@@ -1,0 +1,509 @@
+import SwiftUI
+
+struct AccountsView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    // MARK: - State Variables
+    @State private var showingLinkNewAccount = false
+    @State private var showingInstitutionDetails = false
+    @State private var selectedInstitution: FinancialInstitution?
+    
+    // MARK: - Sample Data
+    @State private var institutions: [FinancialInstitution] = [
+        FinancialInstitution(
+            id: "1",
+            name: "Chase Bank",
+            logo: "building.2.fill",
+            status: .connected,
+            accounts: [
+                FinancialAccount(id: "1", type: .checking, name: "Chase Checking", balance: 2547.89, nickname: "Main Account", isSynced: true),
+                FinancialAccount(id: "2", type: .savings, name: "Chase Savings", balance: 12500.00, nickname: "Emergency Fund", isSynced: true)
+            ]
+        ),
+        FinancialInstitution(
+            id: "2",
+            name: "Bank of America",
+            logo: "building.columns.fill",
+            status: .connected,
+            accounts: [
+                FinancialAccount(id: "3", type: .checking, name: "BofA Checking", balance: 892.45, nickname: "Daily Use", isSynced: true),
+                FinancialAccount(id: "4", type: .creditCard, name: "BofA Credit Card", balance: -1250.67, nickname: "Travel Card", isSynced: true)
+            ]
+        ),
+        FinancialInstitution(
+            id: "3",
+            name: "Wells Fargo",
+            logo: "building.2",
+            status: .disconnected,
+            accounts: [
+                FinancialAccount(id: "5", type: .savings, name: "Wells Fargo Savings", balance: 0.0, nickname: "Old Savings", isSynced: false)
+            ]
+        )
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // Background
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    headerView
+                    
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            linkNewAccountSection
+                            connectedInstitutionsSection
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
+                    }
+                }
+            }
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showingLinkNewAccount) {
+            LinkNewAccountView()
+        }
+        .sheet(isPresented: $showingInstitutionDetails) {
+            if let institution = selectedInstitution {
+                InstitutionDetailsView(institution: institution)
+            }
+        }
+    }
+    
+    // MARK: - Header View
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                dismiss()
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color.gray.opacity(0.2))
+                    .clipShape(Circle())
+            }
+            
+            Spacer()
+            
+            Text("Accounts")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+            
+            Spacer()
+            
+            // Invisible spacer to center the title
+            Color.clear
+                .frame(width: 40, height: 40)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 15)
+        .padding(.bottom, 20)
+    }
+    
+    // MARK: - Link New Account Section
+    private var linkNewAccountSection: some View {
+        Button(action: {
+            showingLinkNewAccount = true
+        }) {
+            HStack(spacing: 16) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                
+                Text("Link New Account")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 30)
+            .padding(.vertical, 24)
+            .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
+            .cornerRadius(16)
+        }
+    }
+    
+    // MARK: - Connected Institutions Section
+    private var connectedInstitutionsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Connected Institutions")
+                .font(.headline)
+                .foregroundColor(.gray)
+                .padding(.horizontal, 20)
+            
+            ForEach(institutions) { institution in
+                institutionCard(institution)
+            }
+        }
+    }
+    
+    // MARK: - Institution Card
+    private func institutionCard(_ institution: FinancialInstitution) -> some View {
+        VStack(spacing: 0) {
+            // Institution Header
+            Button(action: {
+                selectedInstitution = institution
+                showingInstitutionDetails = true
+            }) {
+                HStack(spacing: 16) {
+                    Image(systemName: institution.logo)
+                        .font(.title2)
+                        .foregroundColor(.teal)
+                        .frame(width: 32, height: 32)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(institution.name)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(institution.status.color)
+                                .frame(width: 8, height: 8)
+                            
+                            Text(institution.status.displayText)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.gray)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 24)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(16)
+            }
+            
+            // Accounts Preview
+            VStack(spacing: 8) {
+                ForEach(institution.accounts.prefix(2)) { account in
+                    accountRow(account)
+                }
+                
+                if institution.accounts.count > 2 {
+                    HStack {
+                        Text("+\(institution.accounts.count - 2) more accounts")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 8)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+    }
+    
+    // MARK: - Account Row
+    private func accountRow(_ account: FinancialAccount) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: account.type.icon)
+                .font(.caption)
+                .foregroundColor(.teal)
+                .frame(width: 20, height: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.nickname)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                
+                Text(account.type.displayName)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            if account.isSynced {
+                Text(account.balance.formatted(.currency(code: "USD")))
+                    .font(.caption)
+                    .foregroundColor(account.balance >= 0 ? .green : .red)
+            } else {
+                Text("Not synced")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 12)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Data Models
+struct FinancialInstitution: Identifiable {
+    let id: String
+    let name: String
+    let logo: String
+    let status: ConnectionStatus
+    let accounts: [FinancialAccount]
+}
+
+struct FinancialAccount: Identifiable {
+    let id: String
+    let type: AccountType
+    let name: String
+    let balance: Double
+    let nickname: String
+    let isSynced: Bool
+}
+
+enum ConnectionStatus {
+    case connected
+    case disconnected
+    case pending
+    
+    var color: Color {
+        switch self {
+        case .connected: return .green
+        case .disconnected: return .red
+        case .pending: return .orange
+        }
+    }
+    
+    var displayText: String {
+        switch self {
+        case .connected: return "Connected"
+        case .disconnected: return "Disconnected"
+        case .pending: return "Pending"
+        }
+    }
+}
+
+enum AccountType {
+    case checking
+    case savings
+    case creditCard
+    case investment
+    case loan
+    
+    var icon: String {
+        switch self {
+        case .checking: return "creditcard.fill"
+        case .savings: return "banknote.fill"
+        case .creditCard: return "creditcard"
+        case .investment: return "chart.line.uptrend.xyaxis"
+        case .loan: return "hand.raised.fill"
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .checking: return "Checking"
+        case .savings: return "Savings"
+        case .creditCard: return "Credit Card"
+        case .investment: return "Investment"
+        case .loan: return "Loan"
+        }
+    }
+}
+
+// MARK: - Link New Account View (Modal)
+struct LinkNewAccountView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var selectedBank: String?
+    
+    let popularBanks = ["Chase", "Bank of America", "Wells Fargo", "Citibank", "Capital One", "American Express"]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    Text("Link New Account")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.top, 20)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Search for your bank")
+                            .font(.body)
+                            .foregroundColor(.white)
+                        
+                        TextField("Enter bank name...", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Popular Banks")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 20)
+                        
+                        ForEach(popularBanks, id: \.self) { bank in
+                            Button(action: {
+                                selectedBank = bank
+                            }) {
+                                HStack {
+                                    Text(bank)
+                                        .font(.body)
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    if selectedBank == bank {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.teal)
+                                    }
+                                }
+                                .padding(.horizontal, 30)
+                                .padding(.vertical, 16)
+                                .background(selectedBank == bank ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                                .cornerRadius(12)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Institution Details View (Modal)
+struct InstitutionDetailsView: View {
+    @Environment(\.dismiss) private var dismiss
+    let institution: FinancialInstitution
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    Text(institution.name)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.top, 20)
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: institution.logo)
+                                .font(.title)
+                                .foregroundColor(.teal)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Status")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(institution.status.color)
+                                        .frame(width: 8, height: 8)
+                                    
+                                    Text(institution.status.displayText)
+                                        .font(.body)
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(16)
+                        
+                        Text("Accounts")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 20)
+                        
+                        ForEach(institution.accounts) { account in
+                            accountDetailRow(account)
+                        }
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+    }
+    
+    private func accountDetailRow(_ account: FinancialAccount) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: account.type.icon)
+                .font(.title3)
+                .foregroundColor(.teal)
+                .frame(width: 24, height: 24)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(account.nickname)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                
+                Text(account.name)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                if account.isSynced {
+                    Text(account.balance.formatted(.currency(code: "USD")))
+                        .font(.body)
+                        .foregroundColor(account.balance >= 0 ? .green : .red)
+                } else {
+                    Text("Not synced")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Text(account.type.displayName)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 20)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+}
+
+#Preview {
+    AccountsView()
+}

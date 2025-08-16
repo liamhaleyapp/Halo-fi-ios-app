@@ -1,6 +1,13 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @State private var showingProfile = false
+    @State private var showingPreferences = false
+    @State private var showingSubscription = false
+    @State private var showingInviteFriends = false
+    @State private var showingAbout = false
+    @State private var showingAccounts = false
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -28,7 +35,7 @@ struct SettingsView: View {
                                 icon: "person.fill",
                                 title: "Profile",
                                 action: {
-                                    // TODO: Navigate to Profile
+                                    showingProfile = true
                                 }
                             )
                             
@@ -36,7 +43,7 @@ struct SettingsView: View {
                                 icon: "hexagon.fill",
                                 title: "Preferences",
                                 action: {
-                                    // TODO: Navigate to Preferences
+                                    showingPreferences = true
                                 }
                             )
                             
@@ -44,7 +51,7 @@ struct SettingsView: View {
                                 icon: "diamond.fill",
                                 title: "Subscription",
                                 action: {
-                                    // TODO: Navigate to Subscription
+                                    showingSubscription = true
                                 }
                             )
                             
@@ -52,7 +59,15 @@ struct SettingsView: View {
                                 icon: "person.2.fill",
                                 title: "Invite Friends",
                                 action: {
-                                    // TODO: Navigate to Invite Friends
+                                    showingInviteFriends = true
+                                }
+                            )
+                            
+                            SettingsOption(
+                                icon: "person.fill",
+                                title: "Accounts",
+                                action: {
+                                    showingAccounts = true
                                 }
                             )
                             
@@ -60,7 +75,7 @@ struct SettingsView: View {
                                 icon: "info.circle.fill",
                                 title: "About",
                                 action: {
-                                    // TODO: Navigate to About
+                                    showingAbout = true
                                 }
                             )
                             
@@ -69,14 +84,6 @@ struct SettingsView: View {
                                 title: "Logout",
                                 action: {
                                     // TODO: Implement logout
-                                }
-                            )
-                            
-                            SettingsOption(
-                                icon: "person.fill",
-                                title: "Account",
-                                action: {
-                                    // TODO: Navigate to Account
                                 }
                             )
                         }
@@ -88,6 +95,24 @@ struct SettingsView: View {
             }
         }
         .navigationBarHidden(true)
+        .fullScreenCover(isPresented: $showingProfile) {
+            ProfileView()
+        }
+        .fullScreenCover(isPresented: $showingPreferences) {
+            PreferencesView()
+        }
+        .fullScreenCover(isPresented: $showingSubscription) {
+            SubscriptionView()
+        }
+        .fullScreenCover(isPresented: $showingInviteFriends) {
+            InviteFriendsView()
+        }
+        .fullScreenCover(isPresented: $showingAbout) {
+            AboutView()
+        }
+        .fullScreenCover(isPresented: $showingAccounts) {
+            AccountsView()
+        }
     }
 }
 

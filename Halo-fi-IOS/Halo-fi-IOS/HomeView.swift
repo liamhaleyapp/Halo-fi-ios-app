@@ -125,9 +125,9 @@ struct HomeView: View {
             }
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showingVoiceConversation) {
-            VoiceConversationView()
-        }
+                            .fullScreenCover(isPresented: $showingVoiceConversation) {
+                        VoiceConversationView()
+                    }
     }
 }
 
