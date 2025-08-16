@@ -151,7 +151,7 @@ struct ActionButton: View {
                     .foregroundColor(.white.opacity(0.8))
             }
             .padding(.horizontal, 32)
-            .padding(.vertical, 28)
+            .padding(.vertical, 24)
             .background(gradient)
             .cornerRadius(16)
         }

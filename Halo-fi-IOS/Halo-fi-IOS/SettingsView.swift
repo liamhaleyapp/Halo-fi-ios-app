@@ -30,7 +30,7 @@ struct SettingsView: View {
                     
                     // Settings options
                     ScrollView {
-                        VStack(spacing: 16) {
+                        VStack(spacing: 8) {
                             SettingsOption(
                                 icon: "person.fill",
                                 title: "Profile",

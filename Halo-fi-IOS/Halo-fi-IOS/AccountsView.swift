@@ -51,7 +51,7 @@ struct AccountsView: View {
                     headerView
                     
                     ScrollView {
-                        VStack(spacing: 20) {
+                        VStack(spacing: 12) {
                             linkNewAccountSection
                             connectedInstitutionsSection
                         }
@@ -134,7 +134,7 @@ struct AccountsView: View {
     
     // MARK: - Connected Institutions Section
     private var connectedInstitutionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Connected Institutions")
                 .font(.headline)
                 .foregroundColor(.gray)
@@ -190,7 +190,7 @@ struct AccountsView: View {
             }
             
             // Accounts Preview
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ForEach(institution.accounts.prefix(2)) { account in
                     accountRow(account)
                 }
@@ -203,11 +203,11 @@ struct AccountsView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 30)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+            .padding(.bottom, 12)
         }
     }
     

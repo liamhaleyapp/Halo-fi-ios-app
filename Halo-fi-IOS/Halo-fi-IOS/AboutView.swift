@@ -89,14 +89,14 @@ struct AboutView: View {
                 .font(.headline)
                 .foregroundColor(.gray)
             
-            Text("Your voice-first financial assistant built to support everyone—especially the visually impaired—with easy, intuitive financial guidance.")
+            Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
                 .font(.body)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
@@ -109,14 +109,14 @@ struct AboutView: View {
                 .font(.headline)
                 .foregroundColor(.gray)
             
-            Text("To make financial health accessible, intelligent, and inclusive.")
+            Text("To bring visibility to personal finances through accessible and intelligent technology—empowering everyone, especially those with visual impairments.")
                 .font(.body)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
@@ -141,8 +141,8 @@ struct AboutView: View {
                 Spacer()
             }
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
@@ -158,8 +158,8 @@ struct AboutView: View {
                     .foregroundColor(.gray)
                 Spacer()
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 24)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
             .background(Color.gray.opacity(0.1))
             .cornerRadius(16)
             
@@ -177,8 +177,8 @@ struct AboutView: View {
                             .foregroundColor(.gray)
                             .font(.caption)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(16)
                 }
@@ -195,8 +195,8 @@ struct AboutView: View {
                             .foregroundColor(.gray)
                             .font(.caption)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(16)
                 }
@@ -216,8 +216,8 @@ struct AboutView: View {
                             .foregroundColor(.gray)
                             .font(.caption)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(16)
                 }
@@ -234,8 +234,8 @@ struct AboutView: View {
                             .foregroundColor(.gray)
                             .font(.caption)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(16)
                 }
@@ -254,8 +254,8 @@ struct AboutView: View {
                         .foregroundColor(.gray)
                         .font(.caption)
                 }
-                .padding(.horizontal, 30)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
                 .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
                 .cornerRadius(16)
             }
@@ -319,8 +319,8 @@ struct TeamView: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)

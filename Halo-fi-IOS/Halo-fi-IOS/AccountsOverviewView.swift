@@ -26,7 +26,7 @@ struct AccountsOverviewView: View {
                     .padding(.bottom, 10)
                     
                     // Content
-                    VStack(spacing: 12) {
+                    VStack(spacing: 6) {
                         // Checking Accounts
                         AccountCategorySection(
                             title: "Checking Accounts",
@@ -45,8 +45,7 @@ struct AccountsOverviewView: View {
                             color: Color.purple.opacity(0.7),
                             accounts: [
                                 Account(name: "Ally Savings", balance: "$9,230.50", trend: .up)
-                            ],
-                            isHighlighted: true
+                            ]
                         )
                         
                         // Credit Cards
@@ -103,7 +102,7 @@ struct AccountCategorySection: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 // Category button
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Image(systemName: icon)
                         .font(.title2)
                         .foregroundColor(.white)
@@ -113,7 +112,7 @@ struct AccountCategorySection: View {
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                 }
-                .frame(width: 80, height: 80)
+                .frame(width: 70, height: 70)
                 .background(color)
                 .cornerRadius(12)
                 
@@ -151,7 +150,7 @@ struct AccountCategorySection: View {
                 }
             }
         }
-        .padding(12)
+        .padding(8)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(12)
         .overlay(
