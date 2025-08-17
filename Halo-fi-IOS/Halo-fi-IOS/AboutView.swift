@@ -19,15 +19,15 @@ struct AboutView: View {
             VStack(spacing: 0) {
                 headerView
                 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        whatIsHaloFiSection
-                        ourMissionSection
-                        meetTheTeamButtonSection
-                        dataSecuritySection
-                        legalAndSupportSection
-                        appVersionSection
-                    }
+                                    ScrollView {
+                        VStack(spacing: 12) {
+                            whatIsHaloFiSection
+                            ourMissionSection
+                            meetTheTeamButtonSection
+                            dataSecuritySection
+                            legalAndSupportSection
+                            appVersionSection
+                        }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
