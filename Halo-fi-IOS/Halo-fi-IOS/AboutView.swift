@@ -387,9 +387,22 @@ struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                }
+                .padding(.top, 8)
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -397,7 +410,7 @@ struct TermsView: View {
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
-                            .padding(.top, 20)
+                            .padding(.top, 8)
                         
                         Text("Last updated: December 2024")
                             .font(.caption)
@@ -414,15 +427,8 @@ struct TermsView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
-            }
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
+                
+                Spacer()
             }
         }
     }
@@ -433,9 +439,22 @@ struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                }
+                .padding(.top, 8)
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -443,7 +462,7 @@ struct PrivacyView: View {
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
-                            .padding(.top, 20)
+                            .padding(.top, 8)
                         
                         Text("Last updated: December 2024")
                             .font(.caption)
@@ -460,15 +479,8 @@ struct PrivacyView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
-            }
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
+                
+                Spacer()
             }
         }
     }
@@ -481,16 +493,29 @@ struct ContactSupportView: View {
     @State private var showingSent = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                }
+                .padding(.top, 8)
                 
                 VStack(spacing: 20) {
                     Text("Contact Support")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
-                        .padding(.top, 20)
+                        .padding(.top, 8)
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("How can we help you?")
@@ -520,21 +545,14 @@ struct ContactSupportView: View {
                     
                     Spacer()
                 }
+                
+                Spacer()
             }
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
-            }
-            .alert("Message Sent!", isPresented: $showingSent) {
-                Button("OK") { }
-            } message: {
-                Text("We'll get back to you within 24 hours.")
-            }
+        }
+        .alert("Message Sent!", isPresented: $showingSent) {
+            Button("OK") { }
+        } message: {
+            Text("We'll get back to you within 24 hours.")
         }
     }
 }
@@ -546,16 +564,29 @@ struct BugReportView: View {
     @State private var showingSent = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                }
+                .padding(.top, 8)
                 
                 VStack(spacing: 20) {
                     Text("Report a Bug / Feedback")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
-                        .padding(.top, 20)
+                        .padding(.top, 8)
                     
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Help us improve Halo Fi")
@@ -585,21 +616,14 @@ struct BugReportView: View {
                     
                     Spacer()
                 }
+                
+                Spacer()
             }
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
-            }
-            .alert("Report Submitted!", isPresented: $showingSent) {
-                Button("OK") { }
-            } message: {
-                Text("Thank you for helping us improve Halo Fi!")
-            }
+        }
+        .alert("Report Submitted!", isPresented: $showingSent) {
+            Button("OK") { }
+        } message: {
+            Text("Thank you for helping us improve Halo Fi!")
         }
     }
 }
