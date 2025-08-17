@@ -1,5 +1,5 @@
 import SwiftUI
-import WebKit
+@preconcurrency import WebKit
 
 struct PlaidOnboardingView: View {
     @Environment(\.dismiss) private var dismiss

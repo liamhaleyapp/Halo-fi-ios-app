@@ -65,6 +65,23 @@ struct SignInView: View {
     // MARK: - Header View
     private var headerView: some View {
         VStack(spacing: 16) {
+            // Back Arrow
+            HStack {
+                Button(action: {
+                    dismiss()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(Color.white.opacity(0.2))
+                        .clipShape(Circle())
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            
             // App Logo/Icon
             Circle()
                 .fill(LinearGradient(colors: [Color.purple, Color.indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
