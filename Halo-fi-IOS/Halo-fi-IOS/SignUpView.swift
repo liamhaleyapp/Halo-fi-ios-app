@@ -8,6 +8,7 @@ struct SignUpView: View {
     @State private var confirmPassword = ""
     @State private var firstName = ""
     @State private var showingSignIn = false
+    @State private var showingPlaidOnboarding = false
     @State private var isLoading = false
     
     var body: some View {
@@ -49,6 +50,9 @@ struct SignUpView: View {
         .navigationBarHidden(true)
         .fullScreenCover(isPresented: $showingSignIn) {
             SignInView()
+        }
+        .sheet(isPresented: $showingPlaidOnboarding) {
+            PlaidOnboardingView()
         }
     }
     
@@ -170,7 +174,7 @@ struct SignUpView: View {
                     password: password,
                     firstName: firstName
                 )
-                dismiss()
+                showingPlaidOnboarding = true
             } catch {
                 // TODO: Show error message
                 print("Error creating account: \(error)")
