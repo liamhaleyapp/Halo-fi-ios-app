@@ -23,8 +23,10 @@ struct AboutView: View {
                         VStack(spacing: 20) {
                             whatIsHaloFiSection
                             ourMissionSection
+                            meetTheTeamButtonSection
                             dataSecuritySection
-                            versionLegalSection
+                            legalAndSupportSection
+                            appVersionSection
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100)
@@ -122,6 +124,27 @@ struct AboutView: View {
         .cornerRadius(16)
     }
     
+    // MARK: - Meet the Team Button Section
+    private var meetTheTeamButtonSection: some View {
+        Button(action: {
+            showingTeam = true
+        }) {
+            HStack {
+                Text("Meet the Team")
+                    .font(.body)
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
+            .cornerRadius(16)
+        }
+    }
+    
     // MARK: - Data Security Section
     private var dataSecuritySection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -148,21 +171,9 @@ struct AboutView: View {
         .cornerRadius(16)
     }
     
-    // MARK: - Version & Legal Section
-    private var versionLegalSection: some View {
+    // MARK: - Legal and Support Section
+    private var legalAndSupportSection: some View {
         VStack(spacing: 16) {
-            // App Version
-            HStack {
-                Text("App Version: v1.0.0")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(16)
-            
             // Legal Links
             VStack(spacing: 12) {
                 Button(action: {
@@ -240,25 +251,23 @@ struct AboutView: View {
                     .cornerRadius(16)
                 }
             }
-            
-            // Meet the Team Button
-            Button(action: {
-                showingTeam = true
-            }) {
-                HStack {
-                    Text("Meet the Team")
-                        .font(.body)
-                        .foregroundColor(.white)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.gray)
-                        .font(.caption)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
-                .cornerRadius(16)
+        }
+    }
+    
+    // MARK: - App Version Section
+    private var appVersionSection: some View {
+        VStack(spacing: 16) {
+            // App Version
+            HStack {
+                Text("App Version: v1.0.0")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                Spacer()
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(16)
         }
     }
 }

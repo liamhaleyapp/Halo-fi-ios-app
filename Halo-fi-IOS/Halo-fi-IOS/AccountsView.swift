@@ -50,15 +50,12 @@ struct AccountsView: View {
                 VStack(spacing: 16) {
                     headerView
                     
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            linkNewAccountSection
-                            connectedInstitutionsSection
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 100)
-                    }
+                    linkNewAccountSection
+                    
+                    Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
             }
         }
         .navigationBarHidden(true)
@@ -107,16 +104,15 @@ struct AccountsView: View {
     // MARK: - Link New Account Section
     private var linkNewAccountSection: some View {
         Button(action: {
-            showingLinkNewAccount = true
+            // TODO: Implement account linking logic
         }) {
-            HStack(spacing: 16) {
+            HStack {
                 Image(systemName: "plus.circle.fill")
                     .font(.title2)
                     .foregroundColor(.white)
                 
                 Text("Link New Account")
                     .font(.body)
-                    .fontWeight(.medium)
                     .foregroundColor(.white)
                 
                 Spacer()
@@ -125,8 +121,8 @@ struct AccountsView: View {
                     .foregroundColor(.gray)
                     .font(.caption)
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 24)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
             .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
             .cornerRadius(16)
         }

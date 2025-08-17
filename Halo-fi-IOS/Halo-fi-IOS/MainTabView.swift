@@ -4,17 +4,17 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView {
             HomeView()
                 .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("Home")
+                    Image(systemName: "mic.circle.fill")
+                    Text("Agent")
                 }
                 .tag(0)
             
             AccountsOverviewView()
                 .tabItem {
-                    Image(systemName: "person.fill")
+                    Image(systemName: "creditcard.fill")
                     Text("Account")
                 }
                 .tag(1)
