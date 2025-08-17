@@ -80,7 +80,7 @@ struct AboutView: View {
                 .frame(width: 40, height: 40)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 50) // Increased top padding to account for safe area
+        .padding(.top, 20) // Reduced top padding to move header higher
         .padding(.bottom, 20)
     }
     
