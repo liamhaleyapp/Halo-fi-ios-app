@@ -28,7 +28,14 @@ class UserManager: ObservableObject {
     private let userKey = "currentUser"
     
     init() {
-        loadUserFromStorage()
+        // Ensure we're on the main thread when setting @Published properties
+        if Thread.isMainThread {
+            loadUserFromStorage()
+        } else {
+            DispatchQueue.main.async {
+                self.loadUserFromStorage()
+            }
+        }
     }
     
     // MARK: - Authentication Methods
@@ -80,9 +87,18 @@ class UserManager: ObservableObject {
     }
     
     func signOut() {
-        currentUser = nil
-        isAuthenticated = false
-        clearUserFromStorage()
+        // Ensure we're on the main thread when setting @Published properties
+        if Thread.isMainThread {
+            currentUser = nil
+            isAuthenticated = false
+            clearUserFromStorage()
+        } else {
+            DispatchQueue.main.async {
+                self.currentUser = nil
+                self.isAuthenticated = false
+                self.clearUserFromStorage()
+            }
+        }
     }
     
     func resetPassword(email: String) async throws {
@@ -100,10 +116,17 @@ class UserManager: ObservableObject {
     // MARK: - User Onboarding
     
     func completeOnboarding() {
-        guard var user = currentUser else { return }
-        user.isOnboarded = true
-        currentUser = user
-        saveUserToStorage()
+        // Ensure we're on the main thread when setting @Published properties
+        if Thread.isMainThread {
+            guard var user = currentUser else { return }
+            user.isOnboarded = true
+            currentUser = user
+            saveUserToStorage()
+        } else {
+            DispatchQueue.main.async {
+                self.completeOnboarding()
+            }
+        }
     }
     
     // MARK: - Storage Methods
