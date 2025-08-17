@@ -277,19 +277,33 @@ struct TeamView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .font(.body)
+                    .padding(.trailing, 20)
+                    .padding(.top, 10)
+                }
                 
-                VStack(spacing: 16) {
-                    Text("Meet the Team")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .padding(.top, 8)
-                    
-                    ScrollView {
-                        VStack(spacing: 20) {
+                // Title
+                Text("Meet the Team")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                
+                // Content
+                ScrollView {
+                    VStack(spacing: 20) {
                             // Andrew Babin
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Andrew Babin")
@@ -365,44 +379,10 @@ struct TeamView: View {
                     Spacer()
                 }
             }
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
-            }
         }
     }
     
-    private func teamMemberCard(name: String, role: String, description: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(name)
-                .font(.title3)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
-            
-            Text(role)
-                .font(.subheadline)
-                .foregroundColor(.teal)
-            
-            Text(description)
-                .font(.body)
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(16)
-    }
-}
-
-// MARK: - Terms View (Modal)
+    // MARK: - Terms View (Modal)
 struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
     
