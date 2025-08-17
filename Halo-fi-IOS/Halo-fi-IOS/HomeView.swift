@@ -1,8 +1,12 @@
 import SwiftUI
 
 struct HomeView: View {
-    @State private var userName = "Liam"
+    @Environment(\.userManager) private var userManager
     @State private var showingVoiceConversation = false
+    
+    private var userName: String {
+        userManager.currentUser?.firstName ?? "User"
+    }
     
     var body: some View {
         NavigationView {
@@ -50,8 +54,9 @@ struct HomeView: View {
                                     )
                                     .shadow(color: .blue.opacity(0.5), radius: 20, x: 0, y: 0)
                                 
+                                // Mic icon for voice conversation
                                 Image(systemName: "mic.fill")
-                                    .font(.system(size: 40))
+                                    .font(.system(size: 50, weight: .medium))
                                     .foregroundColor(.white)
                             }
                         }
