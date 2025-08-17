@@ -11,30 +11,30 @@ struct AboutView: View {
     @State private var showingBugReport = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background
-                Color.black.ignoresSafeArea()
+        ZStack {
+            // Background - ensure it covers the entire screen
+            Color.black
+                .ignoresSafeArea(.all, edges: .all)
+            
+            VStack(spacing: 0) {
+                headerView
                 
-                VStack(spacing: 16) {
-                    headerView
-                    
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            whatIsHaloFiSection
-                            ourMissionSection
-                            meetTheTeamButtonSection
-                            dataSecuritySection
-                            legalAndSupportSection
-                            appVersionSection
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 100)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        whatIsHaloFiSection
+                        ourMissionSection
+                        meetTheTeamButtonSection
+                        dataSecuritySection
+                        legalAndSupportSection
+                        appVersionSection
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
                 }
+                
+                Spacer()
             }
         }
-        .navigationBarHidden(true)
         .sheet(isPresented: $showingTeam) {
             TeamView()
         }
@@ -80,7 +80,7 @@ struct AboutView: View {
                 .frame(width: 40, height: 40)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 15)
+        .padding(.top, 50) // Increased top padding to account for safe area
         .padding(.bottom, 20)
     }
     
