@@ -1,0 +1,29 @@
+PLACEHOLDER FOR HALO FI LOGO
+
+To add your actual logo:
+
+1. Save your logo as a PNG file with transparent background
+2. Recommended sizes:
+   - 1x: 120x120px
+   - 2x: 240x240px  
+   - 3x: 360x360px
+
+3. In Xcode:
+   - Open Assets.xcassets
+   - Find HaloFiLogo image set
+   - Drag your PNG files to the appropriate size slots
+
+4. Or manually replace files:
+   - Delete this PLACEHOLDER.txt file
+   - Add your logo files with these names:
+     - 120x120.png (1x)
+     - 240x240.png (2x) 
+     - 360x360.png (3x)
+
+Your logo will automatically appear in:
+- Onboarding screens
+- Sign Up/Sign In pages
+- Home view central button
+- Agent tab icon
+
+The app is now ready to use your custom logo!
