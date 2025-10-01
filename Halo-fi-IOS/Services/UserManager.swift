@@ -6,9 +6,7 @@
 //
 
 import SwiftUI
-import Foundation
 
-// MARK: - User Manager
 @Observable
 class UserManager {
   var currentUser: User?

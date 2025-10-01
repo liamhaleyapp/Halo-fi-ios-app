@@ -34,19 +34,19 @@ struct AccountsOverviewView: View {
           
           // Large horizontal navigation buttons
           VStack(spacing: 12) {
-            NavigationLink(destination: CheckingAccountsView()) {
+            NavigationLink(destination: AccountTypeNavigationView(accountType: .checking)) {
               LargeNavButton(title: "Checking Accounts", icon: "house.fill", tileColor: Color.gray.opacity(0.7))
             }
-            NavigationLink(destination: SavingsAccountsView()) {
+            NavigationLink(destination: AccountTypeNavigationView(accountType: .savings)) {
               LargeNavButton(title: "Savings Accounts", icon: "creditcard.fill", tileColor: Color.purple.opacity(0.8))
             }
-            NavigationLink(destination: CreditCardsView()) {
+            NavigationLink(destination: AccountTypeNavigationView(accountType: .creditCard)) {
               LargeNavButton(title: "Credit Cards", icon: "creditcard.fill", tileColor: Color.blue)
             }
-            NavigationLink(destination: InvestmentsView()) {
+            NavigationLink(destination: AccountTypeNavigationView(accountType: .investment)) {
               LargeNavButton(title: "Investments", icon: "chart.line.uptrend.xyaxis", tileColor: Color.blue.opacity(0.9))
             }
-            NavigationLink(destination: LoansView()) {
+            NavigationLink(destination: AccountTypeNavigationView(accountType: .loan)) {
               LargeNavButton(title: "My Loans", icon: "house.fill", tileColor: Color.teal)
             }
           }

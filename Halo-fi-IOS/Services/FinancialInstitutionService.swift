@@ -7,7 +7,6 @@
 
 import Foundation
 
-// MARK: - Financial Institution Service
 struct FinancialInstitutionService {
     
     // MARK: - Public Methods
