@@ -5,7 +5,6 @@
 //  Created by Christopher Koski on 10/1/25.
 //
 
-import Foundation
 import SwiftUI
 
 // MARK: - Connection Status Enum

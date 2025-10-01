@@ -7,7 +7,6 @@
 
 import Foundation
 
-// MARK: - Financial Account Model
 struct FinancialAccount: Identifiable {
     let id: String
     let type: AccountType

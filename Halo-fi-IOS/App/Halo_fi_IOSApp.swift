@@ -9,12 +9,12 @@ import SwiftUI
 
 @main
 struct Halo_fi_IOSApp: App {
-    @State private var userManager = UserManager()
-    
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environment(userManager)
-        }
+  @State private var userManager = UserManager()
+  
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
+        .environment(userManager)
     }
+  }
 }

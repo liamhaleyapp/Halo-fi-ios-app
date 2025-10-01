@@ -1,3 +1,10 @@
+//
+//  UserManager.swift
+//  Halo-fi-IOS
+//
+//  Created by Christopher Koski on 10/1/25.
+//
+
 import SwiftUI
 import Foundation
 

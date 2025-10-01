@@ -7,7 +7,6 @@
 
 import Foundation
 
-// MARK: - Financial Institution Model
 struct FinancialInstitution: Identifiable {
     let id: String
     let name: String
