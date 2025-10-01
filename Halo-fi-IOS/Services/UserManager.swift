@@ -1,23 +1,6 @@
 import SwiftUI
 import Foundation
 
-// MARK: - User Model
-struct User: Codable, Identifiable {
-    let id: String
-    let email: String
-    var firstName: String
-    let createdAt: Date
-    var isOnboarded: Bool
-    
-    init(id: String = UUID().uuidString, email: String, firstName: String, createdAt: Date = Date(), isOnboarded: Bool = false) {
-        self.id = id
-        self.email = email
-        self.firstName = firstName
-        self.createdAt = createdAt
-        self.isOnboarded = isOnboarded
-    }
-}
-
 // MARK: - User Manager
 class UserManager: ObservableObject {
     @Published var currentUser: User?
@@ -147,24 +130,6 @@ class UserManager: ObservableObject {
     
     private func clearUserFromStorage() {
         userDefaults.removeObject(forKey: userKey)
-    }
-}
-
-// MARK: - Authentication Errors
-enum AuthError: LocalizedError {
-    case invalidCredentials
-    case networkError
-    case unknownError
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidCredentials:
-            return "Invalid email or password"
-        case .networkError:
-            return "Network error. Please try again"
-        case .unknownError:
-            return "An unknown error occurred"
-        }
     }
 }
 

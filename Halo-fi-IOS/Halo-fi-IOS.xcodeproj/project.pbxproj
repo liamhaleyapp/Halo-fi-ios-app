@@ -37,20 +37,67 @@
 		0C39AAC92E4EBF9C00CF16A0 /* Halo-fi-IOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9E95D7392E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
+				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
+			);
+			target = 0C39AAAE2E4EBF9A00CF16A0 /* Halo-fi-IOS */;
+		};
+		9E95D73A2E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOSTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+			);
+			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;
+		};
+		9E95D7402E8DB163003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOSUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
+				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
+			);
+			target = 0C39AAC82E4EBF9C00CF16A0 /* Halo-fi-IOSUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		0C39AAB12E4EBF9A00CF16A0 /* Halo-fi-IOS */ = {
+		0C39AAB12E4EBF9A00CF16A0 /* App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Halo-fi-IOS";
+			path = App;
 			sourceTree = "<group>";
 		};
-		0C39AAC22E4EBF9C00CF16A0 /* Halo-fi-IOSTests */ = {
+		9E95D71F2E8DB084003087CE /* UI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Halo-fi-IOSTests";
+			path = UI;
 			sourceTree = "<group>";
 		};
-		0C39AACC2E4EBF9C00CF16A0 /* Halo-fi-IOSUITests */ = {
+		9E95D7202E8DB08C003087CE /* Data */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Halo-fi-IOSUITests";
+			path = Data;
+			sourceTree = "<group>";
+		};
+		9E95D7212E8DB0A9003087CE /* Features */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Features;
+			sourceTree = "<group>";
+		};
+		9E95D7342E8DB133003087CE /* Services */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		9E95D7352E8DB15C003087CE /* Tests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9E95D7392E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOS" target */,
+				9E95D73A2E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOSTests" target */,
+				9E95D7402E8DB163003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOSUITests" target */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -88,9 +135,12 @@
 		0C39AAA62E4EBF9A00CF16A0 = {
 			isa = PBXGroup;
 			children = (
-				0C39AAB12E4EBF9A00CF16A0 /* Halo-fi-IOS */,
-				0C39AAC22E4EBF9C00CF16A0 /* Halo-fi-IOSTests */,
-				0C39AACC2E4EBF9C00CF16A0 /* Halo-fi-IOSUITests */,
+				9E95D7352E8DB15C003087CE /* Tests */,
+				9E95D7342E8DB133003087CE /* Services */,
+				9E95D7212E8DB0A9003087CE /* Features */,
+				9E95D7202E8DB08C003087CE /* Data */,
+				9E95D71F2E8DB084003087CE /* UI */,
+				0C39AAB12E4EBF9A00CF16A0 /* App */,
 				0C39AAB02E4EBF9A00CF16A0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,7 +171,12 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				0C39AAB12E4EBF9A00CF16A0 /* Halo-fi-IOS */,
+				0C39AAB12E4EBF9A00CF16A0 /* App */,
+				9E95D71F2E8DB084003087CE /* UI */,
+				9E95D7202E8DB08C003087CE /* Data */,
+				9E95D7212E8DB0A9003087CE /* Features */,
+				9E95D7342E8DB133003087CE /* Services */,
+				9E95D7352E8DB15C003087CE /* Tests */,
 			);
 			name = "Halo-fi-IOS";
 			packageProductDependencies = (
@@ -148,9 +203,6 @@
 			dependencies = (
 				0C39AAC12E4EBF9C00CF16A0 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				0C39AAC22E4EBF9C00CF16A0 /* Halo-fi-IOSTests */,
-			);
 			name = "Halo-fi-IOSTests";
 			packageProductDependencies = (
 			);
@@ -170,9 +222,6 @@
 			);
 			dependencies = (
 				0C39AACB2E4EBF9C00CF16A0 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				0C39AACC2E4EBF9C00CF16A0 /* Halo-fi-IOSUITests */,
 			);
 			name = "Halo-fi-IOSUITests";
 			packageProductDependencies = (
