@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @Environment(UserManager.self) private var userManager
-    @State private var selectedTab = 0
+  @Environment(UserManager.self) private var userManager
+  @State private var selectedTab = 0
   
   var body: some View {
     Group {
@@ -41,8 +41,8 @@ struct MainTabView: View {
       } else {
         OnboardingView()
       }
-        }
     }
+  }
 }
 
 #Preview {
