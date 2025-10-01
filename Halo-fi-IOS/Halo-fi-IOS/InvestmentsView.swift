@@ -1,0 +1,33 @@
+import SwiftUI
+
+struct InvestmentsView: View {
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Investments")
+                    .font(.largeTitle)
+                    .fontWeight(.heavy)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 12)
+                
+                List {
+                    Section(header: Text("Connected").foregroundColor(.gray)) {
+                        AccountRowSimple(name: "Vanguard IRA", balance: 21304.23)
+                        AccountRowSimple(name: "Robinhood", balance: 1190.44)
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+            .padding(.horizontal, 20)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+#Preview {
+    NavigationView { InvestmentsView() }
+}
+
+
