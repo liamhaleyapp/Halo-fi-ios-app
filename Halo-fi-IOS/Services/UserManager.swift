@@ -2,10 +2,11 @@ import SwiftUI
 import Foundation
 
 // MARK: - User Manager
-class UserManager: ObservableObject {
-    @Published var currentUser: User?
-    @Published var isAuthenticated = false
-    @Published var isLoading = false
+@Observable
+class UserManager {
+    var currentUser: User?
+    var isAuthenticated = false
+    var isLoading = false
     
     private let userDefaults = UserDefaults.standard
     private let userKey = "currentUser"
@@ -133,21 +134,3 @@ class UserManager: ObservableObject {
     }
 }
 
-// MARK: - User Manager Environment Key
-struct UserManagerKey: EnvironmentKey {
-    static let defaultValue = UserManager()
-}
-
-extension EnvironmentValues {
-    var userManager: UserManager {
-        get { self[UserManagerKey.self] }
-        set { self[UserManagerKey.self] = newValue }
-    }
-}
-
-// MARK: - View Extension
-extension View {
-    func userManager(_ userManager: UserManager) -> some View {
-        environment(\.userManager, userManager)
-    }
-}

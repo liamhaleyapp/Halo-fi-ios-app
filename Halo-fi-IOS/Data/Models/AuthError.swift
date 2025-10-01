@@ -4,7 +4,7 @@
 //
 //  Created by Christopher Koski on 10/1/25.
 //
-
+import Foundation
 
 enum AuthError: LocalizedError {
     case invalidCredentials

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var showingProfile = false
     @State private var showingPreferences = false
     @State private var showingSubscription = false

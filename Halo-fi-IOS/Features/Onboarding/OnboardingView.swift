@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var currentPage = 0
     @State private var showingSignUp = false
     @State private var showingSignIn = false

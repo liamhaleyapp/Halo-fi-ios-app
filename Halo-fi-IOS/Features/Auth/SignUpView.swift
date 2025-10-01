@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SignUpView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""

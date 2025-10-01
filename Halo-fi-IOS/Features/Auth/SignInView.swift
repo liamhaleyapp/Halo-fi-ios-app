@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SignInView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var email = ""
     @State private var password = ""
     @State private var showingSignUp = false
@@ -178,7 +178,7 @@ struct SignInView: View {
 // MARK: - Forgot Password View
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var email = ""
     @State private var isLoading = false
     @State private var showingSuccess = false

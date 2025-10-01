@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @Environment(\.userManager) private var userManager
+    @Environment(UserManager.self) private var userManager
     @State private var showingVoiceConversation = false
     
     private var userName: String {
