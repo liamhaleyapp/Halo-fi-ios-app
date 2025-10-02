@@ -12,7 +12,9 @@ struct MainTabView: View {
                     NavigationSplitView {
                         SidebarView(selectedTab: $selectedTab)
                     } detail: {
-                        DetailView(selectedTab: selectedTab)
+                        NavigationStack {
+                            DetailView(selectedTab: selectedTab)
+                        }
                     }
                     .accentColor(.blue)
                     .preferredColorScheme(.dark)
@@ -104,15 +106,22 @@ struct DetailView: View {
             switch selectedTab {
             case 0:
                 HomeView()
+                    .navigationTitle("Agent")
+                    .navigationBarTitleDisplayMode(.large)
             case 1:
                 AccountsOverviewView()
+                    .navigationTitle("Accounts")
+                    .navigationBarTitleDisplayMode(.large)
             case 2:
                 SettingsView()
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.large)
             default:
                 HomeView()
+                    .navigationTitle("Agent")
+                    .navigationBarTitleDisplayMode(.large)
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

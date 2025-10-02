@@ -95,7 +95,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(UIDevice.current.userInterfaceIdiom != .pad)
         .fullScreenCover(isPresented: $showingProfile) {
             ProfileView()
         }

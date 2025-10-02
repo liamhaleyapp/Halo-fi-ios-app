@@ -187,7 +187,7 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(UIDevice.current.userInterfaceIdiom != .pad)
         .fullScreenCover(isPresented: $showingVoiceConversation) {
             VoiceConversationView()
         }

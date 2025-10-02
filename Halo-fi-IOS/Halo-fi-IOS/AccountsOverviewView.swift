@@ -80,7 +80,7 @@ struct AccountsOverviewView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(UIDevice.current.userInterfaceIdiom != .pad)
     }
 }
 
