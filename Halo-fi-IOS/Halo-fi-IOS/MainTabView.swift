@@ -56,18 +56,39 @@ struct SidebarView: View {
     @Binding var selectedTab: Int
     
     var body: some View {
-        List(selection: $selectedTab) {
-            NavigationLink(value: 0) {
-                Label("Agent", systemImage: "mic.circle.fill")
+        List {
+            Button(action: { selectedTab = 0 }) {
+                HStack {
+                    Image(systemName: "mic.circle.fill")
+                        .foregroundColor(selectedTab == 0 ? .blue : .primary)
+                    Text("Agent")
+                        .foregroundColor(selectedTab == 0 ? .blue : .primary)
+                    Spacer()
+                }
             }
+            .listRowBackground(selectedTab == 0 ? Color.blue.opacity(0.1) : Color.clear)
             
-            NavigationLink(value: 1) {
-                Label("Accounts", systemImage: "creditcard.fill")
+            Button(action: { selectedTab = 1 }) {
+                HStack {
+                    Image(systemName: "creditcard.fill")
+                        .foregroundColor(selectedTab == 1 ? .blue : .primary)
+                    Text("Accounts")
+                        .foregroundColor(selectedTab == 1 ? .blue : .primary)
+                    Spacer()
+                }
             }
+            .listRowBackground(selectedTab == 1 ? Color.blue.opacity(0.1) : Color.clear)
             
-            NavigationLink(value: 2) {
-                Label("Settings", systemImage: "gearshape.fill")
+            Button(action: { selectedTab = 2 }) {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(selectedTab == 2 ? .blue : .primary)
+                    Text("Settings")
+                        .foregroundColor(selectedTab == 2 ? .blue : .primary)
+                    Spacer()
+                }
             }
+            .listRowBackground(selectedTab == 2 ? Color.blue.opacity(0.1) : Color.clear)
         }
         .navigationTitle("Halo Fi")
         .listStyle(SidebarListStyle())
