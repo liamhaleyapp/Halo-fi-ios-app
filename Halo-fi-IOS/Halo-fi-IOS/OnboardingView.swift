@@ -11,21 +11,21 @@ struct OnboardingView: View {
             title: "Welcome to Halo Fi",
             subtitle: "Your voice-first financial assistant",
             description: "Get personalized financial guidance through natural conversations. No more complex menus or confusing interfaces.",
-            icon: "mic.circle.fill",
+            icon: "HaloFiLogo",
             color: [Color.purple, Color.indigo]
         ),
         OnboardingPage(
             title: "Smart Financial Insights",
             subtitle: "Powered by AI & Plaid",
             description: "Connect your accounts securely and get real-time insights about your spending, saving, and financial health.",
-            icon: "brain.head.profile",
+            icon: "HaloFiLogo",
             color: [Color.blue, Color.teal]
         ),
         OnboardingPage(
             title: "Accessible for Everyone",
             subtitle: "Built with inclusivity in mind",
             description: "Designed specifically for the visually impaired community, with voice-first navigation and high-contrast interfaces.",
-            icon: "eye.slash.fill",
+            icon: "HaloFiLogo",
             color: [Color.orange, Color.red]
         )
     ]
@@ -64,15 +64,19 @@ struct OnboardingView: View {
         VStack(spacing: 32) {
             Spacer()
             
-            // Icon
-            Circle()
-                .fill(LinearGradient(colors: page.color, startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 120, height: 120)
-                .overlay(
-                    Image(systemName: page.icon)
-                        .font(.system(size: 60))
-                        .foregroundColor(.white)
-                )
+            // Logo with gradient background
+            ZStack {
+                // Gradient background circle
+                Circle()
+                    .fill(LinearGradient(colors: page.color, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 120, height: 120)
+                
+                // Halo Fi logo
+                Image(page.icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 80)
+            }
             
             // Text Content
             VStack(spacing: 16) {
