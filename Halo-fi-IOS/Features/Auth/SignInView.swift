@@ -75,6 +75,40 @@ struct SignInView: View {
             .foregroundColor(.blue)
           }
           .font(.body)
+          
+          // Debug Section (only in development)
+          #if DEBUG
+          VStack(spacing: 12) {
+            Divider()
+              .background(Color.gray.opacity(0.3))
+            
+            Text("DEBUG MENU")
+              .font(.caption)
+              .foregroundColor(.orange)
+              .fontWeight(.bold)
+            
+            VStack(spacing: 8) {
+              Button("🚀 Quick Test Login") {
+                quickTestLogin()
+              }
+              .foregroundColor(.green)
+              .font(.caption)
+              
+              Button("👤 Mock User Login") {
+                mockUserLogin()
+              }
+              .foregroundColor(.blue)
+              .font(.caption)
+              
+              Button("🔧 Clear User Data") {
+                clearUserData()
+              }
+              .foregroundColor(.red)
+              .font(.caption)
+            }
+          }
+          .padding(.top, 10)
+          #endif
         }
         .padding(.horizontal, 20)
         
@@ -115,6 +149,57 @@ struct SignInView: View {
           errorMessage = error.localizedDescription
           showingError = true
         }
+      }
+    }
+  }
+  
+  // MARK: - Debug Actions
+  private func quickTestLogin() {
+    print("🚀 DEBUG: Quick test login triggered")
+    Task {
+      await MainActor.run {
+        // Simulate successful login with mock data
+        userManager.isAuthenticated = true
+        userManager.currentUser = User(
+          id: "debug-user-123",
+          email: "test@halofi.com",
+          firstName: "Test"
+        )
+        // Note: Tokens are managed by TokenStorage internally
+        // For debug purposes, we're just bypassing authentication
+        dismiss()
+      }
+    }
+  }
+  
+  private func mockUserLogin() {
+    print("👤 DEBUG: Mock user login triggered")
+    Task {
+      await MainActor.run {
+        // Create a more detailed mock user
+        userManager.isAuthenticated = true
+        userManager.currentUser = User(
+          id: "mock-user-456",
+          email: "mock@halofi.com",
+          firstName: "Mock"
+        )
+        // Note: Tokens are managed by TokenStorage internally
+        // For debug purposes, we're just bypassing authentication
+        dismiss()
+      }
+    }
+  }
+  
+  private func clearUserData() {
+    print("🔧 DEBUG: Clearing user data")
+    Task {
+      await MainActor.run {
+        userManager.signOut()
+        // Clear form fields
+        email = ""
+        password = ""
+        errorMessage = ""
+        showingError = false
       }
     }
   }
