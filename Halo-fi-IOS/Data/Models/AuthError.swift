@@ -11,6 +11,10 @@ enum AuthError: LocalizedError {
     case invalidCredentials
     case networkError
     case unknownError
+    case validationError([ValidationErrorDetail])
+    case emailAlreadyExists
+    case serverError(Int)
+    case tokenExpired
     
     var errorDescription: String? {
         switch self {
@@ -20,6 +24,15 @@ enum AuthError: LocalizedError {
             return "Network error. Please try again"
         case .unknownError:
             return "An unknown error occurred"
+        case .validationError(let details):
+            let messages = details.map { $0.msg }.joined(separator: ", ")
+            return "Validation error: \(messages)"
+        case .emailAlreadyExists:
+            return "An account with this email already exists"
+        case .serverError(let code):
+            return "Server error (\(code)). Please try again"
+        case .tokenExpired:
+            return "Your session has expired. Please sign in again"
         }
     }
 }

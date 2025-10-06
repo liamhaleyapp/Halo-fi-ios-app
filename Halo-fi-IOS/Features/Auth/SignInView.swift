@@ -15,6 +15,8 @@ struct SignInView: View {
   @State private var showingSignUp = false
   @State private var isLoading = false
   @State private var showingForgotPassword = false
+  @State private var errorMessage = ""
+  @State private var showingError = false
   
   var body: some View {
     ZStack {
@@ -87,6 +89,11 @@ struct SignInView: View {
     .sheet(isPresented: $showingForgotPassword) {
       ForgotPasswordView()
     }
+    .alert("Sign In Error", isPresented: $showingError) {
+      Button("OK") { }
+    } message: {
+      Text(errorMessage)
+    }
   }
   
   // MARK: - Form Validation
@@ -100,10 +107,14 @@ struct SignInView: View {
     Task {
       do {
         try await userManager.signIn(email: email, password: password)
-        dismiss()
+        await MainActor.run {
+          dismiss()
+        }
       } catch {
-        // TODO: Show error message
-        print("Error signing in: \(error)")
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          showingError = true
+        }
       }
     }
   }
