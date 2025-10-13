@@ -62,27 +62,29 @@ class UserManager {
     }
   }
   
-  func signIn(email: String, password: String) async throws {
+  func signIn(phoneNumber: String, password: String) async throws {
     isLoading = true
     
     do {
       let authResponse = try await authService.login(
-        email: email,
+        phoneNumber: phoneNumber,
         password: password
       )
+      print("\(authResponse)")
       
       // Save tokens
       tokenStorage.saveTokens(
-        accessToken: authResponse.accessToken,
-        refreshToken: authResponse.refreshToken,
-        expiresIn: authResponse.expiresIn
+        accessToken: authResponse.authData.session.accessToken,
+        refreshToken: authResponse.authData.session.refreshToken,
+        expiresIn: authResponse.authData.session.expiresIn
       )
       
       // Create user from API response
+      let authUser = authResponse.authData.authUser
       let user = User(
-        id: authResponse.authUser.authUserId,
-        email: authResponse.authUser.email,
-        firstName: "User" // We'll need to get this from the API response
+        id: authUser.authUserId,
+        email: authUser.email,
+        firstName: authUser.appMetaData.displayName
       )
       
       await MainActor.run {

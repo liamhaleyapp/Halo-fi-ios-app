@@ -36,3 +36,13 @@ enum AuthError: LocalizedError {
         }
     }
 }
+
+struct ValidationError: Codable {
+  let detail: [ValidationErrorDetail]
+}
+
+struct ValidationErrorDetail: Codable {
+  let loc: [String]
+  let msg: String
+  let type: String
+}

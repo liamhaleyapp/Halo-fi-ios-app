@@ -10,7 +10,7 @@ import SwiftUI
 struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
-  @State private var email = ""
+  @State private var phoneNumber = ""
   @State private var password = ""
   @State private var showingSignUp = false
   @State private var isLoading = false
@@ -34,10 +34,10 @@ struct SignInView: View {
         // Form
         VStack(spacing: 20) {
           AuthFormField(
-            title: "Email",
-            placeholder: "Enter your email",
-            text: $email,
-            keyboardType: .emailAddress
+            title: "Phone Number",
+            placeholder: "Enter your phone number",
+            text: $phoneNumber,
+            keyboardType: .phonePad
           )
           
           AuthFormField(
@@ -132,7 +132,7 @@ struct SignInView: View {
   
   // MARK: - Form Validation
   private var isFormValid: Bool {
-    !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+    !phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
     !password.isEmpty
   }
   
@@ -140,7 +140,8 @@ struct SignInView: View {
   private func signIn() {
     Task {
       do {
-        try await userManager.signIn(email: email, password: password)
+        let phoneNum = "+1"+phoneNumber
+        try await userManager.signIn(phoneNumber: phoneNum, password: password)
         await MainActor.run {
           dismiss()
         }
@@ -196,7 +197,7 @@ struct SignInView: View {
       await MainActor.run {
         userManager.signOut()
         // Clear form fields
-        email = ""
+        phoneNumber = ""
         password = ""
         errorMessage = ""
         showingError = false
