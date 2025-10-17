@@ -51,7 +51,7 @@ class AuthService {
   }
   
   // MARK: - Register
-  func register(name: String, email: String, phone: String, password: String) async throws {
+  func register(firstName: String, lastName: String, email: String, phone: String, password: String) async throws {
     let urlString = "\(baseURL)/users/signup"
     print("🔵 AuthService: Base URL: \(baseURL)")
     print("🔵 AuthService: Full URL string: \(urlString)")
@@ -64,17 +64,15 @@ class AuthService {
     print("🔵 AuthService: Starting signup request to: \(url)")
     
     let registerRequest = SignupRequest(
-      name: name,
+      firstName: firstName,
+      lastName: lastName,
       email: email,
       phone: phone,
       password: password
     )
-    
-    // Log request data (without password for security)
-    print("🔵 AuthService: Request data - name: \(name), email: \(email), phone: \(phone)")
-    
+
     // Validate required fields
-    if name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
+    if firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
       print("❌ AuthService: Missing required fields")
       throw AuthError.validationError([])
     }

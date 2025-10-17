@@ -14,6 +14,8 @@ struct SignUpView: View {
   @State private var password = ""
   @State private var confirmPassword = ""
   @State private var firstName = ""
+  @State private var lastName = ""
+  @State private var phoneNumber = ""
   @State private var showingSignIn = false
   @State private var showingPlaidOnboarding = false
   @State private var isLoading = false
@@ -23,67 +25,82 @@ struct SignUpView: View {
       // Background
       Color.black.ignoresSafeArea()
       
-      VStack(spacing: 24) {
-        // Header
-        AuthHeaderView(
-          title: "Create Your Account",
-          subtitle: "Join Halo Fi and start your financial journey",
-          onBackTap: { dismiss() }
-        )
-        
-        // Form
-        VStack(spacing: 20) {
-          AuthFormField(
-            title: "First Name",
-            placeholder: "Enter your first name",
-            text: $firstName
+      ScrollView {
+        VStack(spacing: 24) {
+          // Header
+          AuthHeaderView(
+            title: "Create Your Account",
+            subtitle: "Join Halo Fi and start your financial journey",
+            onBackTap: { dismiss() }
           )
           
-          AuthFormField(
-            title: "Email",
-            placeholder: "Enter your email",
-            text: $email,
-            keyboardType: .emailAddress
-          )
-          
-          AuthFormField(
-            title: "Password",
-            placeholder: "Create a password",
-            text: $password,
-            isSecure: true
-          )
-          
-          AuthFormField(
-            title: "Confirm Password",
-            placeholder: "Confirm your password",
-            text: $confirmPassword,
-            isSecure: true
-          )
-          
-          AuthButton(
-            title: "Create Account",
-            isLoading: isLoading,
-            isEnabled: isFormValid,
-            action: createAccount
-          )
-          
-          // Sign In Link
-          HStack {
-            Text("Already have an account?")
-              .foregroundColor(.gray)
+          // Form
+          VStack(spacing: 20) {
+            AuthFormField(
+              title: "First Name",
+              placeholder: "Enter your first name",
+              text: $firstName
+            )
             
-            Button("Sign In") {
-              showingSignIn = true
+            AuthFormField(
+              title: "Last Name",
+              placeholder: "Enter your last name",
+              text: $lastName
+            )
+            
+            AuthFormField(
+              title: "Phone Number",
+              placeholder: "Enter your phone number",
+              text: $phoneNumber,
+              keyboardType: .phonePad
+            )
+            
+            AuthFormField(
+              title: "Email",
+              placeholder: "Enter your email",
+              text: $email,
+              keyboardType: .emailAddress
+            )
+            
+            AuthFormField(
+              title: "Password",
+              placeholder: "Create a password",
+              text: $password,
+              isSecure: true
+            )
+            
+            AuthFormField(
+              title: "Confirm Password",
+              placeholder: "Confirm your password",
+              text: $confirmPassword,
+              isSecure: true
+            )
+            
+            AuthButton(
+              title: "Create Account",
+              isLoading: isLoading,
+              isEnabled: isFormValid,
+              action: createAccount
+            )
+            
+            // Sign In Link
+            HStack {
+              Text("Already have an account?")
+                .foregroundColor(.gray)
+              
+              Button("Sign In") {
+                showingSignIn = true
+              }
+              .foregroundColor(.blue)
             }
-            .foregroundColor(.blue)
+            .font(.body)
           }
-          .font(.body)
+          .padding(.horizontal, 20)
+          
+          Spacer()
         }
-        .padding(.horizontal, 20)
-        
-        Spacer()
+        .padding(.top, 40)
       }
-      .padding(.top, 40)
     }
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {
@@ -107,14 +124,26 @@ struct SignUpView: View {
   // MARK: - Actions
   private func createAccount() {
     Task {
+      isLoading = true
+      
       do {
         try await userManager.signUp(
+          firstName: firstName,
+          lastName: lastName,
+          phone: "+1"+phoneNumber,
           email: email,
-          password: password,
-          firstName: firstName
+          password: password
         )
-        showingPlaidOnboarding = true
+        
+        await MainActor.run {
+          isLoading = false
+          showingPlaidOnboarding = true
+        }
+        
       } catch {
+        await MainActor.run {
+          isLoading = false
+        }
         // TODO: Show error message
         print("Error creating account: \(error)")
       }

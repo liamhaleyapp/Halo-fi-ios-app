@@ -31,18 +31,18 @@ class UserManager {
   
   // MARK: - Authentication Methods
   
-  func signUp(email: String, password: String, firstName: String) async throws {
+  func signUp(firstName: String, lastName: String, phone: String, email: String, password: String) async throws {
     print("🟡 UserManager: Starting signup process")
     isLoading = true
     
     do {
       print("🟡 UserManager: Calling AuthService.register")
-      // For now, we'll use firstName as name and generate a placeholder phone
-      // TODO: Add phone field to SignUpView when server requirements are clear
+
       try await authService.register(
-        name: firstName,
+        firstName: firstName,
+        lastName: lastName,
         email: email,
-        phone: "+1234567890", // Placeholder phone number
+        phone: phone,
         password: password
       )
       

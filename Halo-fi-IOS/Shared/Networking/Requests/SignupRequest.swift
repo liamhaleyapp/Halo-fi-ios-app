@@ -7,8 +7,9 @@
 import Foundation
 
 struct SignupRequest: Codable {
-  let name: String
-  let email: String
-  let phone: String
-  let password: String
+  let firstName:  String
+  let lastName:   String
+  let email:      String
+  let phone:      String
+  let password:   String
 }
