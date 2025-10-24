@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AccountsOverviewView: View {
   @Environment(\.presentationMode) var presentationMode
+  @State private var showingPlaidOnboarding = false
   
   var body: some View {
     NavigationView {
@@ -18,8 +19,6 @@ struct AccountsOverviewView: View {
         VStack(spacing: 16) {
           // Navigation bar
           HStack {
-            Spacer()
-            
             Text("Accounts")
               .font(.largeTitle)
               .fontWeight(.heavy)
@@ -29,7 +28,6 @@ struct AccountsOverviewView: View {
             Spacer()
           }
           .padding(.horizontal, 20)
-          .padding(.top, 20)
           .padding(.bottom, 10)
           
           // Large horizontal navigation buttons
@@ -54,8 +52,20 @@ struct AccountsOverviewView: View {
           .padding(.bottom, 20)
         }
       }
+      .toolbar {
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button {
+            showingPlaidOnboarding = true
+          } label: {
+            Image(systemName: "plus.app")
+          }
+        }
+      }
     }
     .navigationBarHidden(true)
+    .sheet(isPresented: $showingPlaidOnboarding) {
+      PlaidOnboardingView()
+    }
   }
 }
 

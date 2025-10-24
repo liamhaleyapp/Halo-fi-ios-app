@@ -24,14 +24,19 @@ struct PlaidOnboardingView: View {
         if isLoading {
           PlaidLoadingView()
         } else {
-          PlaidWebView(
-            linkToken: plaidManager.linkToken,
-            onSuccess: { publicToken in
-              handlePlaidSuccess(publicToken)
-            },
-            onExit: { error in
-              handlePlaidExit(error)
+          Button("Connect") {
+            Task {
+              try await plaidManager.createLinkToken()
             }
+          }
+          .foregroundStyle(.white)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(
+            LinearGradient(
+              colors: [Color.indigo, Color.purple],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
           )
         }
       }
@@ -59,6 +64,7 @@ struct PlaidOnboardingView: View {
         await MainActor.run {
           errorMessage = "Failed to start bank connection: \(error.localizedDescription)"
           showingError = true
+          isLoading = false
         }
       }
     }
@@ -76,6 +82,7 @@ struct PlaidOnboardingView: View {
         await MainActor.run {
           errorMessage = "Failed to complete connection: \(error.localizedDescription)"
           showingError = true
+          isLoading = false
         }
       }
     }
@@ -85,6 +92,7 @@ struct PlaidOnboardingView: View {
     if let error = error {
       errorMessage = "Connection failed: \(error.localizedDescription)"
       showingError = true
+      isLoading = false
     } else {
       // User cancelled - just dismiss
       dismiss()

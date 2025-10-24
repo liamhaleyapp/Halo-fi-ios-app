@@ -14,7 +14,6 @@ class NetworkService {
     private let baseURL = "https://halofiapp-production.up.railway.app"
     private let session = URLSession.shared
     private let tokenStorage = TokenStorage()
-    private let authService = AuthService.shared
     
     private init() {}
     
@@ -26,7 +25,7 @@ class NetworkService {
         body: Data? = nil,
         responseType: T.Type
     ) async throws -> T {
-        var request = try await createAuthenticatedRequest(
+        let request = try await createAuthenticatedRequest(
             endpoint: endpoint,
             method: method,
             body: body

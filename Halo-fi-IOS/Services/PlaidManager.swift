@@ -7,16 +7,30 @@
 
 import Foundation
 
+@MainActor
 class PlaidManager: ObservableObject {
   @Published var linkToken: String = ""
+  private let networkService = NetworkService.shared
   
   func createLinkToken() async throws {
-    // In a real app, this would call your backend
-    // For now, we'll simulate it
-    try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+    let linkTokenRequest = PlaidLinkRequest()
+    let requestBody = try JSONEncoder().encode(linkTokenRequest)
     
-    // Simulate getting a link token from your backend
-    linkToken = "link-sandbox-\(UUID().uuidString)"
+    let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
+      endpoint: "/bank/link/create",
+      method: .POST,
+      body: requestBody,
+      responseType: PlaidLinkResponse.self
+    )
+    
+    // Debug: Print the response
+    print("Plaid Link Response: \(linkResponse)")
+    
+    guard linkResponse.success else {
+      throw PlaidError.linkTokenCreationFailed
+    }
+    
+    linkToken = linkResponse.linkToken
   }
   
   func exchangePublicToken(_ publicToken: String) async throws {

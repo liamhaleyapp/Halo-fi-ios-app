@@ -72,11 +72,11 @@ class UserManager {
       )
       print("\(authResponse)")
       
-      // Save tokens
-      tokenStorage.saveTokens(
+      // Save tokens using exact server expiration timestamp
+      tokenStorage.saveTokensWithExpiration(
         accessToken: authResponse.authData.session.accessToken,
         refreshToken: authResponse.authData.session.refreshToken,
-        expiresIn: authResponse.authData.session.expiresIn
+        expiresAt: authResponse.authData.session.expiresAt
       )
       
       // Create user from API response

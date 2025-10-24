@@ -12,6 +12,12 @@ struct PlaidLinkRequest: Codable {
   let countryCodes: [String]
   let language: String
   
+  enum CodingKeys: String, CodingKey {
+    case products
+    case countryCodes = "country_codes"
+    case language
+  }
+  
   init(products: [String], countryCodes: [String], language: String) {
     self.products = products
     self.countryCodes = countryCodes

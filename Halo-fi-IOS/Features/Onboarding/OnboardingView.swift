@@ -9,9 +9,11 @@ import SwiftUI
 
 struct OnboardingView: View {
   @Environment(UserManager.self) private var userManager
+  @EnvironmentObject private var permissionManager: PermissionManager
   @State private var currentPage = 0
   @State private var showingSignUp = false
   @State private var showingSignIn = false
+  @State private var showingPermissionRequest = false
   
   private let onboardingPages = MockOnboardingData.pages
   
@@ -35,8 +37,20 @@ struct OnboardingView: View {
         OnboardingBottomSection(
           currentPage: currentPage,
           totalPages: onboardingPages.count,
-          onGetStarted: { showingSignUp = true },
-          onSignIn: { showingSignIn = true }
+          onGetStarted: { 
+            if permissionManager.microphonePermission == .notDetermined {
+              showingPermissionRequest = true
+            } else {
+              showingSignUp = true
+            }
+          },
+          onSignIn: { 
+            if permissionManager.microphonePermission == .notDetermined {
+              showingPermissionRequest = true
+            } else {
+              showingSignIn = true
+            }
+          }
         )
       }
     }
@@ -46,6 +60,28 @@ struct OnboardingView: View {
     }
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
+    }
+    .fullScreenCover(isPresented: $showingPermissionRequest) {
+      PermissionRequestView(
+        onPermissionGranted: {
+          showingPermissionRequest = false
+          // Continue to sign up/sign in based on what was originally requested
+          if currentPage == onboardingPages.count - 1 {
+            showingSignUp = true
+          } else {
+            showingSignIn = true
+          }
+        },
+        onSkip: {
+          showingPermissionRequest = false
+          // Allow user to continue without permission
+          if currentPage == onboardingPages.count - 1 {
+            showingSignUp = true
+          } else {
+            showingSignIn = true
+          }
+        }
+      )
     }
   }
 }

@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct VoiceAnimationView: View {
+  let isRecording: Bool
+  let isConnected: Bool
+  
   @State private var pulseScale: CGFloat = 1.0
   @State private var rotationAngle: Double = 0.0
   
@@ -82,12 +85,32 @@ struct VoiceAnimationView: View {
       pulseScale = 1.2
       rotationAngle = 360
     }
+    .onChange(of: isRecording) { _, newValue in
+      if newValue {
+        // Start more intense animation when recording
+        withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+          pulseScale = 1.4
+        }
+      } else {
+        // Return to normal animation when not recording
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+          pulseScale = 1.2
+        }
+      }
+    }
+    .onChange(of: isConnected) { _, newValue in
+      if !newValue {
+        // Stop animations when disconnected
+        pulseScale = 1.0
+        rotationAngle = 0.0
+      }
+    }
   }
 }
 
 #Preview {
   ZStack {
     Color.black.ignoresSafeArea()
-    VoiceAnimationView()
+    VoiceAnimationView(isRecording: false, isConnected: true)
   }
 }
