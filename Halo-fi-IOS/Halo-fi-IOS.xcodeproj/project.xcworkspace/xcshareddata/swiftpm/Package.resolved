@@ -1,5 +1,5 @@
 {
-  "originHash" : "8364e24122622da4829eb4c1cf2687cbfaf74447fa2324323734494742054164",
+  "originHash" : "d1050116094aac6c3e903b27577063dad8bd9fed063fac8654086e2f2ecbf8d1",
   "pins" : [
     {
       "identity" : "plaid-link-ios",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "ce3caa92ecd63ba824c02a1765977b1dc32d4a6d",
         "version" : "6.4.1"
+      }
+    },
+    {
+      "identity" : "purchases-ios-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RevenueCat/purchases-ios-spm.git",
+      "state" : {
+        "revision" : "27c98b8ad7ae17333ebe3be1113d89d96c6f7790",
+        "version" : "5.45.1"
       }
     },
     {

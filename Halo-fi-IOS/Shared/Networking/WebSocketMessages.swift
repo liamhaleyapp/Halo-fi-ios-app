@@ -10,23 +10,25 @@ import Foundation
 // MARK: - Outgoing Messages (Client to Server)
 
 struct VoiceStartMessage: Codable {
-    let type: String = "voice_start"
+    let type: String
     let sessionId: String
     let userId: String
     
     init(sessionId: String, userId: String) {
+        self.type = "voice_start"
         self.sessionId = sessionId
         self.userId = userId
     }
 }
 
 struct VoiceAudioMessage: Codable {
-    let type: String = "voice_audio"
+    let type: String
     let sessionId: String
     let audioData: String // Base64 encoded audio data
     let timestamp: Int64
     
     init(sessionId: String, audioData: Data, timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
+        self.type = "voice_audio"
         self.sessionId = sessionId
         self.audioData = audioData.base64EncodedString()
         self.timestamp = timestamp
@@ -34,19 +36,21 @@ struct VoiceAudioMessage: Codable {
 }
 
 struct VoiceEndMessage: Codable {
-    let type: String = "voice_end"
+    let type: String
     let sessionId: String
     
     init(sessionId: String) {
+        self.type = "voice_end"
         self.sessionId = sessionId
     }
 }
 
 struct VoicePingMessage: Codable {
-    let type: String = "ping"
+    let type: String
     let timestamp: Int64
     
     init() {
+        self.type = "ping"
         self.timestamp = Int64(Date().timeIntervalSince1970 * 1000)
     }
 }

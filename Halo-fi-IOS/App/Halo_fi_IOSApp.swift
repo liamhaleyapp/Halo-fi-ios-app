@@ -6,16 +6,23 @@
 //
 
 import SwiftUI
+import RevenueCat
 
 @main
 struct Halo_fi_IOSApp: App {
   @State private var userManager = UserManager()
+  @State private var subscriptionService = SubscriptionService()
   @StateObject private var permissionManager = PermissionManager.shared
+  
+  init() {
+    Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
+  }
   
   var body: some Scene {
     WindowGroup {
       ContentView()
         .environment(userManager)
+        .environment(subscriptionService)
         .environmentObject(permissionManager)
         .onAppear {
           // Request microphone permission early for accessibility
@@ -23,6 +30,11 @@ struct Halo_fi_IOSApp: App {
             if permissionManager.microphonePermission == .notDetermined {
               _ = await permissionManager.requestMicrophonePermission()
             }
+          }
+          
+          // Initialize subscription service
+          Task {
+            await subscriptionService.initialize()
           }
         }
     }

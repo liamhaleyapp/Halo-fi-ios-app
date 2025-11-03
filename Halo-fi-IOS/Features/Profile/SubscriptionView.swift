@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SubscriptionView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(SubscriptionService.self) private var subscriptionService
   
   // MARK: - Subscription State
   @State private var selectedPlan: SubscriptionPlan = .pro
@@ -16,6 +17,11 @@ struct SubscriptionView: View {
   @State private var showingChangePlan = false
   @State private var showingPaymentMethod = false
   @State private var showingCancelConfirmation = false
+  @State private var showingPurchaseAlert = false
+  @State private var purchaseAlertMessage = ""
+  @State private var showingRestoreAlert = false
+  @State private var restoreAlertMessage = ""
+  @State private var isLoadingPurchase = false
   
   var body: some View {
     NavigationView {
@@ -30,26 +36,178 @@ struct SubscriptionView: View {
           billingCycleSection
           actionButtonsSection
         }
+        
+        // Loading overlay
+        if isLoadingPurchase || subscriptionService.isLoading {
+          Color.black.opacity(0.7)
+            .ignoresSafeArea()
+          
+          VStack(spacing: 16) {
+            ProgressView()
+              .scaleEffect(1.5)
+              .tint(.white)
+            Text("Processing...")
+              .foregroundColor(.white)
+              .font(.subheadline)
+          }
+        }
       }
     }
     .navigationBarHidden(true)
+    .onAppear {
+      // If products haven't loaded, retry initialization
+      if subscriptionService.availablePackages.isEmpty && !subscriptionService.isLoading {
+        Task {
+          await subscriptionService.initialize()
+        }
+      }
+      
+      // Update selected plan from subscription when view appears
+      updateSelectedPlanFromSubscription()
+    }
+    .alert("Purchase", isPresented: $showingPurchaseAlert) {
+      Button("OK", role: .cancel) { }
+    } message: {
+      Text(purchaseAlertMessage)
+    }
+    .alert("Restore Purchases", isPresented: $showingRestoreAlert) {
+      Button("OK", role: .cancel) { }
+    } message: {
+      Text(restoreAlertMessage)
+    }
     .alert("Change Plan", isPresented: $showingChangePlan) {
-      Button("OK") { }
+      Button("Cancel", role: .cancel) { }
+      Button("Change", role: .destructive) {
+        Task {
+          await handlePurchase()
+        }
+      }
     } message: {
       Text("Plan change will take effect at your next billing cycle.")
     }
     .alert("Update Payment Method", isPresented: $showingPaymentMethod) {
       Button("OK") { }
     } message: {
-      Text("Redirecting to payment method update...")
+      Text("You can update your payment method in Settings > Apple ID > Subscriptions or App Store.")
     }
     .alert("Cancel Subscription", isPresented: $showingCancelConfirmation) {
       Button("Cancel", role: .cancel) { }
       Button("Yes, Cancel", role: .destructive) {
-        // TODO: Implement subscription cancellation
+        Task {
+          await handleCancelSubscription()
+        }
       }
     } message: {
-      Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period.")
+      Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")
+    }
+  }
+  
+  // MARK: - Helper Methods
+  
+  private func updateSelectedPlanFromSubscription() {
+    switch subscriptionService.currentSubscription {
+    case .basic:
+      selectedPlan = .basic
+    case .pro:
+      selectedPlan = .pro
+    case .max:
+      selectedPlan = .max
+    default:
+      break
+    }
+  }
+  
+  private func handlePurchase() async {
+    // Check if products are loaded
+    if subscriptionService.availablePackages.isEmpty {
+      // Try to initialize if not already loading
+      if !subscriptionService.isLoading {
+        await subscriptionService.initialize()
+      }
+      
+      // Wait a bit for products to load if still loading
+      if subscriptionService.isLoading {
+        var waitCount = 0
+        while subscriptionService.isLoading && waitCount < 10 {
+          try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+          waitCount += 1
+        }
+      }
+      
+      // Check again
+      if subscriptionService.availablePackages.isEmpty {
+        await MainActor.run {
+          purchaseAlertMessage = "Products are still loading. Please wait a moment and try again."
+          showingPurchaseAlert = true
+        }
+        return
+      }
+    }
+    
+    isLoadingPurchase = true
+    
+    let productId = selectedPlan.productId(for: billingCycle)
+    
+    do {
+      let result = try await subscriptionService.purchase(productId: productId)
+      
+      await MainActor.run {
+        isLoadingPurchase = false
+        
+        if result.success {
+          purchaseAlertMessage = "Successfully subscribed to \(selectedPlan.displayName)!"
+          updateSelectedPlanFromSubscription()
+        } else {
+          purchaseAlertMessage = "Purchase completed but subscription status is pending."
+        }
+        showingPurchaseAlert = true
+      }
+    } catch SubscriptionError.purchaseCancelled {
+      await MainActor.run {
+        isLoadingPurchase = false
+      }
+      // User cancelled - don't show error
+    } catch {
+      await MainActor.run {
+        isLoadingPurchase = false
+        purchaseAlertMessage = error.localizedDescription
+        showingPurchaseAlert = true
+      }
+    }
+  }
+  
+  private func handleRestorePurchases() async {
+    isLoadingPurchase = true
+    
+    do {
+      try await subscriptionService.restorePurchases()
+      
+      await MainActor.run {
+        isLoadingPurchase = false
+        updateSelectedPlanFromSubscription()
+        
+        if subscriptionService.hasActiveSubscription {
+          restoreAlertMessage = "Purchases restored successfully! You have access to \(subscriptionService.currentSubscription.displayName)."
+        } else {
+          restoreAlertMessage = "No active purchases found to restore."
+        }
+        showingRestoreAlert = true
+      }
+    } catch {
+      await MainActor.run {
+        isLoadingPurchase = false
+        restoreAlertMessage = error.localizedDescription
+        showingRestoreAlert = true
+      }
+    }
+  }
+  
+  private func handleCancelSubscription() {
+    // iOS doesn't allow programmatic cancellation - direct users to Settings
+    showingPaymentMethod = false
+    
+    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+      UIApplication.shared.open(url)
     }
   }
   
@@ -95,35 +253,39 @@ struct SubscriptionView: View {
         
         Spacer()
         
-        Text(selectedPlan.displayName)
+        Text(subscriptionService.currentSubscription.displayName)
           .font(.title2)
           .fontWeight(.bold)
           .foregroundColor(.white)
       }
       
-      HStack {
-        Text("Next Billing Date")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-        
-        Spacer()
-        
-        Text("December 15, 2024")
-          .font(.subheadline)
-          .foregroundColor(.white)
+      if let renewalDate = subscriptionService.renewalDate {
+        HStack {
+          Text("Next Billing Date")
+            .font(.subheadline)
+            .foregroundColor(.gray)
+          
+          Spacer()
+          
+          Text(renewalDate, style: .date)
+            .font(.subheadline)
+            .foregroundColor(.white)
+        }
       }
       
-      HStack {
-        Text("Amount")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-        
-        Spacer()
-        
-        Text(billingCycle == .monthly ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice)
-          .font(.title3)
-          .fontWeight(.semibold)
-          .foregroundColor(.purple)
+      if subscriptionService.hasActiveSubscription {
+        HStack {
+          Text("Status")
+            .font(.subheadline)
+            .foregroundColor(.gray)
+          
+          Spacer()
+          
+          Text("Active")
+            .font(.subheadline)
+            .fontWeight(.medium)
+            .foregroundColor(.green)
+        }
       }
     }
     .padding(.horizontal, 20)
@@ -219,18 +381,76 @@ struct SubscriptionView: View {
   // MARK: - Action Buttons Section
   private var actionButtonsSection: some View {
     VStack(spacing: 12) {
-      changePlanButton
-      updatePaymentButton
-      cancelSubscriptionButton
+      // Subscribe button if no active subscription, otherwise show change plan
+      if subscriptionService.hasActiveSubscription {
+        changePlanButton
+        updatePaymentButton
+        cancelSubscriptionButton
+      } else {
+        subscribeButton
+        restorePurchasesButton
+      }
     }
     .padding(.horizontal, 16)
     .padding(.bottom, 40)
   }
   
+  // MARK: - Subscribe Button
+  private var subscribeButton: some View {
+    Button(action: {
+      Task {
+        await handlePurchase()
+      }
+    }) {
+      HStack(spacing: 12) {
+        Image(systemName: "star.fill")
+          .font(.headline)
+          .foregroundColor(.white)
+        
+        Text("Subscribe to \(selectedPlan.displayName)")
+          .font(.subheadline)
+          .fontWeight(.semibold)
+          .foregroundColor(.white)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 48)
+      .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
+      .cornerRadius(12)
+    }
+    .disabled(isLoadingPurchase || subscriptionService.isLoading)
+  }
+  
+  // MARK: - Restore Purchases Button
+  private var restorePurchasesButton: some View {
+    Button(action: {
+      Task {
+        await handleRestorePurchases()
+      }
+    }) {
+      HStack(spacing: 12) {
+        Image(systemName: "arrow.clockwise.circle.fill")
+          .font(.headline)
+          .foregroundColor(.white)
+        
+        Text("Restore Purchases")
+          .font(.subheadline)
+          .fontWeight(.semibold)
+          .foregroundColor(.white)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 48)
+      .background(LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
+      .cornerRadius(12)
+    }
+    .disabled(isLoadingPurchase || subscriptionService.isLoading)
+  }
+  
   // MARK: - Change Plan Button
   private var changePlanButton: some View {
     Button(action: {
-      showingChangePlan = true
+      Task {
+        await handlePurchase()
+      }
     }) {
       HStack(spacing: 12) {
         Image(systemName: "arrow.triangle.2.circlepath")
@@ -247,6 +467,7 @@ struct SubscriptionView: View {
       .background(LinearGradient(colors: [Color.teal, Color.blue], startPoint: .leading, endPoint: .trailing))
       .cornerRadius(12)
     }
+    .disabled(isLoadingPurchase || subscriptionService.isLoading)
   }
   
   // MARK: - Update Payment Button
@@ -391,16 +612,40 @@ enum SubscriptionPlan: CaseIterable {
   var monthlyPrice: String {
     switch self {
     case .basic: return "$12.99/mo"
-    case .pro: return "$23.99/mo"
+    case .pro: return "$24.99/mo"
     case .max: return "$49.99/mo"
     }
   }
   
   var yearlyPrice: String {
     switch self {
-    case .basic: return "$125/yr"
-    case .pro: return "$245/yr"
-    case .max: return "$499.99/yr"
+    case .basic: return "$144.99/yr"
+    case .pro: return "$274.99/yr"
+    case .max: return "$549.99/yr"
+    }
+  }
+  
+  // RevenueCat Product IDs
+  var monthlyProductId: String {
+    switch self {
+    case .basic: return "com.halofi.basic.monthly"
+    case .pro: return "com.halofi.pro.monthly"
+    case .max: return "com.halofi.max.monthly"
+    }
+  }
+  
+  var yearlyProductId: String {
+    switch self {
+    case .basic: return "com.halofi.basic.yearly"
+    case .pro: return "com.halofi.pro.yearly"
+    case .max: return "com.halofi.max.yearly"
+    }
+  }
+  
+  func productId(for billingCycle: BillingCycle) -> String {
+    switch billingCycle {
+    case .monthly: return monthlyProductId
+    case .yearly: return yearlyProductId
     }
   }
 }

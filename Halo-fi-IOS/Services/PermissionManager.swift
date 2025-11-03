@@ -43,16 +43,31 @@ class PermissionManager: ObservableObject {
     }
     
     private func checkMicrophonePermission() {
-        let status = AVAudioSession.sharedInstance().recordPermission
-        switch status {
-        case .granted:
-            microphonePermission = .granted
-        case .denied:
-            microphonePermission = .denied
-        case .undetermined:
-            microphonePermission = .notDetermined
-        @unknown default:
-            microphonePermission = .notDetermined
+        if #available(iOS 17.0, *) {
+            let status = AVAudioApplication.shared.recordPermission
+            switch status {
+            case .granted:
+                microphonePermission = .granted
+            case .denied:
+                microphonePermission = .denied
+            case .undetermined:
+                microphonePermission = .notDetermined
+            @unknown default:
+                microphonePermission = .notDetermined
+            }
+        } else {
+            // Fallback for iOS 16 and earlier
+            let status = AVAudioSession.sharedInstance().recordPermission
+            switch status {
+            case .granted:
+                microphonePermission = .granted
+            case .denied:
+                microphonePermission = .denied
+            case .undetermined:
+                microphonePermission = .notDetermined
+            @unknown default:
+                microphonePermission = .notDetermined
+            }
         }
         updateAllPermissionsStatus()
     }
