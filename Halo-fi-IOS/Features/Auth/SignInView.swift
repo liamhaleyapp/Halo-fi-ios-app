@@ -10,9 +10,12 @@ import SwiftUI
 struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
+  @Environment(SubscriptionService.self) private var subscriptionService
   @State private var phoneNumber = ""
   @State private var password = ""
   @State private var showingSignUp = false
+  @State private var showingSubscriptionOnboarding = false
+  @State private var showingPlaidOnboarding = false
   @State private var isLoading = false
   @State private var showingForgotPassword = false
   @State private var errorMessage = ""
@@ -100,6 +103,18 @@ struct SignInView: View {
               .foregroundColor(.blue)
               .font(.caption)
               
+              Button("💳 Test Subscription Flow") {
+                testSubscriptionFlow()
+              }
+              .foregroundColor(.purple)
+              .font(.caption)
+              
+              Button("🏦 Test Plaid Flow") {
+                testPlaidFlow()
+              }
+              .foregroundColor(.cyan)
+              .font(.caption)
+              
               Button("🔧 Clear User Data") {
                 clearUserData()
               }
@@ -123,6 +138,12 @@ struct SignInView: View {
     .sheet(isPresented: $showingForgotPassword) {
       ForgotPasswordView()
     }
+    .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
+      SubscriptionOnboardingFlowView()
+    }
+    .fullScreenCover(isPresented: $showingPlaidOnboarding) {
+      PlaidOnboardingView()
+    }
     .alert("Sign In Error", isPresented: $showingError) {
       Button("OK") { }
     } message: {
@@ -142,8 +163,27 @@ struct SignInView: View {
       do {
         let phoneNum = "+1"+phoneNumber
         try await userManager.signIn(phoneNumber: phoneNum, password: password)
-        await MainActor.run {
-          dismiss()
+        
+        // Check if user has completed onboarding
+        if let user = userManager.currentUser, user.isOnboarded {
+          // User is fully onboarded - just dismiss
+          await MainActor.run {
+            dismiss()
+          }
+        } else {
+          // User needs to complete onboarding
+          // Check subscription status
+          await subscriptionService.initialize()
+          
+          await MainActor.run {
+            if subscriptionService.hasActiveSubscription {
+              // Has subscription - go to Plaid
+              showingPlaidOnboarding = true
+            } else {
+              // No subscription - go to subscription flow
+              showingSubscriptionOnboarding = true
+            }
+          }
         }
       } catch {
         await MainActor.run {
@@ -203,6 +243,21 @@ struct SignInView: View {
         showingError = false
       }
     }
+  }
+  
+  // MARK: - Debug Onboarding Flow Actions
+  private func testSubscriptionFlow() {
+    print("💳 DEBUG: Testing subscription onboarding flow")
+    // Don't set authentication - just show the flow directly
+    // This allows testing without triggering navigation to main app
+    showingSubscriptionOnboarding = true
+  }
+  
+  private func testPlaidFlow() {
+    print("🏦 DEBUG: Testing Plaid onboarding flow")
+    // Don't set authentication - just show the flow directly
+    // This allows testing without triggering navigation to main app
+    showingPlaidOnboarding = true
   }
 }
 

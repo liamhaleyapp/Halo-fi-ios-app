@@ -10,6 +10,7 @@ import LinkKit
 
 struct PlaidOnboardingView: View {
   @SwiftUI.Environment(\.dismiss) private var dismiss
+  @SwiftUI.Environment(UserManager.self) private var userManager
   @StateObject private var plaidManager = PlaidManager()
   @State private var showingPlaidLink = false
   @State private var showingError = false
@@ -92,7 +93,27 @@ struct PlaidOnboardingView: View {
         }
       } catch {
         await MainActor.run {
-          errorMessage = "Failed to start bank connection: \(error.localizedDescription)"
+          // Provide more specific error messages
+          if let authError = error as? AuthError {
+            switch authError {
+            case .tokenExpired:
+              errorMessage = "Your session has expired. Please sign in again."
+            case .serverError(let code):
+              errorMessage = "Server error (\(code)). Please try again later."
+            case .networkError:
+              errorMessage = "Network connection failed. Please check your internet connection."
+            case .validationError:
+              errorMessage = "Invalid request. Please try again."
+            case .invalidCredentials:
+              errorMessage = "Invalid credentials. Please sign in again."
+            case .emailAlreadyExists:
+              errorMessage = "An account with this email already exists."
+            case .unknownError:
+              errorMessage = "An unknown error occurred. Please try again."
+            }
+          } else {
+            errorMessage = "Failed to start bank connection: \(error.localizedDescription)"
+          }
           showingError = true
         }
       }
@@ -104,8 +125,9 @@ struct PlaidOnboardingView: View {
       // Exchange the public token with your backend
       try await plaidManager.exchangePublicToken(linkSuccess.publicToken)
       
-      // Success - dismiss and return to main app
+      // Mark onboarding as complete
       await MainActor.run {
+        userManager.completeOnboarding()
         dismiss()
       }
     } catch {
@@ -156,3 +178,4 @@ struct PlaidOnboardingView: View {
     }
   }
 }
+

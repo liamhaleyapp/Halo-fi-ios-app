@@ -32,12 +32,9 @@ class UserManager {
   // MARK: - Authentication Methods
   
   func signUp(firstName: String, lastName: String, phone: String, email: String, password: String) async throws {
-    print("🟡 UserManager: Starting signup process")
     isLoading = true
     
     do {
-      print("🟡 UserManager: Calling AuthService.register")
-
       try await authService.register(
         firstName: firstName,
         lastName: lastName,
@@ -46,15 +43,10 @@ class UserManager {
         password: password
       )
       
-      print("✅ UserManager: Signup successful")
-      // Signup successful - user will need to sign in separately
       await MainActor.run {
         self.isLoading = false
       }
     } catch {
-      print("❌ UserManager: Signup failed with error: \(error)")
-      print("❌ UserManager: Error type: \(type(of: error))")
-      print("❌ UserManager: Error description: \(error.localizedDescription)")
       await MainActor.run {
         self.isLoading = false
       }
@@ -70,7 +62,6 @@ class UserManager {
         phoneNumber: phoneNumber,
         password: password
       )
-      print("\(authResponse)")
       
       // Save tokens using exact server expiration timestamp
       tokenStorage.saveTokensWithExpiration(

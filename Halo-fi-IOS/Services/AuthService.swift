@@ -44,11 +44,8 @@ class AuthService {
   
   // MARK: - Register
   func register(firstName: String, lastName: String, email: String, phone: String, password: String) async throws {
-    print("🔵 AuthService: Starting signup request")
-    
     // Validate required fields
     if firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
-      print("❌ AuthService: Missing required fields")
       throw AuthError.validationError([])
     }
     
@@ -60,28 +57,14 @@ class AuthService {
       password: password
     )
     
-    do {
-      let requestBody = try JSONEncoder().encode(registerRequest)
-      
-      // Log the JSON string for debugging
-      if let jsonString = String(data: requestBody, encoding: .utf8) {
-        print("🔵 AuthService: Request JSON: \(jsonString)")
-      }
-      print("🔵 AuthService: Request body encoded successfully")
-      
-      print("🔵 AuthService: Making network request...")
-      let _: EmptyResponse = try await networkService.publicRequest(
-        endpoint: "/users/signup",
-        method: .POST,
-        body: requestBody,
-        responseType: EmptyResponse.self
-      )
-      
-      print("✅ AuthService: Signup successful")
-    } catch {
-      print("❌ AuthService: Signup failed with error: \(error)")
-      throw error
-    }
+    let requestBody = try JSONEncoder().encode(registerRequest)
+    
+    let _: SignupResponse = try await networkService.publicRequest(
+      endpoint: "/users/signup",
+      method: .POST,
+      body: requestBody,
+      responseType: SignupResponse.self
+    )
   }
   
   // MARK: - Refresh Token

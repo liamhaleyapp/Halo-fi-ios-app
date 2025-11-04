@@ -44,7 +44,14 @@ class NetworkService {
             throw AuthError.tokenExpired
         }
         
-        if httpResponse.statusCode == 200 {
+        // Accept both 200 (OK) and 201 (Created) as success status codes
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            // Handle empty responses (e.g., 201 Created with no body)
+            if data.isEmpty {
+                // Try to decode from empty JSON object
+                let emptyJSON = "{}".data(using: .utf8)!
+                return try JSONDecoder().decode(T.self, from: emptyJSON)
+            }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
             throw AuthError.serverError(httpResponse.statusCode)
@@ -75,7 +82,14 @@ class NetworkService {
             throw AuthError.networkError
         }
         
-        if httpResponse.statusCode == 200 {
+        // Accept both 200 (OK) and 201 (Created) as success status codes
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            // Handle empty responses (e.g., 201 Created with no body)
+            if data.isEmpty {
+                // Try to decode from empty JSON object
+                let emptyJSON = "{}".data(using: .utf8)!
+                return try JSONDecoder().decode(T.self, from: emptyJSON)
+            }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
             throw AuthError.serverError(httpResponse.statusCode)

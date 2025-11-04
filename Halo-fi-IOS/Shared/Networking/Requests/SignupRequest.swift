@@ -12,4 +12,12 @@ struct SignupRequest: Codable {
   let email:      String
   let phone:      String
   let password:   String
+  
+  enum CodingKeys: String, CodingKey {
+    case firstName = "first_name"
+    case lastName = "last_name"
+    case email
+    case phone
+    case password
+  }
 }

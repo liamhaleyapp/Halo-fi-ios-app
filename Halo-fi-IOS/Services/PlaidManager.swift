@@ -21,26 +21,34 @@ class PlaidManager: ObservableObject {
   func createLinkToken() async throws {
     isCreatingLinkToken = true
     
+    defer {
+      // Always reset the loading state, even if there's an error
+      isCreatingLinkToken = false
+    }
+    
     let linkTokenRequest = PlaidLinkRequest()
     let requestBody = try JSONEncoder().encode(linkTokenRequest)
     
     let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
-      endpoint: "/bank/link/create",
+      endpoint: "/bank/multi-link/create",
       method: .POST,
       body: requestBody,
       responseType: PlaidLinkResponse.self
     )
     
-    // Debug: Print the response
-    print("Plaid Link Response: \(linkResponse)")
+    if let error = linkResponse.error {
+      throw PlaidError.linkTokenCreationFailed
+    }
     
     guard linkResponse.success else {
-      isCreatingLinkToken = false
+      throw PlaidError.linkTokenCreationFailed
+    }
+    
+    guard !linkResponse.linkToken.isEmpty else {
       throw PlaidError.linkTokenCreationFailed
     }
     
     linkToken = linkResponse.linkToken
-    isCreatingLinkToken = false
   }
   
   // MARK: - Plaid Handler Creation
@@ -63,7 +71,7 @@ class PlaidManager: ObservableObject {
     }
     
     configuration.onEvent = { event in
-      print("Link Event: \(event.eventName)")
+      // Handle Plaid events if needed
     }
     
     // Create the handler using Plaid.create
@@ -72,8 +80,7 @@ class PlaidManager: ObservableObject {
     case .success(let handler):
       linkHandler = handler
       return handler
-    case .failure(let error):
-      print("Failed to create Plaid Handler: \(error)")
+    case .failure:
       return nil
     }
   }
@@ -86,6 +93,5 @@ class PlaidManager: ObservableObject {
     try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
     
     // Simulate successful exchange
-    print("Successfully exchanged public token: \(publicToken)")
   }
 }

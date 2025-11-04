@@ -11,6 +11,8 @@ struct SubscriptionView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(SubscriptionService.self) private var subscriptionService
   
+  var hideHeader: Bool = false // Allow hiding header when embedded in onboarding
+  
   // MARK: - Subscription State
   @State private var selectedPlan: SubscriptionPlan = .pro
   @State private var billingCycle: BillingCycle = .monthly
@@ -30,7 +32,13 @@ struct SubscriptionView: View {
         Color.black.ignoresSafeArea()
         
         VStack(spacing: 16) {
-          headerView
+          if !hideHeader {
+            headerView
+          } else {
+            // Add top padding when header is hidden (for onboarding)
+            Spacer()
+              .frame(height: 60)
+          }
           currentPlanSection
           planOptionsSection
           billingCycleSection

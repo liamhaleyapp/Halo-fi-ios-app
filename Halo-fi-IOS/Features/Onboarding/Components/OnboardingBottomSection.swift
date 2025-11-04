@@ -12,7 +12,7 @@ struct OnboardingBottomSection: View {
     let currentPage: Int
     let totalPages: Int
     let onGetStarted: () -> Void
-    let onSignIn: () -> Void
+    let onSignIn: (() -> Void)?
     
     var body: some View {
         VStack(spacing: 24) {
@@ -33,11 +33,13 @@ struct OnboardingBottomSection: View {
                     onGetStarted()
                 }
                 
-                // Sign In Button
-                Button(action: onSignIn) {
-                    Text("I already have an account")
-                        .font(.body)
-                        .foregroundColor(.blue)
+                // Sign In Button (only show if handler is provided)
+                if let onSignIn = onSignIn {
+                    Button(action: onSignIn) {
+                        Text("I already have an account")
+                            .font(.body)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
             .padding(.horizontal, 20)

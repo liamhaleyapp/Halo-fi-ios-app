@@ -17,7 +17,6 @@ struct SignUpView: View {
   @State private var lastName = ""
   @State private var phoneNumber = ""
   @State private var showingSignIn = false
-  @State private var showingPlaidOnboarding = false
   @State private var isLoading = false
   
   var body: some View {
@@ -106,9 +105,6 @@ struct SignUpView: View {
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
     }
-    .sheet(isPresented: $showingPlaidOnboarding) {
-      PlaidOnboardingView()
-    }
   }
   
   // MARK: - Form Validation
@@ -127,6 +123,7 @@ struct SignUpView: View {
       isLoading = true
       
       do {
+        // Step 1: Sign up
         try await userManager.signUp(
           firstName: firstName,
           lastName: lastName,
@@ -135,9 +132,17 @@ struct SignUpView: View {
           password: password
         )
         
+        // Step 2: Auto sign in after successful sign up
+        try await userManager.signIn(
+          phoneNumber: "+1"+phoneNumber,
+          password: password
+        )
+        
         await MainActor.run {
           isLoading = false
-          showingPlaidOnboarding = true
+          // User is now authenticated but not onboarded
+          // MainTabView will detect this and show the appropriate onboarding flow
+          // No need to present onboarding from here as the view hierarchy will change
         }
         
       } catch {
