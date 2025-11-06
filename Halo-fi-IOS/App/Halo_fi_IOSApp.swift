@@ -12,6 +12,7 @@ import RevenueCat
 struct Halo_fi_IOSApp: App {
   @State private var userManager = UserManager()
   @State private var subscriptionService = SubscriptionService()
+  @State private var bankDataManager = BankDataManager()
   @StateObject private var permissionManager = PermissionManager.shared
   
   init() {
@@ -23,6 +24,7 @@ struct Halo_fi_IOSApp: App {
       ContentView()
         .environment(userManager)
         .environment(subscriptionService)
+        .environment(bankDataManager)
         .environmentObject(permissionManager)
         .onAppear {
           // Request microphone permission early for accessibility
