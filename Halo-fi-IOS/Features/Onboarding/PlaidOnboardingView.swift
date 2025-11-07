@@ -16,6 +16,9 @@ struct PlaidOnboardingView: View {
   @State private var showingError = false
   @State private var errorMessage = ""
   
+  // Feature flag to bypass Plaid - set to true to skip Plaid flow
+  private let bypassPlaid: Bool = true
+  
   var body: some View {
     NavigationView {
       VStack(spacing: 0) {
@@ -23,7 +26,10 @@ struct PlaidOnboardingView: View {
         PlaidHeader(onCancel: { dismiss() })
         
         // Plaid Link Interface
-        if plaidManager.isCreatingLinkToken {
+        if bypassPlaid {
+          // Bypass mode - show skip button
+          bypassPlaidView
+        } else if plaidManager.isCreatingLinkToken {
           PlaidLoadingView()
         } else if showingPlaidLink, let handler = plaidManager.linkHandler {
           LinkController(handler: handler)
@@ -55,13 +61,72 @@ struct PlaidOnboardingView: View {
       .navigationBarHidden(true)
     }
     .onAppear {
-      startPlaidFlow()
+      if bypassPlaid {
+        // Automatically skip Plaid and mark onboarding complete
+        // Small delay to prevent view flashing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+          handleBypassPlaid()
+        }
+      } else {
+        startPlaidFlow()
+      }
     }
     .alert("Connection Error", isPresented: $showingError) {
       Button("OK") { }
     } message: {
       Text(errorMessage)
     }
+  }
+  
+  // MARK: - Bypass Plaid View
+  private var bypassPlaidView: some View {
+    VStack(spacing: 24) {
+      Spacer()
+      
+      Image(systemName: "checkmark.circle.fill")
+        .font(.system(size: 80))
+        .foregroundColor(.green)
+      
+      Text("Plaid Bypassed")
+        .font(.title)
+        .fontWeight(.bold)
+        .foregroundColor(.white)
+      
+      Text("You can connect your bank account later from the Accounts section.")
+        .font(.body)
+        .foregroundColor(.gray)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 40)
+      
+      Spacer()
+      
+      Button("Continue") {
+        handleBypassPlaid()
+      }
+      .font(.headline)
+      .foregroundColor(.white)
+      .frame(maxWidth: .infinity)
+      .padding()
+      .background(
+        LinearGradient(
+          colors: [Color.blue, Color.purple],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      )
+      .cornerRadius(12)
+      .padding(.horizontal, 40)
+      .padding(.bottom, 40)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color.black)
+  }
+  
+  // MARK: - Bypass Handler
+  private func handleBypassPlaid() {
+    // Mark onboarding as complete without going through Plaid
+    userManager.completeOnboarding()
+    dismiss()
   }
   
   // MARK: - Plaid Flow Methods

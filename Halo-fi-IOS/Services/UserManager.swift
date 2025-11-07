@@ -43,7 +43,18 @@ class UserManager {
         password: password
       )
       
+      // After successful signup, create a user object with the provided data
+      // The user will be fully populated after they sign in
+      let user = User(
+        id: UUID().uuidString, // Temporary ID, will be replaced on login
+        email: email,
+        firstName: firstName,
+        lastName: lastName.isEmpty ? nil : lastName,
+        phone: phone
+      )
+      
       await MainActor.run {
+        // Don't set as authenticated yet, wait for sign in
         self.isLoading = false
       }
     } catch {
@@ -72,10 +83,43 @@ class UserManager {
       
       // Create user from API response
       let authUser = authResponse.authData.authUser
+      
+      let trimmedDisplayName = authUser.appMetaData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+      
+      let rawFirstName = authUser.firstName?.trimmingCharacters(in: .whitespacesAndNewlines)
+      let sanitizedFirstName: String
+      if let first = rawFirstName, !first.isEmpty {
+        sanitizedFirstName = first
+      } else if !trimmedDisplayName.isEmpty {
+        sanitizedFirstName = trimmedDisplayName.components(separatedBy: " ").first ?? trimmedDisplayName
+      } else {
+        sanitizedFirstName = "User"
+      }
+      
+      var sanitizedLastName: String?
+      if let last = authUser.lastName?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty {
+        sanitizedLastName = last
+      } else {
+        let nameComponents = trimmedDisplayName.components(separatedBy: " ")
+        if nameComponents.count > 1 {
+          let joined = nameComponents.dropFirst().joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+          if !joined.isEmpty {
+            sanitizedLastName = joined
+          }
+        }
+      }
+      
+      let trimmedPhone = authUser.phone.trimmingCharacters(in: .whitespacesAndNewlines)
+      let sanitizedPhone = trimmedPhone.isEmpty ? nil : trimmedPhone
+      let parsedDateOfBirth = parseDate(authUser.dateOfBirth)
+      
       let user = User(
         id: authUser.authUserId,
         email: authUser.email,
-        firstName: authUser.appMetaData.displayName
+        firstName: sanitizedFirstName,
+        lastName: sanitizedLastName,
+        phone: sanitizedPhone,
+        dateOfBirth: parsedDateOfBirth
       )
       
       await MainActor.run {
@@ -83,6 +127,12 @@ class UserManager {
         self.isAuthenticated = true
         self.isLoading = false
         self.saveUserToStorage()
+      }
+      
+      // Fetch full profile data from server after login
+      // This will update the user with any additional fields from /auth/me
+      Task {
+        try? await fetchUserProfile()
       }
     } catch {
       await MainActor.run {
@@ -138,6 +188,177 @@ class UserManager {
       DispatchQueue.main.async {
         self.completeOnboarding()
       }
+    }
+  }
+  
+  // MARK: - User Profile Management
+  
+  /// Fetches the complete user profile from the server
+  func fetchUserProfile() async throws {
+    isLoading = true
+    
+    do {
+      let profileResponse = try await authService.getUserProfile()
+      
+      // Debug: Print raw response
+      print("🔍 /auth/me Response:")
+      print("   Success: \(profileResponse.success)")
+      print("   Message: \(profileResponse.message ?? "nil")")
+      
+      guard let wrapper = profileResponse.data else {
+        print("⚠️ /auth/me: No user data in response")
+        throw AuthError.networkError
+      }
+      
+      let profileData = wrapper.user
+      
+      await MainActor.run {
+        self.applyProfileData(
+          profileData,
+          overrideFirstName: nil,
+          overrideLastName: nil,
+          overridePhone: nil
+        )
+        self.isLoading = false
+      }
+    } catch {
+      await MainActor.run {
+        self.isLoading = false
+      }
+      throw error
+    }
+  }
+  
+  /// Helper method to parse date strings in various formats
+  private func parseDate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    
+    // Try ISO8601 formatters first
+    let iso8601FormatterWithFractional = ISO8601DateFormatter()
+    iso8601FormatterWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    
+    let iso8601Formatter = ISO8601DateFormatter()
+    iso8601Formatter.formatOptions = [.withInternetDateTime]
+    
+    let formatters: [DateFormatter?] = [
+      // ISO 8601 formatters
+      nil, // Placeholder for iso8601FormatterWithFractional
+      nil, // Placeholder for iso8601Formatter
+      // Custom formatters for common date formats
+      createDateFormatter(format: "yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ"),
+      createDateFormatter(format: "yyyy-MM-dd'T'HH:mm:ssZ"),
+      createDateFormatter(format: "yyyy-MM-dd"),
+      createDateFormatter(format: "yyyy/MM/dd")
+    ]
+    
+    // Try ISO8601 formatters first
+    if let date = iso8601FormatterWithFractional.date(from: dateString) {
+      return date
+    }
+    if let date = iso8601Formatter.date(from: dateString) {
+      return date
+    }
+    
+    // Try custom formatters
+    for formatter in formatters.compactMap({ $0 }) {
+      if let date = formatter.date(from: dateString) {
+        return date
+      }
+    }
+    
+    return nil
+  }
+  
+  private func createDateFormatter(format: String) -> DateFormatter {
+    let formatter = DateFormatter()
+    formatter.dateFormat = format
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    return formatter
+  }
+  
+  private func applyProfileData(
+    _ profileData: UserProfileData,
+    overrideFirstName: String?,
+    overrideLastName: String?,
+    overridePhone: String?
+  ) {
+    // Debug: Print all profile data fields
+    print("📋 Profile Data:")
+    print("   ID: \(profileData.id)")
+    print("   Email: \(profileData.email)")
+    print("   Phone: \(profileData.phone ?? "nil")")
+    print("   First Name: \(profileData.firstName)")
+    print("   Last Name: \(profileData.lastName ?? "nil")")
+    print("   Status: \(profileData.status ?? "nil")")
+    print("   Date of Birth: \(profileData.dateOfBirth ?? "nil")")
+    print("   Location: \(profileData.location ?? "nil")")
+    
+    let resolvedFirstName = (overrideFirstName ?? profileData.firstName).trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedLastName = overrideLastName ?? profileData.lastName
+    let sanitizedLastName = (resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? nil : resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedPhone = (overridePhone ?? profileData.phone)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedDateOfBirth = parseDate(profileData.dateOfBirth) ?? currentUser?.dateOfBirth
+    
+    let updatedUser = User(
+      id: profileData.id,
+      email: profileData.email,
+      firstName: resolvedFirstName,
+      lastName: sanitizedLastName,
+      phone: resolvedPhone,
+      dateOfBirth: resolvedDateOfBirth,
+      createdAt: currentUser?.createdAt ?? Date(),
+      isOnboarded: currentUser?.isOnboarded ?? false
+    )
+    
+    currentUser = updatedUser
+    saveUserToStorage()
+  }
+  
+  func updateUserProfile(
+    firstName: String? = nil,
+    lastName: String? = nil,
+    email: String? = nil,
+    phone: String? = nil
+  ) async throws {
+    guard currentUser != nil else {
+      throw AuthError.networkError
+    }
+    
+    let sanitizedFirstName = firstName?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let sanitizedLastName = lastName?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let sanitizedPhone = phone?.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    let request = UpdateUserProfileRequest(
+      firstName: sanitizedFirstName,
+      lastName: sanitizedLastName?.isEmpty == true ? nil : sanitizedLastName,
+      status: nil,
+      parents: nil,
+      motivations: nil,
+      referralCode: nil,
+      dateOfBirth: nil,
+      location: nil,
+      maritalStatus: nil,
+      dependent: nil,
+      householdSize: nil,
+      phone: sanitizedPhone?.isEmpty == true ? nil : sanitizedPhone
+    )
+    
+    let response = try await authService.updateUserProfile(request: request)
+    
+    guard let wrapper = response.data else {
+      throw AuthError.serverError(500)
+    }
+    
+    let profileData = wrapper.user
+    
+    await MainActor.run {
+      self.applyProfileData(
+        profileData,
+        overrideFirstName: sanitizedFirstName,
+        overrideLastName: sanitizedLastName,
+        overridePhone: sanitizedPhone
+      )
     }
   }
   

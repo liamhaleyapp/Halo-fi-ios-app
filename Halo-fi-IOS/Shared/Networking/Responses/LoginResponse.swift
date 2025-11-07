@@ -32,8 +32,11 @@ struct AuthData: Codable {
 
 struct AuthUser: Codable {
   let authUserId: String
+  let firstName: String?
+  let lastName: String?
   let email: String
   let phone: String
+  let dateOfBirth: String?
   let emailConfirmed: Bool
   let phoneConfirmed: Bool
   let createdAt: String
@@ -42,8 +45,11 @@ struct AuthUser: Codable {
   
   enum CodingKeys: String, CodingKey {
     case authUserId = "id"
+    case firstName = "first_name"
+    case lastName = "last_name"
     case email
     case phone
+    case dateOfBirth = "date_of_birth"
     case emailConfirmed = "email_confirmed"
     case phoneConfirmed = "phone_confirmed"
     case createdAt = "created_at"

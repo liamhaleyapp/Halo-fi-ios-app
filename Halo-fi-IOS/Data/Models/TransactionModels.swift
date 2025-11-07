@@ -12,10 +12,6 @@ struct TransactionLocation: Codable {
     // Dynamic properties that can vary
     let additionalProperties: [String: AnyCodable]?
     
-    enum CodingKeys: String, CodingKey {
-        // Add any known keys here if needed
-    }
-    
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
         var properties: [String: AnyCodable] = [:]

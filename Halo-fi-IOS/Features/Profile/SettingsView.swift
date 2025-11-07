@@ -105,6 +105,7 @@ struct SettingsView: View {
         .navigationBarHidden(true)
         .fullScreenCover(isPresented: $showingProfile) {
             ProfileView()
+                .environment(userManager)
         }
         .fullScreenCover(isPresented: $showingPreferences) {
             PreferencesView()

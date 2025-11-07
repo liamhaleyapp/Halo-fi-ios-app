@@ -46,6 +46,14 @@ class NetworkService {
         
         // Accept both 200 (OK) and 201 (Created) as success status codes
         if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            // Debug: Print raw response for /auth/me endpoint
+            if endpoint.contains("/auth/me") {
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("📥 Raw /auth/me Response (Status \(httpResponse.statusCode)):")
+                    print(responseString)
+                }
+            }
+            
             // Handle empty responses (e.g., 201 Created with no body)
             if data.isEmpty {
                 // Try to decode from empty JSON object

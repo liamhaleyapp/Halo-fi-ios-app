@@ -9,12 +9,19 @@ import SwiftUI
 
 struct ProfileView: View {
   @Environment(\.dismiss) var dismiss
-  @State private var fullName = "Liam Haley"
-  @State private var email = "liam.haley@example.com"
-  @State private var phoneNumber = "+1 (555) 123-4567"
-  @State private var dateOfBirth = Date()
-  @State private var showingDatePicker = false
+  @Environment(UserManager.self) private var userManager
+  
+  @State private var firstName = ""
+  @State private var lastName = ""
+  @State private var email = ""
+  @State private var phoneNumber = ""
   @State private var hasChanges = false
+  @State private var isSaving = false
+  @State private var isLoadingProfile = false
+  @State private var originalFirstName = ""
+  @State private var originalLastName = ""
+  @State private var originalEmail = ""
+  @State private var originalPhoneNumber = ""
   
   var body: some View {
     ZStack {
@@ -31,9 +38,16 @@ struct ProfileView: View {
             // Personal Information Section
             VStack(spacing: 24) {
               ProfileField(
-                title: "Full Name",
-                value: $fullName,
-                placeholder: "Enter your full name",
+                title: "First Name",
+                value: $firstName,
+                placeholder: "Enter your first name",
+                icon: "person.fill"
+              )
+              
+              ProfileField(
+                title: "Last Name",
+                value: $lastName,
+                placeholder: "Enter your last name",
                 icon: "person.fill"
               )
               
@@ -42,7 +56,8 @@ struct ProfileView: View {
                 value: $email,
                 placeholder: "Enter your email",
                 icon: "envelope.fill",
-                keyboardType: .emailAddress
+                keyboardType: .emailAddress,
+                isDisabled: true
               )
               
               ProfileField(
@@ -52,11 +67,6 @@ struct ProfileView: View {
                 icon: "phone.fill",
                 keyboardType: .phonePad
               )
-              
-              // Date of Birth
-              DateOfBirthField(selectedDate: dateOfBirth) {
-                showingDatePicker = true
-              }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
@@ -64,7 +74,7 @@ struct ProfileView: View {
             .cornerRadius(20)
             
             // Save Button
-            SaveProfileButton(isEnabled: hasChanges, onSave: saveProfile)
+            SaveProfileButton(isEnabled: hasChanges && !isSaving, onSave: saveProfile)
             
             Spacer(minLength: 40)
           }
@@ -73,27 +83,95 @@ struct ProfileView: View {
       }
     }
     .navigationBarHidden(true)
-    .sheet(isPresented: $showingDatePicker) {
-      DatePickerSheet(selectedDate: $dateOfBirth)
+    .onAppear {
+      loadUserData()
+      // Fetch fresh profile data from server
+      Task {
+        await fetchProfileData()
+      }
     }
-    .onChange(of: fullName) { _, _ in hasChanges = true }
-    .onChange(of: email) { _, _ in hasChanges = true }
-    .onChange(of: phoneNumber) { _, _ in hasChanges = true }
-    .onChange(of: dateOfBirth) { _, _ in hasChanges = true }
+    .onChange(of: firstName) { _, _ in checkForChanges() }
+    .onChange(of: lastName) { _, _ in checkForChanges() }
+    .onChange(of: phoneNumber) { _, _ in checkForChanges() }
+  }
+  
+  private func loadUserData() {
+    guard let user = userManager.currentUser else { return }
+    
+    firstName = user.firstName
+    lastName = user.lastName ?? ""
+    email = user.email
+    phoneNumber = user.phone ?? ""
+    
+    // Store original values for change detection
+    originalFirstName = user.firstName
+    originalLastName = user.lastName ?? ""
+    originalEmail = user.email
+    originalPhoneNumber = user.phone ?? ""
+  }
+  
+  private func fetchProfileData() async {
+    isLoadingProfile = true
+    
+    do {
+      try await userManager.fetchUserProfile()
+      
+      // Reload data after fetching
+      await MainActor.run {
+        loadUserData()
+        isLoadingProfile = false
+      }
+    } catch {
+      await MainActor.run {
+        isLoadingProfile = false
+      }
+      // Silently fail - we'll still show cached data
+      print("Error fetching profile: \(error)")
+    }
+  }
+  
+  private func checkForChanges() {
+    // Note: email changes are not tracked since email updates require verification
+    hasChanges = 
+      firstName != originalFirstName ||
+      lastName != originalLastName ||
+      phoneNumber != originalPhoneNumber
   }
   
   private func saveProfile() {
-    // TODO: Implement actual save logic
-    // For now, just show success feedback
-    
-    // Haptic feedback
-    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-    impactFeedback.impactOccurred()
-    
-    // Reset changes flag
-    hasChanges = false
-    
-    // TODO: Show success toast or alert
+    Task {
+      isSaving = true
+      
+      // Haptic feedback
+      let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+      impactFeedback.impactOccurred()
+      
+      do {
+        try await userManager.updateUserProfile(
+          firstName: firstName,
+          lastName: lastName.isEmpty ? nil : lastName,
+          phone: phoneNumber.isEmpty ? nil : phoneNumber
+        )
+        
+        // Update original values after successful save
+        await MainActor.run {
+          originalFirstName = firstName
+          originalLastName = lastName
+          originalEmail = email
+          originalPhoneNumber = phoneNumber
+          hasChanges = false
+          isSaving = false
+        }
+        
+        // TODO: Show success toast or alert
+      } catch {
+        await MainActor.run {
+          isSaving = false
+        }
+        // TODO: Show error message
+        print("Error saving profile: \(error)")
+      }
+    }
   }
 }
 

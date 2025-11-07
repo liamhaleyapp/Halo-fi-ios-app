@@ -13,6 +13,7 @@ struct ProfileField: View {
   let placeholder: String
   let icon: String
   var keyboardType: UIKeyboardType = .default
+  var isDisabled: Bool = false
   
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -34,6 +35,8 @@ struct ProfileField: View {
         .keyboardType(keyboardType)
         .autocapitalization(.none)
         .disableAutocorrection(true)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.6 : 1.0)
     }
   }
 }
