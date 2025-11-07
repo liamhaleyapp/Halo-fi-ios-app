@@ -217,7 +217,8 @@ class UserManager {
           profileData,
           overrideFirstName: nil,
           overrideLastName: nil,
-          overridePhone: nil
+          overridePhone: nil,
+          overrideDateOfBirth: nil
         )
         self.isLoading = false
       }
@@ -277,11 +278,19 @@ class UserManager {
     return formatter
   }
   
+  private func formatDateForRequest(_ date: Date?) -> String? {
+    guard let date = date else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
+  }
+  
   private func applyProfileData(
     _ profileData: UserProfileData,
     overrideFirstName: String?,
     overrideLastName: String?,
-    overridePhone: String?
+    overridePhone: String?,
+    overrideDateOfBirth: Date?
   ) {
     // Debug: Print all profile data fields
     print("📋 Profile Data:")
@@ -298,7 +307,7 @@ class UserManager {
     let resolvedLastName = overrideLastName ?? profileData.lastName
     let sanitizedLastName = (resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? nil : resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedPhone = (overridePhone ?? profileData.phone)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let resolvedDateOfBirth = parseDate(profileData.dateOfBirth) ?? currentUser?.dateOfBirth
+    let resolvedDateOfBirth = overrideDateOfBirth ?? parseDate(profileData.dateOfBirth) ?? currentUser?.dateOfBirth
     
     let updatedUser = User(
       id: profileData.id,
@@ -319,7 +328,8 @@ class UserManager {
     firstName: String? = nil,
     lastName: String? = nil,
     email: String? = nil,
-    phone: String? = nil
+    phone: String? = nil,
+    dateOfBirth: Date? = nil
   ) async throws {
     guard currentUser != nil else {
       throw AuthError.networkError
@@ -328,6 +338,7 @@ class UserManager {
     let sanitizedFirstName = firstName?.trimmingCharacters(in: .whitespacesAndNewlines)
     let sanitizedLastName = lastName?.trimmingCharacters(in: .whitespacesAndNewlines)
     let sanitizedPhone = phone?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let sanitizedDateOfBirth = dateOfBirth
     
     let request = UpdateUserProfileRequest(
       firstName: sanitizedFirstName,
@@ -336,7 +347,7 @@ class UserManager {
       parents: nil,
       motivations: nil,
       referralCode: nil,
-      dateOfBirth: nil,
+      dateOfBirth: formatDateForRequest(sanitizedDateOfBirth),
       location: nil,
       maritalStatus: nil,
       dependent: nil,
@@ -357,7 +368,8 @@ class UserManager {
         profileData,
         overrideFirstName: sanitizedFirstName,
         overrideLastName: sanitizedLastName,
-        overridePhone: sanitizedPhone
+        overridePhone: sanitizedPhone,
+        overrideDateOfBirth: sanitizedDateOfBirth
       )
     }
   }

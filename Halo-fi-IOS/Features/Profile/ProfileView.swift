@@ -15,13 +15,15 @@ struct ProfileView: View {
   @State private var lastName = ""
   @State private var email = ""
   @State private var phoneNumber = ""
+  @State private var dateOfBirth: Date?
   @State private var hasChanges = false
   @State private var isSaving = false
   @State private var isLoadingProfile = false
+  @State private var showingDatePicker = false
   @State private var originalFirstName = ""
   @State private var originalLastName = ""
   @State private var originalEmail = ""
-  @State private var originalPhoneNumber = ""
+  @State private var originalDateOfBirth: Date?
   
   var body: some View {
     ZStack {
@@ -65,8 +67,14 @@ struct ProfileView: View {
                 value: $phoneNumber,
                 placeholder: "Enter your phone number",
                 icon: "phone.fill",
-                keyboardType: .phonePad
+                keyboardType: .phonePad,
+                isDisabled: true
               )
+              
+              // Date of Birth
+              DateOfBirthField(selectedDate: dateOfBirth ?? Date()) {
+                showingDatePicker = true
+              }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
@@ -83,6 +91,12 @@ struct ProfileView: View {
       }
     }
     .navigationBarHidden(true)
+    .sheet(isPresented: $showingDatePicker) {
+      DatePickerSheet(selectedDate: Binding(
+        get: { dateOfBirth ?? Date() },
+        set: { dateOfBirth = $0 }
+      ))
+    }
     .onAppear {
       loadUserData()
       // Fetch fresh profile data from server
@@ -92,7 +106,7 @@ struct ProfileView: View {
     }
     .onChange(of: firstName) { _, _ in checkForChanges() }
     .onChange(of: lastName) { _, _ in checkForChanges() }
-    .onChange(of: phoneNumber) { _, _ in checkForChanges() }
+    .onChange(of: dateOfBirth) { _, _ in checkForChanges() }
   }
   
   private func loadUserData() {
@@ -102,12 +116,13 @@ struct ProfileView: View {
     lastName = user.lastName ?? ""
     email = user.email
     phoneNumber = user.phone ?? ""
+    dateOfBirth = user.dateOfBirth
     
     // Store original values for change detection
     originalFirstName = user.firstName
     originalLastName = user.lastName ?? ""
     originalEmail = user.email
-    originalPhoneNumber = user.phone ?? ""
+    originalDateOfBirth = user.dateOfBirth
   }
   
   private func fetchProfileData() async {
@@ -135,7 +150,7 @@ struct ProfileView: View {
     hasChanges = 
       firstName != originalFirstName ||
       lastName != originalLastName ||
-      phoneNumber != originalPhoneNumber
+      dateOfBirth != originalDateOfBirth
   }
   
   private func saveProfile() {
@@ -150,7 +165,7 @@ struct ProfileView: View {
         try await userManager.updateUserProfile(
           firstName: firstName,
           lastName: lastName.isEmpty ? nil : lastName,
-          phone: phoneNumber.isEmpty ? nil : phoneNumber
+          dateOfBirth: dateOfBirth
         )
         
         // Update original values after successful save
@@ -158,7 +173,7 @@ struct ProfileView: View {
           originalFirstName = firstName
           originalLastName = lastName
           originalEmail = email
-          originalPhoneNumber = phoneNumber
+          originalDateOfBirth = dateOfBirth
           hasChanges = false
           isSaving = false
         }

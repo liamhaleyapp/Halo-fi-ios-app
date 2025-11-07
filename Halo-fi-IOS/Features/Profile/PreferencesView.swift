@@ -41,7 +41,8 @@ struct PreferencesView: View {
               icon: "globe",
               selectedValue: voiceLanguage,
               isExpanded: $showingLanguageDropdown,
-              options: ["English", "Spanish"]
+              options: ["English", "Spanish"],
+              disabledOptions: ["Spanish"]
             ) { newValue in
               voiceLanguage = newValue
               showingLanguageDropdown = false

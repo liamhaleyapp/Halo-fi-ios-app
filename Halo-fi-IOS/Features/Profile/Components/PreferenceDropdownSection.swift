@@ -14,7 +14,15 @@ struct PreferenceDropdownSection: View {
   let selectedValue: String
   @Binding var isExpanded: Bool
   let options: [String]
+  var disabledOptions: Set<String> = []
   let onSelection: (String) -> Void
+  
+  private var displaySelectedValue: String {
+    if disabledOptions.contains(selectedValue) {
+      return "\(selectedValue) (Coming Soon)"
+    }
+    return selectedValue
+  }
   
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -47,7 +55,7 @@ struct PreferenceDropdownSection: View {
         }
       }) {
         HStack {
-          Text(selectedValue)
+          Text(displaySelectedValue)
             .font(.headline)
             .foregroundColor(.white)
             .fontWeight(.medium)
@@ -81,6 +89,7 @@ struct PreferenceDropdownSection: View {
             PreferenceOptionButton(
               option: option,
               selectedValue: selectedValue,
+              isDisabled: disabledOptions.contains(option),
               onSelection: onSelection
             )
           }
@@ -104,7 +113,8 @@ struct PreferenceDropdownSection: View {
       icon: "globe",
       selectedValue: "English",
       isExpanded: .constant(true),
-      options: ["English", "Spanish", "French"]
+      options: ["English", "Spanish", "French"],
+      disabledOptions: ["Spanish"]
     ) { _ in }
     .padding()
   }

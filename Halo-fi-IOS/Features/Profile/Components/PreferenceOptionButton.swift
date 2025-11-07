@@ -10,6 +10,7 @@ import SwiftUI
 struct PreferenceOptionButton: View {
   let option: String
   let selectedValue: String
+  let isDisabled: Bool
   let onSelection: (String) -> Void
   
   private var isSelected: Bool {
@@ -17,21 +18,32 @@ struct PreferenceOptionButton: View {
   }
   
   private var backgroundColor: Color {
-    isSelected ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1)
+    if isDisabled {
+      return Color.gray.opacity(0.05)
+    }
+    return isSelected ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1)
   }
   
   private var strokeColor: Color {
-    isSelected ? Color.blue : Color.clear
+    if isDisabled {
+      return Color.clear
+    }
+    return isSelected ? Color.blue : Color.clear
+  }
+
+  private var displayText: String {
+    isDisabled ? "\(option) (Coming Soon)" : option
   }
   
   var body: some View {
     Button(action: {
+      guard !isDisabled else { return }
       onSelection(option)
     }) {
       HStack {
-        Text(option)
+        Text(displayText)
           .font(.subheadline)
-          .foregroundColor(isSelected ? .white : .gray)
+          .foregroundColor(isDisabled ? .gray.opacity(0.6) : (isSelected ? .white : .gray))
           .fontWeight(isSelected ? .semibold : .medium)
         
         Spacer()
@@ -54,9 +66,10 @@ struct PreferenceOptionButton: View {
           .stroke(strokeColor, lineWidth: 1)
       )
     }
-    .accessibilityLabel("\(option) option")
+    .accessibilityLabel("\(displayText) option")
     .accessibilityAddTraits(isSelected ? .isSelected : [])
-    .accessibilityHint(isSelected ? "Currently selected" : "Tap to select")
+    .accessibilityHint(isDisabled ? "Coming soon" : (isSelected ? "Currently selected" : "Tap to select"))
+    .disabled(isDisabled)
   }
 }
 
@@ -67,12 +80,14 @@ struct PreferenceOptionButton: View {
       PreferenceOptionButton(
         option: "English",
         selectedValue: "English",
+        isDisabled: false,
         onSelection: { _ in }
       )
       
       PreferenceOptionButton(
         option: "Spanish",
         selectedValue: "English",
+        isDisabled: true,
         onSelection: { _ in }
       )
     }
