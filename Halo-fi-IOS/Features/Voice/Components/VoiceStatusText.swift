@@ -14,7 +14,7 @@ struct VoiceStatusText: View {
     Text(isListening ? "Listening..." : "Muted")
       .font(.title2)
       .fontWeight(.medium)
-      .foregroundColor(.white)
+      .foregroundColor(.primary)
       .padding(.top, 30)
       .opacity(isListening ? 1.0 : 0.7)
   }
@@ -22,7 +22,7 @@ struct VoiceStatusText: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     VStack {
       VoiceStatusText(isListening: true)
       VoiceStatusText(isListening: false)

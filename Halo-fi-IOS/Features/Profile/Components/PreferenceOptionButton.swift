@@ -19,16 +19,16 @@ struct PreferenceOptionButton: View {
   
   private var backgroundColor: Color {
     if isDisabled {
-      return Color.gray.opacity(0.05)
+      return Color(.quaternarySystemFill)
     }
-    return isSelected ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1)
+    return isSelected ? Color.accentColor.opacity(0.2) : Color(.tertiarySystemFill)
   }
   
   private var strokeColor: Color {
     if isDisabled {
       return Color.clear
     }
-    return isSelected ? Color.blue : Color.clear
+    return isSelected ? Color.accentColor : Color.clear
   }
 
   private var displayText: String {
@@ -43,7 +43,7 @@ struct PreferenceOptionButton: View {
       HStack {
         Text(displayText)
           .font(.subheadline)
-          .foregroundColor(isDisabled ? .gray.opacity(0.6) : (isSelected ? .white : .gray))
+          .foregroundColor(isDisabled ? Color.secondary : (isSelected ? Color.primary : Color.secondary))
           .fontWeight(isSelected ? .semibold : .medium)
         
         Spacer()
@@ -51,7 +51,7 @@ struct PreferenceOptionButton: View {
         if isSelected {
           Image(systemName: "checkmark.circle.fill")
             .font(.caption)
-            .foregroundColor(.blue)
+            .foregroundColor(Color.accentColor)
         }
       }
       .padding(.horizontal, 16)

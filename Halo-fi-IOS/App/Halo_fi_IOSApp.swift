@@ -14,6 +14,26 @@ struct Halo_fi_IOSApp: App {
   @State private var subscriptionService = SubscriptionService()
   @State private var bankDataManager = BankDataManager()
   @StateObject private var permissionManager = PermissionManager.shared
+  @AppStorage("themeMode") private var themeMode = "System"
+  
+  private var preferredColorScheme: ColorScheme? {
+    switch themeMode {
+    case "Light":
+      return .light
+    case "Dark":
+      return .dark
+    case "High-Contrast":
+      return .dark
+    case "System":
+      return nil
+    default:
+      return nil
+    }
+  }
+  
+  private var accessibilityDifferentiation: Bool {
+    themeMode == "High-Contrast"
+  }
   
   init() {
     Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
@@ -26,16 +46,12 @@ struct Halo_fi_IOSApp: App {
         .environment(subscriptionService)
         .environment(bankDataManager)
         .environmentObject(permissionManager)
+        .preferredColorScheme(preferredColorScheme)
         .onAppear {
-          // Request microphone permission early for accessibility
           Task {
             if permissionManager.microphonePermission == .notDetermined {
               _ = await permissionManager.requestMicrophonePermission()
             }
-          }
-          
-          // Initialize subscription service
-          Task {
             await subscriptionService.initialize()
           }
         }

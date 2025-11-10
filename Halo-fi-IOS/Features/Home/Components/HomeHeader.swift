@@ -15,7 +15,7 @@ struct HomeHeader: View {
       Text("Hello, \(userName)")
         .font(.largeTitle)
         .fontWeight(.bold)
-        .foregroundColor(.white)
+        .foregroundColor(.primary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
@@ -25,7 +25,7 @@ struct HomeHeader: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     HomeHeader(userName: "Christopher")
   }
 }

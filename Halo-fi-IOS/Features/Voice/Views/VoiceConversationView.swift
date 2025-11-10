@@ -27,8 +27,7 @@ struct VoiceConversationView: View {
   
   var body: some View {
     ZStack {
-      // Dark background
-      Color.black.ignoresSafeArea()
+      Color(.systemBackground).ignoresSafeArea()
       
       VStack(spacing: 0) {
         // Header text at top

@@ -15,9 +15,9 @@ struct PreferencesHeader: View {
       Button(action: onBack) {
         Image(systemName: "chevron.left")
           .font(.title2)
-          .foregroundColor(.white)
+          .foregroundColor(.primary)
           .frame(width: 40, height: 40)
-          .background(Color.gray.opacity(0.2))
+          .background(Color(.quaternarySystemFill))
           .clipShape(Circle())
       }
       
@@ -26,7 +26,7 @@ struct PreferencesHeader: View {
       Text("Preferences")
         .font(.title2)
         .fontWeight(.semibold)
-        .foregroundColor(.white)
+        .foregroundColor(.primary)
       
       Spacer()
       
@@ -42,7 +42,7 @@ struct PreferencesHeader: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     PreferencesHeader(onBack: {})
   }
 }

@@ -12,7 +12,7 @@ struct PreferencesView: View {
   
   // MARK: - User Preferences
   @AppStorage("voiceLanguage") private var voiceLanguage = "English"
-  @AppStorage("themeMode") private var themeMode = "Dark"
+  @AppStorage("themeMode") private var themeMode = "System"
   @AppStorage("voiceAgent") private var voiceAgent = "Female"
   @AppStorage("voiceSpeed") private var voiceSpeed = "Normal"
   
@@ -22,11 +22,37 @@ struct PreferencesView: View {
   @State private var showingVoiceAgentDropdown = false
   @State private var showingVoiceSpeedDropdown = false
   
+  private var systemColorScheme: ColorScheme? {
+    switch UIScreen.main.traitCollection.userInterfaceStyle {
+    case .light:
+      return .light
+    case .dark:
+      return .dark
+    default:
+      return nil
+    }
+  }
+  
+  private var selectedColorScheme: ColorScheme? {
+    switch themeMode {
+    case "Light":
+      return .light
+    case "Dark":
+      return .dark
+    case "High-Contrast":
+      return .dark
+    case "System":
+      return systemColorScheme
+    default:
+      return nil
+    }
+  }
+  
   var body: some View {
     NavigationView {
       ZStack {
         // Background
-        Color.black.ignoresSafeArea()
+        Color(.systemBackground).ignoresSafeArea()
         
         VStack(spacing: 16) {
           // Header
@@ -55,7 +81,7 @@ struct PreferencesView: View {
               icon: "paintbrush",
               selectedValue: themeMode,
               isExpanded: $showingThemeDropdown,
-              options: ["Light", "Dark", "High-Contrast"]
+              options: ["System", "Light", "Dark", "High-Contrast"]
             ) { newValue in
               themeMode = newValue
               showingThemeDropdown = false
@@ -99,6 +125,7 @@ struct PreferencesView: View {
       }
     }
     .navigationBarHidden(true)
+    .preferredColorScheme(selectedColorScheme)
   }
   
   private func savePreferences() {

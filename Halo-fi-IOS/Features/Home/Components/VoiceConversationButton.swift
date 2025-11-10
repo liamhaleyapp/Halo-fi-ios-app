@@ -45,7 +45,7 @@ struct VoiceConversationButton: View {
       
       Text("Tap to start conversation")
         .font(.headline)
-        .foregroundColor(.white)
+        .foregroundColor(.primary)
     }
     .padding(80)
     .overlay(
@@ -64,7 +64,7 @@ struct VoiceConversationButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     VoiceConversationButton(onTap: {})
   }
 }

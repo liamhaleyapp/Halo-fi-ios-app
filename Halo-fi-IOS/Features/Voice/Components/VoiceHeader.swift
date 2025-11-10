@@ -12,7 +12,7 @@ struct VoiceHeader: View {
     Text("Hi, I'm Halo. How can I help you?")
       .font(.title2)
       .fontWeight(.medium)
-      .foregroundColor(.white)
+      .foregroundColor(.primary)
       .multilineTextAlignment(.center)
       .padding(.horizontal, 40)
       .padding(.top, 60)

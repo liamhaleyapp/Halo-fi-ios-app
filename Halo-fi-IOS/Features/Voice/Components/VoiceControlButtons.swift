@@ -68,7 +68,7 @@ struct VoiceControlButtons: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     VoiceControlButtons(
       isMuted: false,
       onMuteToggle: {},

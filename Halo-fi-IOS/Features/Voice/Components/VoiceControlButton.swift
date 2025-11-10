@@ -39,7 +39,7 @@ struct VoiceControlButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color(.systemBackground).ignoresSafeArea()
     HStack(spacing: 40) {
       VoiceControlButton(
         icon: "mic.fill",

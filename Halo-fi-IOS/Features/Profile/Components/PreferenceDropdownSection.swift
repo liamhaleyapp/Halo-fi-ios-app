@@ -30,18 +30,18 @@ struct PreferenceDropdownSection: View {
       HStack(spacing: 12) {
         Image(systemName: icon)
           .font(.title3)
-          .foregroundColor(.blue)
+          .foregroundColor(Color.accentColor)
           .frame(width: 20, height: 20)
         
         VStack(alignment: .leading, spacing: 2) {
           Text(title)
             .font(.title3)
             .fontWeight(.semibold)
-            .foregroundColor(.white)
+            .foregroundColor(.primary)
           
           Text(subtitle)
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.secondary)
             .lineLimit(2)
         }
         
@@ -57,14 +57,14 @@ struct PreferenceDropdownSection: View {
         HStack {
           Text(displaySelectedValue)
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(.primary)
             .fontWeight(.medium)
           
           Spacer()
           
           Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
             .font(.title3)
-            .foregroundColor(.blue)
+            .foregroundColor(Color.accentColor)
             .rotationEffect(.degrees(isExpanded ? 0 : 0))
         }
         .padding(.horizontal, 16)
@@ -72,11 +72,11 @@ struct PreferenceDropdownSection: View {
         .frame(maxWidth: .infinity)
         .background(
           RoundedRectangle(cornerRadius: 10)
-            .fill(Color.gray.opacity(0.15))
+            .fill(Color(.tertiarySystemFill))
         )
         .overlay(
           RoundedRectangle(cornerRadius: 10)
-            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
         )
       }
       .accessibilityLabel("\(title): \(selectedValue)")

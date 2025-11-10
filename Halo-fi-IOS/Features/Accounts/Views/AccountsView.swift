@@ -16,8 +16,7 @@ struct AccountsView: View {
   var body: some View {
     NavigationView {
       ZStack {
-        // Background
-        Color.black.ignoresSafeArea()
+        Color(.systemBackground).ignoresSafeArea()
         
         VStack(spacing: 16) {
           headerView
@@ -47,9 +46,9 @@ struct AccountsView: View {
       }) {
         Image(systemName: "chevron.left")
           .font(.title2)
-          .foregroundColor(.white)
+          .foregroundColor(.primary)
           .frame(width: 40, height: 40)
-          .background(Color.gray.opacity(0.2))
+          .background(Color(.quaternarySystemFill))
           .clipShape(Circle())
       }
       
@@ -58,7 +57,7 @@ struct AccountsView: View {
       Text("Accounts")
         .font(.title2)
         .fontWeight(.semibold)
-        .foregroundColor(.white)
+        .foregroundColor(.primary)
       
       Spacer()
       

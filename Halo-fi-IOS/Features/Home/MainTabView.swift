@@ -49,7 +49,6 @@ struct MainTabView: View {
               .tag(2)
           }
           .accentColor(.blue)
-          .preferredColorScheme(.dark)
         }
       } else {
         OnboardingView()
@@ -72,9 +71,9 @@ struct OnboardingRedirectView: View {
   
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color(.systemBackground).ignoresSafeArea()
       ProgressView()
-        .tint(.white)
+        .tint(.primary)
     }
     .task {
       await checkOnboardingStatus()
