@@ -39,6 +39,7 @@
 		0C39AABF2E4EBF9C00CF16A0 /* Halo-fi-IOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C39AAC92E4EBF9C00CF16A0 /* Halo-fi-IOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E08DB562EB2F2B700473197 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Halo-fi-IOS-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -147,6 +148,7 @@
 		0C39AAA62E4EBF9A00CF16A0 = {
 			isa = PBXGroup;
 			children = (
+				9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */,
 				9EDDB70F2E9D8BD200295AB4 /* Shared */,
 				9E95D7352E8DB15C003087CE /* Tests */,
 				9E95D7342E8DB133003087CE /* Services */,
@@ -498,6 +500,7 @@
 				DEVELOPMENT_TEAM = 3TB8D2484F;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Halo-fi-IOS-Info.plist";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone to enable voice chat with our AI assistant.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -528,6 +531,7 @@
 				DEVELOPMENT_TEAM = 3TB8D2484F;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Halo-fi-IOS-Info.plist";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone to enable voice chat with our AI assistant.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

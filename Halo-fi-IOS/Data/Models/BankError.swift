@@ -15,6 +15,7 @@ enum BankError: LocalizedError {
     case itemNotFound
     case serverError(Int)
     case invalidResponse
+    case multiConnectFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -31,6 +32,8 @@ enum BankError: LocalizedError {
             return "Server error (\(code)). Please try again later."
         case .invalidResponse:
             return "Invalid response from server."
+        case .multiConnectFailed(let message):
+            return message
         }
     }
 }

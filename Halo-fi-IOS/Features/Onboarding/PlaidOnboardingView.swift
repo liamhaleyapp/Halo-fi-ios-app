@@ -11,122 +11,65 @@ import LinkKit
 struct PlaidOnboardingView: View {
   @SwiftUI.Environment(\.dismiss) private var dismiss
   @SwiftUI.Environment(UserManager.self) private var userManager
+  @SwiftUI.Environment(BankDataManager.self) private var bankDataManager
   @StateObject private var plaidManager = PlaidManager()
   @State private var showingPlaidLink = false
   @State private var showingError = false
   @State private var errorMessage = ""
-  
-  // Feature flag to bypass Plaid - set to true to skip Plaid flow
-  private let bypassPlaid: Bool = true
+  @State private var hasStartedFlow = false
   
   var body: some View {
     NavigationView {
-      VStack(spacing: 0) {
-        // Header
-        PlaidHeader(onCancel: { dismiss() })
+      ZStack {
+        Color(.systemBackground).ignoresSafeArea()
         
-        // Plaid Link Interface
-        if bypassPlaid {
-          // Bypass mode - show skip button
-          bypassPlaidView
-        } else if plaidManager.isCreatingLinkToken {
+        if plaidManager.isCreatingLinkToken {
           PlaidLoadingView()
         } else if showingPlaidLink, let handler = plaidManager.linkHandler {
           LinkController(handler: handler)
         } else {
-          // Fallback view if something goes wrong
-          VStack(spacing: 20) {
-            Text("Ready to connect your bank account")
-              .font(.title2)
-              .foregroundColor(.white)
+          VStack(spacing: 0) {
+            PlaidHeader(onCancel: { dismiss() })
             
-            Button("Start Connection") {
-              startPlaidFlow()
+            VStack(spacing: 20) {
+              Text("Ready to connect your bank account")
+                .font(.title2)
+                .foregroundColor(.white)
+              
+              Button("Start Connection") {
+                startPlaidFlow()
+              }
+              .font(.headline)
+              .foregroundColor(.white)
+              .padding()
+              .background(
+                RoundedRectangle(cornerRadius: 12)
+                  .fill(Color.blue)
+              )
             }
-            .foregroundStyle(.white)
-            .padding()
-            .background(Color.blue)
-            .cornerRadius(10)
-          }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(
-            LinearGradient(
-              colors: [Color.indigo, Color.purple],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+              LinearGradient(
+                colors: [Color.indigo, Color.purple],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
             )
-          )
+          }
         }
       }
       .navigationBarHidden(true)
     }
     .onAppear {
-      if bypassPlaid {
-        // Automatically skip Plaid and mark onboarding complete
-        // Small delay to prevent view flashing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-          handleBypassPlaid()
-        }
-      } else {
-        startPlaidFlow()
-      }
+      guard !hasStartedFlow else { return }
+      hasStartedFlow = true
+      startPlaidFlow()
     }
     .alert("Connection Error", isPresented: $showingError) {
       Button("OK") { }
     } message: {
       Text(errorMessage)
     }
-  }
-  
-  // MARK: - Bypass Plaid View
-  private var bypassPlaidView: some View {
-    VStack(spacing: 24) {
-      Spacer()
-      
-      Image(systemName: "checkmark.circle.fill")
-        .font(.system(size: 80))
-        .foregroundColor(.green)
-      
-      Text("Plaid Bypassed")
-        .font(.title)
-        .fontWeight(.bold)
-        .foregroundColor(.white)
-      
-      Text("You can connect your bank account later from the Accounts section.")
-        .font(.body)
-        .foregroundColor(.gray)
-        .multilineTextAlignment(.center)
-        .padding(.horizontal, 40)
-      
-      Spacer()
-      
-      Button("Continue") {
-        handleBypassPlaid()
-      }
-      .font(.headline)
-      .foregroundColor(.white)
-      .frame(maxWidth: .infinity)
-      .padding()
-      .background(
-        LinearGradient(
-          colors: [Color.blue, Color.purple],
-          startPoint: .leading,
-          endPoint: .trailing
-        )
-      )
-      .cornerRadius(12)
-      .padding(.horizontal, 40)
-      .padding(.bottom, 40)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color.black)
-  }
-  
-  // MARK: - Bypass Handler
-  private func handleBypassPlaid() {
-    // Mark onboarding as complete without going through Plaid
-    userManager.completeOnboarding()
-    dismiss()
   }
   
   // MARK: - Plaid Flow Methods
@@ -187,10 +130,9 @@ struct PlaidOnboardingView: View {
   
   private func handlePlaidSuccess(_ linkSuccess: LinkSuccess) async {
     do {
-      // Exchange the public token with your backend
-      try await plaidManager.exchangePublicToken(linkSuccess.publicToken)
+      let tokens = [linkSuccess.publicToken]
+      _ = try await bankDataManager.completeLinking(with: tokens)
       
-      // Mark onboarding as complete
       await MainActor.run {
         userManager.completeOnboarding()
         dismiss()

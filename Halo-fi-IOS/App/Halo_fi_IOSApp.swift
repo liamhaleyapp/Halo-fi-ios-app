@@ -7,6 +7,7 @@
 
 import SwiftUI
 import RevenueCat
+import PlaidLink
 
 @main
 struct Halo_fi_IOSApp: App {
@@ -54,6 +55,10 @@ struct Halo_fi_IOSApp: App {
             }
             await subscriptionService.initialize()
           }
+        }
+        .onOpenURL { url in
+          // Handles halofi://plaid-oauth?... from your Vercel page
+          _ = Plaid.shared().handleRedirectURL(url)
         }
     }
   }

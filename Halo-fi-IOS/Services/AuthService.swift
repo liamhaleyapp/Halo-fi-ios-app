@@ -43,7 +43,7 @@ class AuthService {
   }
   
   // MARK: - Register
-  func register(firstName: String, lastName: String, email: String, phone: String, password: String) async throws {
+  func register(firstName: String, lastName: String, email: String, phone: String, password: String, dateOfBirth: Date) async throws {
     // Validate required fields
     if firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
       throw AuthError.validationError([])
@@ -54,7 +54,8 @@ class AuthService {
       lastName: lastName,
       email: email,
       phone: phone,
-      password: password
+      password: password,
+      dateOfBirth: formatDateForRequest(dateOfBirth)
     )
     
     let requestBody = try JSONEncoder().encode(registerRequest)
@@ -65,6 +66,12 @@ class AuthService {
       body: requestBody,
       responseType: SignupResponse.self
     )
+  }
+
+  private func formatDateForRequest(_ date: Date) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: date)
   }
   
   // MARK: - Refresh Token

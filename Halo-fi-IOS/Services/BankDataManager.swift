@@ -45,6 +45,27 @@ class BankDataManager {
         self.tokenStorage = tokenStorage
     }
     
+    // MARK: - Bank Linking Flow
+    
+    /// Exchanges collected public tokens for access tokens via backend
+    func completeLinking(with publicTokens: [String]) async throws -> BankMultiConnectResponse {
+        let response = try await connectMultipleBankAccounts(publicTokens: publicTokens)
+        
+        guard response.success else {
+            let message = response.message ?? "Unable to connect bank accounts."
+            throw BankError.multiConnectFailed(message)
+        }
+        
+        if let failedItems = response.failedItems, !failedItems.isEmpty {
+            let message = response.message ?? "Failed to connect \(failedItems.count) item(s). Please try again."
+            throw BankError.multiConnectFailed(message)
+        }
+        
+        try await fetchAccounts(forceRefresh: true)
+        
+        return response
+    }
+    
     // MARK: - Account Management
     
     /// Fetches bank accounts from the API
@@ -95,6 +116,37 @@ class BankDataManager {
         // This will fetch accounts and we can extract summary from the response
         // For now, we'll use the same method but could be enhanced if the API provides a summary endpoint
         try await fetchAccounts(forceRefresh: forceRefresh)
+    }
+    
+    /// Connects multiple bank accounts using public tokens returned from Plaid Link
+    /// - Parameter publicTokens: Array of public tokens collected from Plaid Link sessions
+    func connectMultipleBankAccounts(publicTokens: [String]) async throws -> BankMultiConnectResponse {
+        guard !publicTokens.isEmpty else {
+            throw BankError.validationError([ValidationErrorDetail(loc: ["public_tokens"], msg: "No public tokens provided", type: "value_error")])
+        }
+        
+        guard let accessToken = tokenStorage.getAccessToken() else {
+            throw BankError.unauthorized
+        }
+        
+        isSyncing = true
+        
+        do {
+            let response = try await bankService.connectMultipleBankAccounts(
+                accessToken: accessToken,
+                publicTokens: publicTokens
+            )
+            isSyncing = false
+            return response
+        } catch let error as BankError {
+            isSyncing = false
+            syncError = error
+            throw error
+        } catch {
+            isSyncing = false
+            syncError = .networkError
+            throw BankError.networkError
+        }
     }
     
     // MARK: - Transaction Management

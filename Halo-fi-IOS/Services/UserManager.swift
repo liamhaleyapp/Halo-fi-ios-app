@@ -31,7 +31,7 @@ class UserManager {
   
   // MARK: - Authentication Methods
   
-  func signUp(firstName: String, lastName: String, phone: String, email: String, password: String) async throws {
+  func signUp(firstName: String, lastName: String, phone: String, email: String, password: String, dateOfBirth: Date) async throws {
     isLoading = true
     
     do {
@@ -40,7 +40,8 @@ class UserManager {
         lastName: lastName,
         email: email,
         phone: phone,
-        password: password
+        password: password,
+        dateOfBirth: dateOfBirth
       )
       
       // After successful signup, create a user object with the provided data
@@ -50,7 +51,8 @@ class UserManager {
         email: email,
         firstName: firstName,
         lastName: lastName.isEmpty ? nil : lastName,
-        phone: phone
+        phone: phone,
+        dateOfBirth: dateOfBirth
       )
       
       await MainActor.run {

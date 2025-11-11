@@ -16,6 +16,7 @@ struct SignUpView: View {
   @State private var firstName = ""
   @State private var lastName = ""
   @State private var phoneNumber = ""
+  @State private var dateOfBirth = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
   @State private var showingSignIn = false
   @State private var isLoading = false
   
@@ -46,6 +47,31 @@ struct SignUpView: View {
               placeholder: "Enter your last name",
               text: $lastName
             )
+
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Date of Birth")
+                .font(.headline)
+                .foregroundColor(.white)
+              
+              DatePicker(
+                "Date of Birth",
+                selection: $dateOfBirth,
+                in: dateOfBirthRange,
+                displayedComponents: .date
+              )
+              .labelsHidden()
+              .datePickerStyle(.compact)
+              .colorScheme(.dark)
+              .padding(.horizontal, 16)
+              .padding(.vertical, 14)
+              .background(Color.gray.opacity(0.2))
+              .cornerRadius(12)
+              .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                  .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+              )
+              .accessibilityLabel("Date of Birth")
+            }
             
             AuthFormField(
               title: "Phone Number",
@@ -114,7 +140,19 @@ struct SignUpView: View {
     !password.isEmpty &&
     password == confirmPassword &&
     password.count >= 8 &&
-    email.contains("@")
+    email.contains("@") &&
+    isDateOfBirthValid
+  }
+  
+  private var dateOfBirthRange: ClosedRange<Date> {
+    let calendar = Calendar.current
+    let minDate = calendar.date(from: DateComponents(year: 1900, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
+    let maxDate = Date()
+    return minDate...maxDate
+  }
+  
+  private var isDateOfBirthValid: Bool {
+    dateOfBirth <= Date()
   }
   
   // MARK: - Actions
@@ -129,7 +167,8 @@ struct SignUpView: View {
           lastName: lastName,
           phone: "+1"+phoneNumber,
           email: email,
-          password: password
+          password: password,
+          dateOfBirth: dateOfBirth
         )
         
         // Step 2: Auto sign in after successful sign up

@@ -47,6 +47,39 @@ class BankService {
         }
     }
     
+    // MARK: - Connect Multiple Bank Accounts
+    func connectMultipleBankAccounts(accessToken: String, publicTokens: [String]) async throws -> BankMultiConnectResponse {
+        guard let url = URL(string: "\(baseURL)/bank/multi-connect") else {
+            throw BankError.networkError
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = BankMultiConnectRequest(publicTokens: publicTokens)
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BankError.networkError
+        }
+        
+        switch httpResponse.statusCode {
+        case 200, 201:
+            return try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
+        case 401:
+            throw BankError.unauthorized
+        case 422:
+            let validationError = try JSONDecoder().decode(ValidationError.self, from: data)
+            throw BankError.validationError(validationError.detail)
+        default:
+            throw BankError.serverError(httpResponse.statusCode)
+        }
+    }
+    
     // MARK: - Get Bank Accounts
     func getBankAccounts(accessToken: String) async throws -> [BankAccount] {
         let url = URL(string: "\(baseURL)/bank/accounts")!
