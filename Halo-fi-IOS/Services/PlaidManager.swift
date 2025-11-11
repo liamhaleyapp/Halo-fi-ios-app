@@ -36,7 +36,7 @@ class PlaidManager: ObservableObject {
       responseType: PlaidLinkResponse.self
     )
     
-    if let error = linkResponse.error {
+    if linkResponse.error != nil {
       throw PlaidError.linkTokenCreationFailed
     }
     
@@ -93,5 +93,24 @@ class PlaidManager: ObservableObject {
     try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
     
     // Simulate successful exchange
+  }
+  
+  // MARK: - Redirect URL Handling
+  
+  /// Handles OAuth redirect URLs from Plaid
+  /// This should be called when the app receives a redirect URL (e.g., halofi://plaid-oauth?...)
+  /// - Parameter url: The redirect URL received from Plaid
+  /// - Returns: True if the URL is a valid Plaid redirect URL, false otherwise
+  func handleRedirectURL(_ url: URL) -> Bool {
+    // Check if the URL is a Plaid OAuth redirect
+    // LinkKit automatically handles OAuth redirects when the handler is active
+    // This method just validates that it's a Plaid redirect URL
+    let isPlaidRedirect = (url.scheme == "halofi" || url.scheme == "plaid") &&
+                          (url.host == "plaid-oauth" || url.host == "oauth")
+    
+    // If we have an active handler, LinkKit will automatically process the redirect
+    // when the handler processes the OAuth flow. The redirect URL is passed to the handler
+    // through the system's URL handling mechanism.
+    return isPlaidRedirect
   }
 }

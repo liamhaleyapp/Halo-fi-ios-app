@@ -17,16 +17,18 @@ struct PlaidOnboardingView: View {
   @State private var showingError = false
   @State private var errorMessage = ""
   @State private var hasStartedFlow = false
+  @State private var isDismissing = false
   
   var body: some View {
     NavigationView {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
         
-        if plaidManager.isCreatingLinkToken {
-          PlaidLoadingView()
-        } else if showingPlaidLink, let handler = plaidManager.linkHandler {
+        if showingPlaidLink, let handler = plaidManager.linkHandler {
           LinkController(handler: handler)
+            .background(Color.black)
+        } else if plaidManager.isCreatingLinkToken {
+          PlaidLoadingView()
         } else {
           VStack(spacing: 0) {
             PlaidHeader(onCancel: { dismiss() })
@@ -66,7 +68,11 @@ struct PlaidOnboardingView: View {
       startPlaidFlow()
     }
     .alert("Connection Error", isPresented: $showingError) {
-      Button("OK") { }
+      Button("OK") {
+        // Reset state after dismissing error
+        showingPlaidLink = false
+        hasStartedFlow = false
+      }
     } message: {
       Text(errorMessage)
     }
@@ -80,7 +86,7 @@ struct PlaidOnboardingView: View {
         try await plaidManager.createLinkToken()
         
         // Step 2: Create Plaid handler with callbacks
-        guard let handler = plaidManager.createHandler(
+        guard plaidManager.createHandler(
           onSuccess: { linkSuccess in
             Task { @MainActor in
               await handlePlaidSuccess(linkSuccess)
@@ -91,7 +97,7 @@ struct PlaidOnboardingView: View {
               await handlePlaidExit(linkExit)
             }
           }
-        ) else {
+        ) != nil else {
           throw PlaidError.linkTokenCreationFailed
         }
         
@@ -146,43 +152,63 @@ struct PlaidOnboardingView: View {
   }
   
   private func handlePlaidExit(_ linkExit: LinkExit?) async {
-    if let linkExit = linkExit {
-      // Handle specific exit scenarios
-      let errorMessage = switch linkExit.error?.errorCode {
-      case .apiError(let apiError):
-        "API Error: \(apiError)"
-      case .authError(let authError):
-        "Authentication Error: \(authError)"
-      case .itemError(let itemError):
-        "Item Error: \(itemError)"
-      case .invalidInput(let inputError):
-        "Invalid Input: \(inputError)"
-      case .invalidRequest(let requestError):
-        "Invalid Request: \(requestError)"
-      case .rateLimitExceeded(let rateLimitError):
-        "Rate Limit Exceeded: \(rateLimitError)"
-      case .institutionError(let institutionError):
-        "Institution Error: \(institutionError)"
-      case .assetReportError(let assetError):
-        "Asset Report Error: \(assetError)"
-      case .internal(let internalError):
-        "Internal Error: \(internalError)"
-      case .unknown(let type, let code):
-        "Unknown Error: \(type) - \(code)"
-      case .none:
-        linkExit.error?.errorMessage ?? "Connection failed"
-      }
-      
-      await MainActor.run {
+    // Reset Plaid Link view state first to hide the LinkController
+    await MainActor.run {
+      showingPlaidLink = false
+    }
+    
+    // Small delay to ensure the view updates before showing error or dismissing
+    try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+    
+    // Check if there's an error that needs to be shown
+    let hasError = linkExit?.error != nil
+    
+    await MainActor.run {
+      if hasError {
+        // Handle specific exit scenarios with errors
+        let errorMessage = switch linkExit?.error?.errorCode {
+        case .apiError(let apiError):
+          "API Error: \(apiError)"
+        case .authError(let authError):
+          "Authentication Error: \(authError)"
+        case .itemError(let itemError):
+          "Item Error: \(itemError)"
+        case .invalidInput(let inputError):
+          "Invalid Input: \(inputError)"
+        case .invalidRequest(let requestError):
+          "Invalid Request: \(requestError)"
+        case .rateLimitExceeded(let rateLimitError):
+          "Rate Limit Exceeded: \(rateLimitError)"
+        case .institutionError(let institutionError):
+          "Institution Error: \(institutionError)"
+        case .assetReportError(let assetError):
+          "Asset Report Error: \(assetError)"
+        case .internal(let internalError):
+          "Internal Error: \(internalError)"
+        case .unknown(let type, let code):
+          "Unknown Error: \(type) - \(code)"
+        case .none:
+          linkExit?.error?.errorMessage ?? "Connection failed"
+        @unknown default:
+          linkExit?.error?.errorMessage ?? "Connection failed"
+        }
+        
         self.errorMessage = errorMessage
         showingError = true
-      }
-    } else {
-      // User cancelled without error - just dismiss
-      await MainActor.run {
+        hasStartedFlow = false // Reset so user can try again
+      } else {
+        // User cancelled without error - dismiss the onboarding view
+        // Don't show any alerts, just dismiss
+        isDismissing = true
         dismiss()
       }
     }
   }
+}
+
+#Preview {
+  PlaidOnboardingView()
+    .environment(UserManager())
+    .environment(BankDataManager())
 }
 

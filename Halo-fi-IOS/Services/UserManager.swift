@@ -44,17 +44,7 @@ class UserManager {
         dateOfBirth: dateOfBirth
       )
       
-      // After successful signup, create a user object with the provided data
-      // The user will be fully populated after they sign in
-      let user = User(
-        id: UUID().uuidString, // Temporary ID, will be replaced on login
-        email: email,
-        firstName: firstName,
-        lastName: lastName.isEmpty ? nil : lastName,
-        phone: phone,
-        dateOfBirth: dateOfBirth
-      )
-      
+      // After successful signup, the user will be fully populated after they sign in
       await MainActor.run {
         // Don't set as authenticated yet, wait for sign in
         self.isLoading = false

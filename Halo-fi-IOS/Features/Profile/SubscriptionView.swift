@@ -101,9 +101,7 @@ struct SubscriptionView: View {
     .alert("Cancel Subscription", isPresented: $showingCancelConfirmation) {
       Button("Cancel", role: .cancel) { }
       Button("Yes, Cancel", role: .destructive) {
-        Task {
-          await handleCancelSubscription()
-        }
+        handleCancelSubscription()
       }
     } message: {
       Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")

@@ -7,13 +7,13 @@
 
 import SwiftUI
 import RevenueCat
-import PlaidLink
 
 @main
 struct Halo_fi_IOSApp: App {
   @State private var userManager = UserManager()
   @State private var subscriptionService = SubscriptionService()
   @State private var bankDataManager = BankDataManager()
+  @StateObject private var plaidManager = PlaidManager()
   @StateObject private var permissionManager = PermissionManager.shared
   @AppStorage("themeMode") private var themeMode = "System"
   
@@ -46,6 +46,7 @@ struct Halo_fi_IOSApp: App {
         .environment(userManager)
         .environment(subscriptionService)
         .environment(bankDataManager)
+        .environmentObject(plaidManager)
         .environmentObject(permissionManager)
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
@@ -57,8 +58,8 @@ struct Halo_fi_IOSApp: App {
           }
         }
         .onOpenURL { url in
-          // Handles halofi://plaid-oauth?... from your Vercel page
-          _ = Plaid.shared().handleRedirectURL(url)
+          // Handles halofi://plaid-oauth?... redirect URLs from Plaid OAuth flow
+          _ = plaidManager.handleRedirectURL(url)
         }
     }
   }

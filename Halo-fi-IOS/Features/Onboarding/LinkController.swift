@@ -12,9 +12,11 @@ import SwiftUI
 struct LinkController: UIViewControllerRepresentable {
 
     private let handler: Handler
+    private let colorScheme: ColorScheme?
 
-    init(handler: Handler) {
+    init(handler: Handler, colorScheme: ColorScheme? = nil) {
         self.handler = handler
+        self.colorScheme = colorScheme
     }
 
     // MARK: UIViewControllerRepresentable
@@ -22,14 +24,20 @@ struct LinkController: UIViewControllerRepresentable {
     final class Coordinator: NSObject {
         private let parent: LinkController
         private let handler: Handler
+        private let colorScheme: ColorScheme?
 
-        fileprivate init(parent: LinkController, handler: Handler) {
+        fileprivate init(parent: LinkController, handler: Handler, colorScheme: ColorScheme?) {
             self.parent = parent
             self.handler = handler
+            self.colorScheme = colorScheme
         }
 
         fileprivate func present(_ handler: Handler, in viewController: UIViewController) {
             handler.open(presentUsing: .custom({ linkViewController in
+                // Always use dark mode for Plaid Link for better visual consistency
+                linkViewController.overrideUserInterfaceStyle = .dark
+                linkViewController.view.backgroundColor = .black
+                
                 viewController.addChild(linkViewController)
                 viewController.view.addSubview(linkViewController.view)
                 linkViewController.view.translatesAutoresizingMaskIntoConstraints = false
@@ -46,13 +54,25 @@ struct LinkController: UIViewControllerRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self, handler: handler)
+        Coordinator(parent: self, handler: handler, colorScheme: colorScheme)
     }
 
     func makeUIViewController(context: Context) -> UIViewController {
         let viewController = UIViewController()
+        
+        // Always use dark mode for Plaid Link for better visual consistency
+        viewController.overrideUserInterfaceStyle = .dark
+        viewController.view.backgroundColor = .black
+        
+        // Configure status bar style
+        viewController.setNeedsStatusBarAppearanceUpdate()
+        
         context.coordinator.present(handler, in: viewController)
         return viewController
+    }
+    
+    static func dismantleUIViewController(_ uiViewController: UIViewController, coordinator: Coordinator) {
+        // Clean up if needed
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {

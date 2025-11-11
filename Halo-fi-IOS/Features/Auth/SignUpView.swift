@@ -18,6 +18,7 @@ struct SignUpView: View {
   @State private var phoneNumber = ""
   @State private var dateOfBirth = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
   @State private var showingSignIn = false
+  @State private var showingDatePicker = false
   @State private var isLoading = false
   
   var body: some View {
@@ -48,29 +49,8 @@ struct SignUpView: View {
               text: $lastName
             )
 
-            VStack(alignment: .leading, spacing: 8) {
-              Text("Date of Birth")
-                .font(.headline)
-                .foregroundColor(.white)
-              
-              DatePicker(
-                "Date of Birth",
-                selection: $dateOfBirth,
-                in: dateOfBirthRange,
-                displayedComponents: .date
-              )
-              .labelsHidden()
-              .datePickerStyle(.compact)
-              .colorScheme(.dark)
-              .padding(.horizontal, 16)
-              .padding(.vertical, 14)
-              .background(Color.gray.opacity(0.2))
-              .cornerRadius(12)
-              .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                  .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-              )
-              .accessibilityLabel("Date of Birth")
+            DateOfBirthField(selectedDate: dateOfBirth) {
+              showingDatePicker = true
             }
             
             AuthFormField(
@@ -130,6 +110,35 @@ struct SignUpView: View {
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
+    }
+    .sheet(isPresented: $showingDatePicker) {
+      NavigationView {
+        VStack {
+          DatePicker(
+            "Date of Birth",
+            selection: $dateOfBirth,
+            in: dateOfBirthRange,
+            displayedComponents: .date
+          )
+          .datePickerStyle(.wheel)
+          .labelsHidden()
+          .padding()
+          
+          Spacer()
+        }
+        .background(Color.black)
+        .navigationTitle("Select Date of Birth")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .navigationBarTrailing) {
+            Button("Done") {
+              showingDatePicker = false
+            }
+            .foregroundColor(.blue)
+          }
+        }
+      }
+      .presentationDetents([.medium])
     }
   }
   

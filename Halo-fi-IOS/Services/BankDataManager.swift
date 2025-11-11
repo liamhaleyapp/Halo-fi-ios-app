@@ -73,7 +73,7 @@ class BankDataManager {
     func fetchAccounts(forceRefresh: Bool = false) async throws {
         // Check if we have valid cached data
         if !forceRefresh,
-           let cachedAccounts = accounts,
+           accounts != nil,
            let lastFetched = accountsLastFetched,
            Date().timeIntervalSince(lastFetched) < cacheTTL {
             // Return cached data
@@ -169,7 +169,7 @@ class BankDataManager {
         // Check if we have valid cached data for this query
         if !forceRefresh,
            cacheKey == transactionsCacheKey,
-           let cachedTransactions = transactions,
+           transactions != nil,
            let lastFetched = transactionsLastFetched,
            Date().timeIntervalSince(lastFetched) < cacheTTL {
             // Return cached data

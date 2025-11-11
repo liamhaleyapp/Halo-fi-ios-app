@@ -11,37 +11,41 @@ struct DateOfBirthField: View {
   let selectedDate: Date
   let onTap: () -> Void
   
+  private var dateFormatter: DateFormatter {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    return formatter
+  }
+  
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack {
-        Image(systemName: "calendar")
-          .font(.title3)
-          .foregroundColor(.blue)
-          .frame(width: 20, height: 20)
-        
-        Text("Date of Birth")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Spacer()
-      }
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Date of Birth")
+        .font(.headline)
+        .foregroundColor(.white)
       
       Button(action: onTap) {
         HStack {
-          Text(selectedDate, style: .date)
+          Text(dateFormatter.string(from: selectedDate))
             .foregroundColor(.white)
-            .padding(.leading, 16)
+            .font(.body)
           
           Spacer()
           
-          Image(systemName: "chevron.right")
+          Image(systemName: "calendar")
             .foregroundColor(.gray)
-            .padding(.trailing, 16)
+            .font(.body)
         }
-        .frame(height: 50)
-        .background(Color.gray.opacity(0.15))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(Color.gray.opacity(0.2))
         .cornerRadius(12)
+        .overlay(
+          RoundedRectangle(cornerRadius: 12)
+            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
       }
+      .buttonStyle(PlainButtonStyle())
     }
   }
 }
