@@ -48,20 +48,52 @@ class BankDataManager {
     // MARK: - Bank Linking Flow
     
     /// Exchanges collected public tokens for access tokens via backend
-    func completeLinking(with publicTokens: [String]) async throws -> BankMultiConnectResponse {
-        let response = try await connectMultipleBankAccounts(publicTokens: publicTokens)
+    /// - Parameter publicTokens: Array of public tokens from Plaid Link (can be empty for sandbox "continue as guest")
+    /// - Parameter useSandbox: If true, uses sandbox endpoint (for testing/guest mode)
+    func completeLinking(with publicTokens: [String], useSandbox: Bool = false) async throws -> BankMultiConnectResponse {
+        // For sandbox, allow empty public tokens (e.g., "continue as guest" flow)
+        let sanitizedTokens = useSandbox ? publicTokens.filter { !$0.isEmpty } : publicTokens
+        
+        let response = try await connectMultipleBankAccounts(publicTokens: sanitizedTokens.isEmpty && useSandbox ? [""] : sanitizedTokens, useSandbox: useSandbox)
         
         guard response.success else {
             let message = response.message ?? "Unable to connect bank accounts."
             throw BankError.multiConnectFailed(message)
         }
         
-        if let failedItems = response.failedItems, !failedItems.isEmpty {
-            let message = response.message ?? "Failed to connect \(failedItems.count) item(s). Please try again."
-            throw BankError.multiConnectFailed(message)
+        // For sandbox, check totalItemsCreated instead of failedItems
+        if useSandbox {
+            if let itemsCreated = response.totalItemsCreated, itemsCreated == 0 {
+                let message = response.message ?? "No items were created. Please try again."
+                throw BankError.multiConnectFailed(message)
+            }
+            // Sandbox endpoint creates items automatically, success means items were created
+        } else {
+            // For production, check failedItems
+            if let failedItems = response.failedItems, !failedItems.isEmpty {
+                let message = response.message ?? "Failed to connect \(failedItems.count) item(s). Please try again."
+                throw BankError.multiConnectFailed(message)
+            }
+            
+            // Ensure we have connected items for production
+            if let connectedItems = response.allConnectedItems, connectedItems.isEmpty {
+                let message = response.message ?? "No items were connected. Please try again."
+                throw BankError.multiConnectFailed(message)
+            }
         }
         
-        try await fetchAccounts(forceRefresh: true)
+        // Fetch accounts to update the UI with the newly connected items
+        // For sandbox, add a small delay to allow backend to sync accounts from Plaid
+        if useSandbox {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        }
+        
+        // Don't fail the entire linking process if account fetch fails - items are already connected
+        do {
+            try await fetchAccounts(forceRefresh: true)
+        } catch {
+            // Accounts will be fetched when user navigates to accounts view
+        }
         
         return response
     }
@@ -120,7 +152,8 @@ class BankDataManager {
     
     /// Connects multiple bank accounts using public tokens returned from Plaid Link
     /// - Parameter publicTokens: Array of public tokens collected from Plaid Link sessions
-    func connectMultipleBankAccounts(publicTokens: [String]) async throws -> BankMultiConnectResponse {
+    /// - Parameter useSandbox: If true, uses the sandbox endpoint for testing
+    func connectMultipleBankAccounts(publicTokens: [String], useSandbox: Bool = false) async throws -> BankMultiConnectResponse {
         guard !publicTokens.isEmpty else {
             throw BankError.validationError([ValidationErrorDetail(loc: ["public_tokens"], msg: "No public tokens provided", type: "value_error")])
         }
@@ -132,10 +165,20 @@ class BankDataManager {
         isSyncing = true
         
         do {
-            let response = try await bankService.connectMultipleBankAccounts(
-                accessToken: accessToken,
-                publicTokens: publicTokens
-            )
+            let response: BankMultiConnectResponse
+            if useSandbox {
+                // Use sandbox endpoint for testing (e.g., "continue as guest" flow)
+                response = try await bankService.createSandboxMultiItems(
+                    accessToken: accessToken,
+                    publicTokens: publicTokens
+                )
+            } else {
+                // Use production endpoint
+                response = try await bankService.connectMultipleBankAccounts(
+                    accessToken: accessToken,
+                    publicTokens: publicTokens
+                )
+            }
             isSyncing = false
             return response
         } catch let error as BankError {

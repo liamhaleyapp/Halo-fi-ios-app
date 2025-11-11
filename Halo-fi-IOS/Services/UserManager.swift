@@ -15,8 +15,31 @@ class UserManager {
   
   private let userDefaults = UserDefaults.standard
   private let userKey = "currentUser"
+  private let onboardingKey = "user_onboarding_completed"
   private let tokenStorage = TokenStorage()
   private let authService = AuthService.shared
+  
+  // Onboarding state persisted independently of User object
+  // This ensures onboarding status persists even when User object is refreshed from server
+  var isOnboarded: Bool {
+    get {
+      // Check UserDefaults first (most reliable)
+      if userDefaults.object(forKey: onboardingKey) != nil {
+        return userDefaults.bool(forKey: onboardingKey)
+      }
+      // Fallback to User object if UserDefaults doesn't have it yet
+      return currentUser?.isOnboarded ?? false
+    }
+    set {
+      userDefaults.set(newValue, forKey: onboardingKey)
+      // Also update User object if it exists
+      if var user = currentUser {
+        user.isOnboarded = newValue
+        currentUser = user
+        saveUserToStorage()
+      }
+    }
+  }
   
   init() {
     // Ensure we're on the main thread when setting @Published properties
@@ -115,7 +138,11 @@ class UserManager {
       )
       
       await MainActor.run {
-        self.currentUser = user
+        // Preserve onboarding status when creating user from login response
+        let preservedOnboardingStatus = isOnboarded
+        var newUser = user
+        newUser.isOnboarded = preservedOnboardingStatus
+        self.currentUser = newUser
         self.isAuthenticated = true
         self.isLoading = false
         self.saveUserToStorage()
@@ -141,11 +168,13 @@ class UserManager {
     // Clear local storage
     tokenStorage.clearTokens()
     
-    // Ensure we're on the main thread when setting @Published properties
+    // Ensure we're on the main thread when setting properties
     if Thread.isMainThread {
       currentUser = nil
       isAuthenticated = false
       clearUserFromStorage()
+      // Note: We intentionally DON'T clear onboarding status on sign out
+      // so users don't have to re-onboard if they sign back in
     } else {
       DispatchQueue.main.async {
         self.currentUser = nil
@@ -170,15 +199,42 @@ class UserManager {
   // MARK: - User Onboarding
   
   func completeOnboarding() {
-    // Ensure we're on the main thread when setting @Published properties
+    // Ensure we're on the main thread when setting properties
     if Thread.isMainThread {
-      guard var user = currentUser else { return }
-      user.isOnboarded = true
-      currentUser = user
-      saveUserToStorage()
+      // Persist onboarding state independently
+      isOnboarded = true
     } else {
       DispatchQueue.main.async {
         self.completeOnboarding()
+      }
+    }
+  }
+  
+  /// Checks if user has completed onboarding by checking persisted state or bank accounts
+  /// - Parameter bankDataManager: Optional BankDataManager to check for connected accounts
+  func checkOnboardingStatus(bankDataManager: BankDataManager? = nil) async {
+    // If we already have onboarding status persisted, use it
+    if userDefaults.object(forKey: onboardingKey) != nil {
+      return
+    }
+    
+    // Fallback: Check if user has connected bank accounts (indicates onboarding completion)
+    if let bankDataManager = bankDataManager {
+      do {
+        try await bankDataManager.fetchAccounts(forceRefresh: false)
+        // Access main actor-isolated property on main actor
+        let hasAccounts = await MainActor.run {
+          guard let accounts = bankDataManager.accounts else { return false }
+          return !accounts.isEmpty
+        }
+        
+        if hasAccounts {
+          await MainActor.run {
+            self.isOnboarded = true
+          }
+        }
+      } catch {
+        // If we can't fetch accounts, don't change onboarding status
       }
     }
   }
@@ -192,13 +248,7 @@ class UserManager {
     do {
       let profileResponse = try await authService.getUserProfile()
       
-      // Debug: Print raw response
-      print("🔍 /auth/me Response:")
-      print("   Success: \(profileResponse.success)")
-      print("   Message: \(profileResponse.message ?? "nil")")
-      
       guard let wrapper = profileResponse.data else {
-        print("⚠️ /auth/me: No user data in response")
         throw AuthError.networkError
       }
       
@@ -284,22 +334,15 @@ class UserManager {
     overridePhone: String?,
     overrideDateOfBirth: Date?
   ) {
-    // Debug: Print all profile data fields
-    print("📋 Profile Data:")
-    print("   ID: \(profileData.id)")
-    print("   Email: \(profileData.email)")
-    print("   Phone: \(profileData.phone ?? "nil")")
-    print("   First Name: \(profileData.firstName)")
-    print("   Last Name: \(profileData.lastName ?? "nil")")
-    print("   Status: \(profileData.status ?? "nil")")
-    print("   Date of Birth: \(profileData.dateOfBirth ?? "nil")")
-    print("   Location: \(profileData.location ?? "nil")")
-    
     let resolvedFirstName = (overrideFirstName ?? profileData.firstName).trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedLastName = overrideLastName ?? profileData.lastName
     let sanitizedLastName = (resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? nil : resolvedLastName?.trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedPhone = (overridePhone ?? profileData.phone)?.trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedDateOfBirth = overrideDateOfBirth ?? parseDate(profileData.dateOfBirth) ?? currentUser?.dateOfBirth
+    
+    // Preserve onboarding state from persisted storage (not from User object)
+    // This ensures onboarding status persists across profile refreshes
+    let preservedOnboardingStatus = isOnboarded
     
     let updatedUser = User(
       id: profileData.id,
@@ -309,7 +352,7 @@ class UserManager {
       phone: resolvedPhone,
       dateOfBirth: resolvedDateOfBirth,
       createdAt: currentUser?.createdAt ?? Date(),
-      isOnboarded: currentUser?.isOnboarded ?? false
+      isOnboarded: preservedOnboardingStatus
     )
     
     currentUser = updatedUser

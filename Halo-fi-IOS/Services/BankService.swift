@@ -69,7 +69,42 @@ class BankService {
         
         switch httpResponse.statusCode {
         case 200, 201:
-            return try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
+            let decodedResponse = try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
+            return decodedResponse
+        case 401:
+            throw BankError.unauthorized
+        case 422:
+            let validationError = try JSONDecoder().decode(ValidationError.self, from: data)
+            throw BankError.validationError(validationError.detail)
+        default:
+            throw BankError.serverError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Sandbox: Create Multiple Items
+    func createSandboxMultiItems(accessToken: String, publicTokens: [String]) async throws -> BankMultiConnectResponse {
+        guard let url = URL(string: "\(baseURL)/bank/sandbox/create-multi-items") else {
+            throw BankError.networkError
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = BankMultiConnectRequest(publicTokens: publicTokens)
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BankError.networkError
+        }
+        
+        switch httpResponse.statusCode {
+        case 200, 201:
+            let decodedResponse = try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
+            return decodedResponse
         case 401:
             throw BankError.unauthorized
         case 422:
@@ -96,10 +131,17 @@ class BankService {
         
         switch httpResponse.statusCode {
         case 200:
-            let accountsResponse = try JSONDecoder().decode(BankAccountsResponse.self, from: data)
-            return accountsResponse.accounts
+            do {
+                let accountsResponse = try JSONDecoder().decode(BankAccountsResponse.self, from: data)
+                return accountsResponse.accounts
+            } catch {
+                throw BankError.invalidResponse
+            }
         case 401:
             throw BankError.unauthorized
+        case 404:
+            // Return empty array instead of throwing error for 404
+            return []
         default:
             throw BankError.serverError(httpResponse.statusCode)
         }

@@ -84,25 +84,14 @@ class AuthService {
   // MARK: - Get User Profile
   func getUserProfile() async throws -> UserProfileResponse {
     do {
-      // Debug: Print endpoint being called
-      print("🌐 Calling /auth/me endpoint...")
-      
       let profileResponse: UserProfileResponse = try await networkService.authenticatedRequest(
         endpoint: "/auth/me",
         method: .GET,
         responseType: UserProfileResponse.self
       )
       
-      // Debug: Print raw JSON if we can decode it
-      if let jsonData = try? JSONEncoder().encode(profileResponse),
-         let jsonString = String(data: jsonData, encoding: .utf8) {
-        print("📦 /auth/me Raw JSON Response:")
-        print(jsonString)
-      }
-      
       return profileResponse
     } catch {
-      print("❌ /auth/me Error: \(error)")
       // NetworkService handles basic errors, but we need to handle auth-specific errors
       if let authError = error as? AuthError {
         throw authError
@@ -115,7 +104,6 @@ class AuthService {
   // MARK: - Update User Profile
   func updateUserProfile(request: UpdateUserProfileRequest) async throws -> UserProfileResponse {
     do {
-      print("📝 Updating /auth/me profile...")
       let requestBody = try JSONEncoder().encode(request)
       
       let profileResponse: UserProfileResponse = try await networkService.authenticatedRequest(
@@ -125,15 +113,8 @@ class AuthService {
         responseType: UserProfileResponse.self
       )
       
-      if let jsonData = try? JSONEncoder().encode(profileResponse),
-         let jsonString = String(data: jsonData, encoding: .utf8) {
-        print("✅ /auth/me Update Response:")
-        print(jsonString)
-      }
-      
       return profileResponse
     } catch {
-      print("❌ /auth/me Update Error: \(error)")
       if let authError = error as? AuthError {
         throw authError
       } else {

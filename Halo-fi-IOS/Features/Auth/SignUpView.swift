@@ -10,6 +10,7 @@ import SwiftUI
 struct SignUpView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
+  var onComplete: (() -> Void)? = nil
   @State private var email = ""
   @State private var password = ""
   @State private var confirmPassword = ""
@@ -189,8 +190,11 @@ struct SignUpView: View {
         await MainActor.run {
           isLoading = false
           // User is now authenticated but not onboarded
-          // MainTabView will detect this and show the appropriate onboarding flow
-          // No need to present onboarding from here as the view hierarchy will change
+          // Call completion handler if provided (for onboarding flow)
+          // Otherwise MainTabView will detect this and show the appropriate onboarding flow
+          if let onComplete = onComplete {
+            onComplete()
+          }
         }
         
       } catch {

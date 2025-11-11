@@ -165,7 +165,8 @@ struct SignInView: View {
         try await userManager.signIn(phoneNumber: phoneNum, password: password)
         
         // Check if user has completed onboarding
-        if let user = userManager.currentUser, user.isOnboarded {
+        // Use UserManager's isOnboarded property which persists independently
+        if userManager.isOnboarded {
           // User is fully onboarded - just dismiss
           await MainActor.run {
             dismiss()
