@@ -42,23 +42,19 @@ struct BankMultiConnectResponse: Codable {
         }
         
         let mappedItems = sandboxItems.compactMap { sandboxItem -> ConnectedItem? in
-            do {
-                let item = ConnectedItem(
-                    institutionId: sandboxItem.institutionId,
-                    institutionName: sandboxItem.institutionName,
-                    availableProducts: parseAvailableProducts(sandboxItem.availableProducts),
-                    itemId: sandboxItem.itemId,
-                    userId: "", // Not provided in sandbox response
-                    plaidItemId: sandboxItem.plaidItemId,
-                    isActive: true, // Assume active for sandbox
-                    lastSync: nil,
-                    createdAt: sandboxItem.createdAt,
-                    updatedAt: nil
-                )
-                return item
-            } catch {
-                return nil
-            }
+            let item = ConnectedItem(
+                institutionId: sandboxItem.institutionId,
+                institutionName: sandboxItem.institutionName,
+                availableProducts: parseAvailableProducts(sandboxItem.availableProducts),
+                itemId: sandboxItem.itemId,
+                userId: "", // Not provided in sandbox response
+                plaidItemId: sandboxItem.plaidItemId,
+                isActive: true, // Assume active for sandbox
+                lastSync: nil,
+                createdAt: sandboxItem.createdAt,
+                updatedAt: nil
+            )
+            return item
         }
         
         return mappedItems.isEmpty ? nil : mappedItems

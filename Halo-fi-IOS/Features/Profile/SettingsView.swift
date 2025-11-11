@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var showingInviteFriends = false
     @State private var showingAbout = false
     @State private var showingAccounts = false
+    #if DEBUG
+    @State private var showingWebSocketTest = false
+    #endif
     
     var body: some View {
         NavigationView {
@@ -94,6 +97,27 @@ struct SettingsView: View {
                                     userManager.signOut()
                                 }
                             )
+                            
+                            #if DEBUG
+                            // Debug Section
+                            Divider()
+                                .padding(.vertical, 8)
+                            
+                            Text("DEBUG")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                            
+                            SettingsOption(
+                                icon: "network",
+                                title: "WebSocket Test",
+                                action: {
+                                    showingWebSocketTest = true
+                                }
+                            )
+                            #endif
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
@@ -122,6 +146,11 @@ struct SettingsView: View {
         .fullScreenCover(isPresented: $showingAccounts) {
             AccountsView()
         }
+        #if DEBUG
+        .fullScreenCover(isPresented: $showingWebSocketTest) {
+            WebSocketTestView()
+        }
+        #endif
     }
 }
 

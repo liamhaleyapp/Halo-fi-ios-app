@@ -11,8 +11,8 @@ struct VoiceConversationButton: View {
   let onTap: () -> Void
   
   var body: some View {
-    VStack(spacing: 16) {
-      Button(action: onTap) {
+    Button(action: onTap) {
+      VStack(spacing: 16) {
         ZStack {
           Circle()
             .fill(
@@ -41,24 +41,26 @@ struct VoiceConversationButton: View {
             .font(.system(size: 50, weight: .medium))
             .foregroundColor(.white)
         }
+        
+        Text("Tap to start conversation")
+          .font(.headline)
+          .foregroundColor(.primary)
       }
-      
-      Text("Tap to start conversation")
-        .font(.headline)
-        .foregroundColor(.primary)
+      .padding(80)
+      .overlay(
+        RoundedRectangle(cornerRadius: 20)
+          .stroke(
+            LinearGradient(
+              colors: [Color.blue, Color.purple],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ),
+            lineWidth: 2
+          )
+      )
+      .contentShape(Rectangle())
     }
-    .padding(80)
-    .overlay(
-      RoundedRectangle(cornerRadius: 20)
-        .stroke(
-          LinearGradient(
-            colors: [Color.blue, Color.purple],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          ),
-          lineWidth: 2
-        )
-    )
+    .buttonStyle(PlainButtonStyle())
   }
 }
 
