@@ -32,10 +32,6 @@ struct Halo_fi_IOSApp: App {
     }
   }
   
-  private var accessibilityDifferentiation: Bool {
-    themeMode == "High-Contrast"
-  }
-  
   init() {
     Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
   }
