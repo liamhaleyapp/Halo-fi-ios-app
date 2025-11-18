@@ -11,15 +11,12 @@ struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
-  @State private var phoneNumber = ""
-  @State private var password = ""
+  
+  @State private var viewModel = SignInViewModel()
   @State private var showingSignUp = false
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
-  @State private var isLoading = false
   @State private var showingForgotPassword = false
-  @State private var errorMessage = ""
-  @State private var showingError = false
   
   var body: some View {
     ZStack {
@@ -39,16 +36,22 @@ struct SignInView: View {
           AuthFormField(
             title: "Phone Number",
             placeholder: "Enter your phone number",
-            text: $phoneNumber,
+            text: $viewModel.phoneNumber,
             keyboardType: .phonePad
           )
+          if let error = viewModel.phoneError {
+            validationText(error)
+          }
           
           AuthFormField(
             title: "Password",
             placeholder: "Enter your password",
-            text: $password,
+            text: $viewModel.password,
             isSecure: true
           )
+          if let error = viewModel.passwordError {
+            validationText(error)
+          }
           
           // Forgot Password
           HStack {
@@ -62,9 +65,19 @@ struct SignInView: View {
           
           AuthButton(
             title: "Sign In",
-            isLoading: isLoading,
-            isEnabled: isFormValid,
-            action: signIn
+            isLoading: viewModel.isLoading,
+            isEnabled: !viewModel.isLoading,
+            action: {
+              Task {
+                await viewModel.signIn(
+                  using: userManager,
+                  subscriptionService: subscriptionService,
+                  onNeedsSubscription: { showingSubscriptionOnboarding = true },
+                  onNeedsPlaid: { showingPlaidOnboarding = true },
+                  onSignedInAndOnboarded: { dismiss() }
+                )
+              }
+            }
           )
           
           // Sign Up Link
@@ -79,51 +92,15 @@ struct SignInView: View {
           }
           .font(.body)
           
-          // Debug Section (only in development)
-          #if DEBUG
-          VStack(spacing: 12) {
-            Divider()
-              .background(Color.gray.opacity(0.3))
-            
-            Text("DEBUG MENU")
-              .font(.caption)
-              .foregroundColor(.orange)
-              .fontWeight(.bold)
-            
-            VStack(spacing: 8) {
-              Button("🚀 Quick Test Login") {
-                quickTestLogin()
-              }
-              .foregroundColor(.green)
-              .font(.caption)
-              
-              Button("👤 Mock User Login") {
-                mockUserLogin()
-              }
-              .foregroundColor(.blue)
-              .font(.caption)
-              
-              Button("💳 Test Subscription Flow") {
-                testSubscriptionFlow()
-              }
-              .foregroundColor(.purple)
-              .font(.caption)
-              
-              Button("🏦 Test Plaid Flow") {
-                testPlaidFlow()
-              }
-              .foregroundColor(.cyan)
-              .font(.caption)
-              
-              Button("🔧 Clear User Data") {
-                clearUserData()
-              }
-              .foregroundColor(.red)
-              .font(.caption)
-            }
-          }
-          .padding(.top, 10)
-          #endif
+#if DEBUG
+          SignInDebugMenu(
+            quickTestLogin: quickTestLogin,
+            mockUserLogin: mockUserLogin,
+            testSubscriptionFlow: testSubscriptionFlow,
+            testPlaidFlow: testPlaidFlow,
+            clearUserData: clearUserData
+          )
+#endif
         }
         .padding(.horizontal, 20)
         
@@ -144,55 +121,19 @@ struct SignInView: View {
     .fullScreenCover(isPresented: $showingPlaidOnboarding) {
       PlaidOnboardingView()
     }
-    .alert("Sign In Error", isPresented: $showingError) {
+    .alert("Sign In Error", isPresented: $viewModel.showingError) {
       Button("OK") { }
     } message: {
-      Text(errorMessage)
+      Text(viewModel.errorMessage)
     }
   }
   
-  // MARK: - Form Validation
-  private var isFormValid: Bool {
-    !phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-    !password.isEmpty
-  }
-  
-  // MARK: - Actions
-  private func signIn() {
-    Task {
-      do {
-        let phoneNum = "+1"+phoneNumber
-        try await userManager.signIn(phoneNumber: phoneNum, password: password)
-        
-        // Check if user has completed onboarding
-        // Use UserManager's isOnboarded property which persists independently
-        if userManager.isOnboarded {
-          // User is fully onboarded - just dismiss
-          await MainActor.run {
-            dismiss()
-          }
-        } else {
-          // User needs to complete onboarding
-          // Check subscription status
-          await subscriptionService.initialize()
-          
-          await MainActor.run {
-            if subscriptionService.hasActiveSubscription {
-              // Has subscription - go to Plaid
-              showingPlaidOnboarding = true
-            } else {
-              // No subscription - go to subscription flow
-              showingSubscriptionOnboarding = true
-            }
-          }
-        }
-      } catch {
-        await MainActor.run {
-          errorMessage = error.localizedDescription
-          showingError = true
-        }
-      }
-    }
+  @ViewBuilder
+  private func validationText(_ message: String) -> some View {
+    Text(message)
+      .foregroundColor(.red)
+      .font(.caption)
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
   
   // MARK: - Debug Actions
@@ -238,10 +179,10 @@ struct SignInView: View {
       await MainActor.run {
         userManager.signOut()
         // Clear form fields
-        phoneNumber = ""
-        password = ""
-        errorMessage = ""
-        showingError = false
+        viewModel.phoneNumber = ""
+        viewModel.password = ""
+        viewModel.errorMessage = ""
+        viewModel.showingError = false
       }
     }
   }
@@ -264,4 +205,6 @@ struct SignInView: View {
 
 #Preview {
   SignInView()
+    .environment(UserManager())
+    .environment(SubscriptionService())
 }
