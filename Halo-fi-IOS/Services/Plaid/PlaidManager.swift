@@ -113,4 +113,13 @@ class PlaidManager: ObservableObject {
     // through the system's URL handling mechanism.
     return isPlaidRedirect
   }
+  
+  // MARK: - Security: Clear Sensitive Data
+  
+  /// Clears link token from memory after use
+  /// SECURITY: Should be called when Plaid Link session ends to clear sensitive data
+  func clearLinkToken() {
+    linkToken = ""
+    linkHandler = nil
+  }
 }

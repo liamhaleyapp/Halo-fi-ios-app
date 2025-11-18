@@ -54,11 +54,14 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            // Log full error response for debugging
-            let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            // Log error without sensitive data (sanitized for security)
+            // SECURITY: Don't log full response as it may contain sensitive tokens/data
+            let sanitizedResponse = sanitizeErrorResponse(data)
             print("❌ Network Error [\(httpResponse.statusCode)]:")
             print("   Endpoint: \(endpoint)")
-            print("   Response: \(responseString)")
+            if let sanitized = sanitizedResponse {
+                print("   Response: \(sanitized)")
+            }
             
             // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
             if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
@@ -131,11 +134,14 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            // Log full error response for debugging
-            let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            // Log error without sensitive data (sanitized for security)
+            // SECURITY: Don't log full response as it may contain sensitive tokens/data
+            let sanitizedResponse = sanitizeErrorResponse(data)
             print("❌ Network Error [\(httpResponse.statusCode)]:")
             print("   Endpoint: \(endpoint)")
-            print("   Response: \(responseString)")
+            if let sanitized = sanitizedResponse {
+                print("   Response: \(sanitized)")
+            }
             
             // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
             if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
@@ -202,6 +208,43 @@ class NetworkService {
     // TODO: Implement when refresh token endpoint is available
     private func refreshTokenAndRetry(refreshToken: String) async throws {
         throw AuthError.serverError(501, "Token refresh not implemented") // Not implemented
+    }
+    
+    // MARK: - Security Helpers
+    
+    /// Sanitizes error response data to remove sensitive information before logging
+    /// SECURITY: Removes tokens, passwords, and other sensitive fields from error logs
+    private func sanitizeErrorResponse(_ data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            // If not JSON, return truncated string (max 200 chars)
+            if let string = String(data: data, encoding: .utf8) {
+                return String(string.prefix(200))
+            }
+            return nil
+        }
+        
+        var sanitized = json
+        
+        // Remove sensitive fields
+        let sensitiveKeys = [
+            "access_token", "refresh_token", "token", "public_token", "link_token",
+            "password", "password_hash", "api_key", "secret", "authorization",
+            "account_number", "routing_number", "ssn", "social_security"
+        ]
+        
+        for key in sensitiveKeys {
+            sanitized.removeValue(forKey: key)
+            sanitized.removeValue(forKey: key.capitalized)
+            sanitized.removeValue(forKey: key.uppercased())
+        }
+        
+        // Convert back to JSON string
+        if let sanitizedData = try? JSONSerialization.data(withJSONObject: sanitized, options: .prettyPrinted),
+           let sanitizedString = String(data: sanitizedData, encoding: .utf8) {
+            return sanitizedString
+        }
+        
+        return nil
     }
 }
 
