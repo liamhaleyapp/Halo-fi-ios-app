@@ -13,7 +13,7 @@ enum AuthError: LocalizedError {
     case unknownError
     case validationError([ValidationErrorDetail])
     case emailAlreadyExists
-    case serverError(Int)
+    case serverError(Int, String?)
     case tokenExpired
     
     var errorDescription: String? {
@@ -29,7 +29,10 @@ enum AuthError: LocalizedError {
             return "Validation error: \(messages)"
         case .emailAlreadyExists:
             return "An account with this email already exists"
-        case .serverError(let code):
+        case .serverError(let code, let detail):
+            if let detail = detail, !detail.isEmpty {
+                return detail
+            }
             return "Server error (\(code)). Please try again"
         case .tokenExpired:
             return "Your session has expired. Please sign in again"
@@ -39,6 +42,11 @@ enum AuthError: LocalizedError {
 
 struct ValidationError: Codable {
   let detail: [ValidationErrorDetail]
+}
+
+// Simple error response with a string detail (e.g., {"detail": "Invalid phone number format"})
+struct SimpleErrorResponse: Codable {
+  let detail: String
 }
 
 struct ValidationErrorDetail: Codable {

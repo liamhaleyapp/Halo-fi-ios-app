@@ -393,7 +393,7 @@ class UserManager {
     let response = try await authService.updateUserProfile(request: request)
     
     guard let wrapper = response.data else {
-      throw AuthError.serverError(500)
+      throw AuthError.serverError(500, "Invalid response from server")
     }
     
     let profileData = wrapper.user

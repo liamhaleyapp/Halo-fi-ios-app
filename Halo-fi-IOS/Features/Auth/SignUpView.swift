@@ -21,6 +21,8 @@ struct SignUpView: View {
   @State private var showingSignIn = false
   @State private var showingDatePicker = false
   @State private var isLoading = false
+  @State private var showingError = false
+  @State private var errorMessage = ""
   
   var body: some View {
     ZStack {
@@ -141,6 +143,11 @@ struct SignUpView: View {
       }
       .presentationDetents([.medium])
     }
+    .alert("Sign Up Error", isPresented: $showingError) {
+      Button("OK") { }
+    } message: {
+      Text(errorMessage)
+    }
   }
   
   // MARK: - Form Validation
@@ -200,9 +207,22 @@ struct SignUpView: View {
       } catch {
         await MainActor.run {
           isLoading = false
+          
+          // Extract user-friendly error message
+          if let authError = error as? AuthError {
+            errorMessage = authError.errorDescription ?? "An error occurred. Please try again."
+          } else {
+            errorMessage = error.localizedDescription.isEmpty ? "An error occurred. Please try again." : error.localizedDescription
+          }
+          
+          // Log full error details for debugging
+          print("Error creating account: \(error)")
+          if let authError = error as? AuthError {
+            print("AuthError details: \(authError)")
+          }
+          
+          showingError = true
         }
-        // TODO: Show error message
-        print("Error creating account: \(error)")
       }
     }
   }

@@ -54,7 +54,46 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            throw AuthError.serverError(httpResponse.statusCode)
+            // Log full error response for debugging
+            let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            print("❌ Network Error [\(httpResponse.statusCode)]:")
+            print("   Endpoint: \(endpoint)")
+            print("   Response: \(responseString)")
+            
+            // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
+            if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
+                // First, try to parse as ValidationError (array format)
+                if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                    throw AuthError.validationError(validationError.detail)
+                }
+                
+                // If that fails, try to parse as SimpleErrorResponse (string detail format)
+                if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                    throw AuthError.serverError(httpResponse.statusCode, simpleError.detail)
+                }
+                
+                // If both fail, try to extract detail from raw JSON
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let detail = json["detail"] as? String {
+                    throw AuthError.serverError(httpResponse.statusCode, detail)
+                }
+                
+                // Fallback for 422 - validation error with empty details
+                if httpResponse.statusCode == 422 {
+                    throw AuthError.validationError([])
+                }
+            }
+            
+            // For other error codes, try to extract detail message if available
+            var errorDetail: String? = nil
+            if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                errorDetail = simpleError.detail
+            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let detail = json["detail"] as? String {
+                errorDetail = detail
+            }
+            
+            throw AuthError.serverError(httpResponse.statusCode, errorDetail)
         }
     }
     
@@ -92,7 +131,46 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            throw AuthError.serverError(httpResponse.statusCode)
+            // Log full error response for debugging
+            let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            print("❌ Network Error [\(httpResponse.statusCode)]:")
+            print("   Endpoint: \(endpoint)")
+            print("   Response: \(responseString)")
+            
+            // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
+            if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
+                // First, try to parse as ValidationError (array format)
+                if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                    throw AuthError.validationError(validationError.detail)
+                }
+                
+                // If that fails, try to parse as SimpleErrorResponse (string detail format)
+                if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                    throw AuthError.serverError(httpResponse.statusCode, simpleError.detail)
+                }
+                
+                // If both fail, try to extract detail from raw JSON
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let detail = json["detail"] as? String {
+                    throw AuthError.serverError(httpResponse.statusCode, detail)
+                }
+                
+                // Fallback for 422 - validation error with empty details
+                if httpResponse.statusCode == 422 {
+                    throw AuthError.validationError([])
+                }
+            }
+            
+            // For other error codes, try to extract detail message if available
+            var errorDetail: String? = nil
+            if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                errorDetail = simpleError.detail
+            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let detail = json["detail"] as? String {
+                errorDetail = detail
+            }
+            
+            throw AuthError.serverError(httpResponse.statusCode, errorDetail)
         }
     }
     
@@ -123,7 +201,7 @@ class NetworkService {
     
     // TODO: Implement when refresh token endpoint is available
     private func refreshTokenAndRetry(refreshToken: String) async throws {
-        throw AuthError.serverError(501) // Not implemented
+        throw AuthError.serverError(501, "Token refresh not implemented") // Not implemented
     }
 }
 

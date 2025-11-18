@@ -78,7 +78,7 @@ class AuthService {
   // TODO: Implement when refresh endpoint is available in the API
   // Currently not available in the API documentation
   func refreshToken(refreshToken: String) async throws -> LoginResponse {
-    throw AuthError.serverError(501) // Not implemented
+    throw AuthError.serverError(501, "Token refresh not implemented") // Not implemented
   }
   
   // MARK: - Get User Profile
@@ -129,7 +129,7 @@ class AuthService {
   func logout(accessToken: String) async throws {
     // For now, just clear local tokens
     // Server-side logout not available yet
-    throw AuthError.serverError(501) // Not implemented
+    throw AuthError.serverError(501, "Logout not implemented") // Not implemented
   }
 }
 
