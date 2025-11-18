@@ -259,3 +259,26 @@ enum SubscriptionError: LocalizedError {
   }
 }
 
+extension SubscriptionService {
+  static var previewActivePro: SubscriptionService {
+    let service = SubscriptionService()
+    
+    // Fake a Pro subscription
+    service.currentSubscription = .pro
+    service.activeEntitlements = ["pro"]
+    service.customerInfo = nil
+    service.isLoading = false
+    service.availablePackages = []
+    service.availableProducts = []
+    
+    return service
+  }
+  
+  static var previewNone: SubscriptionService {
+    let service = SubscriptionService()
+    service.currentSubscription = .none
+    service.activeEntitlements = []
+    service.isLoading = false
+    return service
+  }
+}

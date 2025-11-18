@@ -89,7 +89,8 @@ struct SubscriptionOnboardingFlowView: View {
               withAnimation {
                 showingSubscriptionView = false
               }
-            }
+            },
+            viewModel: SubscriptionViewModel(subscriptionService: subscriptionService)
           )
         }
       }
@@ -130,11 +131,20 @@ struct SubscriptionOnboardingFlowView: View {
 // MARK: - Subscription View Wrapper for Onboarding
 struct SubscriptionViewWithBack: View {
   let onBack: (() -> Void)?
+  @State private var viewModel: SubscriptionViewModel
+  
+  init(
+    onBack: (() -> Void)? = nil,
+    viewModel: SubscriptionViewModel
+  ) {
+    self.onBack = onBack
+    _viewModel = State(initialValue: viewModel)
+  }
   
   var body: some View {
     ZStack {
       // Hide SubscriptionView's header since we'll add our own
-      SubscriptionView(hideHeader: true)
+      SubscriptionView(hideHeader: true, viewModel: viewModel)
         .navigationBarHidden(true)
       
       // Custom header with back button - only show if onBack is provided
@@ -149,14 +159,10 @@ struct SubscriptionViewWithBack: View {
                 .background(Color.gray.opacity(0.2))
                 .clipShape(Circle())
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 15)
           } else {
             // Spacer to keep title centered when no back button
             Color.clear
               .frame(width: 40, height: 40)
-              .padding(.horizontal, 20)
-              .padding(.top, 15)
           }
           
           Spacer()
@@ -173,6 +179,7 @@ struct SubscriptionViewWithBack: View {
             .frame(width: 40, height: 40)
         }
         .padding(.horizontal, 20)
+        .padding(.top, 15)
         
         Spacer()
       }
