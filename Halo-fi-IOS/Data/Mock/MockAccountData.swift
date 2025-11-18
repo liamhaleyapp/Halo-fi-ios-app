@@ -11,38 +11,101 @@ import Foundation
 struct MockAccountData {
     
     // MARK: - Checking Accounts
-    static let checkingAccounts: [(name: String, balance: Double)] = [
-        ("Bank of America Checking", 4502.32),
-        ("Chime Checking", 1120.00)
+    static let checkingAccounts: [FinancialAccount] = [
+        FinancialAccount(
+            id: "mock-checking-1",
+            type: .checking,
+            name: "Bank of America Checking",
+            balance: 4502.32,
+            nickname: "BofA Checking",
+            isSynced: true
+        ),
+        FinancialAccount(
+            id: "mock-checking-2",
+            type: .checking,
+            name: "Chime Checking",
+            balance: 1120.00,
+            nickname: "Chime",
+            isSynced: true
+        )
     ]
     
     // MARK: - Savings Accounts
-    static let savingsAccounts: [(name: String, balance: Double)] = [
-        ("Ally Savings", 9230.50)
+    static let savingsAccounts: [FinancialAccount] = [
+        FinancialAccount(
+            id: "mock-savings-1",
+            type: .savings,
+            name: "Ally Savings",
+            balance: 9230.50,
+            nickname: "Ally Savings",
+            isSynced: true
+        )
     ]
     
     // MARK: - Credit Cards
-    static let creditCards: [(name: String, balance: Double)] = [
-        ("Amex Platinum", -1245.12),
-        ("Chase Sapphire", -3010.00)
+    static let creditCards: [FinancialAccount] = [
+        FinancialAccount(
+            id: "mock-credit-1",
+            type: .creditCard,
+            name: "Amex Platinum",
+            balance: -1245.12,
+            nickname: "Amex Platinum",
+            isSynced: true
+        ),
+        FinancialAccount(
+            id: "mock-credit-2",
+            type: .creditCard,
+            name: "Chase Sapphire",
+            balance: -3010.00,
+            nickname: "Chase Sapphire",
+            isSynced: true
+        )
     ]
     
     // MARK: - Investments
-    static let investments: [(name: String, balance: Double)] = [
-        ("Vanguard IRA", 21304.23),
-        ("Robinhood", 1190.44)
+    static let investments: [FinancialAccount] = [
+        FinancialAccount(
+            id: "mock-investment-1",
+            type: .investment,
+            name: "Vanguard IRA",
+            balance: 21304.23,
+            nickname: "Vanguard IRA",
+            isSynced: true
+        ),
+        FinancialAccount(
+            id: "mock-investment-2",
+            type: .investment,
+            name: "Robinhood",
+            balance: 1190.44,
+            nickname: "Robinhood",
+            isSynced: true
+        )
     ]
     
     // MARK: - Loans
-    static let loans: [(name: String, balance: Double)] = [
-        ("Car Loan", -9200.00),
-        ("Student Loan", -15500.00)
+    static let loans: [FinancialAccount] = [
+        FinancialAccount(
+            id: "mock-loan-1",
+            type: .loan,
+            name: "Car Loan",
+            balance: -9200.00,
+            nickname: "Car Loan",
+            isSynced: true
+        ),
+        FinancialAccount(
+            id: "mock-loan-2",
+            type: .loan,
+            name: "Student Loan",
+            balance: -15500.00,
+            nickname: "Student Loan",
+            isSynced: true
+        )
     ]
     
     // MARK: - Helper Methods
     
     /// Get accounts for a specific type
-    static func accounts(for type: AccountType) -> [(name: String, balance: Double)] {
+    static func accounts(for type: AccountType) -> [FinancialAccount] {
         switch type {
         case .checking:
             return checkingAccounts
@@ -55,6 +118,11 @@ struct MockAccountData {
         case .loan:
             return loans
         }
+    }
+    
+    /// Legacy method for backward compatibility - returns tuples
+    static func accountsLegacy(for type: AccountType) -> [(name: String, balance: Double)] {
+        return accounts(for: type).map { ($0.name, $0.balance) }
     }
     
     /// Get display title for account type

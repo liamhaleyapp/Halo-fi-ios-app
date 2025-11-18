@@ -10,13 +10,14 @@ import SwiftUI
 struct AccountRowSimple: View {
   let name: String
   let balance: Double
+  let accountType: AccountType
   
   var body: some View {
     HStack {
       VStack(alignment: .leading, spacing: 4) {
         Text(name)
           .foregroundColor(.white)
-        Text("Checking")
+        Text(accountType.displayName)
           .font(.caption)
           .foregroundColor(.gray)
       }
@@ -24,6 +25,5 @@ struct AccountRowSimple: View {
       Text(balance, format: .currency(code: "USD"))
         .foregroundColor(balance >= 0 ? .green : .red)
     }
-    .listRowBackground(Color.gray.opacity(0.15))
   }
 }

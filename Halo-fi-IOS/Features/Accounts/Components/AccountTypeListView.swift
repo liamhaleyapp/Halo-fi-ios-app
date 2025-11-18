@@ -10,7 +10,7 @@ import SwiftUI
 struct AccountTypeListView: View {
   let accountType: AccountType
   
-  private var accounts: [(name: String, balance: Double)] {
+  private var accounts: [FinancialAccount] {
     MockAccountData.accounts(for: accountType)
   }
   
@@ -32,11 +32,15 @@ struct AccountTypeListView: View {
         
         List {
           Section(header: Text("Connected").foregroundColor(.gray)) {
-            ForEach(accounts.indices, id: \.self) { index in
-              AccountRowSimple(
-                name: accounts[index].name,
-                balance: accounts[index].balance
-              )
+            ForEach(accounts) { account in
+              NavigationLink(destination: AccountDetailView(account: account)) {
+                AccountRowSimple(
+                  name: account.name,
+                  balance: account.balance,
+                  accountType: account.type
+                )
+              }
+              .listRowBackground(Color.gray.opacity(0.15))
             }
           }
         }
