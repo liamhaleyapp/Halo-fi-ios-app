@@ -230,4 +230,5 @@ struct SignUpView: View {
 
 #Preview {
   SignUpView()
+    .environment(UserManager())
 }
