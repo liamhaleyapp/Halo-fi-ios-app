@@ -17,6 +17,7 @@ struct VoiceHeader: View {
       .padding(.horizontal, 40)
       .padding(.top, 60)
       .padding(.bottom, 20)
+      .accessibilityAddTraits(.isHeader)
   }
 }
 

@@ -30,41 +30,31 @@ struct VoiceConversationView: View {
       Color(.systemBackground).ignoresSafeArea()
       
       VStack(spacing: 0) {
-        // Header text at top
         VoiceHeader()
         
         Spacer()
         
-        // Central animated graphics
         VoiceAnimationView(isRecording: isRecording, isConnected: isConnected)
         
-        // Status text below mic graphic
-        VoiceStatusText(isListening: isListening && !isMuted)
+        VoiceStatusText(
+          isListening: isListening && !isMuted
+        )
         
         Spacer()
         
-        // Control buttons at bottom
         VoiceControlButtons(
           isMuted: isMuted,
-          onMuteToggle: {
-            handleMuteToggle()
-          },
-          onEndCall: {
-            handleEndCall()
-          }
+          onMuteToggle: { handleMuteToggle() },
+          onEndCall: { handleEndCall() }
         )
       }
     }
     .navigationBarHidden(true)
     .onAppear {
-      Task {
-        await connectToVoiceService()
-      }
+      Task { await connectToVoiceService() }
     }
     .onDisappear {
-      Task {
-        await disconnectFromVoiceService()
-      }
+      Task { await disconnectFromVoiceService() }
     }
     .alert("Voice Chat Error", isPresented: $showingError) {
       Button("OK") { }
@@ -72,6 +62,7 @@ struct VoiceConversationView: View {
       Text(errorMessage)
     }
   }
+  
   
   // MARK: - Actions
   

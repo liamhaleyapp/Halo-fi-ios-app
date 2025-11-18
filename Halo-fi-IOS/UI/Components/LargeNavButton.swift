@@ -18,9 +18,11 @@ struct LargeNavButton: View {
         RoundedRectangle(cornerRadius: 12)
           .fill(tileColor)
           .frame(width: 72, height: 72)
+        
         Image(systemName: icon)
           .font(.title2)
           .foregroundColor(.white)
+          .accessibilityHidden(true)
       }
       
       Text(title)
@@ -36,11 +38,15 @@ struct LargeNavButton: View {
       Image(systemName: "chevron.right")
         .font(.headline)
         .foregroundColor(.white.opacity(0.8))
+        .accessibilityHidden(true)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
     .background(Color.gray.opacity(0.12))
     .cornerRadius(16)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(title)
+    .accessibilityHint("Opens \(title)")
   }
 }
 

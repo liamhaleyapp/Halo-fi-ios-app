@@ -24,6 +24,7 @@ struct AccountsOverviewView: View {
               .fontWeight(.heavy)
               .foregroundColor(.white)
               .padding(.vertical, 8)
+              .accessibilityAddTraits(.isHeader)
             
             Spacer()
           }
@@ -59,6 +60,8 @@ struct AccountsOverviewView: View {
           } label: {
             Image(systemName: "plus.app")
           }
+          .accessibilityLabel("Add bank account")
+          .accessibilityHint("Connect a new bank account")
         }
       }
     }

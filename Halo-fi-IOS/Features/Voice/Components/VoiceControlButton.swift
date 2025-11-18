@@ -20,6 +20,8 @@ struct VoiceControlButton: View {
         Image(systemName: icon)
           .font(.system(size: 30))
           .foregroundColor(.white)
+          .accessibilityHidden(true)
+        
         Text(title)
           .font(.headline)
           .foregroundColor(.white)
@@ -34,6 +36,9 @@ struct VoiceControlButton: View {
           .stroke(strokeGradient, lineWidth: 3)
       )
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(title)
+    .accessibilityHint("Performs \(title.lowercased())")
   }
 }
 

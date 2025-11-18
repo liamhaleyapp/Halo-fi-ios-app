@@ -17,6 +17,11 @@ struct VoiceStatusText: View {
       .foregroundColor(.primary)
       .padding(.top, 30)
       .opacity(isListening ? 1.0 : 0.7)
+      .accessibilityLabel(
+        isListening
+          ? "Microphone is active and listening"
+          : "Microphone is muted"
+      )
   }
 }
 

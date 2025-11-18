@@ -13,7 +13,6 @@ struct ModalHeader: View {
   
   var body: some View {
     VStack(spacing: 0) {
-      // Header with Done button
       HStack {
         Spacer()
         Button("Done") {
@@ -23,16 +22,17 @@ struct ModalHeader: View {
         .font(.body)
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+        .accessibilityHint("Closes this screen")
       }
       .padding(.top, 8)
       
-      // Title
       Text(title)
         .font(.title2)
         .fontWeight(.semibold)
         .foregroundColor(.white)
         .padding(.top, 8)
         .padding(.bottom, 16)
+        .accessibilityAddTraits(.isHeader)
     }
   }
 }

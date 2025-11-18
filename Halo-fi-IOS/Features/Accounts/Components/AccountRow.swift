@@ -43,6 +43,14 @@ struct AccountRow: View {
     .padding(.vertical, 12)
     .background(Color.gray.opacity(0.05))
     .cornerRadius(12)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(account.nickname), \(account.type.displayName)")
+    .accessibilityValue(
+      account.isSynced
+      ? account.balance.formatted(.currency(code: "USD"))
+      : "Not synced"
+    )
+    .accessibilityHint("Opens account details")
   }
 }
 

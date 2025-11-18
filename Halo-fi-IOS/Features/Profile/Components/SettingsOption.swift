@@ -15,10 +15,12 @@ struct SettingsOption: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 20) {
+        
         Image(systemName: icon)
           .font(.title2)
           .foregroundColor(.accentColor)
           .frame(width: 32, height: 32)
+          .accessibilityHidden(true) // decorative
         
         Text(title)
           .font(.title3)
@@ -30,11 +32,15 @@ struct SettingsOption: View {
         Image(systemName: "chevron.right")
           .font(.system(size: 18, weight: .semibold))
           .foregroundColor(Color(.tertiaryLabel))
+          .accessibilityHidden(true)
       }
       .padding(.horizontal, 30)
       .padding(.vertical, 24)
       .background(Color(.secondarySystemBackground))
       .cornerRadius(16)
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(title)
+    .accessibilityHint("Opens \(title)")
   }
 }

@@ -30,12 +30,23 @@ struct AuthButton: View {
       .frame(maxWidth: .infinity)
       .frame(height: 56)
       .background(
-        LinearGradient(colors: [Color.purple, Color.indigo], startPoint: .leading, endPoint: .trailing)
+        LinearGradient(
+          colors: [Color.purple, Color.indigo],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
       )
       .cornerRadius(16)
     }
     .disabled(isLoading || !isEnabled)
     .opacity(isEnabled ? 1.0 : 0.6)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(isLoading ? "\(title), loading" : title)
+    .accessibilityHint(
+      isLoading
+      ? "Please wait"
+      : "Performs \(title.lowercased())"
+    )
   }
 }
 

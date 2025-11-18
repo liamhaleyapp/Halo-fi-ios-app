@@ -34,6 +34,7 @@ struct SettingsView: View {
               .font(.largeTitle)
               .fontWeight(.bold)
               .foregroundColor(.primary)
+              .accessibilityAddTraits(.isHeader)
             
             Spacer()
           }

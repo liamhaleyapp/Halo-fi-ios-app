@@ -40,6 +40,7 @@ struct VoiceConversationButton: View {
           Image(systemName: "mic.fill")
             .font(.system(size: 50, weight: .medium))
             .foregroundColor(.white)
+            .accessibilityHidden(true)
         }
         
         Text("Tap to start conversation")
@@ -61,6 +62,8 @@ struct VoiceConversationButton: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(PlainButtonStyle())
+    .accessibilityLabel("Start voice conversation")
+    .accessibilityHint("Starts a voice conversation with your financial assistant")
   }
 }
 

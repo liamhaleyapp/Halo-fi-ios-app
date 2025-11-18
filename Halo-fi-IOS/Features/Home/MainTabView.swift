@@ -22,25 +22,25 @@ struct MainTabView: View {
           UnifiedOnboardingFlowView()
         } else {
           // User is fully onboarded - show main app
-          TabView {
+          TabView(selection: $selectedTab) {
             HomeView()
               .tabItem {
-                Image(systemName: "mic.circle.fill")
-                Text("Agent")
+                Label("Agent", systemImage: "mic.circle.fill")
+                  .accessibilityHint("Voice assistant and home screen")
               }
               .tag(0)
             
             AccountsOverviewView()
               .tabItem {
-                Image(systemName: "creditcard.fill")
-                Text("Account")
+                Label("Account", systemImage: "creditcard.fill")
+                  .accessibilityHint("View and manage your financial accounts")
               }
               .tag(1)
             
             SettingsView()
               .tabItem {
-                Image(systemName: "gearshape.fill")
-                Text("Settings")
+                Label("Settings", systemImage: "gearshape.fill")
+                  .accessibilityHint("App settings and preferences")
               }
               .tag(2)
           }

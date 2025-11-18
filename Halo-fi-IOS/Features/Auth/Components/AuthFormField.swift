@@ -14,7 +14,13 @@ struct AuthFormField: View {
   let isSecure: Bool
   let keyboardType: UIKeyboardType
   
-  init(title: String, placeholder: String, text: Binding<String>, isSecure: Bool = false, keyboardType: UIKeyboardType = .default) {
+  init(
+    title: String,
+    placeholder: String,
+    text: Binding<String>,
+    isSecure: Bool = false,
+    keyboardType: UIKeyboardType = .default
+  ) {
     self.title = title
     self.placeholder = placeholder
     self._text = text
@@ -27,6 +33,7 @@ struct AuthFormField: View {
       Text(title)
         .font(.headline)
         .foregroundColor(.white)
+        .accessibilityHidden(true)
       
       Group {
         if isSecure {
@@ -37,10 +44,22 @@ struct AuthFormField: View {
       }
       .textFieldStyle(CustomTextFieldStyle())
       .keyboardType(keyboardType)
-      .autocapitalization(isSecure ? .none : .none)
+      .autocapitalization(.none)
+      .accessibilityLabel(title)
+      .accessibilityHint("Enter your \(title.lowercased())")
+      .accessibilityValue(accessibilityValueText)
+    }
+  }
+  
+  private var accessibilityValueText: String {
+    if isSecure {
+      return text.isEmpty ? "No \(title.lowercased()) entered" : "\(title) entered"
+    } else {
+      return text.isEmpty ? placeholder : text
     }
   }
 }
+
 
 #Preview {
   ZStack {

@@ -16,6 +16,7 @@ struct HomeHeader: View {
         .font(.largeTitle)
         .fontWeight(.bold)
         .foregroundColor(.primary)
+        .accessibilityAddTraits(.isHeader)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)

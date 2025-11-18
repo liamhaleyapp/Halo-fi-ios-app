@@ -24,30 +24,43 @@ struct AuthHeaderView: View {
             .background(Color.white.opacity(0.2))
             .clipShape(Circle())
         }
+        .accessibilityLabel("Back")
+        .accessibilityHint("Tap to go back")
         
         Spacer()
       }
       .padding(.horizontal, 20)
       
-      // App Logo/Icon
+      // App Logo/Icon (decorative)
       Circle()
-        .fill(LinearGradient(colors: [Color.purple, Color.indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .fill(
+          LinearGradient(
+            colors: [Color.purple, Color.indigo],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
         .frame(width: 80, height: 80)
         .overlay(
           Image(systemName: "mic.circle.fill")
             .font(.system(size: 40))
             .foregroundColor(.white)
         )
+        .accessibilityHidden(true)
       
       Text(title)
         .font(.largeTitle)
         .fontWeight(.bold)
         .foregroundColor(.white)
+        .multilineTextAlignment(.center)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilitySortPriority(2)
       
       Text(subtitle)
         .font(.body)
         .foregroundColor(.gray)
         .multilineTextAlignment(.center)
+        .accessibilitySortPriority(1)
     }
   }
 }

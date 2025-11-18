@@ -24,6 +24,8 @@ struct ActionButton: View {
                 .background(gradient)
                 .cornerRadius(16)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens \(title)")
     }
 }
 

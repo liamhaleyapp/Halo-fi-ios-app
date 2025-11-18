@@ -61,6 +61,7 @@ struct SignInView: View {
             }
             .foregroundColor(.blue)
             .font(.body)
+            .accessibilityHint("Resets your password")
           }
           
           AuthButton(
@@ -89,6 +90,7 @@ struct SignInView: View {
               showingSignUp = true
             }
             .foregroundColor(.blue)
+            .accessibilityHint("Creates a new account")
           }
           .font(.body)
           
@@ -134,6 +136,8 @@ struct SignInView: View {
       .foregroundColor(.red)
       .font(.caption)
       .frame(maxWidth: .infinity, alignment: .leading)
+      .accessibilityLabel("Error: \(message)")
+      .accessibilityAddTraits(.isStaticText)
   }
   
   // MARK: - Debug Actions
