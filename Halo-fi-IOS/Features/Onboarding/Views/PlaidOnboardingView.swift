@@ -73,9 +73,40 @@ struct PlaidOnboardingView: View {
       .navigationBarHidden(true)
     }
     .onAppear {
-      guard !hasStartedFlow else { return }
-      hasStartedFlow = true
-      startPlaidFlow()
+      // Check if user already has connected accounts before starting flow
+      Task {
+        // Quick check: if user already has accounts, we shouldn't be here
+        // But if we are, check and complete if accounts exist
+        do {
+          try await bankDataManager.fetchAccounts(forceRefresh: false)
+          await MainActor.run {
+            let hasAccounts = bankDataManager.accounts?.isEmpty == false
+            
+            if hasAccounts {
+              // User already has accounts - complete onboarding
+              userManager.completeOnboarding()
+              if let onComplete = onComplete {
+                onComplete()
+              } else {
+                dismiss()
+              }
+              return
+            }
+            
+            // No accounts - proceed with normal flow
+            guard !hasStartedFlow else { return }
+            hasStartedFlow = true
+            startPlaidFlow()
+          }
+        } catch {
+          // If fetch fails, proceed with normal flow
+          await MainActor.run {
+            guard !hasStartedFlow else { return }
+            hasStartedFlow = true
+            startPlaidFlow()
+          }
+        }
+      }
     }
     .alert("Connection Error", isPresented: $showingError) {
       Button("OK") {
@@ -154,6 +185,7 @@ struct PlaidOnboardingView: View {
     await MainActor.run {
       isCompletingLinking = true
       showingPlaidLink = false // Hide Plaid Link UI
+      hasStartedFlow = true // Mark as started to prevent restart
     }
     
     do {
@@ -166,15 +198,31 @@ struct PlaidOnboardingView: View {
       _ = try await bankDataManager.completeLinking(with: tokens, useSandbox: false)
       #endif
       
+      // Verify accounts were actually created before completing
+      // Give backend a moment to sync
+      try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+      try? await bankDataManager.fetchAccounts(forceRefresh: true)
+      
       await MainActor.run {
         isCompletingLinking = false
-        userManager.completeOnboarding()
-        // Call completion handler if provided (for unified onboarding flow)
-        // Otherwise dismiss
-        if let onComplete = onComplete {
-          onComplete()
+        
+        // Double-check that accounts exist before completing
+        let hasAccounts = bankDataManager.accounts?.isEmpty == false
+        
+        if hasAccounts {
+          userManager.completeOnboarding()
+          // Call completion handler if provided (for unified onboarding flow)
+          // Otherwise dismiss
+          if let onComplete = onComplete {
+            onComplete()
+          } else {
+            dismiss()
+          }
         } else {
-          dismiss()
+          // Accounts weren't created - show error but don't restart flow
+          errorMessage = "Connection completed but accounts weren't found. Please try again."
+          showingError = true
+          hasStartedFlow = false // Allow retry
         }
       }
     } catch {
@@ -244,6 +292,28 @@ struct PlaidOnboardingView: View {
     // Check if there's an error that needs to be shown
     let hasError = linkExit?.error != nil
     
+    // Before handling exit, check if user already has accounts
+    // (They might have completed connection but exited before success callback)
+    do {
+      try await bankDataManager.fetchAccounts(forceRefresh: true)
+      await MainActor.run {
+        let hasAccounts = bankDataManager.accounts?.isEmpty == false
+        
+        if hasAccounts {
+          // User has accounts - complete onboarding even though they exited
+          userManager.completeOnboarding()
+          if let onComplete = onComplete {
+            onComplete()
+          } else {
+            dismiss()
+          }
+          return
+        }
+      }
+    } catch {
+      // If fetch fails, continue with normal exit handling
+    }
+    
     await MainActor.run {
       if hasError {
         // Handle specific exit scenarios with errors
@@ -280,6 +350,7 @@ struct PlaidOnboardingView: View {
       } else {
         // User cancelled without error - go back or dismiss
         isDismissing = true
+        hasStartedFlow = false // Reset so they can try again if they want
         if let onBack = onBack {
           onBack()
         } else {

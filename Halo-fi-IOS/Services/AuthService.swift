@@ -49,26 +49,35 @@ class AuthService {
       throw AuthError.validationError([])
     }
     
+    let formattedDateOfBirth = formatDateForRequest(dateOfBirth)
+    
     let registerRequest = SignupRequest(
       firstName: firstName,
       lastName: lastName,
       email: email,
       phone: phone,
       password: password,
-      dateOfBirth: formatDateForRequest(dateOfBirth)
+      dateOfBirth: formattedDateOfBirth
     )
     
     let requestBody = try JSONEncoder().encode(registerRequest)
     
-    let _: SignupResponse = try await networkService.publicRequest(
-      endpoint: "/users/signup",
-      method: .POST,
-      body: requestBody,
-      responseType: SignupResponse.self
-    )
+    do {
+      _ = try await networkService.publicRequest(
+        endpoint: "/users/signup",
+        method: .POST,
+        body: requestBody,
+        responseType: SignupResponse.self
+      )
+    } catch {
+      // Re-throw the error so it can be handled upstream
+      throw error
+    }
   }
 
   private func formatDateForRequest(_ date: Date) -> String {
+    // Format date of birth as ISO8601 timestamp (e.g., "2025-11-21T14:57:21.298Z")
+    // Server expects full timestamp format, not just date
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter.string(from: date)

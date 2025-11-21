@@ -90,6 +90,14 @@ struct SubscriptionOnboardingFlowView: View {
                 showingSubscriptionView = false
               }
             },
+            onContinue: {
+              // User has subscription and wants to continue
+              if let onComplete = onComplete {
+                onComplete()
+              } else {
+                showingPlaidOnboarding = true
+              }
+            },
             viewModel: SubscriptionViewModel(subscriptionService: subscriptionService)
           )
         }
@@ -131,21 +139,29 @@ struct SubscriptionOnboardingFlowView: View {
 // MARK: - Subscription View Wrapper for Onboarding
 struct SubscriptionViewWithBack: View {
   let onBack: (() -> Void)?
+  let onContinue: (() -> Void)?
   @State private var viewModel: SubscriptionViewModel
   
   init(
     onBack: (() -> Void)? = nil,
+    onContinue: (() -> Void)? = nil,
     viewModel: SubscriptionViewModel
   ) {
     self.onBack = onBack
+    self.onContinue = onContinue
     _viewModel = State(initialValue: viewModel)
   }
   
   var body: some View {
     ZStack {
       // Hide SubscriptionView's header since we'll add our own
-      SubscriptionView(hideHeader: true, viewModel: viewModel)
-        .navigationBarHidden(true)
+      SubscriptionView(
+        hideHeader: true,
+        isOnboarding: true,
+        onContinue: onContinue,
+        viewModel: viewModel
+      )
+      .navigationBarHidden(true)
       
       // Custom header with back button - only show if onBack is provided
       VStack {

@@ -54,15 +54,6 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            // Log error without sensitive data (sanitized for security)
-            // SECURITY: Don't log full response as it may contain sensitive tokens/data
-            let sanitizedResponse = sanitizeErrorResponse(data)
-            print("❌ Network Error [\(httpResponse.statusCode)]:")
-            print("   Endpoint: \(endpoint)")
-            if let sanitized = sanitizedResponse {
-                print("   Response: \(sanitized)")
-            }
-            
             // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
             if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
                 // First, try to parse as ValidationError (array format)
@@ -134,15 +125,6 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
-            // Log error without sensitive data (sanitized for security)
-            // SECURITY: Don't log full response as it may contain sensitive tokens/data
-            let sanitizedResponse = sanitizeErrorResponse(data)
-            print("❌ Network Error [\(httpResponse.statusCode)]:")
-            print("   Endpoint: \(endpoint)")
-            if let sanitized = sanitizedResponse {
-                print("   Response: \(sanitized)")
-            }
-            
             // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
             if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
                 // First, try to parse as ValidationError (array format)

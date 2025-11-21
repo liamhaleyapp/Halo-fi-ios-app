@@ -9,22 +9,12 @@ import Foundation
 struct LoginResponse: Codable {
   let success: Bool
   let message: String
-  let authData: AuthData
-  
-  enum CodingKeys: String, CodingKey {
-    case success
-    case message
-    case authData = "data"
-  }
-}
-
-struct AuthData: Codable {
-  let success: Bool
   let authUser: AuthUser
   let session: AuthSession
   
   enum CodingKeys: String, CodingKey {
     case success
+    case message
     case authUser = "auth_user"
     case session
   }

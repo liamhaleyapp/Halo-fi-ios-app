@@ -33,6 +33,7 @@ struct Halo_fi_IOSApp: App {
   }
   
   init() {
+    Purchases.logLevel = .error
     Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
   }
   

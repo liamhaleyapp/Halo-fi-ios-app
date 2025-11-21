@@ -207,7 +207,6 @@ class SignUpViewModel {
         : error.localizedDescription
       }
       showingError = true
-      print("Error creating account: \(error)")
     }
   }
 }

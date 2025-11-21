@@ -12,10 +12,19 @@ struct SubscriptionView: View {
   
   @State private var viewModel: SubscriptionViewModel
   var hideHeader: Bool
+  var isOnboarding: Bool
+  var onContinue: (() -> Void)?
   
   // Custom initializer
-  init(hideHeader: Bool = false, viewModel: SubscriptionViewModel) {
+  init(
+    hideHeader: Bool = false,
+    isOnboarding: Bool = false,
+    onContinue: (() -> Void)? = nil,
+    viewModel: SubscriptionViewModel
+  ) {
     self.hideHeader = hideHeader
+    self.isOnboarding = isOnboarding
+    self.onContinue = onContinue
     _viewModel = State(initialValue: viewModel)
   }
   
@@ -142,45 +151,83 @@ struct SubscriptionView: View {
   // MARK: - Current Plan Section
   private var currentPlanSection: some View {
     VStack(spacing: 12) {
-      HStack {
-        Text("Current Plan")
-          .font(.headline)
-          .foregroundColor(.gray)
-        
-        Spacer()
-        
-        Text(viewModel.currentPlanName)
-          .font(.title2)
-          .fontWeight(.bold)
-          .foregroundColor(.white)
-      }
-      
-      if let renewalDate = viewModel.renewalDate {
-        HStack {
-          Text("Next Billing Date")
-            .font(.subheadline)
-            .foregroundColor(.gray)
-          
-          Spacer()
-          
-          Text(renewalDate, style: .date)
-            .font(.subheadline)
-            .foregroundColor(.white)
-        }
-      }
-      
       if viewModel.hasActiveSubscription {
+        // Show subscription status message
+        if isOnboarding {
+          VStack(spacing: 8) {
+            HStack {
+              Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+                .font(.title3)
+              
+              Text("You're subscribed to \(viewModel.currentPlanName).")
+                .font(.headline)
+                .foregroundColor(.white)
+              
+              Spacer()
+            }
+            
+            Text("You can continue with your current subscription or change your plan below.")
+              .font(.subheadline)
+              .foregroundColor(.gray)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+        } else {
+          HStack {
+            Text("Current Plan")
+              .font(.headline)
+              .foregroundColor(.gray)
+            
+            Spacer()
+            
+            Text(viewModel.currentPlanName)
+              .font(.title2)
+              .fontWeight(.bold)
+              .foregroundColor(.white)
+          }
+        }
+        
+        if let renewalDate = viewModel.renewalDate {
+          HStack {
+            Text("Next Billing Date")
+              .font(.subheadline)
+              .foregroundColor(.gray)
+            
+            Spacer()
+            
+            Text(renewalDate, style: .date)
+              .font(.subheadline)
+              .foregroundColor(.white)
+          }
+        }
+        
+        if !isOnboarding {
+          HStack {
+            Text("Status")
+              .font(.subheadline)
+              .foregroundColor(.gray)
+            
+            Spacer()
+            
+            Text("Active")
+              .font(.subheadline)
+              .fontWeight(.medium)
+              .foregroundColor(.green)
+          }
+        }
+      } else {
+        // No active subscription
         HStack {
-          Text("Status")
-            .font(.subheadline)
+          Text("Current Plan")
+            .font(.headline)
             .foregroundColor(.gray)
           
           Spacer()
           
-          Text("Active")
-            .font(.subheadline)
-            .fontWeight(.medium)
-            .foregroundColor(.green)
+          Text(viewModel.currentPlanName)
+            .font(.title2)
+            .fontWeight(.bold)
+            .foregroundColor(.white)
         }
       }
     }
@@ -279,9 +326,17 @@ struct SubscriptionView: View {
     VStack(spacing: 12) {
       // Subscribe button if no active subscription, otherwise show change plan
       if viewModel.hasActiveSubscription {
-        changePlanButton
-        updatePaymentButton
-        cancelSubscriptionButton
+        // In onboarding mode, show Continue button first, then Change Plan
+        if isOnboarding {
+          continueButton
+          changePlanButton
+          updatePaymentButton
+        } else {
+          // Regular mode: show Change Plan, Update Payment, Cancel
+          changePlanButton
+          updatePaymentButton
+          cancelSubscriptionButton
+        }
       } else {
         subscribeButton
         restorePurchasesButton
@@ -289,6 +344,35 @@ struct SubscriptionView: View {
     }
     .padding(.horizontal, 16)
     .padding(.bottom, 40)
+  }
+  
+  // MARK: - Continue Button (Onboarding)
+  private var continueButton: some View {
+    Button {
+      onContinue?()
+    } label: {
+      HStack(spacing: 12) {
+        Image(systemName: "checkmark.circle.fill")
+          .font(.headline)
+          .foregroundColor(.white)
+        
+        Text("Continue")
+          .font(.subheadline)
+          .fontWeight(.semibold)
+          .foregroundColor(.white)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 48)
+      .background(
+        LinearGradient(
+          colors: [Color.green, Color.green.opacity(0.8)],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      )
+      .cornerRadius(12)
+    }
+    .disabled(viewModel.isLoadingPurchase || viewModel.isServiceLoading)
   }
   
   // MARK: - Subscribe Button

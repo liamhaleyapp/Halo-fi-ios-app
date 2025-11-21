@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import RevenueCat
 
 @Observable
 class UserManager {
@@ -91,13 +92,13 @@ class UserManager {
       
       // Save tokens using exact server expiration timestamp
       tokenStorage.saveTokensWithExpiration(
-        accessToken: authResponse.authData.session.accessToken,
-        refreshToken: authResponse.authData.session.refreshToken,
-        expiresAt: authResponse.authData.session.expiresAt
+        accessToken: authResponse.session.accessToken,
+        refreshToken: authResponse.session.refreshToken,
+        expiresAt: authResponse.session.expiresAt
       )
       
       // Create user from API response
-      let authUser = authResponse.authData.authUser
+      let authUser = authResponse.authUser
       
       let trimmedDisplayName = authUser.appMetaData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
       
@@ -138,14 +139,39 @@ class UserManager {
       )
       
       await MainActor.run {
-        // Preserve onboarding status when creating user from login response
-        let preservedOnboardingStatus = isOnboarded
+        // Check if this is a new user (different user ID) or if onboarding status hasn't been explicitly set
+        let isNewUser = currentUser?.id != user.id
+        let hasExplicitOnboardingStatus = userDefaults.object(forKey: onboardingKey) != nil
+        
+        // For new users or when onboarding status isn't explicitly set, default to false
+        // Only preserve onboarding status if it's the same user and status is explicitly set
+        let preservedOnboardingStatus: Bool
+        if isNewUser || !hasExplicitOnboardingStatus {
+          // New user or no explicit status - ensure onboarding is false
+          preservedOnboardingStatus = false
+          // Explicitly set it to false in UserDefaults
+          userDefaults.set(false, forKey: onboardingKey)
+        } else {
+          // Same user with explicit status - preserve it
+          preservedOnboardingStatus = isOnboarded
+        }
+        
         var newUser = user
         newUser.isOnboarded = preservedOnboardingStatus
         self.currentUser = newUser
         self.isAuthenticated = true
         self.isLoading = false
         self.saveUserToStorage()
+      }
+      
+      // Identify RevenueCat user with Supabase user ID
+      // This ties RevenueCat subscriptions to the user account, allowing subscriptions
+      // to follow the user across devices
+      do {
+        _ = try await Purchases.shared.logIn(user.id)
+      } catch {
+        // Log error but don't fail sign in if RevenueCat identification fails
+        // RevenueCat identification failure is non-critical
       }
       
       // Fetch full profile data from server after login
@@ -167,6 +193,16 @@ class UserManager {
     
     // Clear local storage
     tokenStorage.clearTokens()
+    
+    // Log out from RevenueCat to clear subscription state
+    // This ensures subscriptions don't persist across different user accounts
+    Task {
+      do {
+        _ = try await Purchases.shared.logOut()
+      } catch {
+        // RevenueCat logout failure is non-critical
+      }
+    }
     
     // Ensure we're on the main thread when setting properties
     if Thread.isMainThread {

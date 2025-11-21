@@ -209,6 +209,17 @@ class SubscriptionService {
   var hasActiveSubscription: Bool {
     currentSubscription != .none && currentSubscription != .expired
   }
+  
+  // MARK: - Clear Cached State
+  
+  /// Clears locally cached subscription state
+  /// Call this when user signs out to ensure fresh state on next login
+  func clearCachedState() {
+    currentSubscription = .none
+    activeEntitlements = []
+    customerInfo = nil
+    // Note: We don't clear availablePackages/availableProducts as they're not user-specific
+  }
 }
 
 // MARK: - Supporting Types
