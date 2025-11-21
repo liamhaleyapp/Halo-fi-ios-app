@@ -11,18 +11,15 @@ struct SubscriptionView: View {
   @Environment(\.dismiss) private var dismiss
   
   @State private var viewModel: SubscriptionViewModel
-  var hideHeader: Bool
   var isOnboarding: Bool
   var onContinue: (() -> Void)?
   
   // Custom initializer
   init(
-    hideHeader: Bool = false,
     isOnboarding: Bool = false,
     onContinue: (() -> Void)? = nil,
     viewModel: SubscriptionViewModel
   ) {
-    self.hideHeader = hideHeader
     self.isOnboarding = isOnboarding
     self.onContinue = onContinue
     _viewModel = State(initialValue: viewModel)
@@ -36,23 +33,18 @@ struct SubscriptionView: View {
   @State private var showingRestoreAlert = false
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         // Background
         Color.black.ignoresSafeArea()
         
-        VStack(spacing: 16) {
-          if !hideHeader {
-            headerView
-          } else {
-            // Add top padding when header is hidden (for onboarding)
-            Spacer()
-              .frame(height: 60)
+        ScrollView {
+          VStack(spacing: 16) {
+            currentPlanSection
+            planOptionsSection
+            billingCycleSection
+            actionButtonsSection
           }
-          currentPlanSection
-          planOptionsSection
-          billingCycleSection
-          actionButtonsSection
         }
         
         // Loading overlay
@@ -70,8 +62,12 @@ struct SubscriptionView: View {
           }
         }
       }
+      .navigationTitle(isOnboarding ? "" : "Subscription")
+      .navigationBarTitleDisplayMode(.large)
+      .toolbarBackground(Color.black, for: .navigationBar)
+      .toolbarColorScheme(.dark, for: .navigationBar)
+      .navigationBarHidden(isOnboarding)
     }
-    .navigationBarHidden(true)
     .task {
       await viewModel.onAppear()
     }
@@ -114,38 +110,6 @@ struct SubscriptionView: View {
     } message: {
       Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")
     }
-  }
-  
-  // MARK: - Header View
-  private var headerView: some View {
-    HStack {
-      Button(action: {
-        dismiss()
-      }) {
-        Image(systemName: "chevron.left")
-          .font(.title2)
-          .foregroundColor(.white)
-          .frame(width: 40, height: 40)
-          .background(Color.gray.opacity(0.2))
-          .clipShape(Circle())
-      }
-      
-      Spacer()
-      
-      Text("Subscription")
-        .font(.title2)
-        .fontWeight(.semibold)
-        .foregroundColor(.white)
-      
-      Spacer()
-      
-      // Placeholder for balance
-      Color.clear
-        .frame(width: 40, height: 40)
-    }
-    .padding(.horizontal, 20)
-    .padding(.top, 15)
-    .padding(.bottom, 20)
   }
   
   // MARK: - Current Plan Section

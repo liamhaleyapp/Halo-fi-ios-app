@@ -153,51 +153,24 @@ struct SubscriptionViewWithBack: View {
   }
   
   var body: some View {
-    ZStack {
-      // Hide SubscriptionView's header since we'll add our own
-      SubscriptionView(
-        hideHeader: true,
-        isOnboarding: true,
-        onContinue: onContinue,
-        viewModel: viewModel
-      )
-      .navigationBarHidden(true)
-      
-      // Custom header with back button - only show if onBack is provided
-      VStack {
-        HStack {
-          if let onBack = onBack {
-            Button(action: onBack) {
-              Image(systemName: "chevron.left")
-                .font(.title2)
-                .foregroundColor(.white)
-                .frame(width: 40, height: 40)
-                .background(Color.gray.opacity(0.2))
-                .clipShape(Circle())
-            }
-          } else {
-            // Spacer to keep title centered when no back button
-            Color.clear
-              .frame(width: 40, height: 40)
-          }
-          
-          Spacer()
-          
-          Text("Subscription")
+    SubscriptionView(
+      isOnboarding: true,
+      onContinue: onContinue,
+      viewModel: viewModel
+    )
+    .overlay(alignment: .topLeading) {
+      // Back button overlay - only show if onBack is provided
+      if let onBack = onBack {
+        Button(action: onBack) {
+          Image(systemName: "chevron.left")
             .font(.title2)
-            .fontWeight(.semibold)
             .foregroundColor(.white)
-          
-          Spacer()
-          
-          // Placeholder for balance
-          Color.clear
             .frame(width: 40, height: 40)
+            .background(Color.gray.opacity(0.2))
+            .clipShape(Circle())
         }
         .padding(.horizontal, 20)
         .padding(.top, 15)
-        
-        Spacer()
       }
     }
   }
