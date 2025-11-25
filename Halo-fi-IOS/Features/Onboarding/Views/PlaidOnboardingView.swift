@@ -190,26 +190,57 @@ struct PlaidOnboardingView: View {
     
     do {
       let tokens = [linkSuccess.publicToken]
+      print("🔵 Plaid: Starting completion with public token: \(tokens.first?.prefix(20) ?? "nil")...")
+      
       // Use sandbox endpoint when in sandbox environment (e.g., "continue as guest")
       // TODO: Detect sandbox mode more reliably - for now, always use sandbox in development
       #if DEBUG
-      _ = try await bankDataManager.completeLinking(with: tokens, useSandbox: true)
+      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: true)
+      print("✅ Plaid: Linking response received")
+      print("   - Success: \(linkingResponse.success)")
+      print("   - Message: \(linkingResponse.message ?? "nil")")
+      print("   - Total Items Created: \(linkingResponse.totalItemsCreated ?? -1)")
+      print("   - Failed Items: \(linkingResponse.failedItems?.count ?? 0)")
+      print("   - All Connected Items: \(linkingResponse.allConnectedItems?.count ?? 0)")
       #else
-      _ = try await bankDataManager.completeLinking(with: tokens, useSandbox: false)
+      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: false)
+      print("✅ Plaid: Linking response received")
+      print("   - Success: \(linkingResponse.success)")
+      print("   - Message: \(linkingResponse.message ?? "nil")")
+      print("   - Total Items Created: \(linkingResponse.totalItemsCreated ?? -1)")
+      print("   - Failed Items: \(linkingResponse.failedItems?.count ?? 0)")
+      print("   - All Connected Items: \(linkingResponse.allConnectedItems?.count ?? 0)")
       #endif
       
       // Verify accounts were actually created before completing
       // Give backend a moment to sync
+      print("🔵 Plaid: Waiting 1 second for backend to sync...")
       try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+      
+      print("🔵 Plaid: Fetching accounts...")
       try? await bankDataManager.fetchAccounts(forceRefresh: true)
       
       await MainActor.run {
         isCompletingLinking = false
         
         // Double-check that accounts exist before completing
-        let hasAccounts = bankDataManager.accounts?.isEmpty == false
+        let accounts = bankDataManager.accounts
+        let hasAccounts = accounts?.isEmpty == false
+        
+        print("🔵 Plaid: Account check results:")
+        print("   - Accounts array: \(accounts != nil ? "exists" : "nil")")
+        print("   - Accounts count: \(accounts?.count ?? 0)")
+        print("   - Has accounts: \(hasAccounts)")
+        
+        if let accounts = accounts {
+          print("   - Account details:")
+          for (index, account) in accounts.enumerated() {
+            print("     [\(index)] ID: \(account.id), Name: \(account.name), Type: \(account.type)")
+          }
+        }
         
         if hasAccounts {
+          print("✅ Plaid: Accounts found, completing onboarding")
           userManager.completeOnboarding()
           // Call completion handler if provided (for unified onboarding flow)
           // Otherwise dismiss
@@ -219,6 +250,7 @@ struct PlaidOnboardingView: View {
             dismiss()
           }
         } else {
+          print("❌ Plaid: No accounts found after linking")
           // Accounts weren't created - show error but don't restart flow
           errorMessage = "Connection completed but accounts weren't found. Please try again."
           showingError = true

@@ -104,6 +104,29 @@ class BankService {
                 let accountsResponse = try JSONDecoder().decode(BankAccountsResponse.self, from: data)
                 return accountsResponse.accounts
             } catch {
+                // Log the actual response to debug decoding issues
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("❌ BankService: Failed to decode BankAccountsResponse")
+                    print("   - Response body: \(responseString)")
+                } else {
+                    print("❌ BankService: Failed to decode BankAccountsResponse (non-UTF8 data)")
+                    print("   - Data length: \(data.count) bytes")
+                }
+                print("   - Decoding error: \(error)")
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let key, let context):
+                        print("     → Missing key: \(key.stringValue) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .typeMismatch(let type, let context):
+                        print("     → Type mismatch: Expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .valueNotFound(let type, let context):
+                        print("     → Value not found: Expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .dataCorrupted(let context):
+                        print("     → Data corrupted: \(context.debugDescription)")
+                    @unknown default:
+                        print("     → Unknown decoding error")
+                    }
+                }
                 throw BankError.invalidResponse
             }
         case 401:
@@ -161,6 +184,74 @@ class BankService {
     }
     
     // MARK: - Sync Bank Data
+    
+    /// Syncs multiple bank items at once
+    /// - Parameter accessToken: User's access token
+    /// - Parameter itemIds: Array of Plaid item IDs to sync
+    /// - Returns: BankSyncResponse with sync results
+    func syncMultipleItems(accessToken: String, itemIds: [String]) async throws -> BankSyncResponse {
+        guard let url = URL(string: "\(baseURL)/bank/multi-items/sync") else {
+            throw BankError.networkError
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = BankMultiItemsSyncRequest(itemIds: itemIds)
+        let requestData = try JSONEncoder().encode(requestBody)
+        request.httpBody = requestData
+        
+        // Log request for debugging
+        if let requestString = String(data: requestData, encoding: .utf8) {
+            print("🔵 BankService: Sync request body: \(requestString)")
+        }
+        print("🔵 BankService: Syncing \(itemIds.count) items at \(url.absoluteString)")
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BankError.networkError
+        }
+        
+        print("🔵 BankService: Sync response status: \(httpResponse.statusCode)")
+        
+        switch httpResponse.statusCode {
+        case 200, 202:
+            // 202 Accepted means sync is in progress (async)
+            // 200 OK means sync completed immediately
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("✅ BankService: Sync response body: \(responseString)")
+            }
+            let syncResponse = try JSONDecoder().decode(BankSyncResponse.self, from: data)
+            return syncResponse
+        case 401:
+            throw BankError.unauthorized
+        case 404:
+            throw BankError.itemNotFound
+        case 422:
+            // Validation error - log the response to see what's wrong
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ BankService: Sync validation error (422): \(responseString)")
+            }
+            // Try to parse as ValidationError
+            if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                throw BankError.validationError(validationError.detail)
+            }
+            throw BankError.serverError(422)
+        default:
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ BankService: Sync error (\(httpResponse.statusCode)): \(responseString)")
+            }
+            throw BankError.serverError(httpResponse.statusCode)
+        }
+    }
+    
+    /// Syncs bank data for a specific Plaid item
+    /// - Parameter accessToken: User's access token
+    /// - Parameter plaidItemId: The Plaid item ID to sync
+    /// - Returns: BankSyncResponse with sync results
     func syncBankData(accessToken: String, plaidItemId: String) async throws -> BankSyncResponse {
         let url = URL(string: "\(baseURL)/bank/sync/\(plaidItemId)")!
         

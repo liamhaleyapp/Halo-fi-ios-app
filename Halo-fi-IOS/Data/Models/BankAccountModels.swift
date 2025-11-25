@@ -49,7 +49,7 @@ struct BankAccountsResponse: Codable {
     let totalAccounts: Int
     let totalBalance: Double
     let currency: String
-    let lastSync: String
+    let lastSync: String?  // Optional because API can return null when no sync has occurred yet
     let accounts: [BankAccount]
     
     enum CodingKeys: String, CodingKey {
