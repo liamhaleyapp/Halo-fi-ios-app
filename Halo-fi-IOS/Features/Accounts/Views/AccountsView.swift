@@ -41,11 +41,17 @@ struct AccountsView: View {
         }
       }
     }
-    .sheet(isPresented: $showingLinkNewAccount) {
-      LinkNewAccountView()
+    .fullScreenCover(isPresented: $showingLinkNewAccount) {
+      PlaidOnboardingScreen(
+        onComplete: {
+          showingLinkNewAccount = false
+        },
+        onBack: {
+          showingLinkNewAccount = false
+        }
+      )
     }
   }
-  
 }
 
 

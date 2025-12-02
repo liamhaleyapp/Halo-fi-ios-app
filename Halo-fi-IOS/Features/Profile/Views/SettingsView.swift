@@ -7,21 +7,33 @@
 
 import SwiftUI
 
+enum SettingsDestination: Identifiable {
+  case profile, preferences, subscription, inviteFriends, about, accounts, webSocketTest
+  
+  var id: String {
+    switch self {
+    case .profile: return "profile"
+    case .preferences: return "preferences"
+    case .subscription: return "subscription"
+    case .inviteFriends: return "inviteFriends"
+    case .about: return "about"
+    case .accounts: return "accounts"
+    case .webSocketTest: return "webSocketTest"
+    }
+  }
+}
+
 struct SettingsView: View {
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
-  @State private var showingProfile = false
-  @State private var showingPreferences = false
-  @State private var showingSubscription = false
-  @State private var showingInviteFriends = false
-  @State private var showingAbout = false
-  @State private var showingAccounts = false
+  
+  @State private var destination: SettingsDestination?
+  
 #if DEBUG
   @State private var showingWebSocketTest = false
 #endif
   
   var body: some View {
-    // Use a NavigationStack with a system large title for best accessibility.
     NavigationStack {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
@@ -32,7 +44,7 @@ struct SettingsView: View {
               icon: "person.fill",
               title: "Profile",
               action: {
-                showingProfile = true
+                destination = .profile
               }
             )
             
@@ -40,7 +52,7 @@ struct SettingsView: View {
               icon: "hexagon.fill",
               title: "Preferences",
               action: {
-                showingPreferences = true
+                destination = .preferences
               }
             )
             
@@ -48,7 +60,7 @@ struct SettingsView: View {
               icon: "diamond.fill",
               title: "Subscription",
               action: {
-                showingSubscription = true
+                destination = .subscription
               }
             )
             
@@ -56,7 +68,7 @@ struct SettingsView: View {
               icon: "person.2.fill",
               title: "Invite Friends",
               action: {
-                showingInviteFriends = true
+                destination = .inviteFriends
               }
             )
             
@@ -64,7 +76,7 @@ struct SettingsView: View {
               icon: "person.fill",
               title: "Accounts",
               action: {
-                showingAccounts = true
+                destination = .accounts
               }
             )
             
@@ -72,7 +84,7 @@ struct SettingsView: View {
               icon: "info.circle.fill",
               title: "About",
               action: {
-                showingAbout = true
+                destination = .about
               }
             )
             
@@ -112,33 +124,33 @@ struct SettingsView: View {
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.large)
-      .accessibilityAddTraits(.isHeader)
     }
-    .fullScreenCover(isPresented: $showingProfile) {
-      ProfileView()
-        .environment(userManager)
+    .fullScreenCover(item: $destination) { dest in
+      switch dest {
+      case .profile:
+        ProfileView()
+          .environment(userManager)
+        
+      case .preferences:
+        PreferencesView()
+        
+      case .subscription:
+        let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
+        SubscriptionView(viewModel: viewModel)
+        
+      case .inviteFriends:
+        InviteFriendsView()
+        
+      case .about:
+        AboutView()
+        
+      case .accounts:
+        AccountsView()
+        
+      case .webSocketTest:
+        WebSocketTestView()
+      }
     }
-    .fullScreenCover(isPresented: $showingPreferences) {
-      PreferencesView()
-    }
-    .fullScreenCover(isPresented: $showingSubscription) {
-      let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
-      SubscriptionView(viewModel: viewModel)
-    }
-    .fullScreenCover(isPresented: $showingInviteFriends) {
-      InviteFriendsView()
-    }
-    .fullScreenCover(isPresented: $showingAbout) {
-      AboutView()
-    }
-    .fullScreenCover(isPresented: $showingAccounts) {
-      AccountsView()
-    }
-#if DEBUG
-    .fullScreenCover(isPresented: $showingWebSocketTest) {
-      WebSocketTestView()
-    }
-#endif
   }
 }
 

@@ -29,8 +29,6 @@ struct SubscriptionView: View {
   @State private var showingChangePlan = false
   @State private var showingPaymentMethod = false
   @State private var showingCancelConfirmation = false
-  @State private var showingPurchaseAlert = false
-  @State private var showingRestoreAlert = false
   
   var body: some View {
     NavigationStack {
@@ -41,12 +39,37 @@ struct SubscriptionView: View {
             currentPlanSection
             planOptionsSection
             billingCycleSection
-            actionButtonsSection
+            SubscriptionActionButtonsSection(
+              hasActiveSubscription: viewModel.hasActiveSubscription,
+              isOnboarding: isOnboarding,
+              isBusy: viewModel.isBusy,
+              selectedPlanName: viewModel.selectedPlan.displayName,
+              onContinue: onContinue,
+              onSubscribe: {
+                Task {
+                  _ = await viewModel.handlePurchase()
+                }
+              },
+              onChangePlan: {
+                showingChangePlan = true
+              },
+              onRestore: {
+                Task {
+                  _ = await viewModel.handleRestorePurchases()
+                }
+              },
+              onUpdatePayment: {
+                showingPaymentMethod = true
+              },
+              onCancelSubscription: {
+                showingCancelConfirmation = true
+              }
+            )
           }
         }
         
         // Loading overlay
-        if viewModel.isLoadingPurchase || viewModel.isServiceLoading {
+        if viewModel.isBusy {
           Color(.systemBackground).opacity(0.7)
             .ignoresSafeArea()
           
@@ -81,27 +104,33 @@ struct SubscriptionView: View {
     .task {
       await viewModel.onAppear()
     }
-    .alert("Purchase", isPresented: $showingPurchaseAlert) {
-      Button("OK", role: .cancel) { }
-    } message: {
-      Text(viewModel.purchaseAlertMessage)
-    }
-    .alert("Restore Purchases", isPresented: $showingRestoreAlert) {
-      Button("OK", role: .cancel) { }
-    } message: {
-      Text(viewModel.restoreAlertMessage)
+    .alert(item: $viewModel.activeEvent) { event in
+      switch event {
+      case .purchase(let message):
+        return Alert(
+          title: Text("Purchase"),
+          message: Text(message),
+          dismissButton: .default(Text("OK"))
+        )
+      case .restore(let message):
+        return Alert(
+          title: Text("Restore Purchases"),
+          message: Text(message),
+          dismissButton: .default(Text("OK"))
+        )
+      case .info(let message):
+        return Alert(
+          title: Text("Info"),
+          message: Text(message),
+          dismissButton: .default(Text("OK"))
+        )
+      }
     }
     .alert("Change Plan", isPresented: $showingChangePlan) {
       Button("Cancel", role: .cancel) { }
       Button("Change", role: .destructive) {
         Task {
-          let result = await viewModel.handlePurchase()
-          switch result {
-          case .success, .pending, .productsNotReady, .failure:
-            showingPurchaseAlert = true
-          case .cancelled:
-            break
-          }
+          _ = await viewModel.handlePurchase()
         }
       }
     } message: {
@@ -294,194 +323,9 @@ struct SubscriptionView: View {
         )
     }
   }
-  
-  // MARK: - Action Buttons Section
-  private var actionButtonsSection: some View {
-    VStack(spacing: 12) {
-      // Subscribe button if no active subscription, otherwise show change plan
-      if viewModel.hasActiveSubscription {
-        // In onboarding mode, show Continue button first, then Change Plan
-        if isOnboarding {
-          continueButton
-          changePlanButton
-          updatePaymentButton
-        } else {
-          // Regular mode: show Change Plan, Update Payment, Cancel
-          changePlanButton
-          updatePaymentButton
-          cancelSubscriptionButton
-        }
-      } else {
-        subscribeButton
-        restorePurchasesButton
-      }
-    }
-    .padding(.horizontal, 16)
-    .padding(.bottom, 40)
-  }
-  
-  // MARK: - Continue Button (Onboarding)
-  private var continueButton: some View {
-    Button {
-      onContinue?()
-    } label: {
-      HStack(spacing: 12) {
-        Image(systemName: "checkmark.circle.fill")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Continue")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(
-        LinearGradient(
-          colors: [Color.green, Color.green.opacity(0.8)],
-          startPoint: .leading,
-          endPoint: .trailing
-        )
-      )
-      .cornerRadius(12)
-    }
-    .disabled(viewModel.isLoadingPurchase || viewModel.isServiceLoading)
-  }
-  
-  // MARK: - Subscribe Button
-  private var subscribeButton: some View {
-    Button {
-      Task {
-        let result = await viewModel.handlePurchase()
-        switch result {
-        case .success, .pending, .productsNotReady, .failure:
-          showingPurchaseAlert = true
-        case .cancelled:
-          break
-        }
-      }
-    } label: {
-      HStack(spacing: 12) {
-        Image(systemName: "star.fill")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Subscribe to \(viewModel.selectedPlan.displayName)")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
-      .cornerRadius(12)
-    }
-    .disabled(viewModel.isLoadingPurchase || viewModel.isServiceLoading)
-  }
-  
-  // MARK: - Restore Purchases Button
-  private var restorePurchasesButton: some View {
-    Button {
-      Task {
-        let result = await viewModel.handleRestorePurchases()
-        switch result {
-        case .restored, .noneFound, .failure:
-          showingRestoreAlert = true
-        }
-      }
-    } label: {
-      HStack(spacing: 12) {
-        Image(systemName: "arrow.clockwise.circle.fill")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Restore Purchases")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
-      .cornerRadius(12)
-    }
-    .disabled(viewModel.isLoadingPurchase || viewModel.isServiceLoading)
-  }
-  
-  // MARK: - Change Plan Button
-  private var changePlanButton: some View {
-    Button {
-      showingChangePlan = true
-    } label: {
-      HStack(spacing: 12) {
-        Image(systemName: "arrow.triangle.2.circlepath")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Change Plan")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(
-        LinearGradient(
-          colors: [Color.teal, Color.blue],
-          startPoint: .leading,
-          endPoint: .trailing
-        )
-      )
-      .cornerRadius(12)
-    }
-    .disabled(viewModel.isLoadingPurchase || viewModel.isServiceLoading)
-  }
-  
-  // MARK: - Update Payment Button
-  private var updatePaymentButton: some View {
-    Button(action: {
-      showingPaymentMethod = true
-    }) {
-      HStack(spacing: 12) {
-        Image(systemName: "creditcard.fill")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Update Payment Method")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(LinearGradient(colors: [Color.teal.opacity(0.8), Color.cyan], startPoint: .leading, endPoint: .trailing))
-      .cornerRadius(12)
-    }
-  }
-  
-  // MARK: - Cancel Subscription Button
-  private var cancelSubscriptionButton: some View {
-    Button(action: {
-      showingCancelConfirmation = true
-    }) {
-      HStack(spacing: 12) {
-        Image(systemName: "xmark.circle.fill")
-          .font(.headline)
-          .foregroundColor(.white)
-        
-        Text("Cancel Subscription")
-          .font(.subheadline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-      }
-      .frame(maxWidth: .infinity)
-      .frame(height: 48)
-      .background(LinearGradient(colors: [Color.white.opacity(0.9), Color.gray.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
-      .cornerRadius(12)
-    }
-  }
 }
+  // MARK: - Action Buttons Section
+  
 
 #Preview("Subscription – Active Pro") {
   let service = SubscriptionService.previewActivePro

@@ -33,9 +33,11 @@ class SubscriptionViewModel {
   var billingCycle: BillingCycle = .monthly
   var isLoadingPurchase = false
   
-  // Alert messages (view can bind to bools, VM sets messages)
-  var purchaseAlertMessage = ""
-  var restoreAlertMessage = ""
+  var activeEvent: SubscriptionUIEvent?
+  
+  var isBusy: Bool {
+    isLoadingPurchase || isServiceLoading
+  }
   
   init(subscriptionService: SubscriptionService) {
     self.subscriptionService = subscriptionService
@@ -88,16 +90,8 @@ class SubscriptionViewModel {
         await subscriptionService.initialize()
       }
       
-      if subscriptionService.isLoading {
-        var waitCount = 0
-        while subscriptionService.isLoading && waitCount < 10 {
-          try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-          waitCount += 1
-        }
-      }
-      
-      if subscriptionService.availablePackages.isEmpty {
-        purchaseAlertMessage = "Products are still loading. Please wait a moment and try again."
+      guard !subscriptionService.availablePackages.isEmpty else {
+        activeEvent = .purchase(message: "Products are still loading. Please wait a moment and try again.")
         return .productsNotReady
       }
     }
@@ -110,20 +104,19 @@ class SubscriptionViewModel {
       isLoadingPurchase = false
       
       if result.success {
-        purchaseAlertMessage = "Successfully subscribed to \(selectedPlan.displayName)!"
         updateSelectedPlanFromSubscription()
+        activeEvent = .purchase(message: "Successfully subscribed to \(selectedPlan.displayName)!")
         return .success
       } else {
-        purchaseAlertMessage = "Purchase completed but subscription status is pending."
+        activeEvent = .purchase(message: "Purchase completed but subscription status is pending.")
         return .pending
       }
     } catch SubscriptionError.purchaseCancelled {
       isLoadingPurchase = false
-      // user cancelled – no alert needed if you don't want one
       return .cancelled
     } catch {
       isLoadingPurchase = false
-      purchaseAlertMessage = error.localizedDescription
+      activeEvent = .purchase(message: error.localizedDescription)
       return .failure(error.localizedDescription)
     }
   }
@@ -137,15 +130,17 @@ class SubscriptionViewModel {
       updateSelectedPlanFromSubscription()
       
       if subscriptionService.hasActiveSubscription {
-        restoreAlertMessage = "Purchases restored successfully! You have access to \(subscriptionService.currentSubscription.displayName)."
+        activeEvent = .restore(
+          message: "Purchases restored successfully! You have access to \(subscriptionService.currentSubscription.displayName)."
+        )
         return .restored
       } else {
-        restoreAlertMessage = "No active purchases found to restore."
+        activeEvent = .restore(message: "No active purchases found to restore.")
         return .noneFound
       }
     } catch {
       isLoadingPurchase = false
-      restoreAlertMessage = error.localizedDescription
+      activeEvent = .restore(message: error.localizedDescription)
       return .failure(error.localizedDescription)
     }
   }
