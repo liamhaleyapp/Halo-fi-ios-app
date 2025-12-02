@@ -87,6 +87,9 @@ struct PlaidOnboardingView: View {
         viewModel.handleSignOut(userManager: userManager)
       }
     }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Connect Bank")
+    .accessibilityHint("Step 3 of 3 in the setup process")
   }
 }
 

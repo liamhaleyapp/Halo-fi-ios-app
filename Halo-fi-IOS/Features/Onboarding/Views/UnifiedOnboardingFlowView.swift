@@ -36,12 +36,7 @@ struct UnifiedOnboardingFlowView: View {
         VStack(spacing: 0) {
           // Step indicator (hidden on sign up step)
           if coordinator.currentStep != .signUp {
-            OnboardingStepIndicator(
-              currentStep: coordinator.currentStep,
-              signUpCompleted: coordinator.signUpCompleted,
-              subscriptionCompleted: coordinator.subscriptionCompleted
-            )
-            .background(Color.black)
+            AccessibleOnboardingHeader(currentStep: coordinator.currentStep)
           }
           
           // Step content
@@ -171,13 +166,7 @@ struct UnifiedOnboardingFlowView: View {
   // MARK: - Close / Exit
   
   private func handleCloseOnboarding() {
-    // Mark onboarding as completed so MainTabView will show the main app
-    // rather than forcing the user back into onboarding.
-    //
-    // Users can still complete missing pieces (subscription/bank linking)
-    // from within the app later.
     userManager.completeOnboarding()
-    dismiss()
   }
   
   // MARK: - Auth State Changes
@@ -199,6 +188,44 @@ struct SignUpOnboardingStep: View {
   
   var body: some View {
     SignUpView(onComplete: onComplete)
+  }
+}
+
+struct AccessibleOnboardingHeader: View {
+  let currentStep: OnboardingStep
+  
+  private var stepIndex: Int {
+    OnboardingStep.allCases.firstIndex(of: currentStep) ?? 0
+  }
+  
+  private var totalSteps: Int {
+    OnboardingStep.allCases.count
+  }
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Step \(stepIndex + 1) of \(totalSteps)")
+        .font(.title2.weight(.semibold))   // nice and big
+        .foregroundColor(.white)
+      
+      Text(currentStep.title)              // “Create your account”, “Choose a plan”, etc.
+        .font(.title.weight(.bold))
+        .foregroundColor(.white)
+        .accessibilityAddTraits(.isHeader)
+      
+      ProgressView(
+        value: Double(stepIndex + 1),
+        total: Double(totalSteps)
+      )
+      .progressViewStyle(.linear)
+      .tint(.blue)
+      .accessibilityHidden(true) // just visual; VoiceOver gets a single combined label
+    }
+    .padding(.horizontal, 20)
+    .padding(.vertical, 16)
+    .background(Color.black)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Step \(stepIndex + 1) of \(totalSteps): \(currentStep.title)")
   }
 }
 

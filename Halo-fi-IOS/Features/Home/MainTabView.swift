@@ -20,6 +20,7 @@ struct MainTabView: View {
         if !userManager.isOnboarded {
           // User is authenticated but not onboarded - show unified onboarding flow
           UnifiedOnboardingFlowView()
+            .dynamicTypeSize(.medium ... .accessibility5)
         } else {
           // User is fully onboarded - show main app
           TabView(selection: $selectedTab) {

@@ -115,6 +115,14 @@ struct SettingsView: View {
                 showingWebSocketTest = true
               }
             )
+            
+            SettingsOption(
+              icon: "arrow.counterclockwise",
+              title: "Reset Onboarding",
+              action: {
+                userManager.resetOnboarding()
+              }
+            )
 #endif
           }
           .padding(.horizontal, 20)

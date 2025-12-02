@@ -22,20 +22,14 @@ class UserManager {
   
   // Onboarding state persisted independently of User object
   // This ensures onboarding status persists even when User object is refreshed from server
-  var isOnboarded: Bool {
-    get {
-      // Check UserDefaults first (most reliable)
-      if userDefaults.object(forKey: onboardingKey) != nil {
-        return userDefaults.bool(forKey: onboardingKey)
-      }
-      // Fallback to User object if UserDefaults doesn't have it yet
-      return currentUser?.isOnboarded ?? false
-    }
-    set {
-      userDefaults.set(newValue, forKey: onboardingKey)
-      // Also update User object if it exists
+  var isOnboarded: Bool = false {
+    didSet {
+      // Persist to UserDefaults
+      userDefaults.set(isOnboarded, forKey: onboardingKey)
+      
+      // Keep currentUser in sync
       if var user = currentUser {
-        user.isOnboarded = newValue
+        user.isOnboarded = isOnboarded
         currentUser = user
         saveUserToStorage()
       }
@@ -46,10 +40,22 @@ class UserManager {
     // Ensure we're on the main thread when setting @Published properties
     if Thread.isMainThread {
       loadUserFromStorage()
+      restoreOnboardingState()
     } else {
       DispatchQueue.main.async {
         self.loadUserFromStorage()
+        self.restoreOnboardingState()
       }
+    }
+  }
+  
+  private func restoreOnboardingState() {
+    if userDefaults.object(forKey: onboardingKey) != nil {
+      // Explicit persisted value wins
+      isOnboarded = userDefaults.bool(forKey: onboardingKey)
+    } else {
+      // Fallback to user object if needed
+      isOnboarded = currentUser?.isOnboarded ?? false
     }
   }
   
@@ -235,13 +241,22 @@ class UserManager {
   // MARK: - User Onboarding
   
   func completeOnboarding() {
-    // Ensure we're on the main thread when setting properties
     if Thread.isMainThread {
-      // Persist onboarding state independently
       isOnboarded = true
     } else {
       DispatchQueue.main.async {
-        self.completeOnboarding()
+        self.isOnboarded = true
+      }
+    }
+  }
+  
+  /// Resets onboarding status to false (for testing/debugging purposes)
+  func resetOnboarding() {
+    if Thread.isMainThread {
+      isOnboarded = false
+    } else {
+      DispatchQueue.main.async {
+        self.isOnboarded = false
       }
     }
   }

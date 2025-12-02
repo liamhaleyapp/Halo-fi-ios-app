@@ -20,12 +20,19 @@ struct CloseOnboardingButton: View {
   
   var body: some View {
     Button(action: handleTap) {
-      Image(systemName: "xmark.circle.fill")
-        .font(.title2)
-        .foregroundStyle(.white.opacity(0.7), .white.opacity(0.2))
+      Image(systemName: "xmark")
+        .font(.title)
+        .foregroundColor(.white)
+        .padding(12)
+        .background(
+          Circle()
+            .fill(Color.white.opacity(0.15))
+        )
     }
-    .accessibilityLabel("Close onboarding")
-    .accessibilityHint("Exit onboarding. You can finish setup later.")
+    .frame(minWidth: 44, minHeight: 44, alignment: .center)
+    .contentShape(Rectangle())
+    .accessibilityLabel("Exit setup")
+    .accessibilityHint("Leave onboarding. You can finish setting up your account later.")
     .confirmationDialog(
       "Exit Setup?",
       isPresented: $showingConfirmation,

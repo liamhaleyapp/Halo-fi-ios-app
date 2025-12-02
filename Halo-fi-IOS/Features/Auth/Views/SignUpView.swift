@@ -164,6 +164,9 @@ struct SignUpView: View {
     } message: {
       Text(viewModel.errorMessage)
     }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Create your account")
+    .accessibilityHint("Step 1 of 3 in the setup process")
   }
   
   // Small helper so all error labels look consistent
