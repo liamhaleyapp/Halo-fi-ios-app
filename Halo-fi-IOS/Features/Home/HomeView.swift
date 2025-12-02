@@ -10,6 +10,7 @@ import SwiftUI
 struct HomeView: View {
   @Environment(UserManager.self) private var userManager
   @State private var showingVoiceConversation = false
+  @State private var showingAgentChat = false
   
   private var userName: String {
     userManager.currentUser?.firstName ?? "User"
@@ -29,6 +30,24 @@ struct HomeView: View {
             showingVoiceConversation = true
           }
           
+          // Test Agent Chat Button (for testing)
+          #if DEBUG
+          Button(action: {
+            showingAgentChat = true
+          }) {
+            HStack {
+              Image(systemName: "message.circle.fill")
+              Text("Test Agent Chat")
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.orange)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+          }
+          .padding(.horizontal, 20)
+          #endif
+          
           // Action buttons
           ActionButtonsSection()
         }
@@ -37,6 +56,9 @@ struct HomeView: View {
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingVoiceConversation) {
       VoiceConversationView()
+    }
+    .sheet(isPresented: $showingAgentChat) {
+      AgentChatView()
     }
   }
 }

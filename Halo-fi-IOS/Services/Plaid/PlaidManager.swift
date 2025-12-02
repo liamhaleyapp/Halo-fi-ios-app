@@ -26,29 +26,60 @@ class PlaidManager: ObservableObject {
       isCreatingLinkToken = false
     }
     
+    print("🔵 PlaidManager: Starting link token creation")
+    print("   Endpoint: /bank/multi-link/create")
+    
     let linkTokenRequest = PlaidLinkRequest()
     let requestBody = try JSONEncoder().encode(linkTokenRequest)
     
-    let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
-      endpoint: "/bank/multi-link/create",
-      method: .POST,
-      body: requestBody,
-      responseType: PlaidLinkResponse.self
-    )
-    
-    if linkResponse.error != nil {
-      throw PlaidError.linkTokenCreationFailed
+    if let requestJSON = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any] {
+      print("   Request body: \(requestJSON)")
     }
     
-    guard linkResponse.success else {
-      throw PlaidError.linkTokenCreationFailed
-    }
+    print("   Request body size: \(requestBody.count) bytes")
     
-    guard !linkResponse.linkToken.isEmpty else {
-      throw PlaidError.linkTokenCreationFailed
-    }
+    do {
+      let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
+        endpoint: "/bank/multi-link/create",
+        method: .POST,
+        body: requestBody,
+        responseType: PlaidLinkResponse.self
+      )
+      
+      print("✅ PlaidManager: Link token creation successful")
+      print("   Response success: \(linkResponse.success)")
+      print("   Link token length: \(linkResponse.linkToken.count) characters")
+      
+      if let error = linkResponse.error {
+        print("   Response error: \(error)")
+      }
     
-    linkToken = linkResponse.linkToken
+      if linkResponse.error != nil {
+        print("❌ PlaidManager: Response contains error")
+        throw PlaidError.linkTokenCreationFailed
+      }
+      
+      guard linkResponse.success else {
+        print("❌ PlaidManager: Response success is false")
+        throw PlaidError.linkTokenCreationFailed
+      }
+      
+      guard !linkResponse.linkToken.isEmpty else {
+        print("❌ PlaidManager: Link token is empty")
+        throw PlaidError.linkTokenCreationFailed
+      }
+      
+      linkToken = linkResponse.linkToken
+      print("✅ PlaidManager: Link token stored successfully")
+    } catch {
+      print("❌ PlaidManager: Error creating link token")
+      print("   Error type: \(type(of: error))")
+      print("   Error description: \(error.localizedDescription)")
+      if let authError = error as? AuthError {
+        print("   AuthError case: \(authError)")
+      }
+      throw error
+    }
   }
   
   // MARK: - Plaid Handler Creation

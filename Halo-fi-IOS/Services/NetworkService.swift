@@ -34,11 +34,22 @@ class NetworkService {
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ NetworkService: Invalid HTTP response")
             throw AuthError.networkError
+        }
+        
+        print("🔵 NetworkService: Received response")
+        print("   Status code: \(httpResponse.statusCode)")
+        print("   Response headers: \(httpResponse.allHeaderFields)")
+        print("   Response data size: \(data.count) bytes")
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("   Response body: \(responseString)")
         }
         
         // Handle token expiration
         if httpResponse.statusCode == 401 {
+            print("❌ NetworkService: 401 Unauthorized - Token expired or invalid")
             // TODO: Implement token refresh when endpoint is available
             // For now, just throw token expired error
             throw AuthError.tokenExpired
@@ -54,26 +65,36 @@ class NetworkService {
             }
             return try JSONDecoder().decode(T.self, from: data)
         } else {
+            print("❌ NetworkService: Request failed with status code \(httpResponse.statusCode)")
+            
             // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
             if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
+                print("   Attempting to parse error response...")
+                
                 // First, try to parse as ValidationError (array format)
                 if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                    print("   Parsed as ValidationError: \(validationError.detail)")
                     throw AuthError.validationError(validationError.detail)
                 }
                 
                 // If that fails, try to parse as SimpleErrorResponse (string detail format)
                 if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                    print("   Parsed as SimpleErrorResponse: \(simpleError.detail)")
                     throw AuthError.serverError(httpResponse.statusCode, simpleError.detail)
                 }
                 
                 // If both fail, try to extract detail from raw JSON
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let detail = json["detail"] as? String {
-                    throw AuthError.serverError(httpResponse.statusCode, detail)
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("   Raw JSON response: \(json)")
+                    if let detail = json["detail"] as? String {
+                        print("   Extracted detail: \(detail)")
+                        throw AuthError.serverError(httpResponse.statusCode, detail)
+                    }
                 }
                 
                 // Fallback for 422 - validation error with empty details
                 if httpResponse.statusCode == 422 {
+                    print("   422 with no parseable error details")
                     throw AuthError.validationError([])
                 }
             }
@@ -87,6 +108,7 @@ class NetworkService {
                 errorDetail = detail
             }
             
+            print("   Final error detail: \(errorDetail ?? "nil")")
             throw AuthError.serverError(httpResponse.statusCode, errorDetail)
         }
     }
@@ -170,18 +192,33 @@ class NetworkService {
         body: Data?
     ) async throws -> URLRequest {
         guard let accessToken = tokenStorage.getAccessToken() else {
+            print("❌ NetworkService: No access token found in TokenStorage")
             throw AuthError.tokenExpired
         }
         
+        print("🔵 NetworkService: Creating authenticated request")
+        print("   Endpoint: \(endpoint)")
+        print("   Method: \(method.rawValue)")
+        print("   Token exists: ✅")
+        print("   Token length: \(accessToken.count) characters")
+        print("   Token prefix: \(accessToken.prefix(20))...")
+        
         let url = URL(string: "\(baseURL)\(endpoint)")!
+        print("   Full URL: \(url.absoluteString)")
         
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
+        print("   Authorization header set: ✅")
+        print("   Authorization header prefix: Bearer \(accessToken.prefix(20))...")
+        
         if let body = body {
             request.httpBody = body
+            print("   Request body size: \(body.count) bytes")
+        } else {
+            print("   Request body: nil")
         }
         
         return request
