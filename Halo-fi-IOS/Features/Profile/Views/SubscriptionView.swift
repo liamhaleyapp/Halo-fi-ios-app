@@ -35,9 +35,7 @@ struct SubscriptionView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        // Background
-        Color.black.ignoresSafeArea()
-        
+        // Content
         ScrollView {
           VStack(spacing: 16) {
             currentPlanSection
@@ -49,23 +47,35 @@ struct SubscriptionView: View {
         
         // Loading overlay
         if viewModel.isLoadingPurchase || viewModel.isServiceLoading {
-          Color.black.opacity(0.7)
+          Color(.systemBackground).opacity(0.7)
             .ignoresSafeArea()
           
           VStack(spacing: 16) {
             ProgressView()
               .scaleEffect(1.5)
-              .tint(.white)
             Text("Processing...")
-              .foregroundColor(.white)
+              .foregroundColor(.primary)
               .font(.subheadline)
           }
         }
       }
       .navigationTitle(isOnboarding ? "" : "Subscription")
-      .navigationBarTitleDisplayMode(.large)
-      .toolbarBackground(Color.black, for: .navigationBar)
-      .toolbarColorScheme(.dark, for: .navigationBar)
+      .navigationBarTitleDisplayMode(isOnboarding ? .automatic : .large)
+      .toolbar {
+        if !isOnboarding {
+          ToolbarItem(placement: .topBarLeading) {
+            Button {
+              dismiss()
+            } label: {
+              HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                Text("Settings")
+              }
+            }
+            .accessibilityLabel("Back to Settings")
+          }
+        }
+      }
       .navigationBarHidden(isOnboarding)
     }
     .task {

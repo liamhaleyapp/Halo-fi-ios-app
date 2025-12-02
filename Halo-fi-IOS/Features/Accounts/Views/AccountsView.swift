@@ -14,60 +14,36 @@ struct AccountsView: View {
   @State private var showingLinkNewAccount = false
   
   var body: some View {
-    NavigationView {
-      ZStack {
-        Color(.systemBackground).ignoresSafeArea()
-        
-        VStack(spacing: 16) {
-          headerView
-          
-          LinkNewAccountSection {
-            showingLinkNewAccount = true
-          }
-          
-          // TODO: Add institutions list here when ready
-          Spacer()
+    NavigationStack {
+      VStack(spacing: 16) {
+        LinkNewAccountSection {
+          showingLinkNewAccount = true
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        
+        // TODO: Add institutions list here when ready
+        Spacer()
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
+      .navigationTitle("Accounts")
+      .navigationBarTitleDisplayMode(.large)
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button {
+            dismiss()
+          } label: {
+            HStack(spacing: 4) {
+              Image(systemName: "chevron.left")
+              Text("Settings")
+            }
+          }
+          .accessibilityLabel("Back to Settings")
+        }
       }
     }
-    .navigationBarHidden(true)
     .sheet(isPresented: $showingLinkNewAccount) {
       LinkNewAccountView()
     }
-  }
-  
-  // MARK: - Header View
-  private var headerView: some View {
-    HStack {
-      Button(action: {
-        dismiss()
-      }) {
-        Image(systemName: "chevron.left")
-          .font(.title2)
-          .foregroundColor(.primary)
-          .frame(width: 40, height: 40)
-          .background(Color(.quaternarySystemFill))
-          .clipShape(Circle())
-      }
-      
-      Spacer()
-      
-      Text("Accounts")
-        .font(.title2)
-        .fontWeight(.semibold)
-        .foregroundColor(.primary)
-      
-      Spacer()
-      
-      // Invisible spacer to center the title
-      Color.clear
-        .frame(width: 40, height: 40)
-    }
-    .padding(.horizontal, 20)
-    .padding(.top, 15)
-    .padding(.bottom, 20)
   }
   
 }

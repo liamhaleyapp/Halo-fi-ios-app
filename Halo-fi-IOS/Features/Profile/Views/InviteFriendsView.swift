@@ -22,20 +22,30 @@ struct InviteFriendsView: View {
   private let referralCode = "HALO123"
   
   var body: some View {
-    NavigationView {
-      ZStack {
-        // Background
-        Color.black.ignoresSafeArea()
-        
+    NavigationStack {
+      ScrollView {
         VStack(spacing: 16) {
-          headerView
           referralSummarySection
           inviteSection
           Spacer()
         }
       }
+      .navigationTitle("Invite Friends")
+      .navigationBarTitleDisplayMode(.large)
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button {
+            dismiss()
+          } label: {
+            HStack(spacing: 4) {
+              Image(systemName: "chevron.left")
+              Text("Settings")
+            }
+          }
+          .accessibilityLabel("Back to Settings")
+        }
+      }
     }
-    .navigationBarHidden(true)
     .alert("Invite Sent!", isPresented: $showingInviteSent) {
       Button("OK") { }
     } message: {
@@ -46,38 +56,6 @@ struct InviteFriendsView: View {
     } message: {
       Text("Your referral link has been copied to the clipboard.")
     }
-  }
-  
-  // MARK: - Header View
-  private var headerView: some View {
-    HStack {
-      Button(action: {
-        dismiss()
-      }) {
-        Image(systemName: "chevron.left")
-          .font(.title2)
-          .foregroundColor(.white)
-          .frame(width: 40, height: 40)
-          .background(Color.gray.opacity(0.2))
-          .clipShape(Circle())
-      }
-      
-      Spacer()
-      
-      Text("Invite Friends")
-        .font(.title2)
-        .fontWeight(.semibold)
-        .foregroundColor(.white)
-      
-      Spacer()
-      
-      // Placeholder for balance
-      Color.clear
-        .frame(width: 40, height: 40)
-    }
-    .padding(.horizontal, 20)
-    .padding(.top, 15)
-    .padding(.bottom, 20)
   }
   
   // MARK: - Referral Summary Section

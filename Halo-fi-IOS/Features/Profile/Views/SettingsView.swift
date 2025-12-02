@@ -21,114 +21,99 @@ struct SettingsView: View {
 #endif
   
   var body: some View {
-    NavigationView {
+    // Use a NavigationStack with a system large title for best accessibility.
+    NavigationStack {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
         
-        VStack(spacing: 0) {
-          // Navigation bar
-          HStack {
-            Spacer()
+        ScrollView {
+          VStack(spacing: 8) {
+            SettingsOption(
+              icon: "person.fill",
+              title: "Profile",
+              action: {
+                showingProfile = true
+              }
+            )
             
-            Text("Settings")
-              .font(.largeTitle)
+            SettingsOption(
+              icon: "hexagon.fill",
+              title: "Preferences",
+              action: {
+                showingPreferences = true
+              }
+            )
+            
+            SettingsOption(
+              icon: "diamond.fill",
+              title: "Subscription",
+              action: {
+                showingSubscription = true
+              }
+            )
+            
+            SettingsOption(
+              icon: "person.2.fill",
+              title: "Invite Friends",
+              action: {
+                showingInviteFriends = true
+              }
+            )
+            
+            SettingsOption(
+              icon: "person.fill",
+              title: "Accounts",
+              action: {
+                showingAccounts = true
+              }
+            )
+            
+            SettingsOption(
+              icon: "info.circle.fill",
+              title: "About",
+              action: {
+                showingAbout = true
+              }
+            )
+            
+            SettingsOption(
+              icon: "rectangle.portrait.and.arrow.right",
+              title: "Logout",
+              action: {
+                userManager.signOut()
+              }
+            )
+            
+#if DEBUG
+            // Debug Section
+            Divider()
+              .padding(.vertical, 8)
+            
+            Text("DEBUG")
+              .font(.caption)
+              .foregroundColor(.orange)
               .fontWeight(.bold)
-              .foregroundColor(.primary)
-              .accessibilityAddTraits(.isHeader)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 4)
             
-            Spacer()
+            SettingsOption(
+              icon: "network",
+              title: "WebSocket Test",
+              action: {
+                showingWebSocketTest = true
+              }
+            )
+#endif
           }
           .padding(.horizontal, 20)
-          .padding(.top, 10)
-          
-          // Settings options
-          ScrollView {
-            VStack(spacing: 8) {
-              SettingsOption(
-                icon: "person.fill",
-                title: "Profile",
-                action: {
-                  showingProfile = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "hexagon.fill",
-                title: "Preferences",
-                action: {
-                  showingPreferences = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "diamond.fill",
-                title: "Subscription",
-                action: {
-                  showingSubscription = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "person.2.fill",
-                title: "Invite Friends",
-                action: {
-                  showingInviteFriends = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "person.fill",
-                title: "Accounts",
-                action: {
-                  showingAccounts = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "info.circle.fill",
-                title: "About",
-                action: {
-                  showingAbout = true
-                }
-              )
-              
-              SettingsOption(
-                icon: "rectangle.portrait.and.arrow.right",
-                title: "Logout",
-                action: {
-                  userManager.signOut()
-                }
-              )
-              
-#if DEBUG
-              // Debug Section
-              Divider()
-                .padding(.vertical, 8)
-              
-              Text("DEBUG")
-                .font(.caption)
-                .foregroundColor(.orange)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-              
-              SettingsOption(
-                icon: "network",
-                title: "WebSocket Test",
-                action: {
-                  showingWebSocketTest = true
-                }
-              )
-#endif
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 100)
-          }
+          .padding(.top, 20)
+          .padding(.bottom, 100)
         }
       }
+      .navigationTitle("Settings")
+      .navigationBarTitleDisplayMode(.large)
+      .accessibilityAddTraits(.isHeader)
     }
-    .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingProfile) {
       ProfileView()
         .environment(userManager)
