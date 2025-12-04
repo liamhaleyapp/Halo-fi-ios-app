@@ -43,21 +43,3 @@ struct BankAccount: Codable, Identifiable {
         case updatedAt = "updated_at"
     }
 }
-
-// MARK: - Bank Accounts Response
-struct BankAccountsResponse: Codable {
-    let totalAccounts: Int
-    let totalBalance: Double
-    let currency: String
-    let lastSync: String?  // Optional because API can return null when no sync has occurred yet
-    let accounts: [BankAccount]
-    
-    enum CodingKeys: String, CodingKey {
-        case totalAccounts = "total_accounts"
-        case totalBalance = "total_balance"
-        case currency
-        case lastSync = "last_sync"
-        case accounts
-    }
-}
-

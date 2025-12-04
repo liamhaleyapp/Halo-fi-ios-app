@@ -16,6 +16,31 @@ class PlaidManager: ObservableObject {
   
   private let networkService = NetworkService.shared
   
+  // MARK: - Configuration (DEBUG ONLY - Sandbox Mode)
+  
+#if DEBUG
+  // Sandbox direct mode: when items are created directly without Link UI
+  // ⚠️ DEBUG ONLY - This code will not compile in release builds
+  @Published var sandboxResponse: BankMultiConnectResponse?
+  @Published var isSandboxDirectMode: Bool = false
+  
+  /// ⚠️ DEBUG ONLY - Sandbox mode configuration
+  /// This flag and all sandbox code is wrapped in #if DEBUG to prevent
+  /// accidental inclusion in production builds.
+  /// 
+  /// Set to `true` for sandbox testing, `false` for production
+  /// 
+  /// - **Sandbox mode** (`true`): Uses `/bank/sandbox/create-multi-items` endpoint
+  ///   - Creates items directly, returns `BankMultiConnectResponse`
+  ///   - Bypasses Plaid Link UI and proceeds directly to onboarding completion
+  ///   - Use this for testing when you want to skip the Link UI flow
+  /// 
+  /// - **Production mode** (`false`): Uses `/bank/multi-link/create` endpoint
+  ///   - Returns link token for Plaid Link UI, returns `PlaidLinkResponse`
+  ///   - Standard production flow with Plaid Link SDK
+  private let useSandboxMode = true
+#endif
+  
   // MARK: - Link Token Creation
   
   func createLinkToken() async throws {
@@ -26,9 +51,6 @@ class PlaidManager: ObservableObject {
       isCreatingLinkToken = false
     }
     
-    print("🔵 PlaidManager: Starting link token creation")
-    print("   Endpoint: /bank/multi-link/create")
-    
     let linkTokenRequest = PlaidLinkRequest()
     let requestBody = try JSONEncoder().encode(linkTokenRequest)
     
@@ -38,48 +60,123 @@ class PlaidManager: ObservableObject {
     
     print("   Request body size: \(requestBody.count) bytes")
     
-    do {
-      let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
-        endpoint: "/bank/multi-link/create",
-        method: .POST,
-        body: requestBody,
-        responseType: PlaidLinkResponse.self
-      )
+#if DEBUG
+    if useSandboxMode {
+      // MARK: - Sandbox Path (DEBUG ONLY)
+      // 
+      // ⚠️ DEBUG ONLY - This code will not compile in release builds
+      // Sandbox endpoint: POST /bank/sandbox/create-multi-items
+      // Response: BankMultiConnectResponse (items, public_tokens, access_tokens, total_items_created)
+      // 
+      // ⚠️ IMPORTANT NOTE: This endpoint creates items DIRECTLY without going through Plaid Link UI.
+      // It does NOT return a link_token, so the Plaid Link UI flow cannot proceed.
+      // 
+      // If you need to test the Plaid Link UI flow in sandbox mode, you have two options:
+      // 1. Set useSandboxMode = false (use production endpoint with sandbox Plaid credentials)
+      // 2. Check if your backend has a sandbox link token endpoint (e.g., /bank/sandbox/multi-link/create)
+      // 
+      // The /bank/sandbox/create-multi-items endpoint is intended for testing scenarios where
+      // you want to bypass the Link UI and create items directly (e.g., automated testing).
       
-      print("✅ PlaidManager: Link token creation successful")
-      print("   Response success: \(linkResponse.success)")
-      print("   Link token length: \(linkResponse.linkToken.count) characters")
+      print("🔵 PlaidManager: Starting link token creation (SANDBOX MODE - DEBUG ONLY)")
+      print("   Endpoint: /bank/sandbox/create-multi-items")
+      print("   ⚠️ NOTE: This endpoint creates items directly and doesn't return a link_token")
       
-      if let error = linkResponse.error {
-        print("   Response error: \(error)")
+      do {
+        let sandboxResponse: BankMultiConnectResponse = try await networkService.authenticatedRequest(
+          endpoint: "/bank/sandbox/create-multi-items",
+          method: .POST,
+          body: requestBody,
+          responseType: BankMultiConnectResponse.self
+        )
+        
+        print("✅ PlaidManager: Sandbox response received")
+        print("   Response success: \(sandboxResponse.success)")
+        print("   Total items created: \(sandboxResponse.totalItemsCreated ?? 0)")
+        print("   Items count: \(sandboxResponse.items?.count ?? 0)")
+        
+        guard sandboxResponse.success else {
+          print("❌ PlaidManager: Sandbox response success is false")
+          throw PlaidError.linkTokenCreationFailed
+        }
+        
+        // Store sandbox response and enable direct mode (bypasses Link UI)
+        // The onboarding flow will detect this and proceed directly to account fetching
+        self.sandboxResponse = sandboxResponse
+        self.isSandboxDirectMode = true
+        
+        print("✅ PlaidManager: Sandbox items created directly - proceeding without Link UI")
+        print("   Onboarding will fetch accounts and complete automatically")
+        
+      } catch {
+        print("❌ PlaidManager: Error in sandbox mode")
+        print("   Error type: \(type(of: error))")
+        print("   Error description: \(error.localizedDescription)")
+        if let authError = error as? AuthError {
+          print("   AuthError case: \(authError)")
+        }
+        throw error
       }
-    
-      if linkResponse.error != nil {
-        print("❌ PlaidManager: Response contains error")
-        throw PlaidError.linkTokenCreationFailed
-      }
-      
-      guard linkResponse.success else {
-        print("❌ PlaidManager: Response success is false")
-        throw PlaidError.linkTokenCreationFailed
-      }
-      
-      guard !linkResponse.linkToken.isEmpty else {
-        print("❌ PlaidManager: Link token is empty")
-        throw PlaidError.linkTokenCreationFailed
-      }
-      
-      linkToken = linkResponse.linkToken
-      print("✅ PlaidManager: Link token stored successfully")
-    } catch {
-      print("❌ PlaidManager: Error creating link token")
-      print("   Error type: \(type(of: error))")
-      print("   Error description: \(error.localizedDescription)")
-      if let authError = error as? AuthError {
-        print("   AuthError case: \(authError)")
-      }
-      throw error
+      return
     }
+    
+    // Reset sandbox mode flags when using production (DEBUG only)
+    isSandboxDirectMode = false
+    sandboxResponse = nil
+#endif
+    
+    // MARK: - Production Path
+    // Production endpoint: POST /bank/multi-link/create
+    // Response: PlaidLinkResponse (link_token, expires_at, message, error)
+    // Standard flow: Get link token → Show Plaid Link UI → Exchange public token
+    
+    print("🔵 PlaidManager: Starting link token creation (PRODUCTION MODE)")
+    print("   Endpoint: /bank/multi-link/create")
+      
+      do {
+        let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
+          endpoint: "/bank/multi-link/create",
+          method: .POST,
+          body: requestBody,
+          responseType: PlaidLinkResponse.self
+        )
+        
+        print("✅ PlaidManager: Link token creation successful")
+        print("   Response success: \(linkResponse.success)")
+        print("   Link token length: \(linkResponse.linkToken.count) characters")
+        print("   Expires at: \(linkResponse.expiresAt)")
+        
+        if let error = linkResponse.error {
+          print("   Response error: \(error)")
+        }
+      
+        if linkResponse.error != nil {
+          print("❌ PlaidManager: Response contains error")
+          throw PlaidError.linkTokenCreationFailed
+        }
+        
+        guard linkResponse.success else {
+          print("❌ PlaidManager: Response success is false")
+          throw PlaidError.linkTokenCreationFailed
+        }
+        
+        guard !linkResponse.linkToken.isEmpty else {
+          print("❌ PlaidManager: Link token is empty")
+          throw PlaidError.linkTokenCreationFailed
+        }
+        
+        linkToken = linkResponse.linkToken
+        print("✅ PlaidManager: Link token stored successfully")
+        
+      } catch {
+        print("❌ PlaidManager: Error creating link token")
+        print("   Error type: \(type(of: error))")
+        print("   Error description: \(error.localizedDescription)")
+        if let authError = error as? AuthError {
+          print("   AuthError case: \(authError)")
+        }
+        throw error
+      }
   }
   
   // MARK: - Plaid Handler Creation

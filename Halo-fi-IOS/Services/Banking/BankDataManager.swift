@@ -17,6 +17,12 @@ class BankDataManager {
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
     
+    /// Linked items (institutions) from Plaid - stored after sandbox/production linking
+    var linkedItems: [ConnectedItem]?
+    
+    /// Accounts grouped by item ID - fetched on demand using GET /bank/{item_id}/account
+    var accountsByItemId: [String: [BankAccount]] = [:]
+    
     var isLoadingAccounts = false
     var isLoadingTransactions = false
     var isSyncing = false
@@ -102,19 +108,18 @@ class BankDataManager {
             return response
         }
         
+        // Store linked items for later use (e.g., displaying in AccountsView)
+        self.linkedItems = connectedItems
+        print("✅ BankDataManager: Stored \(connectedItems.count) linked items")
+        
         // Use itemId (UUID) not plaidItemId - the sync endpoint expects UUIDs
         let itemIds = connectedItems.map { $0.itemId }
         print("🔵 BankDataManager: Syncing \(itemIds.count) items...")
         print("   - Item IDs (UUIDs): \(itemIds)")
         print("   - Plaid Item IDs: \(connectedItems.map { $0.plaidItemId })")
         
-        guard let accessToken = tokenStorage.getAccessToken() else {
-            print("⚠️ BankDataManager: No access token for sync, skipping")
-            return response
-        }
-        
         do {
-            let syncResponse = try await bankService.syncMultipleItems(accessToken: accessToken, itemIds: itemIds)
+            let syncResponse = try await bankService.syncMultipleItems(itemIds: itemIds)
             print("✅ BankDataManager: Sync initiated successfully")
             print("   - Success: \(syncResponse.success)")
             print("   - Message: \(syncResponse.message ?? "nil")")
@@ -175,16 +180,12 @@ class BankDataManager {
             return
         }
         
-        guard let accessToken = tokenStorage.getAccessToken() else {
-            throw BankError.unauthorized
-        }
-        
         isLoadingAccounts = true
         accountsError = nil
         
         do {
             print("🔵 BankDataManager: Fetching accounts from API...")
-            let fetchedAccounts = try await bankService.getBankAccounts(accessToken: accessToken)
+            let fetchedAccounts = try await bankService.getBankAccounts()
             
             print("✅ BankDataManager: Accounts fetched successfully")
             print("   - Accounts count: \(fetchedAccounts.count)")
@@ -228,16 +229,45 @@ class BankDataManager {
         try await fetchAccounts(forceRefresh: forceRefresh)
     }
     
+    /// Fetches bank accounts for a specific item
+    /// - Parameters:
+    ///   - itemId: The item ID to fetch accounts for
+    /// - Returns: ItemAccountsResponse containing accounts for that item
+    /// - Note: Uses `GET /bank/{item_id}/account` endpoint via NetworkService
+    func fetchAccountsForItem(itemId: String) async throws -> ItemAccountsResponse {
+        print("🔵 BankDataManager: Fetching accounts for item \(itemId)")
+        
+        do {
+            // BankService now uses NetworkService internally which handles authentication
+            let response = try await bankService.getAccountsByItemId(itemId: itemId)
+            
+            print("✅ BankDataManager: Fetched \(response.accounts.count) accounts for item \(itemId)")
+            
+            if response.accounts.isEmpty {
+                print("⚠️ BankDataManager: No accounts found for item \(itemId)")
+            } else {
+                print("   - Account details:")
+                for (index, account) in response.accounts.enumerated() {
+                    print("     [\(index)] ID: \(account.id), Name: \(account.name), Type: \(account.type), Balance: \(account.currentBalance)")
+                }
+            }
+            
+            return response
+        } catch let error as BankError {
+            print("❌ BankDataManager: BankError fetching accounts for item \(itemId): \(error)")
+            throw error
+        } catch {
+            print("❌ BankDataManager: Unknown error fetching accounts for item \(itemId): \(error)")
+            throw BankError.networkError
+        }
+    }
+    
     /// Connects multiple bank accounts using public tokens returned from Plaid Link
     /// - Parameter publicTokens: Array of public tokens collected from Plaid Link sessions
     /// - Parameter useSandbox: If true, uses the sandbox endpoint for testing
     func connectMultipleBankAccounts(publicTokens: [String], useSandbox: Bool = false) async throws -> BankMultiConnectResponse {
         guard !publicTokens.isEmpty else {
             throw BankError.validationError([ValidationErrorDetail(loc: ["public_tokens"], msg: "No public tokens provided", type: "value_error")])
-        }
-        
-        guard let accessToken = tokenStorage.getAccessToken() else {
-            throw BankError.unauthorized
         }
         
         isSyncing = true
@@ -247,13 +277,11 @@ class BankDataManager {
             if useSandbox {
                 // Use sandbox endpoint for testing (e.g., "continue as guest" flow)
                 response = try await bankService.createSandboxMultiItems(
-                    accessToken: accessToken,
                     publicTokens: publicTokens
                 )
             } else {
                 // Use production endpoint
                 response = try await bankService.connectMultipleBankAccounts(
-                    accessToken: accessToken,
                     publicTokens: publicTokens
                 )
             }
@@ -306,7 +334,6 @@ class BankDataManager {
         
         do {
             let fetchedTransactions = try await bankService.getTransactions(
-                accessToken: accessToken,
                 accountId: accountId,
                 limit: limit,
                 offset: offset
@@ -339,16 +366,11 @@ class BankDataManager {
     /// Syncs bank data for a specific Plaid item
     /// - Parameter plaidItemId: The Plaid item ID to sync
     func syncBankData(plaidItemId: String) async throws {
-        guard let accessToken = tokenStorage.getAccessToken() else {
-            throw BankError.unauthorized
-        }
-        
         isSyncing = true
         syncError = nil
         
         do {
             _ = try await bankService.syncBankData(
-                accessToken: accessToken,
                 plaidItemId: plaidItemId
             )
             

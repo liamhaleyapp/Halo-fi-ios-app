@@ -137,9 +137,9 @@ class NetworkService {
             throw AuthError.networkError
         }
         
-        // Accept both 200 (OK) and 201 (Created) as success status codes
-        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-            // Handle empty responses (e.g., 201 Created with no body)
+        // Accept 200 (OK), 201 (Created), and 204 (No Content) as success status codes
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 || httpResponse.statusCode == 204 {
+            // Handle empty responses (e.g., 201 Created or 204 No Content with no body)
             if data.isEmpty {
                 // Try to decode from empty JSON object
                 let emptyJSON = "{}".data(using: .utf8)!

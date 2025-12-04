@@ -1,5 +1,5 @@
 //
-//  BankResponseModels.swift
+//  BankSyncResponse.swift
 //  Halo-fi-IOS
 //
 //  Created by Christopher Koski on 10/1/25.
@@ -16,11 +16,4 @@ struct BankSyncResponse: Codable {
     let requestId: String?
 }
 
-// MARK: - Bank Health Response
-struct BankHealthResponse: Codable {
-    let status: String
-    let message: String?
-    let timestamp: String
-    let services: [String: String]?
-}
 

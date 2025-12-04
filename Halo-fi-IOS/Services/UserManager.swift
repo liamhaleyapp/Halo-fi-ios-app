@@ -103,6 +103,26 @@ class UserManager {
         expiresAt: authResponse.session.expiresAt
       )
       
+      // Print token expiration for debugging
+      let expirationDate = authResponse.session.expirationDate
+      let formatter = DateFormatter()
+      formatter.dateStyle = .medium
+      formatter.timeStyle = .medium
+      formatter.timeZone = TimeZone.current
+      let expiresInSeconds = authResponse.session.expiresIn
+      let expiresInMinutes = expiresInSeconds / 60
+      let expiresInHours = expiresInMinutes / 60
+      let durationString: String
+      if expiresInHours >= 1 {
+        let remainingMinutes = expiresInMinutes % 60
+        durationString = remainingMinutes > 0 ? "\(expiresInHours)h \(remainingMinutes)m" : "\(expiresInHours)h"
+      } else {
+        durationString = "\(expiresInMinutes)m"
+      }
+      print("🔐 Token expiration: \(authResponse.session.expiresAt) (Unix timestamp)")
+      print("🔐 Token expires at: \(formatter.string(from: expirationDate))")
+      print("🔐 Token duration: \(expiresInSeconds)s (\(durationString))")
+      
       // Create user from API response
       let authUser = authResponse.authUser
       

@@ -38,9 +38,24 @@ class PlaidOnboardingViewModel {
   func startPlaidFlow(bankDataManager: BankDataManager, userManager: UserManager) {
     Task {
       do {
-        // Step 1: Create link token
+        // Step 1: Create link token (or create items directly in sandbox mode)
         try await plaidManager.createLinkToken()
         
+#if DEBUG
+        // Check if we're in sandbox direct mode (items created directly, no Link UI)
+        // ⚠️ DEBUG ONLY - This code will not compile in release builds
+        if plaidManager.isSandboxDirectMode, let sandboxResponse = plaidManager.sandboxResponse {
+          // Sandbox path: Items were created directly, skip Link UI and proceed to onboarding
+          await handleSandboxDirectMode(
+            sandboxResponse: sandboxResponse,
+            bankDataManager: bankDataManager,
+            userManager: userManager
+          )
+          return
+        }
+#endif
+        
+        // Production path: Use Plaid Link UI
         // Step 2: Create Plaid handler with callbacks
         guard plaidManager.createHandler(
           onSuccess: { linkSuccess in
@@ -95,6 +110,58 @@ class PlaidOnboardingViewModel {
       }
     }
   }
+  
+  // MARK: - Sandbox Direct Mode Handler (DEBUG ONLY)
+  
+#if DEBUG
+  /// Handles the sandbox direct mode flow where items are created directly without Plaid Link UI
+  /// ⚠️ DEBUG ONLY - This method will not compile in release builds
+  /// 
+  /// In sandbox mode, items are created directly by the backend. We don't need to fetch accounts
+  /// immediately - accounts can be fetched later in AccountsView using the item IDs from the response.
+  /// The sandbox response contains item IDs that can be used with `GET /bank/{item_id}/account`.
+  private func handleSandboxDirectMode(
+    sandboxResponse: BankMultiConnectResponse,
+    bankDataManager: BankDataManager,
+    userManager: UserManager
+  ) async {
+    print("🔵 Plaid (Sandbox Direct): Items created directly, completing onboarding")
+    print("   - Total items created: \(sandboxResponse.totalItemsCreated ?? 0)")
+    print("   - Items count: \(sandboxResponse.items?.count ?? 0)")
+    
+    // Log created items for reference (accounts can be fetched later using these item IDs)
+    if let items = sandboxResponse.items {
+      print("   - Created items:")
+      for (index, item) in items.enumerated() {
+        print("     [\(index)] Item ID: \(item.itemId), Institution: \(item.institutionName)")
+      }
+    }
+    
+    // Store linked items in BankDataManager for display in AccountsView
+    // The sandbox response has items in a different format, so we map them to ConnectedItem
+    if let connectedItems = sandboxResponse.allConnectedItems {
+      bankDataManager.linkedItems = connectedItems
+      print("✅ Plaid (Sandbox Direct): Stored \(connectedItems.count) linked items in BankDataManager")
+    }
+    
+    // In sandbox mode, items are created directly - no need to fetch accounts now
+    // Accounts can be fetched on-demand in AccountsView using GET /bank/{item_id}/account
+    await MainActor.run {
+      isCompletingLinking = false
+      hasStartedFlow = true
+      
+      print("✅ Plaid (Sandbox Direct): Items created successfully, completing onboarding")
+      print("   Accounts will be fetched on-demand in AccountsView")
+      
+      userManager.completeOnboarding()
+      if let onComplete = onComplete {
+        onComplete()
+      } else {
+        onDismiss?()
+      }
+    }
+  }
+#endif
   
   private func handlePlaidSuccess(_ linkSuccess: LinkSuccess, bankDataManager: BankDataManager, userManager: UserManager) async {
     // Show loading indicator

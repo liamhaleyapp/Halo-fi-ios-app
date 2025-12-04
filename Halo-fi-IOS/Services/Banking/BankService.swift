@@ -11,139 +11,186 @@ import Foundation
 class BankService {
     static let shared = BankService()
     
-    private let baseURL = "https://halofiapp-production.up.railway.app"
-    private let session = URLSession.shared
-    
     private init() {}
     
     // MARK: - Connect Multiple Bank Accounts
-    func connectMultipleBankAccounts(accessToken: String, publicTokens: [String]) async throws -> BankMultiConnectResponse {
-        guard let url = URL(string: "\(baseURL)/bank/multi-connect") else {
-            throw BankError.networkError
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+    /// Connects multiple bank accounts using public tokens returned from Plaid Link
+    /// - Parameter publicTokens: Array of public tokens from Plaid Link
+    /// - Returns: BankMultiConnectResponse with connected items
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func connectMultipleBankAccounts(publicTokens: [String]) async throws -> BankMultiConnectResponse {
         let requestBody = BankMultiConnectRequest(publicTokens: publicTokens)
-        request.httpBody = try JSONEncoder().encode(requestBody)
+        let bodyData = try JSONEncoder().encode(requestBody)
         
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankMultiConnectResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/multi-connect",
+                method: .POST,
+                body: bodyData,
+                responseType: BankMultiConnectResponse.self
+            )
+            
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200, 201:
-            let decodedResponse = try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
-            return decodedResponse
-        case 401:
-            throw BankError.unauthorized
-        case 422:
-            let validationError = try JSONDecoder().decode(ValidationError.self, from: data)
-            throw BankError.validationError(validationError.detail)
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     // MARK: - Sandbox: Create Multiple Items
-    func createSandboxMultiItems(accessToken: String, publicTokens: [String]) async throws -> BankMultiConnectResponse {
-        guard let url = URL(string: "\(baseURL)/bank/sandbox/create-multi-items") else {
-            throw BankError.networkError
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+    /// Creates multiple sandbox items directly (sandbox/testing only)
+    /// - Parameter publicTokens: Array of public tokens (can be empty for sandbox)
+    /// - Returns: BankMultiConnectResponse with created items
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func createSandboxMultiItems(publicTokens: [String]) async throws -> BankMultiConnectResponse {
         let requestBody = BankMultiConnectRequest(publicTokens: publicTokens)
-        request.httpBody = try JSONEncoder().encode(requestBody)
+        let bodyData = try JSONEncoder().encode(requestBody)
         
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankMultiConnectResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/sandbox/create-multi-items",
+                method: .POST,
+                body: bodyData,
+                responseType: BankMultiConnectResponse.self
+            )
+            
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200, 201:
-            let decodedResponse = try JSONDecoder().decode(BankMultiConnectResponse.self, from: data)
-            return decodedResponse
-        case 401:
-            throw BankError.unauthorized
-        case 422:
-            let validationError = try JSONDecoder().decode(ValidationError.self, from: data)
-            throw BankError.validationError(validationError.detail)
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     // MARK: - Get Bank Accounts
-    func getBankAccounts(accessToken: String) async throws -> [BankAccount] {
-        let url = URL(string: "\(baseURL)/bank/accounts")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+    /// Fetches all bank accounts for the authenticated user
+    /// - Returns: Array of BankAccount objects
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getBankAccounts() async throws -> [BankAccount] {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankAccountsResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/accounts",
+                method: .GET,
+                body: nil,
+                responseType: BankAccountsResponse.self
+            )
+            
+            return response.accounts
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                // Check if it's a 404 (no accounts found)
+                if code == 404 {
+                    return []
+                }
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
         }
+    }
+    
+    // MARK: - Get Accounts by Item ID
+    /// Fetches bank accounts for a specific Plaid item
+    /// - Parameter itemId: The item ID (not plaid_item_id) to fetch accounts for
+    /// - Returns: ItemAccountsResponse containing accounts for that item
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getAccountsByItemId(itemId: String) async throws -> ItemAccountsResponse {
+        print("🔵 BankService: Fetching accounts for item \(itemId)")
         
-        switch httpResponse.statusCode {
-        case 200:
-            do {
-                let accountsResponse = try JSONDecoder().decode(BankAccountsResponse.self, from: data)
-                return accountsResponse.accounts
-            } catch {
-                // Log the actual response to debug decoding issues
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("❌ BankService: Failed to decode BankAccountsResponse")
-                    print("   - Response body: \(responseString)")
-                } else {
-                    print("❌ BankService: Failed to decode BankAccountsResponse (non-UTF8 data)")
-                    print("   - Data length: \(data.count) bytes")
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: ItemAccountsResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/\(itemId)/account",
+                method: .GET,
+                body: nil,
+                responseType: ItemAccountsResponse.self
+            )
+            
+            print("✅ BankService: Fetched \(response.accounts.count) accounts for item \(itemId)")
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            print("❌ BankService: AuthError fetching accounts for item \(itemId): \(authError)")
+            
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, let detail):
+                // Check if it's a 404 (item not found)
+                if code == 404 {
+                    print("⚠️ BankService: Item \(itemId) not found (404)")
+                    return ItemAccountsResponse(accounts: [])
                 }
-                print("   - Decoding error: \(error)")
-                if let decodingError = error as? DecodingError {
-                    switch decodingError {
-                    case .keyNotFound(let key, let context):
-                        print("     → Missing key: \(key.stringValue) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .typeMismatch(let type, let context):
-                        print("     → Type mismatch: Expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .valueNotFound(let type, let context):
-                        print("     → Value not found: Expected \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .dataCorrupted(let context):
-                        print("     → Data corrupted: \(context.debugDescription)")
-                    @unknown default:
-                        print("     → Unknown decoding error")
-                    }
-                }
-                throw BankError.invalidResponse
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
             }
-        case 401:
-            throw BankError.unauthorized
-        case 404:
-            // Return empty array instead of throwing error for 404
-            return []
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
+        } catch {
+            // Handle other errors
+            print("❌ BankService: Unknown error fetching accounts for item \(itemId): \(error)")
+            throw BankError.networkError
         }
     }
     
     // MARK: - Get Transactions
-    func getTransactions(accessToken: String, accountId: String? = nil, limit: Int? = nil, offset: Int? = nil) async throws -> [Transaction] {
-        var urlComponents = URLComponents(string: "\(baseURL)/bank/transactions")!
-        
+    /// Fetches transactions for the authenticated user
+    /// - Parameters:
+    ///   - accountId: Optional account ID to filter transactions
+    ///   - limit: Optional limit on number of transactions to return
+    ///   - offset: Optional offset for pagination
+    /// - Returns: Array of Transaction objects
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getTransactions(accountId: String? = nil, limit: Int? = nil, offset: Int? = nil) async throws -> [Transaction] {
+        // Build endpoint with query parameters
+        var endpoint = "/bank/transactions"
         var queryItems: [URLQueryItem] = []
+        
         if let accountId = accountId {
             queryItems.append(URLQueryItem(name: "account_id", value: accountId))
         }
@@ -155,178 +202,203 @@ class BankService {
         }
         
         if !queryItems.isEmpty {
-            urlComponents.queryItems = queryItems
+            var components = URLComponents(string: endpoint)
+            components?.queryItems = queryItems
+            if let queryString = components?.url?.query {
+                endpoint = "\(endpoint)?\(queryString)"
+            }
         }
         
-        guard let url = urlComponents.url else {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: TransactionsResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: endpoint,
+                method: .GET,
+                body: nil,
+                responseType: TransactionsResponse.self
+            )
+            
+            return response.transactions
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200:
-            let transactionsResponse = try JSONDecoder().decode(TransactionsResponse.self, from: data)
-            return transactionsResponse.transactions
-        case 401:
-            throw BankError.unauthorized
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     // MARK: - Sync Bank Data
     
     /// Syncs multiple bank items at once
-    /// - Parameter accessToken: User's access token
     /// - Parameter itemIds: Array of Plaid item IDs to sync
     /// - Returns: BankSyncResponse with sync results
-    func syncMultipleItems(accessToken: String, itemIds: [String]) async throws -> BankSyncResponse {
-        guard let url = URL(string: "\(baseURL)/bank/multi-items/sync") else {
-            throw BankError.networkError
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func syncMultipleItems(itemIds: [String]) async throws -> BankSyncResponse {
         let requestBody = BankMultiItemsSyncRequest(itemIds: itemIds)
-        let requestData = try JSONEncoder().encode(requestBody)
-        request.httpBody = requestData
+        let bodyData = try JSONEncoder().encode(requestBody)
         
-        // Log request for debugging
-        if let requestString = String(data: requestData, encoding: .utf8) {
-            print("🔵 BankService: Sync request body: \(requestString)")
-        }
-        print("🔵 BankService: Syncing \(itemIds.count) items at \(url.absoluteString)")
+        print("🔵 BankService: Syncing \(itemIds.count) items")
         
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankSyncResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/multi-items/sync",
+                method: .POST,
+                body: bodyData,
+                responseType: BankSyncResponse.self
+            )
+            
+            print("✅ BankService: Sync completed successfully")
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            print("❌ BankService: Sync error: \(authError)")
+            
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                // Check if it's a 404 (item not found)
+                if code == 404 {
+                    throw BankError.itemNotFound
+                }
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        print("🔵 BankService: Sync response status: \(httpResponse.statusCode)")
-        
-        switch httpResponse.statusCode {
-        case 200, 202:
-            // 202 Accepted means sync is in progress (async)
-            // 200 OK means sync completed immediately
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("✅ BankService: Sync response body: \(responseString)")
-            }
-            let syncResponse = try JSONDecoder().decode(BankSyncResponse.self, from: data)
-            return syncResponse
-        case 401:
-            throw BankError.unauthorized
-        case 404:
-            throw BankError.itemNotFound
-        case 422:
-            // Validation error - log the response to see what's wrong
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("❌ BankService: Sync validation error (422): \(responseString)")
-            }
-            // Try to parse as ValidationError
-            if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
-                throw BankError.validationError(validationError.detail)
-            }
-            throw BankError.serverError(422)
-        default:
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("❌ BankService: Sync error (\(httpResponse.statusCode)): \(responseString)")
-            }
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     /// Syncs bank data for a specific Plaid item
-    /// - Parameter accessToken: User's access token
     /// - Parameter plaidItemId: The Plaid item ID to sync
     /// - Returns: BankSyncResponse with sync results
-    func syncBankData(accessToken: String, plaidItemId: String) async throws -> BankSyncResponse {
-        let url = URL(string: "\(baseURL)/bank/sync/\(plaidItemId)")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func syncBankData(plaidItemId: String) async throws -> BankSyncResponse {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankSyncResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/sync/\(plaidItemId)",
+                method: .POST,
+                body: nil,
+                responseType: BankSyncResponse.self
+            )
+            
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                // Check if it's a 404 (item not found)
+                if code == 404 {
+                    throw BankError.itemNotFound
+                }
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200, 202:
-            let syncResponse = try JSONDecoder().decode(BankSyncResponse.self, from: data)
-            return syncResponse
-        case 401:
-            throw BankError.unauthorized
-        case 404:
-            throw BankError.itemNotFound
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     // MARK: - Disconnect Bank Account
-    func disconnectBankAccount(accessToken: String, plaidItemId: String) async throws {
-        let url = URL(string: "\(baseURL)/bank/disconnect/\(plaidItemId)")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
-        let (_, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+    /// Disconnects a bank account by Plaid item ID
+    /// - Parameter plaidItemId: The Plaid item ID to disconnect
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func disconnectBankAccount(plaidItemId: String) async throws {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            // EmptyResponse handles DELETE operations that return no body (200/204)
+            let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/disconnect/\(plaidItemId)",
+                method: .DELETE,
+                body: nil,
+                responseType: EmptyResponse.self
+            )
+            
+            // Success - no return value needed
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                // Check if it's a 404 (item not found)
+                if code == 404 {
+                    throw BankError.itemNotFound
+                }
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200, 204:
-            return // Success
-        case 401:
-            throw BankError.unauthorized
-        case 404:
-            throw BankError.itemNotFound
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
     
     // MARK: - Bank Health Check
-    func checkBankHealth(accessToken: String) async throws -> BankHealthResponse {
-        let url = URL(string: "\(baseURL)/bank/health")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+    /// Checks the health status of bank services
+    /// - Returns: BankHealthResponse with health status
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func checkBankHealth() async throws -> BankHealthResponse {
+        do {
+            // Use NetworkService for authenticated request with proper error handling
+            let response: BankHealthResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: "/bank/health",
+                method: .GET,
+                body: nil,
+                responseType: BankHealthResponse.self
+            )
+            
+            return response
+            
+        } catch let authError as AuthError {
+            // Convert AuthError to BankError for consistency with BankService API
+            switch authError {
+            case .networkError:
+                throw BankError.networkError
+            case .tokenExpired, .invalidCredentials:
+                throw BankError.unauthorized
+            case .validationError(let details):
+                throw BankError.validationError(details)
+            case .serverError(let code, _):
+                throw BankError.serverError(code)
+            default:
+                throw BankError.networkError
+            }
+        } catch {
             throw BankError.networkError
-        }
-        
-        switch httpResponse.statusCode {
-        case 200:
-            let healthResponse = try JSONDecoder().decode(BankHealthResponse.self, from: data)
-            return healthResponse
-        case 401:
-            throw BankError.unauthorized
-        default:
-            throw BankError.serverError(httpResponse.statusCode)
         }
     }
 }
