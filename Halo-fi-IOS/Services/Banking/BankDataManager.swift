@@ -10,258 +10,194 @@ import SwiftUI
 
 @Observable
 @MainActor
-class BankDataManager {
+final class BankDataManager {
     // MARK: - State
-    
+
     var accounts: [BankAccount]?
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
-    
+
     /// Linked items (institutions) from Plaid - stored after sandbox/production linking
     var linkedItems: [ConnectedItem]?
-    
+
     /// Accounts grouped by item ID - fetched on demand using GET /bank/{item_id}/account
     var accountsByItemId: [String: [BankAccount]] = [:]
-    
+
     var isLoadingAccounts = false
     var isLoadingTransactions = false
     var isSyncing = false
-    
+
     var accountsError: BankError?
     var transactionsError: BankError?
     var syncError: BankError?
-    
+
     // Cache management
     private var accountsLastFetched: Date?
     private var transactionsLastFetched: Date?
     private var transactionsCacheKey: String?
-    
+
     // Cache TTL (Time To Live) - 5 minutes
-    private let cacheTTL: TimeInterval = 300 // 5 minutes
-    
+    private let cacheTTL: TimeInterval = 300
+
     // MARK: - Dependencies
-    
+
     private let bankService: BankService
-    private let tokenStorage: TokenStorage
-    
+
     // MARK: - Initialization
-    
-    init(bankService: BankService = BankService.shared, tokenStorage: TokenStorage = TokenStorage()) {
+
+    init(bankService: BankService = BankService.shared) {
         self.bankService = bankService
-        self.tokenStorage = tokenStorage
     }
-    
+
     // MARK: - Bank Linking Flow
-    
+
     /// Exchanges collected public tokens for access tokens via backend
     /// - Parameter publicTokens: Array of public tokens from Plaid Link (can be empty for sandbox "continue as guest")
     /// - Parameter useSandbox: If true, uses sandbox endpoint (for testing/guest mode)
     func completeLinking(with publicTokens: [String], useSandbox: Bool = false) async throws -> BankMultiConnectResponse {
-        // For sandbox, allow empty public tokens (e.g., "continue as guest" flow)
         let sanitizedTokens = useSandbox ? publicTokens.filter { !$0.isEmpty } : publicTokens
-        
-        print("🔵 BankDataManager: Connecting bank accounts...")
-        print("   - Public tokens count: \(sanitizedTokens.count)")
-        print("   - Use sandbox: \(useSandbox)")
-        
-        let response = try await connectMultipleBankAccounts(publicTokens: sanitizedTokens.isEmpty && useSandbox ? [""] : sanitizedTokens, useSandbox: useSandbox)
-        
-        print("🔵 BankDataManager: Connection response received")
-        print("   - Success: \(response.success)")
-        print("   - Message: \(response.message ?? "nil")")
-        print("   - Total Items Created: \(response.totalItemsCreated?.description ?? "nil")")
-        print("   - Failed Items: \(response.failedItems?.count ?? 0)")
-        print("   - All Connected Items: \(response.allConnectedItems?.count ?? 0)")
-        
+
+        Logger.info("Connecting bank accounts (tokens: \(sanitizedTokens.count), sandbox: \(useSandbox))")
+
+        let response = try await connectMultipleBankAccounts(
+            publicTokens: sanitizedTokens.isEmpty && useSandbox ? [""] : sanitizedTokens,
+            useSandbox: useSandbox
+        )
+
+        Logger.debug("Connection response: success=\(response.success), items=\(response.allConnectedItems?.count ?? 0)")
+
         guard response.success else {
             let message = response.message ?? "Unable to connect bank accounts."
-            print("❌ BankDataManager: Connection failed - \(message)")
+            Logger.error("Connection failed: \(message)")
             throw BankError.multiConnectFailed(message)
         }
-        
-        print("✅ BankDataManager: Connection successful")
-        
-        // For sandbox, check totalItemsCreated instead of failedItems
+
+        try validateLinkingResponse(response, useSandbox: useSandbox)
+
+        guard let connectedItems = response.allConnectedItems, !connectedItems.isEmpty else {
+            Logger.warning("No connected items to sync")
+            return response
+        }
+
+        linkedItems = connectedItems
+        Logger.success("Stored \(connectedItems.count) linked items")
+
+        await syncConnectedItems(connectedItems)
+
+        return response
+    }
+
+    private func validateLinkingResponse(_ response: BankMultiConnectResponse, useSandbox: Bool) throws {
         if useSandbox {
             if let itemsCreated = response.totalItemsCreated, itemsCreated == 0 {
                 let message = response.message ?? "No items were created. Please try again."
                 throw BankError.multiConnectFailed(message)
             }
-            // Sandbox endpoint creates items automatically, success means items were created
         } else {
-            // For production, check failedItems
             if let failedItems = response.failedItems, !failedItems.isEmpty {
                 let message = response.message ?? "Failed to connect \(failedItems.count) item(s). Please try again."
                 throw BankError.multiConnectFailed(message)
             }
-            
-            // Ensure we have connected items for production
+
             if let connectedItems = response.allConnectedItems, connectedItems.isEmpty {
                 let message = response.message ?? "No items were connected. Please try again."
                 throw BankError.multiConnectFailed(message)
             }
         }
-        
-        // Extract item IDs and sync them to pull account data from Plaid
-        guard let connectedItems = response.allConnectedItems, !connectedItems.isEmpty else {
-            print("⚠️ BankDataManager: No connected items to sync")
-            return response
-        }
-        
-        // Store linked items for later use (e.g., displaying in AccountsView)
-        self.linkedItems = connectedItems
-        print("✅ BankDataManager: Stored \(connectedItems.count) linked items")
-        
-        // Use itemId (UUID) not plaidItemId - the sync endpoint expects UUIDs
+    }
+
+    private func syncConnectedItems(_ connectedItems: [ConnectedItem]) async {
         let itemIds = connectedItems.map { $0.itemId }
-        print("🔵 BankDataManager: Syncing \(itemIds.count) items...")
-        print("   - Item IDs (UUIDs): \(itemIds)")
-        print("   - Plaid Item IDs: \(connectedItems.map { $0.plaidItemId })")
-        
+        Logger.info("Syncing \(itemIds.count) items...")
+
         do {
             let syncResponse = try await bankService.syncMultipleItems(itemIds: itemIds)
-            print("✅ BankDataManager: Sync initiated successfully")
-            print("   - Success: \(syncResponse.success)")
-            print("   - Message: \(syncResponse.message ?? "nil")")
-            print("   - Accounts Updated: \(syncResponse.accountsUpdated ?? -1)")
-            print("   - Transactions Updated: \(syncResponse.transactionsUpdated ?? -1)")
-            
-            // If sync is async (202), wait a bit for it to complete
-            // Then fetch accounts to get the synced data
+            Logger.success("Sync initiated: accounts=\(syncResponse.accountsUpdated ?? -1), transactions=\(syncResponse.transactionsUpdated ?? -1)")
+
             if syncResponse.accountsUpdated == nil {
-                // Sync might be async, wait a moment
-                print("🔵 BankDataManager: Sync appears to be async, waiting 2 seconds...")
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                Logger.debug("Sync appears async, waiting 2 seconds...")
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
-            
-            // Fetch accounts to update the UI with the newly synced data
-            print("🔵 BankDataManager: Fetching accounts after sync...")
+
+            Logger.info("Fetching accounts after sync...")
             try await fetchAccounts(forceRefresh: true)
         } catch let error as BankError {
-            print("⚠️ BankDataManager: Sync failed with BankError: \(error)")
+            Logger.warning("Sync failed with BankError: \(error)")
             if case .validationError(let details) = error {
-                print("   - Validation errors:")
                 for detail in details {
-                    print("     → Location: \(detail.loc.joined(separator: "."))")
-                    print("       Message: \(detail.msg)")
-                    print("       Type: \(detail.type)")
+                    Logger.debug("Validation: \(detail.loc.joined(separator: ".")) - \(detail.msg)")
                 }
-            } else if case .serverError(let code) = error {
-                print("   - Server error code: \(code)")
             }
-            // Don't fail the entire linking process if sync fails - items are already connected
-            // Try to fetch accounts anyway in case they were synced by the backend
-            print("🔵 BankDataManager: Attempting to fetch accounts despite sync failure...")
+            Logger.info("Attempting to fetch accounts despite sync failure...")
             try? await fetchAccounts(forceRefresh: true)
         } catch {
-            print("⚠️ BankDataManager: Sync failed with unknown error: \(error)")
-            print("   - Error type: \(type(of: error))")
-            print("   - Error description: \(error.localizedDescription)")
-            // Don't fail the entire linking process if sync fails - items are already connected
-            // Try to fetch accounts anyway in case they were synced by the backend
-            print("🔵 BankDataManager: Attempting to fetch accounts despite sync failure...")
+            Logger.warning("Sync failed: \(error.localizedDescription)")
+            Logger.info("Attempting to fetch accounts despite sync failure...")
             try? await fetchAccounts(forceRefresh: true)
         }
-        
-        return response
     }
-    
+
     // MARK: - Account Management
-    
+
     /// Fetches bank accounts from the API
     /// - Parameter forceRefresh: If true, bypasses cache and fetches fresh data
     func fetchAccounts(forceRefresh: Bool = false) async throws {
-        // Check if we have valid cached data
         if !forceRefresh,
            accounts != nil,
            let lastFetched = accountsLastFetched,
            Date().timeIntervalSince(lastFetched) < cacheTTL {
-            // Return cached data
             return
         }
-        
+
         isLoadingAccounts = true
         accountsError = nil
-        
+        defer { isLoadingAccounts = false }
+
         do {
-            print("🔵 BankDataManager: Fetching accounts from API...")
+            Logger.info("Fetching accounts from API...")
             let fetchedAccounts = try await bankService.getBankAccounts()
-            
-            print("✅ BankDataManager: Accounts fetched successfully")
-            print("   - Accounts count: \(fetchedAccounts.count)")
-            
-            if fetchedAccounts.isEmpty {
-                print("⚠️ BankDataManager: Accounts array is empty")
-            } else {
-                print("   - Account details:")
-                for (index, account) in fetchedAccounts.enumerated() {
-                  print("     [\(index)] ID: \(account.id), Name: \(account.name), Type: \(account.type), Balance: \(account.currentBalance)")
-                }
-            }
-            
-            await MainActor.run {
-                self.accounts = fetchedAccounts
-                self.accountsLastFetched = Date()
-                self.isLoadingAccounts = false
-            }
+
+            Logger.success("Fetched \(fetchedAccounts.count) accounts")
+
+            accounts = fetchedAccounts
+            accountsLastFetched = Date()
         } catch let error as BankError {
-            print("❌ BankDataManager: BankError fetching accounts: \(error)")
-            await MainActor.run {
-                self.accountsError = error
-                self.isLoadingAccounts = false
-            }
+            Logger.error("BankError fetching accounts: \(error)")
+            accountsError = error
             throw error
         } catch {
-            print("❌ BankDataManager: Unknown error fetching accounts: \(error)")
+            Logger.error("Unknown error fetching accounts: \(error)")
             let bankError = BankError.networkError
-            await MainActor.run {
-                self.accountsError = bankError
-                self.isLoadingAccounts = false
-            }
+            accountsError = bankError
             throw bankError
         }
     }
-    
+
     /// Fetches the full accounts response including summary data
     func fetchAccountsSummary(forceRefresh: Bool = false) async throws {
-        // This will fetch accounts and we can extract summary from the response
-        // For now, we'll use the same method but could be enhanced if the API provides a summary endpoint
         try await fetchAccounts(forceRefresh: forceRefresh)
     }
-    
+
     /// Fetches bank accounts for a specific item
     /// - Parameters:
     ///   - itemId: The item ID to fetch accounts for
     /// - Returns: ItemAccountsResponse containing accounts for that item
-    /// - Note: Uses `GET /bank/{item_id}/account` endpoint via NetworkService
     func fetchAccountsForItem(itemId: String) async throws -> ItemAccountsResponse {
-        print("🔵 BankDataManager: Fetching accounts for item \(itemId)")
-        
+        Logger.info("Fetching accounts for item \(itemId)")
+
         do {
-            // BankService now uses NetworkService internally which handles authentication
             let response = try await bankService.getAccountsByItemId(itemId: itemId)
-            
-            print("✅ BankDataManager: Fetched \(response.accounts.count) accounts for item \(itemId)")
-            
-            if response.accounts.isEmpty {
-                print("⚠️ BankDataManager: No accounts found for item \(itemId)")
-            } else {
-                print("   - Account details:")
-                for (index, account) in response.accounts.enumerated() {
-                    print("     [\(index)] ID: \(account.id), Name: \(account.name), Type: \(account.type), Balance: \(account.currentBalance)")
-                }
-            }
-            
+            Logger.success("Fetched \(response.accounts.count) accounts for item \(itemId)")
             return response
         } catch let error as BankError {
-            print("❌ BankDataManager: BankError fetching accounts for item \(itemId): \(error)")
+            Logger.error("BankError fetching accounts for item \(itemId): \(error)")
             throw error
         } catch {
-            print("❌ BankDataManager: Unknown error fetching accounts for item \(itemId): \(error)")
+            Logger.error("Unknown error fetching accounts for item \(itemId): \(error)")
             throw BankError.networkError
         }
     }
-    
+
     /// Connects multiple bank accounts using public tokens returned from Plaid Link
     /// - Parameter publicTokens: Array of public tokens collected from Plaid Link sessions
     /// - Parameter useSandbox: If true, uses the sandbox endpoint for testing
@@ -269,37 +205,29 @@ class BankDataManager {
         guard !publicTokens.isEmpty else {
             throw BankError.validationError([ValidationErrorDetail(loc: ["public_tokens"], msg: "No public tokens provided", type: "value_error")])
         }
-        
+
         isSyncing = true
-        
+        defer { isSyncing = false }
+
         do {
             let response: BankMultiConnectResponse
             if useSandbox {
-                // Use sandbox endpoint for testing (e.g., "continue as guest" flow)
-                response = try await bankService.createSandboxMultiItems(
-                    publicTokens: publicTokens
-                )
+                response = try await bankService.createSandboxMultiItems(publicTokens: publicTokens)
             } else {
-                // Use production endpoint
-                response = try await bankService.connectMultipleBankAccounts(
-                    publicTokens: publicTokens
-                )
+                response = try await bankService.connectMultipleBankAccounts(publicTokens: publicTokens)
             }
-            isSyncing = false
             return response
         } catch let error as BankError {
-            isSyncing = false
             syncError = error
             throw error
         } catch {
-            isSyncing = false
             syncError = .networkError
             throw BankError.networkError
         }
     }
-    
+
     // MARK: - Transaction Management
-    
+
     /// Fetches transactions from the API
     /// - Parameters:
     ///   - accountId: Optional account ID to filter transactions
@@ -312,100 +240,72 @@ class BankDataManager {
         offset: Int? = nil,
         forceRefresh: Bool = false
     ) async throws {
-        // Create cache key based on parameters
         let cacheKey = "\(accountId ?? "all")-\(limit ?? 0)-\(offset ?? 0)"
-        
-        // Check if we have valid cached data for this query
+
         if !forceRefresh,
            cacheKey == transactionsCacheKey,
            transactions != nil,
            let lastFetched = transactionsLastFetched,
            Date().timeIntervalSince(lastFetched) < cacheTTL {
-            // Return cached data
             return
         }
-        
-        guard let accessToken = tokenStorage.getAccessToken() else {
-            throw BankError.unauthorized
-        }
-        
+
         isLoadingTransactions = true
         transactionsError = nil
-        
+        defer { isLoadingTransactions = false }
+
         do {
             let fetchedTransactions = try await bankService.getTransactions(
                 accountId: accountId,
                 limit: limit,
                 offset: offset
             )
-            
-            await MainActor.run {
-                self.transactions = fetchedTransactions
-                self.transactionsLastFetched = Date()
-                self.transactionsCacheKey = cacheKey
-                self.isLoadingTransactions = false
-            }
+
+            transactions = fetchedTransactions
+            transactionsLastFetched = Date()
+            transactionsCacheKey = cacheKey
         } catch let error as BankError {
-            await MainActor.run {
-                self.transactionsError = error
-                self.isLoadingTransactions = false
-            }
+            transactionsError = error
             throw error
         } catch {
             let bankError = BankError.networkError
-            await MainActor.run {
-                self.transactionsError = bankError
-                self.isLoadingTransactions = false
-            }
+            transactionsError = bankError
             throw bankError
         }
     }
-    
+
     // MARK: - Sync Management
-    
+
     /// Syncs bank data for a specific Plaid item
     /// - Parameter plaidItemId: The Plaid item ID to sync
     func syncBankData(plaidItemId: String) async throws {
         isSyncing = true
         syncError = nil
-        
+
         do {
-            _ = try await bankService.syncBankData(
-                plaidItemId: plaidItemId
-            )
-            
-            // After successful sync, refresh accounts and transactions
-            await MainActor.run {
-                self.isSyncing = false
-            }
-            
-            // Refresh accounts data after sync
+            _ = try await bankService.syncBankData(plaidItemId: plaidItemId)
+
+            isSyncing = false
+
             try await fetchAccounts(forceRefresh: true)
-            
-            // If we have cached transactions, refresh them too
-            // Use the same parameters as the last fetch
+
             if transactionsCacheKey != nil {
-                // Parse cache key to get original parameters (simplified - just clear and let user refetch)
                 clearTransactionsCache()
             }
         } catch let error as BankError {
-            await MainActor.run {
-                self.syncError = error
-                self.isSyncing = false
-            }
+            syncError = error
+            isSyncing = false
             throw error
         } catch {
             let bankError = BankError.networkError
-            await MainActor.run {
-                self.syncError = bankError
-                self.isSyncing = false
-            }
+            syncError = bankError
+            isSyncing = false
             throw bankError
         }
     }
-    
+
     // MARK: - Cache Management
-    
+
     /// Clears all cached data
     func clearCache() {
         accounts = nil
@@ -415,67 +315,63 @@ class BankDataManager {
         transactionsLastFetched = nil
         transactionsCacheKey = nil
     }
-    
+
     /// Clears only transaction cache
     func clearTransactionsCache() {
         transactions = nil
         transactionsLastFetched = nil
         transactionsCacheKey = nil
     }
-    
+
     /// Clears only accounts cache
     func clearAccountsCache() {
         accounts = nil
         accountsSummary = nil
         accountsLastFetched = nil
     }
-    
+
     // MARK: - Helper Methods
-    
+
     /// Gets account by ID
     func getAccount(by id: String) -> BankAccount? {
-        return accounts?.first { $0.idAccount == id }
+        accounts?.first { $0.idAccount == id }
     }
-    
+
     /// Gets transactions for a specific account
     func getTransactions(for accountId: String) -> [Transaction] {
-        return transactions?.filter { $0.accountId == accountId } ?? []
+        transactions?.filter { $0.accountId == accountId } ?? []
     }
-    
+
     /// Checks if accounts data is stale (older than cache TTL)
     var isAccountsDataStale: Bool {
         guard let lastFetched = accountsLastFetched else { return true }
         return Date().timeIntervalSince(lastFetched) >= cacheTTL
     }
-    
+
     /// Checks if transactions data is stale (older than cache TTL)
     var isTransactionsDataStale: Bool {
         guard let lastFetched = transactionsLastFetched else { return true }
         return Date().timeIntervalSince(lastFetched) >= cacheTTL
     }
-    
+
     // MARK: - Account Grouping Helpers
-    
+
     /// Groups all accounts by institution (item ID)
-    /// - Returns: Dictionary mapping item ID to array of accounts
     func accountsGroupedByInstitution() -> [String: [BankAccount]] {
         guard let linkedItems = linkedItems else { return [:] }
-        
+
         var grouped: [String: [BankAccount]] = [:]
         for item in linkedItems {
             grouped[item.itemId] = accountsByItemId[item.itemId] ?? []
         }
         return grouped
     }
-    
+
     /// Groups all accounts by account type
-    /// - Returns: Dictionary mapping account type string to array of accounts
     func accountsGroupedByType() -> [String: [BankAccount]] {
         var grouped: [String: [BankAccount]] = [:]
-        
-        // Collect all accounts from all items
         let allAccounts = accountsByItemId.values.flatMap { $0 }
-        
+
         for account in allAccounts {
             let type = account.type.lowercased()
             if grouped[type] == nil {
@@ -483,43 +379,32 @@ class BankDataManager {
             }
             grouped[type]?.append(account)
         }
-        
+
         return grouped
     }
-    
+
     /// Calculates total balance across all accounts
-    /// - Returns: Total balance as Double
     func totalBalance() -> Double {
-        let allAccounts = accountsByItemId.values.flatMap { $0 }
-        return allAccounts.reduce(0) { $0 + $1.currentBalance }
+        accountsByItemId.values.flatMap { $0 }.reduce(0) { $0 + $1.currentBalance }
     }
-    
+
     /// Gets total account count
-    /// - Returns: Total number of accounts
     func totalAccountCount() -> Int {
-        return accountsByItemId.values.flatMap { $0 }.count
+        accountsByItemId.values.flatMap { $0 }.count
     }
-    
+
     /// Gets account count for a specific type
-    /// - Parameter type: Account type string (e.g., "depository", "credit")
-    /// - Returns: Count of accounts of that type
     func accountCount(forType type: String) -> Int {
-        let allAccounts = accountsByItemId.values.flatMap { $0 }
-        return allAccounts.filter { $0.type.lowercased() == type.lowercased() }.count
+        accountsByItemId.values.flatMap { $0 }.filter { $0.type.lowercased() == type.lowercased() }.count
     }
-    
+
     /// Gets all accounts for a specific institution
-    /// - Parameter itemId: The item ID of the institution
-    /// - Returns: Array of accounts for that institution
     func accountsForInstitution(itemId: String) -> [BankAccount] {
-        return accountsByItemId[itemId] ?? []
+        accountsByItemId[itemId] ?? []
     }
-    
+
     /// Gets total balance for a specific institution
-    /// - Parameter itemId: The item ID of the institution
-    /// - Returns: Total balance for that institution
     func totalBalanceForInstitution(itemId: String) -> Double {
-        let accounts = accountsForInstitution(itemId: itemId)
-        return accounts.reduce(0) { $0 + $1.currentBalance }
+        accountsForInstitution(itemId: itemId).reduce(0) { $0 + $1.currentBalance }
     }
 }
