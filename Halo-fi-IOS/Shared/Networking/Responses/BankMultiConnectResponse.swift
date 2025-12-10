@@ -102,7 +102,7 @@ struct SandboxPublicToken: Codable {
     }
 }
 
-struct ConnectedItem: Codable {
+struct ConnectedItem: Codable, Hashable {
     let institutionId: String
     let institutionName: String
     let availableProducts: [String]?

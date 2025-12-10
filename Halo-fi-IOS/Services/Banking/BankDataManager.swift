@@ -453,5 +453,74 @@ class BankDataManager {
         guard let lastFetched = transactionsLastFetched else { return true }
         return Date().timeIntervalSince(lastFetched) >= cacheTTL
     }
+    
+    // MARK: - Account Grouping Helpers
+    
+    /// Groups all accounts by institution (item ID)
+    /// - Returns: Dictionary mapping item ID to array of accounts
+    func accountsGroupedByInstitution() -> [String: [BankAccount]] {
+        guard let linkedItems = linkedItems else { return [:] }
+        
+        var grouped: [String: [BankAccount]] = [:]
+        for item in linkedItems {
+            grouped[item.itemId] = accountsByItemId[item.itemId] ?? []
+        }
+        return grouped
+    }
+    
+    /// Groups all accounts by account type
+    /// - Returns: Dictionary mapping account type string to array of accounts
+    func accountsGroupedByType() -> [String: [BankAccount]] {
+        var grouped: [String: [BankAccount]] = [:]
+        
+        // Collect all accounts from all items
+        let allAccounts = accountsByItemId.values.flatMap { $0 }
+        
+        for account in allAccounts {
+            let type = account.type.lowercased()
+            if grouped[type] == nil {
+                grouped[type] = []
+            }
+            grouped[type]?.append(account)
+        }
+        
+        return grouped
+    }
+    
+    /// Calculates total balance across all accounts
+    /// - Returns: Total balance as Double
+    func totalBalance() -> Double {
+        let allAccounts = accountsByItemId.values.flatMap { $0 }
+        return allAccounts.reduce(0) { $0 + $1.currentBalance }
+    }
+    
+    /// Gets total account count
+    /// - Returns: Total number of accounts
+    func totalAccountCount() -> Int {
+        return accountsByItemId.values.flatMap { $0 }.count
+    }
+    
+    /// Gets account count for a specific type
+    /// - Parameter type: Account type string (e.g., "depository", "credit")
+    /// - Returns: Count of accounts of that type
+    func accountCount(forType type: String) -> Int {
+        let allAccounts = accountsByItemId.values.flatMap { $0 }
+        return allAccounts.filter { $0.type.lowercased() == type.lowercased() }.count
+    }
+    
+    /// Gets all accounts for a specific institution
+    /// - Parameter itemId: The item ID of the institution
+    /// - Returns: Array of accounts for that institution
+    func accountsForInstitution(itemId: String) -> [BankAccount] {
+        return accountsByItemId[itemId] ?? []
+    }
+    
+    /// Gets total balance for a specific institution
+    /// - Parameter itemId: The item ID of the institution
+    /// - Returns: Total balance for that institution
+    func totalBalanceForInstitution(itemId: String) -> Double {
+        let accounts = accountsForInstitution(itemId: itemId)
+        return accounts.reduce(0) { $0 + $1.currentBalance }
+    }
 }
 

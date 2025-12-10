@@ -17,3 +17,4 @@ struct BankSyncResponse: Codable {
 }
 
 
+

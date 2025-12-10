@@ -7,52 +7,55 @@
 
 import SwiftUI
 
+enum AccountViewMode {
+  case institutions
+  case accountTypes
+}
+
 struct AccountsOverviewView: View {
-  @Environment(\.presentationMode) var presentationMode
+  @Environment(BankDataManager.self) private var bankDataManager
   @State private var showingPlaidOnboarding = false
+  @State private var viewMode: AccountViewMode = .institutions
+  @State private var isLoadingLinkedItems = false
+  @State private var isLoadingAccounts = false
+  @State private var selectedItemId: String?
+  @State private var hasAppeared = false
+  @State private var navigationPath = NavigationPath()
   
   var body: some View {
-    NavigationView {
+    NavigationStack(path: $navigationPath) {
       ZStack {
         Color.black.ignoresSafeArea()
         
-        VStack(spacing: 16) {
-          // Navigation bar
-          HStack {
-            Text("Accounts")
-              .font(.largeTitle)
-              .fontWeight(.heavy)
-              .foregroundColor(.white)
-              .padding(.vertical, 8)
-              .accessibilityAddTraits(.isHeader)
+        ScrollView {
+          VStack(spacing: 20) {
+
+            // Summary Section
+            if hasData {
+              summarySection
+            }
             
-            Spacer()
-          }
-          .padding(.horizontal, 20)
-          .padding(.bottom, 10)
-          
-          // Large horizontal navigation buttons
-          VStack(spacing: 12) {
-            NavigationLink(destination: AccountTypeNavigationView(accountType: .checking)) {
-              LargeNavButton(title: "Checking Accounts", icon: "house.fill", tileColor: Color.gray.opacity(0.7))
+            // Filter Toggle
+            if hasData {
+              filterToggleSection
             }
-            NavigationLink(destination: AccountTypeNavigationView(accountType: .savings)) {
-              LargeNavButton(title: "Savings Accounts", icon: "creditcard.fill", tileColor: Color.purple.opacity(0.8))
-            }
-            NavigationLink(destination: AccountTypeNavigationView(accountType: .creditCard)) {
-              LargeNavButton(title: "Credit Cards", icon: "creditcard.fill", tileColor: Color.blue)
-            }
-            NavigationLink(destination: AccountTypeNavigationView(accountType: .investment)) {
-              LargeNavButton(title: "Investments", icon: "chart.line.uptrend.xyaxis", tileColor: Color.blue.opacity(0.9))
-            }
-            NavigationLink(destination: AccountTypeNavigationView(accountType: .loan)) {
-              LargeNavButton(title: "My Loans", icon: "house.fill", tileColor: Color.teal)
+            
+            // Content based on view mode
+            if isLoadingLinkedItems && !hasAppeared {
+              loadingView
+            } else if hasData {
+              contentView
+            } else {
+              emptyStateView
             }
           }
           .padding(.horizontal, 20)
-          .padding(.bottom, 20)
+          .padding(.top, 20)
+          .padding(.bottom, 100)
         }
       }
+      .navigationTitle("Accounts")
+      .navigationBarTitleDisplayMode(.large)
       .toolbar {
         ToolbarItem(placement: .navigationBarTrailing) {
           Button {
@@ -64,14 +67,273 @@ struct AccountsOverviewView: View {
           .accessibilityHint("Connect a new bank account")
         }
       }
+      .onAppear {
+        if !hasAppeared {
+          hasAppeared = true
+          Task {
+            await loadInitialData()
+          }
+        }
+      }
+      .sheet(isPresented: $showingPlaidOnboarding) {
+        PlaidOnboardingView()
+      }
+      .navigationDestination(for: ConnectedItem.self) { item in
+        InstitutionAccountsView(item: item)
+      }
     }
-    .navigationBarHidden(true)
-    .sheet(isPresented: $showingPlaidOnboarding) {
-      PlaidOnboardingView()
+  }
+  
+  // MARK: - Summary Section
+  
+  private var summarySection: some View {
+    let totalBalance = bankDataManager.totalBalance()
+    let accountCount = bankDataManager.totalAccountCount()
+    let currency = bankDataManager.accountsByItemId.values.flatMap { $0 }.first?.currency ?? "USD"
+    
+    return VStack(spacing: 12) {
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Total Balance")
+            .font(.subheadline)
+            .foregroundColor(.gray)
+            .accessibilityAddTraits(.isHeader)
+          
+          Text(formatCurrency(totalBalance, currency: currency))
+            .font(.title)
+            .fontWeight(.bold)
+            .foregroundColor(.white)
+            .accessibilityLabel("Total balance, \(formatCurrency(totalBalance, currency: currency))")
+        }
+        
+        Spacer()
+        
+        VStack(alignment: .trailing, spacing: 4) {
+          Text("Accounts")
+            .font(.subheadline)
+            .foregroundColor(.gray)
+            .accessibilityAddTraits(.isHeader)
+          
+          Text("\(accountCount)")
+            .font(.title)
+            .fontWeight(.bold)
+            .foregroundColor(.white)
+            .accessibilityLabel("\(accountCount) account\(accountCount == 1 ? "" : "s")")
+        }
+      }
+      .padding(20)
+      .background(Color.gray.opacity(0.1))
+      .cornerRadius(16)
     }
+  }
+  
+  // MARK: - Filter Toggle Section
+  
+  private var filterToggleSection: some View {
+    Picker("View Mode", selection: $viewMode) {
+      Text("By Institution").tag(AccountViewMode.institutions)
+        .accessibilityLabel("View accounts by institution")
+      Text("By Type").tag(AccountViewMode.accountTypes)
+        .accessibilityLabel("View accounts by type")
+    }
+    .pickerStyle(.segmented)
+    .accessibilityLabel("Account view mode")
+    .accessibilityHint("Switch between viewing accounts by institution or by account type")
+  }
+  
+  // MARK: - Content View
+  
+  @ViewBuilder
+  private var contentView: some View {
+    switch viewMode {
+    case .institutions:
+      institutionsView
+    case .accountTypes:
+      accountTypesView
+    }
+  }
+  
+  // MARK: - Institutions View
+  
+  private var institutionsView: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      if let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty {
+        Text("Linked Institutions")
+          .font(.headline)
+          .foregroundColor(.gray)
+          .accessibilityAddTraits(.isHeader)
+          .padding(.top, 8)
+        
+        ForEach(linkedItems, id: \.itemId) { item in
+          NavigationLink(value: item) {
+            AccessibleInstitutionCard(
+              item: item,
+              accounts: bankDataManager.accountsByItemId[item.itemId],
+              isLoading: isLoadingAccounts && selectedItemId == item.itemId
+            )
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    }
+  }
+  
+  // MARK: - Account Types View
+  
+  private var accountTypesView: some View {
+    AccountTypeFilterView(
+      accountsByType: bankDataManager.accountsGroupedByType()
+    )
+  }
+  
+  // MARK: - Loading View
+  
+  private var loadingView: some View {
+    VStack(spacing: 16) {
+      ProgressView()
+        .scaleEffect(1.2)
+        .accessibilityLabel("Loading accounts")
+      
+      Text("Loading accounts...")
+        .font(.body)
+        .foregroundColor(.gray)
+        .accessibilityLabel("Loading accounts, please wait")
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 40)
+  }
+  
+  // MARK: - Empty State View
+  
+  private var emptyStateView: some View {
+    VStack(spacing: 16) {
+      Image(systemName: "building.2")
+        .font(.system(size: 48))
+        .foregroundColor(.gray.opacity(0.5))
+        .accessibilityHidden(true)
+      
+      Text("No Accounts Linked")
+        .font(.headline)
+        .foregroundColor(.white)
+        .accessibilityAddTraits(.isHeader)
+      
+      Text("Connect your bank accounts to get started")
+        .font(.subheadline)
+        .foregroundColor(.gray)
+        .multilineTextAlignment(.center)
+        .accessibilityLabel("No accounts linked. Connect your bank accounts to get started.")
+      
+      Button {
+        showingPlaidOnboarding = true
+      } label: {
+        HStack {
+          Image(systemName: "plus.circle.fill")
+            .accessibilityHidden(true)
+          Text("Link New Account")
+        }
+        .font(.body)
+        .fontWeight(.semibold)
+        .foregroundColor(.white)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
+        .cornerRadius(12)
+      }
+      .accessibilityLabel("Link new account")
+      .accessibilityHint("Double tap to connect a new bank account")
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 40)
+  }
+  
+  // MARK: - Computed Properties
+  
+  private var hasData: Bool {
+    guard let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty else {
+      return false
+    }
+    return true
+  }
+  
+  // MARK: - Data Loading
+  
+  private func loadInitialData() async {
+    isLoadingLinkedItems = true
+    
+    do {
+      // Fetch linked items if we don't have them
+      if bankDataManager.linkedItems == nil {
+        // Try to fetch accounts which may trigger linked items fetch
+        // For now, we'll rely on the linkedItems being set during onboarding
+        // If they're not set, we'll show empty state
+        print("🔵 AccountsOverviewView: Checking for linked items")
+      }
+      
+      // If we have linked items but no accounts loaded, fetch accounts for the first item
+      if let linkedItems = bankDataManager.linkedItems,
+         !linkedItems.isEmpty,
+         bankDataManager.accountsByItemId.isEmpty {
+        // Load accounts for the first institution to show summary
+        let firstItem = linkedItems[0]
+        if bankDataManager.accountsByItemId[firstItem.itemId] == nil {
+          await fetchAccountsForItem(firstItem)
+        }
+      }
+      
+      await MainActor.run {
+        isLoadingLinkedItems = false
+      }
+    } catch {
+      await MainActor.run {
+        isLoadingLinkedItems = false
+        print("❌ AccountsOverviewView: Error loading data: \(error)")
+        // Errors are now handled in InstitutionAccountsView, not here
+      }
+    }
+  }
+  
+  private func fetchAccountsForItem(_ item: ConnectedItem) async {
+    guard !isLoadingAccounts else { return }
+    
+    if bankDataManager.accountsByItemId[item.itemId] != nil {
+      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.itemId)")
+      return
+    }
+    
+    selectedItemId = item.itemId
+    isLoadingAccounts = true
+    
+    do {
+      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
+      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
+      
+      await MainActor.run {
+        bankDataManager.accountsByItemId[item.itemId] = response.accounts
+        isLoadingAccounts = false
+        selectedItemId = nil
+        print("✅ AccountsOverviewView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
+      }
+    } catch {
+      await MainActor.run {
+        isLoadingAccounts = false
+        selectedItemId = nil
+        print("❌ AccountsOverviewView: Error fetching accounts: \(error)")
+        // Errors are now handled in InstitutionAccountsView, not here
+      }
+    }
+  }
+  
+  // MARK: - Helper Methods
+  
+  private func formatCurrency(_ amount: Double, currency: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.currencyCode = currency
+    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 
 #Preview {
   AccountsOverviewView()
+    .environment(BankDataManager())
 }
