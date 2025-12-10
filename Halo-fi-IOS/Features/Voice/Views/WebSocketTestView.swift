@@ -10,7 +10,7 @@ import SwiftUI
 #if DEBUG
 
 struct WebSocketTestView: View {
-  @ObservedObject private var testManager = WebSocketTestManager.shared
+  private let testManager = WebSocketTestManager.shared
   @State private var testMessage = "Hello, Echo Server!"
   @State private var selectedServer: WebSocketTestServer = .echoWebSocketOrg
   

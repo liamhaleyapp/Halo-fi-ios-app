@@ -7,31 +7,34 @@
 
 import Foundation
 
+@Observable
 @MainActor
-class AgentWebSocketManager: ObservableObject {
+final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     static let shared = AgentWebSocketManager()
-    
-    @Published var isConnected = false
-    @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var lastAgentResponse: String?
-    @Published var lastError: String?
-    @Published var currentSessionId: String?
-    @Published var streamingText: String = ""
-    @Published var isStreaming: Bool = false
-    @Published var connectionAckMessage: String?
-    
+
+    var isConnected = false
+    var connectionStatus: ConnectionStatus = .disconnected
+    var lastAgentResponse: String?
+    var lastError: String?
+    var currentSessionId: String?
+    var streamingText: String = ""
+    var isStreaming: Bool = false
+    var connectionAckMessage: String?
+
     private var webSocketConnection: WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>?
     private let baseURL = "wss://halofiapp-production.up.railway.app"
-    private let tokenStorage = TokenStorage()
+    private let tokenStorage: TokenStorageProtocol
     private var sessionId: String?
-    
+
     // Callbacks for handling different message types
     var onAgentResponse: ((AgentResponsePayload) -> Void)?
     var onStreamChunk: ((StreamChunkPayload) -> Void)?
     var onError: ((ErrorPayload) -> Void)?
     var onConnectionAck: ((ConnectionAckPayload) -> Void)?
-    
-    private init() {}
+
+    private init(tokenStorage: TokenStorageProtocol = TokenStorage()) {
+        self.tokenStorage = tokenStorage
+    }
     
     // MARK: - Connection Management
     
@@ -86,7 +89,7 @@ class AgentWebSocketManager: ObservableObject {
                 await handleIncomingMessage(message)
             }
         } catch {
-            print("Agent WebSocket listening error: \(error)")
+            Logger.error("Agent WebSocket listening error: \(error)")
             await MainActor.run {
                 connectionStatus = .disconnected
                 isConnected = false
@@ -113,54 +116,54 @@ class AgentWebSocketManager: ObservableObject {
             isStreaming = false
             streamingText = ""
             lastAgentResponse = response.message
-            print("Agent Response: \(response.message)")
+            Logger.info("Agent Response: \(response.message)")
             if let data = response.data {
-                print("Response data: \(data)")
+                Logger.debug("Response data: \(data)")
             }
         }
         onAgentResponse?(response)
     }
-    
+
     private func handleStreamChunk(_ chunk: StreamChunkPayload) async {
         await MainActor.run {
             isStreaming = true
             streamingText += chunk.chunk
-            print("Stream chunk: \(chunk.chunk)")
+            Logger.debug("Stream chunk: \(chunk.chunk)")
         }
         onStreamChunk?(chunk)
-        
+
         // If this is the final chunk, we can process the complete message
         if chunk.complete == true {
             await MainActor.run {
                 isStreaming = false
                 lastAgentResponse = streamingText
                 streamingText = ""
-                print("Stream complete")
+                Logger.debug("Stream complete")
             }
         }
     }
-    
+
     private func handleError(_ error: ErrorPayload) async {
         await MainActor.run {
             lastError = "\(error.error) (Code: \(error.code))"
-            print("Agent Error: \(error.error) (Code: \(error.code))")
+            Logger.error("Agent Error: \(error.error) (Code: \(error.code))")
             if let details = error.details {
-                print("Error details: \(details)")
+                Logger.error("Error details: \(details)")
             }
         }
         onError?(error)
     }
-    
+
     private func handleConnectionAck(_ ack: ConnectionAckPayload) async {
         await MainActor.run {
             currentSessionId = ack.sessionId
             connectionAckMessage = "\(ack.message) - Session: \(ack.sessionId ?? "none")"
-            print("Connection acknowledged: \(ack.message)")
+            Logger.info("Connection acknowledged: \(ack.message)")
             if let sessionId = ack.sessionId {
-                print("Session ID: \(sessionId)")
+                Logger.debug("Session ID: \(sessionId)")
             }
             if let userId = ack.userId {
-                print("User ID: \(userId)")
+                Logger.debug("User ID: \(userId)")
             }
         }
         onConnectionAck?(ack)

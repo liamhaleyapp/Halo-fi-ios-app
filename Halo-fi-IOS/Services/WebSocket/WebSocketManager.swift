@@ -8,18 +8,19 @@
 import Foundation
 import Network
 
+@Observable
 @MainActor
-class WebSocketManager: ObservableObject {
+final class WebSocketManager: VoiceWebSocketManagerProtocol {
     static let shared = WebSocketManager()
-    
-    @Published var isConnected = false
-    @Published var connectionStatus: ConnectionStatus = .disconnected
-    
+
+    var isConnected = false
+    var connectionStatus: ConnectionStatus = .disconnected
+
     private var webSocketConnection: WebSocketConnection<VoiceIncomingMessage, VoiceOutgoingMessage>?
     private let baseURL = "wss://halofiapp-production.up.railway.app/ws/voice"
     private var sessionId: String = ""
     private var userId: String = ""
-    
+
     private init() {}
     
     // MARK: - Connection Management
@@ -65,7 +66,7 @@ class WebSocketManager: ObservableObject {
                 await handleIncomingMessage(message)
             }
         } catch {
-            print("WebSocket listening error: \(error)")
+            Logger.error("WebSocket listening error: \(error)")
             await MainActor.run {
                 connectionStatus = .disconnected
                 isConnected = false
@@ -85,36 +86,33 @@ class WebSocketManager: ObservableObject {
     }
     
     private func handleVoiceResponse(_ response: VoiceResponseMessage) async {
-        // Handle AI voice response
-        print("Received voice response: \(response)")
-        
-        // TODO: Play audio response if audioData is present
+        Logger.debug("Received voice response: \(response)")
+
+        // Play audio response if audioData is present
         if let audioDataString = response.audioData,
            let audioData = Data(base64Encoded: audioDataString) {
-            // Play the audio response
             await playAudioData(audioData)
         }
-        
-        // TODO: Update UI with text response if present
+
+        // Log text response if present
         if let text = response.text {
-            print("AI Response: \(text)")
+            Logger.info("AI Response: \(text)")
         }
     }
-    
+
     private func handleVoiceError(_ error: VoiceErrorMessage) async {
-        print("Voice error: \(error.error) (Code: \(error.code))")
-        // TODO: Handle error appropriately
+        Logger.error("Voice error: \(error.error) (Code: \(error.code))")
     }
-    
+
     private func handlePong(_ pong: VoicePongMessage) async {
-        print("Received pong: \(pong.timestamp)")
+        Logger.debug("Received pong: \(pong.timestamp)")
     }
-    
+
     // MARK: - Audio Handling
-    
+
     private func playAudioData(_ audioData: Data) async {
         // TODO: Implement audio playback
-        print("Playing audio data of size: \(audioData.count) bytes")
+        Logger.debug("Playing audio data of size: \(audioData.count) bytes")
     }
     
     // MARK: - Sending Messages

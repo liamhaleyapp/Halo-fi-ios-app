@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AgentChatView: View {
-  @ObservedObject private var agentManager = AgentWebSocketManager.shared
+  private let agentManager = AgentWebSocketManager.shared
   @State private var messageText = ""
   @State private var messages: [ChatMessage] = []
   @State private var showingError = false

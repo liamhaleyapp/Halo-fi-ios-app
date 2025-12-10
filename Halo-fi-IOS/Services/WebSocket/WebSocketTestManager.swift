@@ -81,18 +81,19 @@ private final class TestWebSocketConnection: NSObject, Sendable {
 
 // MARK: - WebSocket Test Manager
 
+@Observable
 @MainActor
-class WebSocketTestManager: ObservableObject {
+final class WebSocketTestManager {
     static let shared = WebSocketTestManager()
-    
-    @Published var isConnected = false
-    @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var lastReceivedMessage: String = ""
-    @Published var testLogs: [String] = []
-    
+
+    var isConnected = false
+    var connectionStatus: ConnectionStatus = .disconnected
+    var lastReceivedMessage: String = ""
+    var testLogs: [String] = []
+
     private var webSocketConnection: TestWebSocketConnection?
     private var currentTestServer: WebSocketTestServer?
-    
+
     private init() {}
     
     // MARK: - Test Connection Methods
