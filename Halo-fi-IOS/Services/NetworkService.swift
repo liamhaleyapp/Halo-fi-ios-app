@@ -8,270 +8,197 @@
 import Foundation
 
 // MARK: - Network Service
-class NetworkService {
+
+final class NetworkService {
     static let shared = NetworkService()
-    
-    private let baseURL = "https://halofiapp-production.up.railway.app"
-    private let session = URLSession.shared
-    private let tokenStorage = TokenStorage()
-    
-    private init() {}
-    
+
+    private let baseURL: String
+    private let session: URLSession
+    private let tokenStorage: TokenStorage
+
+    init(
+        baseURL: String = "https://halofiapp-production.up.railway.app",
+        session: URLSession = .shared,
+        tokenStorage: TokenStorage = TokenStorage()
+    ) {
+        self.baseURL = baseURL
+        self.session = session
+        self.tokenStorage = tokenStorage
+    }
+
     // MARK: - Authenticated Requests
-    
+
     func authenticatedRequest<T: Codable>(
         endpoint: String,
         method: HTTPMethod = .GET,
         body: Data? = nil,
         responseType: T.Type
     ) async throws -> T {
-        let request = try await createAuthenticatedRequest(
+        let request = try createAuthenticatedRequest(
             endpoint: endpoint,
             method: method,
             body: body
         )
-        
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ NetworkService: Invalid HTTP response")
+            Logger.error("Invalid HTTP response")
             throw AuthError.networkError
         }
-        
-        print("🔵 NetworkService: Received response")
-        print("   Status code: \(httpResponse.statusCode)")
-        print("   Response headers: \(httpResponse.allHeaderFields)")
-        print("   Response data size: \(data.count) bytes")
-        
-        if let responseString = String(data: data, encoding: .utf8) {
-            print("   Response body: \(responseString)")
-        }
-        
-        // Handle token expiration
+
+        Logger.networkResponse(statusCode: httpResponse.statusCode, dataSize: data.count)
+
         if httpResponse.statusCode == 401 {
-            print("❌ NetworkService: 401 Unauthorized - Token expired or invalid")
-            // TODO: Implement token refresh when endpoint is available
-            // For now, just throw token expired error
+            Logger.error("401 Unauthorized - Token expired or invalid")
             throw AuthError.tokenExpired
         }
-        
-        // Accept both 200 (OK) and 201 (Created) as success status codes
-        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-            // Handle empty responses (e.g., 201 Created with no body)
-            if data.isEmpty {
-                // Try to decode from empty JSON object
-                let emptyJSON = "{}".data(using: .utf8)!
-                return try JSONDecoder().decode(T.self, from: emptyJSON)
-            }
-            return try JSONDecoder().decode(T.self, from: data)
-        } else {
-            print("❌ NetworkService: Request failed with status code \(httpResponse.statusCode)")
-            
-            // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
-            if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
-                print("   Attempting to parse error response...")
-                
-                // First, try to parse as ValidationError (array format)
-                if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
-                    print("   Parsed as ValidationError: \(validationError.detail)")
-                    throw AuthError.validationError(validationError.detail)
-                }
-                
-                // If that fails, try to parse as SimpleErrorResponse (string detail format)
-                if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
-                    print("   Parsed as SimpleErrorResponse: \(simpleError.detail)")
-                    throw AuthError.serverError(httpResponse.statusCode, simpleError.detail)
-                }
-                
-                // If both fail, try to extract detail from raw JSON
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("   Raw JSON response: \(json)")
-                    if let detail = json["detail"] as? String {
-                        print("   Extracted detail: \(detail)")
-                        throw AuthError.serverError(httpResponse.statusCode, detail)
-                    }
-                }
-                
-                // Fallback for 422 - validation error with empty details
-                if httpResponse.statusCode == 422 {
-                    print("   422 with no parseable error details")
-                    throw AuthError.validationError([])
-                }
-            }
-            
-            // For other error codes, try to extract detail message if available
-            var errorDetail: String?
-            if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
-                errorDetail = simpleError.detail
-            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let detail = json["detail"] as? String {
-                errorDetail = detail
-            }
-            
-            print("   Final error detail: \(errorDetail ?? "nil")")
-            throw AuthError.serverError(httpResponse.statusCode, errorDetail)
-        }
+
+        return try handleResponse(data: data, httpResponse: httpResponse, responseType: T.self)
     }
-    
+
     // MARK: - Public Requests (No Authentication)
-    
+
     func publicRequest<T: Codable>(
         endpoint: String,
         method: HTTPMethod = .GET,
         body: Data? = nil,
         responseType: T.Type
     ) async throws -> T {
-        let url = URL(string: "\(baseURL)\(endpoint)")!
-        
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw AuthError.networkError
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         if let body = body {
             request.httpBody = body
         }
-        
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AuthError.networkError
         }
-        
-        // Accept 200 (OK), 201 (Created), and 204 (No Content) as success status codes
-        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 || httpResponse.statusCode == 204 {
-            // Handle empty responses (e.g., 201 Created or 204 No Content with no body)
-            if data.isEmpty {
-                // Try to decode from empty JSON object
-                let emptyJSON = "{}".data(using: .utf8)!
-                return try JSONDecoder().decode(T.self, from: emptyJSON)
-            }
-            return try JSONDecoder().decode(T.self, from: data)
-        } else {
-            // Try to parse error responses (400 Bad Request or 422 Unprocessable Entity)
-            if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
-                // First, try to parse as ValidationError (array format)
-                if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
-                    throw AuthError.validationError(validationError.detail)
-                }
-                
-                // If that fails, try to parse as SimpleErrorResponse (string detail format)
-                if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
-                    throw AuthError.serverError(httpResponse.statusCode, simpleError.detail)
-                }
-                
-                // If both fail, try to extract detail from raw JSON
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let detail = json["detail"] as? String {
-                    throw AuthError.serverError(httpResponse.statusCode, detail)
-                }
-                
-                // Fallback for 422 - validation error with empty details
-                if httpResponse.statusCode == 422 {
-                    throw AuthError.validationError([])
-                }
-            }
-            
-            // For other error codes, try to extract detail message if available
-            var errorDetail: String?
-            if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
-                errorDetail = simpleError.detail
-            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let detail = json["detail"] as? String {
-                errorDetail = detail
-            }
-            
-            throw AuthError.serverError(httpResponse.statusCode, errorDetail)
-        }
+
+        return try handleResponse(data: data, httpResponse: httpResponse, responseType: T.self)
     }
-    
-    // MARK: - Private Methods
-    
+
+    // MARK: - Response Handling
+
+    private func handleResponse<T: Codable>(
+        data: Data,
+        httpResponse: HTTPURLResponse,
+        responseType: T.Type
+    ) throws -> T {
+        let statusCode = httpResponse.statusCode
+
+        // Success: 200 OK, 201 Created, 204 No Content
+        if (200...204).contains(statusCode) {
+            return try decodeSuccessResponse(data: data, responseType: T.self)
+        }
+
+        // Error response
+        throw parseErrorResponse(data: data, statusCode: statusCode)
+    }
+
+    private func decodeSuccessResponse<T: Codable>(data: Data, responseType: T.Type) throws -> T {
+        if data.isEmpty {
+            let emptyJSON = Data("{}".utf8)
+            return try JSONDecoder().decode(T.self, from: emptyJSON)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func parseErrorResponse(data: Data, statusCode: Int) -> AuthError {
+        // Handle validation errors (400, 422)
+        if statusCode == 400 || statusCode == 422 {
+            if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                Logger.debug("Validation error: \(validationError.detail.map { $0.msg }.joined(separator: ", "))")
+                return .validationError(validationError.detail)
+            }
+
+            if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+                Logger.debug("Simple error: \(simpleError.detail)")
+                return .serverError(statusCode, simpleError.detail)
+            }
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let detail = json["detail"] as? String {
+                Logger.debug("JSON error detail: \(detail)")
+                return .serverError(statusCode, detail)
+            }
+
+            if statusCode == 422 {
+                return .validationError([])
+            }
+        }
+
+        // Extract detail from other error responses
+        let errorDetail = extractErrorDetail(from: data)
+        Logger.error("Request failed: status=\(statusCode), detail=\(errorDetail ?? "none")")
+        return .serverError(statusCode, errorDetail)
+    }
+
+    private func extractErrorDetail(from data: Data) -> String? {
+        if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
+            return simpleError.detail
+        }
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let detail = json["detail"] as? String {
+            return detail
+        }
+
+        return nil
+    }
+
+    // MARK: - Request Creation
+
     private func createAuthenticatedRequest(
         endpoint: String,
         method: HTTPMethod,
         body: Data?
-    ) async throws -> URLRequest {
+    ) throws -> URLRequest {
         guard let accessToken = tokenStorage.getAccessToken() else {
-            print("❌ NetworkService: No access token found in TokenStorage")
+            Logger.error("No access token found")
             throw AuthError.tokenExpired
         }
-        
-        print("🔵 NetworkService: Creating authenticated request")
-        print("   Endpoint: \(endpoint)")
-        print("   Method: \(method.rawValue)")
-        print("   Token exists: ✅")
-        print("   Token length: \(accessToken.count) characters")
-        print("   Token prefix: \(accessToken.prefix(20))...")
-        
-        let url = URL(string: "\(baseURL)\(endpoint)")!
-        print("   Full URL: \(url.absoluteString)")
-        
+
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw AuthError.networkError
+        }
+
+        Logger.networkRequest(endpoint: endpoint, method: method.rawValue, hasToken: true)
+
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
-        print("   Authorization header set: ✅")
-        print("   Authorization header prefix: Bearer \(accessToken.prefix(20))...")
-        
+
         if let body = body {
             request.httpBody = body
-            print("   Request body size: \(body.count) bytes")
-        } else {
-            print("   Request body: nil")
         }
-        
+
         return request
     }
-    
-    // TODO: Implement when refresh token endpoint is available
+
+    // MARK: - Token Refresh (Not Implemented)
+
     private func refreshTokenAndRetry(refreshToken: String) async throws {
-        throw AuthError.serverError(501, "Token refresh not implemented") // Not implemented
-    }
-    
-    // MARK: - Security Helpers
-    
-    /// Sanitizes error response data to remove sensitive information before logging
-    /// SECURITY: Removes tokens, passwords, and other sensitive fields from error logs
-    private func sanitizeErrorResponse(_ data: Data) -> String? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // If not JSON, return truncated string (max 200 chars)
-            if let string = String(data: data, encoding: .utf8) {
-                return String(string.prefix(200))
-            }
-            return nil
-        }
-        
-        var sanitized = json
-        
-        // Remove sensitive fields
-        let sensitiveKeys = [
-            "access_token", "refresh_token", "token", "public_token", "link_token",
-            "password", "password_hash", "api_key", "secret", "authorization",
-            "account_number", "routing_number", "ssn", "social_security"
-        ]
-        
-        for key in sensitiveKeys {
-            sanitized.removeValue(forKey: key)
-            sanitized.removeValue(forKey: key.capitalized)
-            sanitized.removeValue(forKey: key.uppercased())
-        }
-        
-        // Convert back to JSON string
-        if let sanitizedData = try? JSONSerialization.data(withJSONObject: sanitized, options: .prettyPrinted),
-           let sanitizedString = String(data: sanitizedData, encoding: .utf8) {
-            return sanitizedString
-        }
-        
-        return nil
+        // TODO: Implement when refresh token endpoint is available
+        throw AuthError.notImplemented
     }
 }
 
 // MARK: - HTTP Method Enum
+
 enum HTTPMethod: String {
-    case GET = "GET"
-    case POST = "POST"
-    case PUT = "PUT"
-    case DELETE = "DELETE"
-    case PATCH = "PATCH"
+    case GET
+    case POST
+    case PUT
+    case DELETE
+    case PATCH
 }
