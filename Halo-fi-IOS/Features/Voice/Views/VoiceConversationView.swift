@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct VoiceConversationView: View {
-  @Environment(\.presentationMode) var presentationMode
+  @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
-  @StateObject private var voiceService = VoiceService.shared
+  private let voiceService = VoiceService.shared
   
   @State private var isMuted = false
   @State private var isListening = true
@@ -88,9 +88,7 @@ struct VoiceConversationView: View {
   private func handleEndCall() {
     Task {
       await disconnectFromVoiceService()
-      await MainActor.run {
-        presentationMode.wrappedValue.dismiss()
-      }
+      dismiss()
     }
   }
   

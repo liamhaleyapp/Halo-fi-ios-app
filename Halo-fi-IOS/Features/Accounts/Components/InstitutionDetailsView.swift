@@ -12,7 +12,7 @@ struct InstitutionDetailsView: View {
   let institution: FinancialInstitution
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
         

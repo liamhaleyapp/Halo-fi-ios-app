@@ -10,12 +10,12 @@ import SwiftUI
 #if DEBUG
 
 struct WebSocketTestView: View {
-  @StateObject private var testManager = WebSocketTestManager.shared
+  @ObservedObject private var testManager = WebSocketTestManager.shared
   @State private var testMessage = "Hello, Echo Server!"
   @State private var selectedServer: WebSocketTestServer = .echoWebSocketOrg
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ScrollView {
         VStack(spacing: 20) {
           // Connection Status

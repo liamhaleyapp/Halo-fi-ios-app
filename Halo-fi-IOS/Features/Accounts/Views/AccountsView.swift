@@ -233,7 +233,7 @@ struct LinkedItemCard: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 12)
-      } else if accounts != nil && accounts!.isEmpty {
+      } else if accounts?.isEmpty == true {
         // No accounts found
         HStack {
           Text("No accounts found")

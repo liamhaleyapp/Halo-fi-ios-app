@@ -130,7 +130,7 @@ struct SignUpView: View {
       SignInView()
     }
     .sheet(isPresented: $showingDatePicker) {
-      NavigationView {
+      NavigationStack {
         VStack {
           DatePicker(
             "Date of Birth",

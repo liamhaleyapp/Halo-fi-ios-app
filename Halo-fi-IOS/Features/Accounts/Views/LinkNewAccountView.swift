@@ -15,7 +15,7 @@ struct LinkNewAccountView: View {
   let popularBanks = ["Chase", "Bank of America", "Wells Fargo", "Citibank", "Capital One", "American Express"]
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
         

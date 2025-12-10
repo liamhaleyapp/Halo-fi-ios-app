@@ -54,19 +54,19 @@ struct AccountTypeListView: View {
 
 // MARK: - Preview
 #Preview("Checking Accounts") {
-  NavigationView {
+  NavigationStack {
     AccountTypeListView(accountType: .checking)
   }
 }
 
 #Preview("Credit Cards") {
-  NavigationView {
+  NavigationStack {
     AccountTypeListView(accountType: .creditCard)
   }
 }
 
 #Preview("Investments") {
-  NavigationView {
+  NavigationStack {
     AccountTypeListView(accountType: .investment)
   }
 }

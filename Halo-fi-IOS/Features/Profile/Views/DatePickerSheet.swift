@@ -10,10 +10,10 @@ import SwiftUI
 // MARK: - Date Picker Sheet
 struct DatePickerSheet: View {
   @Binding var selectedDate: Date
-  @Environment(\.presentationMode) var presentationMode
-  
+  @Environment(\.dismiss) private var dismiss
+
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
         
@@ -41,7 +41,7 @@ struct DatePickerSheet: View {
               endPoint: .trailing
             )
           ) {
-            presentationMode.wrappedValue.dismiss()
+            dismiss()
           }
           .padding(.horizontal, 20)
           .padding(.bottom, 20)

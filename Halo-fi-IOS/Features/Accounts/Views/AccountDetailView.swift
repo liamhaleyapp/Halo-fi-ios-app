@@ -160,7 +160,7 @@ struct AccountDetailView: View {
 }
 
 #Preview("Account Detail - Checking") {
-  NavigationView {
+  NavigationStack {
     AccountDetailView(account: FinancialAccount(
       id: "mock-checking-1",
       type: .checking,
@@ -173,7 +173,7 @@ struct AccountDetailView: View {
 }
 
 #Preview("Account Detail - Credit Card") {
-  NavigationView {
+  NavigationStack {
     AccountDetailView(account: FinancialAccount(
       id: "mock-credit-1",
       type: .creditCard,

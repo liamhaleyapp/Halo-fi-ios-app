@@ -29,7 +29,7 @@ struct UnifiedOnboardingFlowView: View {
   @State private var errorMessage = ""
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
         

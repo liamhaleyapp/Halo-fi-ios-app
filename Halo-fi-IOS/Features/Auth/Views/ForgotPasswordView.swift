@@ -15,7 +15,7 @@ struct ForgotPasswordView: View {
   @State private var showingSuccess = false
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
         

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AgentChatView: View {
-  @StateObject private var agentManager = AgentWebSocketManager.shared
+  @ObservedObject private var agentManager = AgentWebSocketManager.shared
   @State private var messageText = ""
   @State private var messages: [ChatMessage] = []
   @State private var showingError = false
@@ -18,7 +18,7 @@ struct AgentChatView: View {
   @State private var lastProcessedAck: String?
   
   var body: some View {
-    NavigationView {
+    NavigationStack {
       VStack(spacing: 0) {
         // Connection Status Bar
         connectionStatusBar
