@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PermissionRequestView: View {
-  @StateObject private var permissionManager = PermissionManager.shared
+  private let permissionManager = PermissionManager.shared
   @State private var isRequestingPermission = false
   @State private var showingSettingsAlert = false
   

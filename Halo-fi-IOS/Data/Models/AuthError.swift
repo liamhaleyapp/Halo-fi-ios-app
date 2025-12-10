@@ -15,7 +15,10 @@ enum AuthError: LocalizedError {
     case emailAlreadyExists
     case serverError(Int, String?)
     case tokenExpired
-    
+    case notAuthenticated
+    case invalidResponse
+    case notImplemented
+
     var errorDescription: String? {
         switch self {
         case .invalidCredentials:
@@ -36,6 +39,12 @@ enum AuthError: LocalizedError {
             return "Server error (\(code)). Please try again"
         case .tokenExpired:
             return "Your session has expired. Please sign in again"
+        case .notAuthenticated:
+            return "You must be signed in to perform this action"
+        case .invalidResponse:
+            return "Invalid response from server"
+        case .notImplemented:
+            return "This feature is not yet implemented"
         }
     }
 }

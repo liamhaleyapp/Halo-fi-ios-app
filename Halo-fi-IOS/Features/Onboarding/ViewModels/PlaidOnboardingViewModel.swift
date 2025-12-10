@@ -91,7 +91,10 @@ class PlaidOnboardingViewModel {
             case .invalidCredentials:
               errorMessage = "Invalid credentials. Please sign in again."
               shouldSignOut = true
-            case .serverError(let code):
+            case .notAuthenticated:
+              errorMessage = "You must be signed in. Please sign in again."
+              shouldSignOut = true
+            case .serverError(let code, _):
               errorMessage = "Server error (\(code)). Please try again later."
             case .networkError:
               errorMessage = "Network connection failed. Please check your internet connection."
@@ -99,6 +102,10 @@ class PlaidOnboardingViewModel {
               errorMessage = "Invalid request. Please try again."
             case .emailAlreadyExists:
               errorMessage = "An account with this email already exists."
+            case .invalidResponse:
+              errorMessage = "Invalid response from server. Please try again."
+            case .notImplemented:
+              errorMessage = "This feature is not yet available."
             case .unknownError:
               errorMessage = "An unknown error occurred. Please try again."
             }

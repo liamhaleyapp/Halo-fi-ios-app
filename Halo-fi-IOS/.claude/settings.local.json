@@ -6,7 +6,9 @@
       "Bash(find:*)",
       "Bash(tree:*)",
       "Bash(swiftlint lint:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(for dir in Banking Plaid WebSocket)",
+      "Bash(done)"
     ]
   }
 }
