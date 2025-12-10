@@ -9,12 +9,12 @@ import Foundation
 
 // MARK: - Authentication Service
 
-final class AuthService {
+final class AuthService: AuthServiceProtocol {
     static let shared = AuthService()
 
-    private let networkService: NetworkService
+    private let networkService: NetworkServiceProtocol
 
-    init(networkService: NetworkService = .shared) {
+    init(networkService: NetworkServiceProtocol = NetworkService.shared) {
         self.networkService = networkService
     }
 

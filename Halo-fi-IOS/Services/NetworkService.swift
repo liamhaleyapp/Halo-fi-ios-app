@@ -9,17 +9,17 @@ import Foundation
 
 // MARK: - Network Service
 
-final class NetworkService {
+final class NetworkService: NetworkServiceProtocol {
     static let shared = NetworkService()
 
     private let baseURL: String
     private let session: URLSession
-    private let tokenStorage: TokenStorage
+    private let tokenStorage: TokenStorageProtocol
 
     init(
         baseURL: String = "https://halofiapp-production.up.railway.app",
         session: URLSession = .shared,
-        tokenStorage: TokenStorage = TokenStorage()
+        tokenStorage: TokenStorageProtocol = TokenStorage()
     ) {
         self.baseURL = baseURL
         self.session = session

@@ -7,7 +7,7 @@
 import Foundation
 import Security
 
-struct TokenStorage {
+struct TokenStorage: TokenStorageProtocol {
   private let service = "com.halofi.ios"
   private let accessTokenAccount = "accessToken"
   private let refreshTokenAccount = "refreshToken"

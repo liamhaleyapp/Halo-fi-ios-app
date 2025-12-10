@@ -11,11 +11,13 @@ import RevenueCat
 @main
 // swiftlint:disable:next type_name
 struct Halo_fi_IOSApp: App {
-  @State private var userManager = UserManager()
+  /// Central dependency injection container - owns all services
+  @State private var container = DIContainer()
+
+  /// Services not yet in DIContainer (to be migrated)
   @State private var subscriptionService = SubscriptionService()
-  @State private var bankDataManager = BankDataManager()
   @State private var plaidManager = PlaidManager()
-  @State private var permissionManager = PermissionManager.shared
+
   @AppStorage("themeMode") private var themeMode = "System"
   
   private var preferredColorScheme: ColorScheme? {
@@ -41,16 +43,17 @@ struct Halo_fi_IOSApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
-        .environment(userManager)
+        .environment(container)
+        .environment(container.userManager)
+        .environment(container.bankDataManager)
+        .environment(container.permissionManager)
         .environment(subscriptionService)
-        .environment(bankDataManager)
         .environment(plaidManager)
-        .environment(permissionManager)
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
           Task {
-            if permissionManager.microphonePermission == .notDetermined {
-              _ = await permissionManager.requestMicrophonePermission()
+            if container.permissionManager.microphonePermission == .notDetermined {
+              _ = await container.permissionManager.requestMicrophonePermission()
             }
             await subscriptionService.initialize()
           }

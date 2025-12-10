@@ -9,42 +9,17 @@ import SwiftUI
 
 // MARK: - About Header Component
 struct AboutHeader: View {
-  let onBack: () -> Void
-  
-  var body: some View {
-    HStack {
-      Button(action: onBack) {
-        Image(systemName: "chevron.left")
-          .font(.title2)
-          .foregroundColor(.white)
-          .frame(width: 40, height: 40)
-          .background(Color.gray.opacity(0.2))
-          .clipShape(Circle())
-      }
-      
-      Spacer()
-      
-      Text("About")
-        .font(.title2)
-        .fontWeight(.semibold)
-        .foregroundColor(.white)
-      
-      Spacer()
-      
-      // Invisible spacer to center the title
-      Color.clear
-        .frame(width: 40, height: 40)
+    let onBack: () -> Void
+
+    var body: some View {
+        NavigationHeader(title: "About", onBack: onBack, style: .dark)
     }
-    .padding(.horizontal, 20)
-    .padding(.top, 20)
-    .padding(.bottom, 20)
-  }
 }
 
 // MARK: - Preview
 #Preview {
-  ZStack {
-    Color.black.ignoresSafeArea()
-    AboutHeader(onBack: {})
-  }
+    ZStack {
+        Color.black.ignoresSafeArea()
+        AboutHeader(onBack: {})
+    }
 }

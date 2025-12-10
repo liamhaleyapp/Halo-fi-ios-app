@@ -227,15 +227,7 @@ private struct AccountsPreviewSection: View {
   }
   
   private var emptyAccountsView: some View {
-    HStack {
-      Text("No accounts found")
-        .font(.caption)
-        .foregroundColor(.gray)
-      Spacer()
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 12)
-    .accessibilityLabel("No accounts found for this institution")
+    EmptyStateView.compact("No accounts found")
   }
   
   private func accountsListView(_ accounts: [BankAccount]) -> some View {

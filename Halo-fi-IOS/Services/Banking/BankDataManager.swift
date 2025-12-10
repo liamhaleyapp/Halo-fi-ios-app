@@ -41,11 +41,11 @@ final class BankDataManager {
 
     // MARK: - Dependencies
 
-    private let bankService: BankService
+    private let bankService: BankServiceProtocol
 
     // MARK: - Initialization
 
-    init(bankService: BankService = BankService.shared) {
+    init(bankService: BankServiceProtocol = BankService.shared) {
         self.bankService = bankService
     }
 

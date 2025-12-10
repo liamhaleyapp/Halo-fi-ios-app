@@ -18,8 +18,8 @@ final class UserManager {
     private let userDefaults = UserDefaults.standard
     private let userKey = "currentUser"
     private let onboardingKey = "user_onboarding_completed"
-    private let tokenStorage: TokenStorage
-    private let authService: AuthService
+    private let tokenStorage: TokenStorageProtocol
+    private let authService: AuthServiceProtocol
 
     // Onboarding state persisted independently of User object
     // This ensures onboarding status persists even when User object is refreshed from server
@@ -35,7 +35,7 @@ final class UserManager {
         }
     }
 
-    init(tokenStorage: TokenStorage = TokenStorage(), authService: AuthService = .shared) {
+    init(tokenStorage: TokenStorageProtocol = TokenStorage(), authService: AuthServiceProtocol = AuthService.shared) {
         self.tokenStorage = tokenStorage
         self.authService = authService
         loadUserFromStorage()

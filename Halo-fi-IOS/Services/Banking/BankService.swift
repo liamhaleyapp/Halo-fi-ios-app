@@ -8,10 +8,14 @@
 import Foundation
 
 // MARK: - Bank Service
-class BankService {
+final class BankService: BankServiceProtocol {
     static let shared = BankService()
-    
-    private init() {}
+
+    private let networkService: NetworkServiceProtocol
+
+    init(networkService: NetworkServiceProtocol = NetworkService.shared) {
+        self.networkService = networkService
+    }
     
     // MARK: - Connect Multiple Bank Accounts
     /// Connects multiple bank accounts using public tokens returned from Plaid Link
@@ -23,7 +27,7 @@ class BankService {
         let bodyData = try JSONEncoder().encode(requestBody)
 
         do {
-            return try await NetworkService.shared.authenticatedRequest(
+            return try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.multiConnect,
                 method: .POST,
                 body: bodyData,
@@ -44,7 +48,7 @@ class BankService {
         let bodyData = try JSONEncoder().encode(requestBody)
 
         do {
-            return try await NetworkService.shared.authenticatedRequest(
+            return try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Sandbox.createMultiItems,
                 method: .POST,
                 body: bodyData,
@@ -61,7 +65,7 @@ class BankService {
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
     func getBankAccounts() async throws -> [BankAccount] {
         do {
-            let response: BankAccountsResponse = try await NetworkService.shared.authenticatedRequest(
+            let response: BankAccountsResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.accounts,
                 method: .GET,
                 body: nil,
@@ -88,7 +92,7 @@ class BankService {
         Logger.info("Fetching accounts for item \(itemId)")
 
         do {
-            let response: ItemAccountsResponse = try await NetworkService.shared.authenticatedRequest(
+            let response: ItemAccountsResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.accountsForItem(itemId),
                 method: .GET,
                 body: nil,
@@ -142,7 +146,7 @@ class BankService {
         }
 
         do {
-            let response: TransactionsResponse = try await NetworkService.shared.authenticatedRequest(
+            let response: TransactionsResponse = try await networkService.authenticatedRequest(
                 endpoint: endpoint,
                 method: .GET,
                 body: nil,
@@ -167,7 +171,7 @@ class BankService {
         Logger.info("Syncing \(itemIds.count) items")
 
         do {
-            let response: BankSyncResponse = try await NetworkService.shared.authenticatedRequest(
+            let response: BankSyncResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.multiItemsSync,
                 method: .POST,
                 body: bodyData,
@@ -187,7 +191,7 @@ class BankService {
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
     func syncBankData(plaidItemId: String) async throws -> BankSyncResponse {
         do {
-            return try await NetworkService.shared.authenticatedRequest(
+            return try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.syncItem(plaidItemId),
                 method: .POST,
                 body: nil,
@@ -205,7 +209,7 @@ class BankService {
     func disconnectBankAccount(plaidItemId: String) async throws {
         do {
             // EmptyResponse handles DELETE operations that return no body (200/204)
-            let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
+            let _: EmptyResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.disconnect(plaidItemId),
                 method: .DELETE,
                 body: nil,
@@ -222,7 +226,7 @@ class BankService {
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
     func checkBankHealth() async throws -> BankHealthResponse {
         do {
-            return try await NetworkService.shared.authenticatedRequest(
+            return try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.health,
                 method: .GET,
                 body: nil,

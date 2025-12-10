@@ -47,22 +47,11 @@ struct AccountsView: View {
             }
           } else {
             // Empty state
-            VStack(spacing: 12) {
-              Image(systemName: "building.2")
-                .font(.system(size: 48))
-                .foregroundColor(.gray.opacity(0.5))
-              
-              Text("No linked accounts")
-                .font(.headline)
-                .foregroundColor(.gray)
-              
-              Text("Tap \"Link New Account\" to connect your bank")
-                .font(.subheadline)
-                .foregroundColor(.gray.opacity(0.7))
-                .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+            EmptyStateView(
+              icon: "building.2",
+              title: "No linked accounts",
+              message: "Tap \"Link New Account\" to connect your bank"
+            )
           }
           
           // Error message

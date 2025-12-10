@@ -198,26 +198,13 @@ struct InstitutionAccountsView: View {
   }
   
   // MARK: - Empty Accounts View
-  
+
   private var emptyAccountsView: some View {
-    VStack(spacing: 16) {
-      Image(systemName: "creditcard")
-        .font(.system(size: 48))
-        .foregroundColor(.gray.opacity(0.5))
-        .accessibilityHidden(true)
-      
-      Text("No Accounts Found")
-        .font(.headline)
-        .foregroundColor(.white)
-        .accessibilityAddTraits(.isHeader)
-      
-      Text("No accounts were found for this institution")
-        .font(.subheadline)
-        .foregroundColor(.gray)
-        .multilineTextAlignment(.center)
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 40)
+    EmptyStateView(
+      icon: "creditcard",
+      title: "No Accounts Found",
+      message: "No accounts were found for this institution"
+    )
   }
   
   // MARK: - Data Loading
