@@ -95,4 +95,3 @@ struct UserProfileData: Codable {
         case phoneConfirmed = "phone_confirmed"
     }
 }
-

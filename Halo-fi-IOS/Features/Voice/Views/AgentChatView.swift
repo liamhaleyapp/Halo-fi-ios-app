@@ -277,4 +277,3 @@ struct ChatBubble: View {
 #Preview {
   AgentChatView()
 }
-

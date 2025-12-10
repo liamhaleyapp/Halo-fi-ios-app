@@ -300,16 +300,7 @@ private struct AccountPreviewRow: View {
   }
 }
 
-// MARK: - Currency Formatter
-
-private enum CurrencyFormatter {
-  static func format(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
-  }
-}
+// Uses CurrencyFormatter from Shared/Helpers/CurrencyFormatter.swift
 
 // MARK: - Preview
 

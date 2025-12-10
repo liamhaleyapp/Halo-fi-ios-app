@@ -14,4 +14,3 @@ struct BankMultiConnectRequest: Codable {
         case publicTokens = "public_tokens"
     }
 }
-

@@ -14,4 +14,3 @@ struct SignupResponse: Codable {
     case idUser = "id_user"
   }
 }
-

@@ -155,4 +155,3 @@ class WebSocketManager: ObservableObject {
         try await connection.send(.ping(message))
     }
 }
-

@@ -100,7 +100,7 @@ class NetworkService {
             }
             
             // For other error codes, try to extract detail message if available
-            var errorDetail: String? = nil
+            var errorDetail: String?
             if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
                 errorDetail = simpleError.detail
             } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -172,7 +172,7 @@ class NetworkService {
             }
             
             // For other error codes, try to extract detail message if available
-            var errorDetail: String? = nil
+            var errorDetail: String?
             if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
                 errorDetail = simpleError.detail
             } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

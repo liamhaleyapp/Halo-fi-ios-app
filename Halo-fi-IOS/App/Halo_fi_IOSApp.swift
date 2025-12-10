@@ -9,12 +9,13 @@ import SwiftUI
 import RevenueCat
 
 @main
+// swiftlint:disable:next type_name
 struct Halo_fi_IOSApp: App {
   @State private var userManager = UserManager()
   @State private var subscriptionService = SubscriptionService()
   @State private var bankDataManager = BankDataManager()
-  @StateObject private var plaidManager = PlaidManager()
-  @StateObject private var permissionManager = PermissionManager.shared
+  @State private var plaidManager = PlaidManager()
+  @State private var permissionManager = PermissionManager.shared
   @AppStorage("themeMode") private var themeMode = "System"
   
   private var preferredColorScheme: ColorScheme? {
@@ -43,8 +44,8 @@ struct Halo_fi_IOSApp: App {
         .environment(userManager)
         .environment(subscriptionService)
         .environment(bankDataManager)
-        .environmentObject(plaidManager)
-        .environmentObject(permissionManager)
+        .environment(plaidManager)
+        .environment(permissionManager)
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
           Task {

@@ -96,7 +96,7 @@ struct InstitutionAccountsView: View {
               .font(.caption)
               .foregroundColor(.gray)
             
-            Text(formatCurrency(totalBalance, currency: currency))
+            Text(CurrencyFormatter.format(totalBalance, currency: currency))
               .font(.title3)
               .fontWeight(.bold)
               .foregroundColor(.white)
@@ -238,31 +238,22 @@ struct InstitutionAccountsView: View {
     }
     
     do {
-      print("🔵 InstitutionAccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
+      Logger.info("InstitutionAccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
       let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
       
       await MainActor.run {
         bankDataManager.accountsByItemId[item.itemId] = response.accounts
         self.accounts = response.accounts
         self.isLoadingAccounts = false
-        print("✅ InstitutionAccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
+        Logger.success("InstitutionAccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
       }
     } catch {
       await MainActor.run {
         isLoadingAccounts = false
         loadError = "Failed to load accounts: \(error.localizedDescription)"
-        print("❌ InstitutionAccountsView: Error fetching accounts: \(error)")
+        Logger.error("InstitutionAccountsView: Error fetching accounts: \(error)")
       }
     }
-  }
-  
-  // MARK: - Helper Methods
-  
-  private func formatCurrency(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 
@@ -304,10 +295,10 @@ struct BankAccountRow: View {
       Spacer()
       
       VStack(alignment: .trailing, spacing: 4) {
-        Text(formatCurrency(account.currentBalance, currency: account.currency))
+        Text(CurrencyFormatter.format(account.currentBalance, currency: account.currency))
           .font(.body)
           .foregroundColor(account.currentBalance >= 0 ? .green : .red)
-        
+
         if account.isActive {
           Text("Active")
             .font(.caption2)
@@ -324,9 +315,9 @@ struct BankAccountRow: View {
     .background(Color.gray.opacity(0.1))
     .cornerRadius(16)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(account.name), \(account.type.capitalized), ending in \(account.mask), Balance \(formatCurrency(account.currentBalance, currency: account.currency))")
+    .accessibilityLabel("\(account.name), \(account.type.capitalized), ending in \(account.mask), Balance \(CurrencyFormatter.format(account.currentBalance, currency: account.currency))")
   }
-  
+
   private func accountIcon(for type: String) -> String {
     switch type.lowercased() {
     case "depository":
@@ -340,13 +331,6 @@ struct BankAccountRow: View {
     default:
       return "wallet.pass.fill"
     }
-  }
-  
-  private func formatCurrency(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 
@@ -369,4 +353,3 @@ struct BankAccountRow: View {
     .environment(BankDataManager())
   }
 }
-

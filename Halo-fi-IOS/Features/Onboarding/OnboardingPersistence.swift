@@ -75,5 +75,3 @@ struct OnboardingPersistence {
     defaults.removeObject(forKey: Keys.subscriptionCompleted)
   }
 }
-
-

@@ -11,7 +11,7 @@ struct SubscriptionOnboardingFlowView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(SubscriptionService.self) private var subscriptionService
   @Environment(UserManager.self) private var userManager
-  var onComplete: (() -> Void)? = nil
+  var onComplete: (() -> Void)?
   var hideBackButton: Bool = false
   @State private var currentPage = 0
   @State private var showingSubscriptionView = false
@@ -104,7 +104,7 @@ struct SubscriptionOnboardingFlowView: View {
       }
       .navigationBarHidden(true)
     }
-    .onChange(of: subscriptionService.hasActiveSubscription) { oldValue, newValue in
+    .onChange(of: subscriptionService.hasActiveSubscription) { _, newValue in
       // Automatically proceed to next step when subscription becomes active
       if newValue && showingSubscriptionView {
         Task {
@@ -191,4 +191,3 @@ struct SubscriptionViewWithBack: View {
     .environment(SubscriptionService())
     .environment(UserManager())
 }
-

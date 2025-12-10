@@ -217,4 +217,3 @@ enum AgentWebSocketError: LocalizedError {
         }
     }
 }
-

@@ -10,11 +10,12 @@ import AVFoundation
 import SwiftUI
 
 @MainActor
-class PermissionManager: ObservableObject {
+@Observable
+class PermissionManager {
     static let shared = PermissionManager()
-    
-    @Published var microphonePermission: PermissionStatus = .notDetermined
-    @Published var allPermissionsGranted = false
+
+    var microphonePermission: PermissionStatus = .notDetermined
+    var allPermissionsGranted = false
     
     private init() {
         checkMicrophonePermission()
@@ -115,4 +116,3 @@ enum PermissionStatus: String, CaseIterable {
         self == .granted
     }
 }
-

@@ -59,4 +59,3 @@ struct ItemAccountsResponse: Codable {
         self.accounts = accounts
     }
 }
-

@@ -184,4 +184,3 @@ struct AccountDetailView: View {
     ))
   }
 }
-

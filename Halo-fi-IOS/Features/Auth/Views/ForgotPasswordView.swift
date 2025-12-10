@@ -96,7 +96,7 @@ struct ForgotPasswordView: View {
         showingSuccess = true
       } catch {
         // TODO: Show error message
-        print("Error resetting password: \(error)")
+        Logger.error("Error resetting password: \(error)")
       }
     }
   }

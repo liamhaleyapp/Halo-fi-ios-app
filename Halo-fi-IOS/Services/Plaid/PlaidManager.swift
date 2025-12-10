@@ -9,10 +9,11 @@ import Foundation
 import LinkKit
 
 @MainActor
-class PlaidManager: ObservableObject {
-  @Published var linkToken: String = ""
-  @Published var isCreatingLinkToken = false
-  @Published var linkHandler: Handler?
+@Observable
+class PlaidManager {
+  var linkToken: String = ""
+  var isCreatingLinkToken = false
+  var linkHandler: Handler?
   
   private let networkService = NetworkService.shared
   
@@ -21,8 +22,8 @@ class PlaidManager: ObservableObject {
 #if DEBUG
   // Sandbox direct mode: when items are created directly without Link UI
   // ⚠️ DEBUG ONLY - This code will not compile in release builds
-  @Published var sandboxResponse: BankMultiConnectResponse?
-  @Published var isSandboxDirectMode: Bool = false
+  var sandboxResponse: BankMultiConnectResponse?
+  var isSandboxDirectMode: Bool = false
   
   /// ⚠️ DEBUG ONLY - Sandbox mode configuration
   /// This flag and all sandbox code is wrapped in #if DEBUG to prevent
@@ -107,7 +108,6 @@ class PlaidManager: ObservableObject {
         
         print("✅ PlaidManager: Sandbox items created directly - proceeding without Link UI")
         print("   Onboarding will fetch accounts and complete automatically")
-        
       } catch {
         print("❌ PlaidManager: Error in sandbox mode")
         print("   Error type: \(type(of: error))")
@@ -167,7 +167,6 @@ class PlaidManager: ObservableObject {
         
         linkToken = linkResponse.linkToken
         print("✅ PlaidManager: Link token stored successfully")
-        
       } catch {
         print("❌ PlaidManager: Error creating link token")
         print("   Error type: \(type(of: error))")
@@ -198,7 +197,7 @@ class PlaidManager: ObservableObject {
       onExit(exit)
     }
     
-    configuration.onEvent = { event in
+    configuration.onEvent = { _ in
       // Handle Plaid events if needed
     }
     

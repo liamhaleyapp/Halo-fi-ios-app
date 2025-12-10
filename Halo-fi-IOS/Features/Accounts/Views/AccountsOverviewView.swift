@@ -99,11 +99,11 @@ struct AccountsOverviewView: View {
             .foregroundColor(.gray)
             .accessibilityAddTraits(.isHeader)
           
-          Text(formatCurrency(totalBalance, currency: currency))
+          Text(CurrencyFormatter.format(totalBalance, currency: currency))
             .font(.title)
             .fontWeight(.bold)
             .foregroundColor(.white)
-            .accessibilityLabel("Total balance, \(formatCurrency(totalBalance, currency: currency))")
+            .accessibilityLabel("Total balance, \(CurrencyFormatter.format(totalBalance, currency: currency))")
         }
         
         Spacer()
@@ -321,15 +321,6 @@ struct AccountsOverviewView: View {
         // Errors are now handled in InstitutionAccountsView, not here
       }
     }
-  }
-  
-  // MARK: - Helper Methods
-  
-  private func formatCurrency(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 

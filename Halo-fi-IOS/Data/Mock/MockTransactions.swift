@@ -65,10 +65,12 @@ enum MockTransactions {
     return mockTransactions.sorted { $0.transactionDate > $1.transactionDate }
   }
   
+  // swiftlint:disable large_tuple
   private static func mockTransactionFields(
     for type: AccountType,
     index i: Int
   ) -> (Double, String, String?, [String]) {
+    // swiftlint:enable large_tuple
     switch type {
     case .checking:
       if i % 3 == 0 {

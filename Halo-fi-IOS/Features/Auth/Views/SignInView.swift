@@ -142,7 +142,7 @@ struct SignInView: View {
   
   // MARK: - Debug Actions
   private func quickTestLogin() {
-    print("🚀 DEBUG: Quick test login triggered")
+    Logger.info("Quick test login triggered")
     Task {
       await MainActor.run {
         // Simulate successful login with mock data
@@ -160,7 +160,7 @@ struct SignInView: View {
   }
   
   private func mockUserLogin() {
-    print("👤 DEBUG: Mock user login triggered")
+    Logger.info("Mock user login triggered")
     Task {
       await MainActor.run {
         // Create a more detailed mock user
@@ -178,7 +178,7 @@ struct SignInView: View {
   }
   
   private func clearUserData() {
-    print("🔧 DEBUG: Clearing user data")
+    Logger.info("Clearing user data")
     Task {
       await MainActor.run {
         userManager.signOut()
@@ -192,15 +192,15 @@ struct SignInView: View {
   }
   
   // MARK: - Debug Onboarding Flow Actions
-  private func testSubscriptionFlow() {
-    print("💳 DEBUG: Testing subscription onboarding flow")
+  func testSubscriptionFlow() {
+    Logger.info("Testing subscription onboarding flow")
     // Don't set authentication - just show the flow directly
     // This allows testing without triggering navigation to main app
     showingSubscriptionOnboarding = true
   }
   
-  private func testPlaidFlow() {
-    print("🏦 DEBUG: Testing Plaid onboarding flow")
+  func testPlaidFlow() {
+    Logger.info("Testing Plaid onboarding flow")
     // Don't set authentication - just show the flow directly
     // This allows testing without triggering navigation to main app
     showingPlaidOnboarding = true

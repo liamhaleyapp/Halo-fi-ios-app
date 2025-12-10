@@ -22,7 +22,7 @@ class SignUpViewModel {
   var confirmPassword = ""
   var dateOfBirth = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
   
-  // MARK: -UI state
+  // MARK: - UI state
   
   var isLoading = false
   var errorMessage = ""
@@ -210,4 +210,3 @@ class SignUpViewModel {
     }
   }
 }
-

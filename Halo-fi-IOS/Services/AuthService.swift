@@ -141,4 +141,3 @@ class AuthService {
     throw AuthError.serverError(501, "Logout not implemented") // Not implemented
   }
 }
-

@@ -16,6 +16,7 @@ struct WhatIsHaloFiSection: View {
           .font(.headline)
           .foregroundColor(.gray)
         
+        // swiftlint:disable:next line_length
         Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
           .font(.body)
           .foregroundColor(.white)
@@ -35,6 +36,7 @@ struct OurMissionSection: View {
           .font(.headline)
           .foregroundColor(.gray)
         
+        // swiftlint:disable:next line_length
         Text("To bring visibility to personal finances through accessible and intelligent technology—empowering everyone, especially those with visual impairments.")
           .font(.body)
           .foregroundColor(.white)

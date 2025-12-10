@@ -113,7 +113,7 @@ struct AccountsView: View {
     
     // Check if we already have accounts for this item
     if bankDataManager.accountsByItemId[item.itemId] != nil {
-      print("🔵 AccountsView: Accounts already fetched for item \(item.itemId)")
+      Logger.info("AccountsView: Accounts already fetched for item \(item.itemId)")
       return
     }
     
@@ -122,21 +122,21 @@ struct AccountsView: View {
     loadError = nil
     
     do {
-      print("🔵 AccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
+      Logger.info("AccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
       let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
       
       await MainActor.run {
         bankDataManager.accountsByItemId[item.itemId] = response.accounts
         isLoadingAccounts = false
         selectedItemId = nil
-        print("✅ AccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
+        Logger.success("AccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
       }
     } catch {
       await MainActor.run {
         isLoadingAccounts = false
         selectedItemId = nil
         loadError = "Failed to load accounts: \(error.localizedDescription)"
-        print("❌ AccountsView: Error fetching accounts: \(error)")
+        Logger.error("AccountsView: Error fetching accounts: \(error)")
       }
     }
   }

@@ -66,5 +66,3 @@ import Foundation
  // - lastError: String?
  // - currentSessionId: String?
  */
-
-

@@ -15,8 +15,8 @@ struct PlaidOnboardingView: View {
   
   @State private var viewModel = PlaidOnboardingViewModel()
   
-  var onComplete: (() -> Void)? = nil
-  var onBack: (() -> Void)? = nil
+  var onComplete: (() -> Void)?
+  var onBack: (() -> Void)?
   
   init(
     onComplete: (() -> Void)? = nil,
@@ -24,7 +24,6 @@ struct PlaidOnboardingView: View {
   ) {
     self.onComplete = onComplete
     self.onBack = onBack
-    
   }
   
   var body: some View {
@@ -40,7 +39,7 @@ struct PlaidOnboardingView: View {
       }
       // Initial state - show intro and start button
       else {
-        PlaidIntroView() {
+        PlaidIntroView {
           viewModel.startPlaidFlow(
             bankDataManager: bankDataManager,
             userManager: userManager
@@ -82,7 +81,7 @@ struct PlaidOnboardingView: View {
     } message: {
       Text(viewModel.errorMessage)
     }
-    .onChange(of: viewModel.shouldSignOut) { oldValue, newValue in
+    .onChange(of: viewModel.shouldSignOut) { _, newValue in
       if newValue {
         viewModel.handleSignOut(userManager: userManager)
       }
@@ -98,4 +97,3 @@ struct PlaidOnboardingView: View {
     .environment(UserManager())
     .environment(BankDataManager())
 }
-

@@ -202,4 +202,3 @@ struct TransactionRow: View {
     .listStyle(.insetGrouped)
   }
 }
-

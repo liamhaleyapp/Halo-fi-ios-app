@@ -7,11 +7,11 @@
 import Foundation
 
 struct SignupRequest: Codable {
-  let firstName:  String
-  let lastName:   String
-  let email:      String
-  let phone:      String
-  let password:   String
+  let firstName: String
+  let lastName: String
+  let email: String
+  let phone: String
+  let password: String
   let dateOfBirth: String
   
   enum CodingKeys: String, CodingKey {

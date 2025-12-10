@@ -60,7 +60,6 @@ struct AuthFormField: View {
   }
 }
 
-
 #Preview {
   ZStack {
     Color.black.ignoresSafeArea()

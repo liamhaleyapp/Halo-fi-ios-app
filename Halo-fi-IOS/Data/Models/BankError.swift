@@ -37,4 +37,3 @@ enum BankError: LocalizedError {
         }
     }
 }
-

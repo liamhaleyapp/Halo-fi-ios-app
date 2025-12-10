@@ -23,6 +23,3 @@ struct BankAccountsResponse: Codable {
         case accounts
     }
 }
-
-
-

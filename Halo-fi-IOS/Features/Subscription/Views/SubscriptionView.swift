@@ -147,6 +147,7 @@ struct SubscriptionView: View {
         viewModel.handleCancelSubscription()
       }
     } message: {
+      // swiftlint:disable:next line_length
       Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")
     }
   }
@@ -326,7 +327,6 @@ struct SubscriptionView: View {
 }
   // MARK: - Action Buttons Section
   
-
 #Preview("Subscription – Active Pro") {
   let service = SubscriptionService.previewActivePro
   let viewModel = SubscriptionViewModel(subscriptionService: service)

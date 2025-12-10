@@ -63,7 +63,6 @@ struct VoiceConversationView: View {
     }
   }
   
-  
   // MARK: - Actions
   
   private func handleMuteToggle() {

@@ -36,4 +36,3 @@ struct UpdateUserProfileRequest: Codable {
         case phone
     }
 }
-

@@ -14,6 +14,3 @@ struct BankHealthResponse: Codable {
     let timestamp: String
     let services: [String: String]?
 }
-
-
-

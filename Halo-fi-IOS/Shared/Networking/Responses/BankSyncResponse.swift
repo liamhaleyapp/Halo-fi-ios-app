@@ -15,6 +15,3 @@ struct BankSyncResponse: Codable {
     let transactionsUpdated: Int?
     let requestId: String?
 }
-
-
-

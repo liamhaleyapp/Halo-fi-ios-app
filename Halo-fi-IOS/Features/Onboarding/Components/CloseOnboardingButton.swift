@@ -72,5 +72,3 @@ struct CloseOnboardingButton: View {
     }
   }
 }
-
-

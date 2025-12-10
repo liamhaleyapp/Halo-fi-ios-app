@@ -46,7 +46,7 @@ struct LinkController: UIViewControllerRepresentable {
                     linkViewController.view.centerXAnchor.constraint(equalTo: viewController.view.centerXAnchor),
                     linkViewController.view.centerYAnchor.constraint(equalTo: viewController.view.centerYAnchor),
                     linkViewController.view.widthAnchor.constraint(equalTo: viewController.view.widthAnchor),
-                    linkViewController.view.heightAnchor.constraint(equalTo: viewController.view.heightAnchor),
+                    linkViewController.view.heightAnchor.constraint(equalTo: viewController.view.heightAnchor)
                 ])
                 linkViewController.didMove(toParent: viewController)
             }))

@@ -11,13 +11,12 @@ struct SignUpView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
   
-  var onComplete: (() -> Void)? = nil
+  var onComplete: (() -> Void)?
   
   @State private var viewModel = SignUpViewModel()
   @State private var showingSignIn = false
   @State private var showingDatePicker = false
 
-  
   var body: some View {
     ZStack {
       // Background

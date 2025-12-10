@@ -293,7 +293,6 @@ class WebSocketTestManager: ObservableObject {
             try await Task.sleep(nanoseconds: 1_000_000_000)
             
             addLog("✅ Test suite completed successfully!")
-            
         } catch {
             addLog("❌ Test suite failed: \(error.localizedDescription)")
         }
@@ -319,4 +318,3 @@ class WebSocketTestManager: ObservableObject {
 }
 
 #endif
-

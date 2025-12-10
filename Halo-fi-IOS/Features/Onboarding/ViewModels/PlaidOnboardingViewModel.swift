@@ -26,9 +26,9 @@ class PlaidOnboardingViewModel {
   }
   
   // Callbacks (set by view)
-  var onComplete: (() -> Void)? = nil
-  var onBack: (() -> Void)? = nil
-  var onDismiss: (() -> Void)? = nil
+  var onComplete: (() -> Void)?
+  var onBack: (() -> Void)?
+  var onDismiss: (() -> Void)?
   
   let plaidManager = PlaidManager()
   var linkHandler: Handler? { plaidManager.linkHandler }
@@ -391,7 +391,6 @@ class PlaidOnboardingViewModel {
       
       hasStartedFlow = true
       startPlaidFlow(bankDataManager: bankDataManager, userManager: userManager)
-      
     } catch {
       hasStartedFlow = true
       startPlaidFlow(bankDataManager: bankDataManager, userManager: userManager)

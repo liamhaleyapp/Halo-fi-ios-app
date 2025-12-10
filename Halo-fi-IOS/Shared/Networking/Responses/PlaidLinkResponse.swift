@@ -14,14 +14,6 @@ struct PlaidLinkResponse: Codable {
   let message: String
   let error: String?
   
-  init(success: Bool, linkToken: String, expiresAt: String, message: String, error: String?) {
-    self.success = success
-    self.linkToken = linkToken
-    self.expiresAt = expiresAt
-    self.message = message
-    self.error = error
-  }
-  
   enum CodingKeys: String, CodingKey {
     case success
     case linkToken = "link_token"

@@ -126,31 +126,6 @@ struct ConnectedItem: Codable, Hashable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
-    // Initializer for creating from sandbox items
-    init(
-        institutionId: String,
-        institutionName: String,
-        availableProducts: [String]?,
-        itemId: String,
-        userId: String,
-        plaidItemId: String,
-        isActive: Bool,
-        lastSync: String?,
-        createdAt: String?,
-        updatedAt: String?
-    ) {
-        self.institutionId = institutionId
-        self.institutionName = institutionName
-        self.availableProducts = availableProducts
-        self.itemId = itemId
-        self.userId = userId
-        self.plaidItemId = plaidItemId
-        self.isActive = isActive
-        self.lastSync = lastSync
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
 }
 
 struct FailedItem: Codable {
@@ -164,4 +139,3 @@ struct FailedItem: Codable {
         case details
     }
 }
-

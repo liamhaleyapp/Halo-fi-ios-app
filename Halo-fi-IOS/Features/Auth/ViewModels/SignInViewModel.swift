@@ -83,7 +83,6 @@ class SignInViewModel {
       } else {
         onNeedsSubscription()
       }
-      
     } catch {
       errorMessage = error.localizedDescription.isEmpty
       ? "Unable to sign in. Please check your credentials and try again."
@@ -92,4 +91,3 @@ class SignInViewModel {
     }
   }
 }
-

@@ -35,31 +35,35 @@ struct AccountTypeFilterView: View {
   }
   
   private func accountsForType(_ type: AccountType) -> [BankAccount]? {
-    // Map AccountType to possible Plaid type strings
-    let typeStrings = typeStringsForAccountType(type)
-    var matchingAccounts: [BankAccount] = []
-    
-    for (key, accounts) in accountsByType {
-      if typeStrings.contains(key.lowercased()) {
-        matchingAccounts.append(contentsOf: accounts)
-      }
+    let allAccounts = accountsByType.values.flatMap { $0 }
+    let matchingAccounts = allAccounts.filter { account in
+      matchesAccountType(account, type: type)
     }
-    
     return matchingAccounts.isEmpty ? nil : matchingAccounts
   }
-  
-  private func typeStringsForAccountType(_ type: AccountType) -> [String] {
+
+  /// Determines if a bank account matches the specified AccountType.
+  /// Uses both `type` and `subtype` fields for accurate matching.
+  private func matchesAccountType(_ account: BankAccount, type: AccountType) -> Bool {
+    let accountType = account.type.lowercased()
+    let accountSubtype = account.subtype.lowercased()
+
     switch type {
     case .checking:
-      return ["depository", "checking"]
+      // Depository accounts with checking subtype
+      return accountType == "depository" && accountSubtype == "checking"
     case .savings:
-      return ["depository", "savings"]
+      // Depository accounts with savings subtype
+      return accountType == "depository" && accountSubtype == "savings"
     case .creditCard:
-      return ["credit"]
+      // Credit type accounts
+      return accountType == "credit"
     case .investment:
-      return ["investment", "brokerage"]
+      // Investment or brokerage accounts
+      return accountType == "investment" || accountType == "brokerage"
     case .loan:
-      return ["loan"]
+      // Loan type accounts
+      return accountType == "loan"
     }
   }
 }
@@ -101,11 +105,11 @@ struct AccountTypeSection: View {
         
         Spacer()
         
-        Text(formatCurrency(totalBalance, currency: currency))
+        Text(CurrencyFormatter.format(totalBalance, currency: currency))
           .font(.headline)
           .fontWeight(.semibold)
           .foregroundColor(.white)
-          .accessibilityLabel("Total balance, \(formatCurrency(totalBalance, currency: currency))")
+          .accessibilityLabel("Total balance, \(CurrencyFormatter.format(totalBalance, currency: currency))")
       }
       .padding(.horizontal, 20)
       .padding(.vertical, 12)
@@ -125,13 +129,6 @@ struct AccountTypeSection: View {
     .background(Color.gray.opacity(0.05))
     .cornerRadius(16)
     .padding(.bottom, 8)
-  }
-  
-  private func formatCurrency(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 
@@ -180,7 +177,7 @@ struct AccountTypeRow: View {
       
       Spacer()
       
-      Text(formatCurrency(account.currentBalance, currency: account.currency))
+      Text(CurrencyFormatter.format(account.currentBalance, currency: account.currency))
         .font(.subheadline)
         .fontWeight(.medium)
         .foregroundColor(.white)
@@ -192,22 +189,15 @@ struct AccountTypeRow: View {
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
   }
-  
+
   private var accessibilityLabel: String {
     var label = account.name
     if let institutionName = institutionName {
       label += ", \(institutionName)"
     }
     label += ", \(account.type.capitalized), ending in \(account.mask)"
-    label += ", Balance \(formatCurrency(account.currentBalance, currency: account.currency))"
+    label += ", Balance \(CurrencyFormatter.format(account.currentBalance, currency: account.currency))"
     return label
-  }
-  
-  private func formatCurrency(_ amount: Double, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = currency
-    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
   }
 }
 
@@ -238,4 +228,3 @@ struct AccountTypeRow: View {
     .environment(BankDataManager())
   }
 }
-

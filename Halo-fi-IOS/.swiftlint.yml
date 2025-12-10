@@ -1,0 +1,108 @@
+# SwiftLint Configuration for Halo-Fi iOS
+# https://github.com/realm/SwiftLint
+
+# Paths to include/exclude
+included:
+  - App
+  - Features
+  - Services
+  - Data
+  - Shared
+  - UI
+
+excluded:
+  - Tests
+  - Pods
+  - .build
+  - "*.xcodeproj"
+  - "*.xcarchive"
+
+# Rules Configuration
+disabled_rules:
+  - trailing_whitespace  # Can be noisy
+  - identifier_name      # Too strict for SwiftUI property wrappers
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - last_where
+  - overridden_super_call
+  - private_action
+  - private_outlet
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - vertical_whitespace_closing_braces
+
+# Rule Customization
+line_length:
+  warning: 150
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+  ignores_interpolated_strings: true
+
+file_length:
+  warning: 500
+  error: 1000
+
+type_body_length:
+  warning: 300
+  error: 500
+
+function_body_length:
+  warning: 50
+  error: 100
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+nesting:
+  type_level: 3
+  function_level: 5
+
+# Force unwrapping should be avoided
+force_unwrapping:
+  severity: warning
+
+# Force cast should be avoided
+force_cast:
+  severity: warning
+
+# Force try should be avoided
+force_try:
+  severity: warning
+
+# implicit_return is not enabled (opt-in rule)
+
+# Modifier order disabled - using defaults
+# modifier_order: uses SwiftLint defaults
+
+# Custom rules
+custom_rules:
+  # Warn about TODO comments
+  todo_warning:
+    name: "TODO Warning"
+    regex: "(TODO|FIXME|HACK)"
+    message: "Consider resolving this TODO/FIXME before release"
+    severity: warning
+
+  # Warn about print statements (should use Logger)
+  print_usage:
+    name: "Print Usage"
+    regex: "\\bprint\\s*\\("
+    message: "Consider using Logger instead of print() for consistent logging"
+    severity: warning
+    match_kinds:
+      - identifier
+
+# Reporter type (xcode, json, csv, etc.)
+reporter: xcode

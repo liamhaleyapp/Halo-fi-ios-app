@@ -9,7 +9,7 @@ import SwiftUI
 
 struct OnboardingView: View {
   @Environment(UserManager.self) private var userManager
-  @EnvironmentObject private var permissionManager: PermissionManager
+  @Environment(PermissionManager.self) private var permissionManager
   @State private var currentPage = 0
   @State private var showingSignUp = false
   @State private var showingSignIn = false

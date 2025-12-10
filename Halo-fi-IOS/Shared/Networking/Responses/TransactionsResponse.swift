@@ -21,6 +21,3 @@ struct TransactionsResponse: Codable {
         case transactions
     }
 }
-
-
-

@@ -14,12 +14,3 @@ struct BankMultiItemsSyncRequest: Codable {
         case itemIds = "item_ids"
     }
 }
-
-
-
-
-
-
-
-
-

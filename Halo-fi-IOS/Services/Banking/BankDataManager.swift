@@ -523,4 +523,3 @@ class BankDataManager {
         return accounts.reduce(0) { $0 + $1.currentBalance }
     }
 }
-

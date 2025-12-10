@@ -146,7 +146,7 @@ struct ProfileView: View {
         isLoadingProfile = false
       }
       // Silently fail - we'll still show cached data
-      print("Error fetching profile: \(error)")
+      Logger.error("Error fetching profile: \(error)")
     }
   }
   
@@ -189,7 +189,7 @@ struct ProfileView: View {
           isSaving = false
         }
         // TODO: Show error message
-        print("Error saving profile: \(error)")
+        Logger.error("Error saving profile: \(error)")
       }
     }
   }
