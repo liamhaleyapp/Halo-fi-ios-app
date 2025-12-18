@@ -60,9 +60,14 @@ final class DIContainer {
         self.bankService = bankService
 
         // Layer 4: State Managers
-        self.userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
-        self.bankDataManager = BankDataManager(bankService: bankService)
+        let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
+        let bankDataManager = BankDataManager(bankService: bankService)
+        self.userManager = userManager
+        self.bankDataManager = bankDataManager
         self.permissionManager = PermissionManager.shared
+
+        // Wire up cross-manager dependencies
+        userManager.setBankDataManager(bankDataManager)
     }
 
     /// Creates a dependency container with custom implementations (for testing).
@@ -81,9 +86,15 @@ final class DIContainer {
         self.networkService = networkService
         self.authService = authService
         self.bankService = bankService
-        self.userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
-        self.bankDataManager = BankDataManager(bankService: bankService)
+
+        let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
+        let bankDataManager = BankDataManager(bankService: bankService)
+        self.userManager = userManager
+        self.bankDataManager = bankDataManager
         self.permissionManager = PermissionManager.shared
+
+        // Wire up cross-manager dependencies
+        userManager.setBankDataManager(bankDataManager)
     }
 }
 

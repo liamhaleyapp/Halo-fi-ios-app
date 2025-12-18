@@ -145,10 +145,13 @@ class PlaidOnboardingViewModel {
     // Store linked items in BankDataManager for display in AccountsView
     // The sandbox response has items in a different format, so we map them to ConnectedItem
     if let connectedItems = sandboxResponse.allConnectedItems {
-      bankDataManager.linkedItems = connectedItems
+      bankDataManager.setLinkedItems(connectedItems)
       Logger.success("Plaid (Sandbox Direct): Stored \(connectedItems.count) linked items")
     }
-    
+
+    // Clear Plaid session state
+    plaidManager.clearSession()
+
     // In sandbox mode, items are created directly - no need to fetch accounts now
     // Accounts can be fetched on-demand in AccountsView using GET /bank/{item_id}/account
     await MainActor.run {
@@ -174,7 +177,10 @@ class PlaidOnboardingViewModel {
       showingPlaidLink = false // Hide Plaid Link UI
       hasStartedFlow = true // Mark as started to prevent restart
     }
-    
+
+    // Clear Plaid session state (handler no longer needed)
+    plaidManager.clearSession()
+
     do {
       let tokens = [linkSuccess.publicToken]
       Logger.info("Plaid: Starting completion with \(tokens.count) token(s)")
@@ -252,7 +258,10 @@ class PlaidOnboardingViewModel {
     await MainActor.run {
       showingPlaidLink = false
     }
-    
+
+    // Clear Plaid session state (user exited)
+    plaidManager.clearSession()
+
     // Small delay to ensure the view updates before showing error or dismissing
     try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
     

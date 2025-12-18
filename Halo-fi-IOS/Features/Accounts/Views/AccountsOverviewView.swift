@@ -71,6 +71,8 @@ struct AccountsOverviewView: View {
         if !hasAppeared {
           hasAppeared = true
           Task {
+            // Trigger auto-refresh of accounts if stale (uses persisted linkedItems)
+            await bankDataManager.refreshIfStale()
             await loadInitialData()
           }
         }
@@ -275,7 +277,7 @@ struct AccountsOverviewView: View {
          bankDataManager.accountsByItemId.isEmpty {
         // Load accounts for the first institution to show summary
         let firstItem = linkedItems[0]
-        if bankDataManager.accountsByItemId[firstItem.itemId] == nil {
+        if bankDataManager.accountsByItemId[firstItem.plaidItemId] == nil {
           await fetchAccountsForItem(firstItem)
         }
       }

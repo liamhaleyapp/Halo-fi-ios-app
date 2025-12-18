@@ -17,8 +17,8 @@ final class BankDataManager {
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
 
-    /// Linked items (institutions) from Plaid - stored after sandbox/production linking
-    var linkedItems: [ConnectedItem]?
+    /// Linked items (institutions) from Plaid - use mutation methods to modify
+    private(set) var linkedItems: [ConnectedItem]?
 
     /// Accounts grouped by item ID - fetched on demand using GET /bank/{item_id}/account
     var accountsByItemId: [String: [BankAccount]] = [:]
@@ -42,14 +42,149 @@ final class BankDataManager {
     // Cache TTL (Time To Live) - 5 minutes
     private let cacheTTL: TimeInterval = 300
 
+    // Refresh threshold for auto-refresh on launch
+    private let refreshThreshold: TimeInterval = 300
+
     // MARK: - Dependencies
 
     private let bankService: BankServiceProtocol
+    private let persistence = LinkedItemsPersistence()
+    private var currentUserId: String?
 
     // MARK: - Initialization
 
     init(bankService: BankServiceProtocol = BankService.shared) {
         self.bankService = bankService
+    }
+
+    // MARK: - User Session Management
+
+    /// Call after auth resolves with valid user
+    func configureForUser(userId: String) {
+        currentUserId = userId
+        restoreLinkedItems()
+        Task {
+            await refreshIfStale()
+        }
+    }
+
+    private func restoreLinkedItems() {
+        guard let userId = currentUserId else { return }
+
+        if let items = persistence.load(for: userId) {
+            linkedItems = items
+            Logger.info("BankDataManager: Restored \(items.count) linked items from persistence")
+        } else {
+            linkedItems = nil
+        }
+    }
+
+    // MARK: - Linked Items Mutation Methods
+
+    func setLinkedItems(_ items: [ConnectedItem]?) {
+        guard let userId = currentUserId else {
+            Logger.warning("BankDataManager: Cannot set linked items - no user configured")
+            return
+        }
+        linkedItems = items
+        if let items = items, !items.isEmpty {
+            persistence.save(items, for: userId)
+        } else {
+            persistence.clear(for: userId)
+        }
+    }
+
+    func addLinkedItem(_ item: ConnectedItem) {
+        var current = linkedItems ?? []
+        if !current.contains(where: { $0.plaidItemId == item.plaidItemId }) {
+            current.append(item)
+        }
+        setLinkedItems(current)
+    }
+
+    func removeLinkedItem(plaidItemId: String) {
+        guard var current = linkedItems else { return }
+        current.removeAll { $0.plaidItemId == plaidItemId }
+        setLinkedItems(current.isEmpty ? nil : current)
+    }
+
+    // MARK: - Auto-Refresh on Launch
+
+    func refreshIfStale() async {
+        guard let userId = currentUserId else {
+            Logger.debug("BankDataManager: refreshIfStale - waiting for auth")
+            return
+        }
+
+        let lastRefresh = persistence.getLastRefreshAt(for: userId)
+        if let lastRefresh, Date().timeIntervalSince(lastRefresh) < refreshThreshold {
+            Logger.debug("BankDataManager: Skipping refresh - last refresh was recent")
+            return
+        }
+
+        await refreshAllAccounts(for: userId)
+    }
+
+    private func refreshAllAccounts(for userId: String) async {
+        guard currentUserId == userId else {
+            Logger.debug("BankDataManager: User changed during refresh - aborting")
+            return
+        }
+
+        guard let items = linkedItems, !items.isEmpty else { return }
+        Logger.info("BankDataManager: Refreshing accounts for \(items.count) linked items")
+
+        await withTaskGroup(of: Void.self) { group in
+            var runningTasks = 0
+            let maxConcurrency = 2
+
+            for item in items {
+                guard currentUserId == userId else { break }
+
+                if runningTasks >= maxConcurrency {
+                    await group.next()
+                    runningTasks -= 1
+                }
+
+                group.addTask { [weak self] in
+                    guard let self else { return }
+                    do {
+                        let response = try await self.fetchAccountsForItem(itemId: item.plaidItemId)
+                        await MainActor.run {
+                            // Final check: don't write if user changed during fetch
+                            guard self.currentUserId == userId else { return }
+                            self.accountsByItemId[item.plaidItemId] = response.accounts
+                        }
+                    } catch {
+                        Logger.error("BankDataManager: Failed to refresh accounts for item")
+                    }
+                }
+                runningTasks += 1
+            }
+        }
+
+        persistence.setLastRefreshAt(Date(), for: userId)
+    }
+
+    // MARK: - Sign Out / Clear Data
+
+    func clearAllData() {
+        guard let userId = currentUserId else { return }
+        linkedItems = nil
+        accountsByItemId = [:]
+        transactionsByItemId = [:]
+        accounts = nil
+        transactions = nil
+        accountsSummary = nil
+        accountsLastFetched = nil
+        transactionsLastFetched = nil
+        transactionsCacheKey = nil
+        accountsError = nil
+        transactionsError = nil
+        syncError = nil
+        persistence.clear(for: userId)
+        currentUserId = nil
+        Logger.info("BankDataManager: Cleared all bank data")
     }
 
     // MARK: - Bank Linking Flow
@@ -82,7 +217,7 @@ final class BankDataManager {
             return response
         }
 
-        linkedItems = connectedItems
+        setLinkedItems(connectedItems)
         Logger.success("Stored \(connectedItems.count) linked items")
 
         await syncConnectedItems(connectedItems)

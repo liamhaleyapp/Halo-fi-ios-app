@@ -240,11 +240,17 @@ class PlaidManager {
   }
   
   // MARK: - Security: Clear Sensitive Data
-  
-  /// Clears link token from memory after use
-  /// SECURITY: Should be called when Plaid Link session ends to clear sensitive data
-  func clearLinkToken() {
-    linkToken = ""
+
+  /// Clears all Plaid session state
+  /// SECURITY: Should be called when Plaid Link session ends (success, cancel, or error)
+  func clearSession() {
     linkHandler = nil
+    linkToken = ""
+    isCreatingLinkToken = false
+#if DEBUG
+    sandboxResponse = nil
+    isSandboxDirectMode = false
+#endif
+    Logger.debug("PlaidManager: Session cleared")
   }
 }

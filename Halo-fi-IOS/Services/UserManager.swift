@@ -21,6 +21,9 @@ final class UserManager {
     private let tokenStorage: TokenStorageProtocol
     private let authService: AuthServiceProtocol
 
+    /// Bank data manager - set via DI container after initialization
+    private var bankDataManager: BankDataManager?
+
     // Onboarding state persisted independently of User object
     // This ensures onboarding status persists even when User object is refreshed from server
     var isOnboarded: Bool = false {
@@ -40,6 +43,15 @@ final class UserManager {
         self.authService = authService
         loadUserFromStorage()
         restoreOnboardingState()
+    }
+
+    /// Sets the bank data manager dependency (called from DIContainer after initialization)
+    func setBankDataManager(_ manager: BankDataManager) {
+        self.bankDataManager = manager
+        // If user is already authenticated, configure bank data manager immediately
+        if let user = currentUser, isAuthenticated {
+            manager.configureForUser(userId: user.id)
+        }
     }
 
     private func restoreOnboardingState() {
@@ -114,6 +126,9 @@ final class UserManager {
     }
 
     func signOut() {
+        // Clear bank data first (before clearing user)
+        bankDataManager?.clearAllData()
+
         tokenStorage.clearTokens()
 
         Task {
@@ -296,6 +311,9 @@ final class UserManager {
         isAuthenticated = true
         isLoading = false
         saveUserToStorage()
+
+        // Configure bank data manager for this user
+        bankDataManager?.configureForUser(userId: user.id)
     }
 
     private func applyProfileData(
