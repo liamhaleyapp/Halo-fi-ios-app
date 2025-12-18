@@ -168,8 +168,8 @@ struct AccountsOverviewView: View {
           NavigationLink(value: item) {
             AccessibleInstitutionCard(
               item: item,
-              accounts: bankDataManager.accountsByItemId[item.itemId],
-              isLoading: isLoadingAccounts && selectedItemId == item.itemId
+              accounts: bankDataManager.accountsByItemId[item.plaidItemId],
+              isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId
             )
           }
           .buttonStyle(.plain)
@@ -295,20 +295,20 @@ struct AccountsOverviewView: View {
   private func fetchAccountsForItem(_ item: ConnectedItem) async {
     guard !isLoadingAccounts else { return }
     
-    if bankDataManager.accountsByItemId[item.itemId] != nil {
-      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.itemId)")
+    if bankDataManager.accountsByItemId[item.plaidItemId] != nil {
+      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.plaidItemId)")
       return
     }
     
-    selectedItemId = item.itemId
+    selectedItemId = item.plaidItemId
     isLoadingAccounts = true
     
     do {
-      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
-      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
+      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.plaidItemId) (\(item.institutionName))")
+      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.plaidItemId)
       
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.itemId] = response.accounts
+        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
         isLoadingAccounts = false
         selectedItemId = nil
         print("✅ AccountsOverviewView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")

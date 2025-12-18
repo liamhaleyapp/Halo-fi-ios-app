@@ -139,20 +139,28 @@ struct AccountDetailView: View {
       isLoadingTransactions = true
     }
     transactionError = nil
-    
+
     do {
+      // Use mock transactions for mock accounts
       if account.id.hasPrefix("mock-") {
         try await Task.sleep(nanoseconds: 500_000_000)
         transactions = MockTransactions.mockTransactions(for: account)
+      } else if let plaidItemId = account.plaidItemId {
+        // Fetch real transactions from API
+        let allTransactions = try await bankDataManager.fetchTransactionsForItem(
+          plaidItemId: plaidItemId,
+          forceRefresh: forceRefresh
+        )
+        // Filter transactions for this specific account
+        transactions = allTransactions.filter { $0.accountId == account.id }
       } else {
-        try await bankDataManager.fetchTransactions(accountId: account.id,
-                                                    forceRefresh: forceRefresh)
-        transactions = bankDataManager.getTransactions(for: account.id)
+        // No plaidItemId available
+        transactions = []
       }
     } catch {
       transactionError = "Failed to load transactions: \(error.localizedDescription)"
     }
-    
+
     if !forceRefresh {
       isLoadingTransactions = false
     }

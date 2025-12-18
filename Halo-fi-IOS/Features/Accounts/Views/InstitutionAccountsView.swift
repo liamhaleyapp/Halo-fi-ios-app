@@ -123,7 +123,7 @@ struct InstitutionAccountsView: View {
   }
   
   // MARK: - Accounts List View
-  
+
   private func accountsListView(_ accounts: [BankAccount]) -> some View {
     VStack(alignment: .leading, spacing: 16) {
       Text("Accounts")
@@ -131,9 +131,15 @@ struct InstitutionAccountsView: View {
         .foregroundColor(.gray)
         .accessibilityAddTraits(.isHeader)
         .padding(.top, 8)
-      
+
       ForEach(accounts, id: \.id) { account in
-        BankAccountRow(account: account)
+        NavigationLink {
+          AccountDetailView(account: FinancialAccount(from: account, plaidItemId: item.plaidItemId))
+            .environment(bankDataManager)
+        } label: {
+          BankAccountRow(account: account)
+        }
+        .buttonStyle(.plain)
       }
     }
   }
@@ -211,25 +217,25 @@ struct InstitutionAccountsView: View {
   
   private func loadAccounts() async {
     // Check if we already have accounts cached
-    if let cachedAccounts = bankDataManager.accountsByItemId[item.itemId] {
+    if let cachedAccounts = bankDataManager.accountsByItemId[item.plaidItemId] {
       await MainActor.run {
         self.accounts = cachedAccounts
         self.isLoadingAccounts = false
       }
       return
     }
-    
+
     await MainActor.run {
       isLoadingAccounts = true
       loadError = nil
     }
-    
+
     do {
-      Logger.info("InstitutionAccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
-      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
-      
+      Logger.info("InstitutionAccountsView: Fetching accounts for item \(item.plaidItemId) (\(item.institutionName))")
+      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.plaidItemId)
+
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.itemId] = response.accounts
+        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
         self.accounts = response.accounts
         self.isLoadingAccounts = false
         Logger.success("InstitutionAccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")

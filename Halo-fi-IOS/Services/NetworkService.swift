@@ -109,6 +109,12 @@ final class NetworkService: NetworkServiceProtocol {
             let emptyJSON = Data("{}".utf8)
             return try JSONDecoder().decode(T.self, from: emptyJSON)
         }
+
+        // Debug: Print raw response JSON
+        if let jsonString = String(data: data, encoding: .utf8) {
+            Logger.debug("📦 Raw Response JSON:\n\(jsonString)")
+        }
+
         return try JSONDecoder().decode(T.self, from: data)
     }
 

@@ -35,8 +35,9 @@ struct AccountsView: View {
               ForEach(linkedItems, id: \.itemId) { item in
                 LinkedItemCard(
                   item: item,
-                  accounts: bankDataManager.accountsByItemId[item.itemId],
-                  isLoading: isLoadingAccounts && selectedItemId == item.itemId,
+                  accounts: bankDataManager.accountsByItemId[item.plaidItemId],
+                  isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId,
+                  bankDataManager: bankDataManager,
                   onTap: {
                     Task {
                       await fetchAccountsForItem(item)
@@ -99,23 +100,23 @@ struct AccountsView: View {
   private func fetchAccountsForItem(_ item: ConnectedItem) async {
     // Skip if already loading or already fetched
     guard !isLoadingAccounts else { return }
-    
+
     // Check if we already have accounts for this item
-    if bankDataManager.accountsByItemId[item.itemId] != nil {
-      Logger.info("AccountsView: Accounts already fetched for item \(item.itemId)")
+    if bankDataManager.accountsByItemId[item.plaidItemId] != nil {
+      Logger.info("AccountsView: Accounts already fetched for item \(item.plaidItemId)")
       return
     }
-    
-    selectedItemId = item.itemId
+
+    selectedItemId = item.plaidItemId
     isLoadingAccounts = true
     loadError = nil
-    
+
     do {
-      Logger.info("AccountsView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
-      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
-      
+      Logger.info("AccountsView: Fetching accounts for item \(item.plaidItemId) (\(item.institutionName))")
+      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.plaidItemId)
+
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.itemId] = response.accounts
+        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
         isLoadingAccounts = false
         selectedItemId = nil
         Logger.success("AccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
@@ -137,8 +138,9 @@ struct LinkedItemCard: View {
   let item: ConnectedItem
   let accounts: [BankAccount]?
   let isLoading: Bool
+  let bankDataManager: BankDataManager
   let onTap: () -> Void
-  
+
   var body: some View {
     VStack(spacing: 0) {
       // Institution Header
@@ -148,26 +150,26 @@ struct LinkedItemCard: View {
             .font(.title2)
             .foregroundColor(.teal)
             .frame(width: 32, height: 32)
-          
+
           VStack(alignment: .leading, spacing: 4) {
             Text(item.institutionName)
               .font(.body)
               .fontWeight(.medium)
               .foregroundColor(.white)
-            
+
             HStack(spacing: 8) {
               Circle()
                 .fill(item.isActive ? Color.green : Color.orange)
                 .frame(width: 8, height: 8)
-              
+
               Text(item.isActive ? "Connected" : "Needs Attention")
                 .font(.caption)
                 .foregroundColor(.gray)
             }
           }
-          
+
           Spacer()
-          
+
           if isLoading {
             ProgressView()
               .scaleEffect(0.8)
@@ -182,33 +184,43 @@ struct LinkedItemCard: View {
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
       }
-      
-      // Accounts Preview (if fetched)
+
+      // Accounts Preview (if fetched) - now tappable
       if let accounts = accounts, !accounts.isEmpty {
         VStack(spacing: 8) {
           ForEach(accounts.prefix(3), id: \.id) { account in
-            HStack {
-              VStack(alignment: .leading, spacing: 2) {
-                Text(account.name)
+            NavigationLink {
+              AccountDetailView(account: FinancialAccount(from: account))
+                .environment(bankDataManager)
+            } label: {
+              HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(account.name)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+
+                  Text(account.type.capitalized)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                }
+
+                Spacer()
+
+                Text(formatCurrency(account.currentBalance, currency: account.currency))
                   .font(.subheadline)
+                  .fontWeight(.medium)
                   .foregroundColor(.white)
-                
-                Text(account.type.capitalized)
-                  .font(.caption)
+
+                Image(systemName: "chevron.right")
+                  .font(.caption2)
                   .foregroundColor(.gray)
               }
-              
-              Spacer()
-              
-              Text(formatCurrency(account.currentBalance, currency: account.currency))
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
+              .padding(.horizontal, 20)
+              .padding(.vertical, 8)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
           }
-          
+
           if accounts.count > 3 {
             HStack {
               Text("+\(accounts.count - 3) more accounts")
@@ -237,7 +249,7 @@ struct LinkedItemCard: View {
     .background(Color.gray.opacity(0.05))
     .cornerRadius(16)
   }
-  
+
   private func formatCurrency(_ amount: Double, currency: String) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .currency

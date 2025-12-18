@@ -54,8 +54,14 @@ enum APIEndpoints {
             "/bank/\(itemId)/account"
         }
 
-        /// GET - Fetch transactions with optional filters.
+        /// GET - Fetch transactions with optional filters (deprecated).
         static let transactions = "/bank/transactions"
+
+        /// GET - Sync transactions for a specific item.
+        /// Usage: `Bank.syncTransactions(plaidItemId)`
+        static func syncTransactions(_ plaidItemId: String) -> String {
+            "/bank/sync/transactions?plaid_item_id=\(plaidItemId)"
+        }
 
         /// POST - Sync multiple items.
         static let multiItemsSync = "/bank/multi-items/sync"

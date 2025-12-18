@@ -93,8 +93,8 @@ final class BankService: BankServiceProtocol {
 
         do {
             let response: ItemAccountsResponse = try await networkService.authenticatedRequest(
-                endpoint: APIEndpoints.Bank.accountsForItem(itemId),
-                method: .GET,
+                endpoint: APIEndpoints.Bank.syncItem(itemId),
+                method: .POST,
                 body: nil,
                 responseType: ItemAccountsResponse.self
             )
@@ -115,7 +115,7 @@ final class BankService: BankServiceProtocol {
     }
     
     // MARK: - Get Transactions
-    /// Fetches transactions for the authenticated user
+    /// Fetches transactions for the athenticated user
     /// - Parameters:
     ///   - accountId: Optional account ID to filter transactions
     ///   - limit: Optional limit on number of transactions to return
@@ -157,7 +157,37 @@ final class BankService: BankServiceProtocol {
             throw convertToBankError(error)
         }
     }
-    
+
+    // MARK: - Get Transactions for Item
+    /// Fetches transactions for a specific Plaid item
+    /// - Parameter plaidItemId: The Plaid item ID to fetch transactions for
+    /// - Returns: Array of Transaction objects
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction] {
+        Logger.info("Fetching transactions for item \(plaidItemId)")
+
+        do {
+            let response: TransactionsResponse = try await networkService.authenticatedRequest(
+                endpoint: APIEndpoints.Bank.syncTransactions(plaidItemId),
+                method: .GET,
+                body: nil,
+                responseType: TransactionsResponse.self
+            )
+            Logger.success("Fetched \(response.transactions.count) transactions for item \(plaidItemId)")
+            return response.transactions
+        } catch let authError as AuthError {
+            if case .serverError(let code, _) = authError, code == 404 {
+                Logger.warning("No transactions found for item \(plaidItemId)")
+                return []
+            }
+            Logger.error("Error fetching transactions for item \(plaidItemId): \(authError)")
+            throw convertToBankError(authError)
+        } catch {
+            Logger.error("Unknown error fetching transactions for item \(plaidItemId): \(error)")
+            throw convertToBankError(error)
+        }
+    }
+
     // MARK: - Sync Bank Data
     
     /// Syncs multiple bank items at once

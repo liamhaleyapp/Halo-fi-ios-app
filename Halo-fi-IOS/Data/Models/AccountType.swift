@@ -34,4 +34,15 @@ enum AccountType: Hashable {
         case .loan: return "Loan"
         }
     }
+
+    /// Maps Plaid account type strings to AccountType enum
+    static func from(_ plaidType: String) -> AccountType {
+        switch plaidType.lowercased() {
+        case "depository": return .checking
+        case "credit": return .creditCard
+        case "loan": return .loan
+        case "investment": return .investment
+        default: return .checking
+        }
+    }
 }

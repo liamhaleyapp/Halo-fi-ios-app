@@ -37,6 +37,11 @@ protocol BankServiceProtocol {
     /// - Returns: Array of transactions
     func getTransactions(accountId: String?, limit: Int?, offset: Int?) async throws -> [Transaction]
 
+    /// Fetches transactions for a specific Plaid item.
+    /// - Parameter plaidItemId: The Plaid item ID to fetch transactions for
+    /// - Returns: Array of transactions for that item
+    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction]
+
     /// Syncs bank data for multiple items at once.
     /// - Parameter itemIds: Array of item IDs to sync
     /// - Returns: Response with sync results
@@ -104,6 +109,11 @@ actor MockBankService: BankServiceProtocol {
     }
 
     func getTransactions(accountId: String?, limit: Int?, offset: Int?) async throws -> [Transaction] {
+        guard shouldSucceed else { throw BankError.networkError }
+        return mockTransactions
+    }
+
+    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction] {
         guard shouldSucceed else { throw BankError.networkError }
         return mockTransactions
     }

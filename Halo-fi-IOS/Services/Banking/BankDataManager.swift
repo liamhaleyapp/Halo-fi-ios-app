@@ -23,6 +23,9 @@ final class BankDataManager {
     /// Accounts grouped by item ID - fetched on demand using GET /bank/{item_id}/account
     var accountsByItemId: [String: [BankAccount]] = [:]
 
+    /// Transactions grouped by item ID - fetched on demand
+    var transactionsByItemId: [String: [Transaction]] = [:]
+
     var isLoadingAccounts = false
     var isLoadingTransactions = false
     var isSyncing = false
@@ -107,7 +110,7 @@ final class BankDataManager {
     }
 
     private func syncConnectedItems(_ connectedItems: [ConnectedItem]) async {
-        let itemIds = connectedItems.map { $0.itemId }
+        let itemIds = connectedItems.map { $0.plaidItemId }
         Logger.info("Syncing \(itemIds.count) items...")
 
         do {
@@ -274,6 +277,35 @@ final class BankDataManager {
         }
     }
 
+    /// Fetches transactions for a specific Plaid item
+    /// - Parameters:
+    ///   - plaidItemId: The Plaid item ID to fetch transactions for
+    ///   - forceRefresh: If true, bypasses cache and fetches fresh data
+    /// - Returns: Array of transactions for that item
+    func fetchTransactionsForItem(plaidItemId: String, forceRefresh: Bool = false) async throws -> [Transaction] {
+        // Check cache first
+        if !forceRefresh, let cached = transactionsByItemId[plaidItemId] {
+            return cached
+        }
+
+        isLoadingTransactions = true
+        transactionsError = nil
+        defer { isLoadingTransactions = false }
+
+        do {
+            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
+            transactionsByItemId[plaidItemId] = fetchedTransactions
+            return fetchedTransactions
+        } catch let error as BankError {
+            transactionsError = error
+            throw error
+        } catch {
+            let bankError = BankError.networkError
+            transactionsError = bankError
+            throw bankError
+        }
+    }
+
     // MARK: - Sync Management
 
     /// Syncs bank data for a specific Plaid item
@@ -356,13 +388,13 @@ final class BankDataManager {
 
     // MARK: - Account Grouping Helpers
 
-    /// Groups all accounts by institution (item ID)
+    /// Groups all accounts by institution (plaid item ID)
     func accountsGroupedByInstitution() -> [String: [BankAccount]] {
         guard let linkedItems = linkedItems else { return [:] }
 
         var grouped: [String: [BankAccount]] = [:]
         for item in linkedItems {
-            grouped[item.itemId] = accountsByItemId[item.itemId] ?? []
+            grouped[item.plaidItemId] = accountsByItemId[item.plaidItemId] ?? []
         }
         return grouped
     }

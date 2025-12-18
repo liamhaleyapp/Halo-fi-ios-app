@@ -59,8 +59,6 @@ class PlaidManager {
       print("   Request body: \(requestJSON)")
     }
     
-    print("   Request body size: \(requestBody.count) bytes")
-    
 #if DEBUG
     if useSandboxMode {
       // MARK: - Sandbox Path (DEBUG ONLY)

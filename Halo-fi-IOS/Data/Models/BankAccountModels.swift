@@ -17,11 +17,11 @@ struct BankAccount: Codable, Identifiable {
     let availableBalance: Double
     let currency: String
     let idAccount: String
-    let plaidItemId: String
+    let plaidItemId: String?
     let plaidAccountId: String
     let isActive: Bool
-    let createdAt: String
-    let updatedAt: String
+    let createdAt: String?
+    let updatedAt: String?
     
     var id: String {
         return idAccount
