@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 
+// swiftlint:disable type_body_length
 @Observable
 @MainActor
 final class BankDataManager {
@@ -30,6 +31,9 @@ final class BankDataManager {
     var isLoadingTransactions = false
     var isSyncing = false
 
+    /// When transactions were last synced from the server (for "Updated X ago" display)
+    var lastTransactionSyncAt: Date?
+
     var accountsError: BankError?
     var transactionsError: BankError?
     var syncError: BankError?
@@ -49,12 +53,21 @@ final class BankDataManager {
 
     private let bankService: BankServiceProtocol
     private let persistence = LinkedItemsPersistence()
+    private let transactionPersistence: TransactionPersistenceProtocol?
     private var currentUserId: String?
 
     // MARK: - Initialization
 
-    init(bankService: BankServiceProtocol = BankService.shared) {
+    /// Creates a BankDataManager with optional transaction persistence
+    /// - Parameters:
+    ///   - bankService: Service for bank API calls
+    ///   - transactionPersistence: Optional persistence for instant transaction display (nil disables caching)
+    init(
+        bankService: BankServiceProtocol = BankService.shared,
+        transactionPersistence: TransactionPersistenceProtocol? = nil
+    ) {
         self.bankService = bankService
+        self.transactionPersistence = transactionPersistence
     }
 
     // MARK: - User Session Management
@@ -179,10 +192,19 @@ final class BankDataManager {
         accountsLastFetched = nil
         transactionsLastFetched = nil
         transactionsCacheKey = nil
+        lastTransactionSyncAt = nil
         accountsError = nil
         transactionsError = nil
         syncError = nil
         persistence.clear(for: userId)
+
+        // Clear persisted transactions
+        if let txnPersistence = transactionPersistence {
+            Task {
+                await txnPersistence.clearTransactions(for: userId)
+            }
+        }
+
         currentUserId = nil
         Logger.info("BankDataManager: Cleared all bank data")
     }
@@ -412,15 +434,169 @@ final class BankDataManager {
         }
     }
 
+    /// Fetches recent transactions for a specific account with instant cache display
+    /// - Parameters:
+    ///   - accountId: The account ID to fetch transactions for
+    ///   - plaidItemId: The Plaid item ID the account belongs to
+    ///   - limit: Maximum number of transactions to return (default 50)
+    /// - Returns: Array of transactions for that account, from cache or network
+    func fetchRecentTransactions(
+        accountId: String,
+        plaidItemId: String,
+        limit: Int = 50
+    ) async throws -> [Transaction] {
+        guard let userId = currentUserId else {
+            throw BankError.unauthorized
+        }
+
+        // 1. Try to return cached data immediately
+        if let persistence = transactionPersistence {
+            let cached = await persistence.loadTransactions(
+                for: userId,
+                plaidAccountId: accountId,
+                limit: limit,
+                before: nil
+            )
+
+            if !cached.isEmpty {
+                // Trigger background refresh if stale
+                if await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
+                    Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+                }
+                return cached
+            }
+        }
+
+        // 2. Check in-memory cache
+        if let cached = transactionsByItemId[plaidItemId] {
+            let filtered = cached.filter { $0.accountId == accountId }
+            if !filtered.isEmpty {
+                return Array(filtered.prefix(limit))
+            }
+        }
+
+        // 3. No cache: fetch from network (blocking)
+        return try await fetchAndPersistTransactions(plaidItemId: plaidItemId, accountId: accountId, limit: limit)
+    }
+
+    /// Loads more transactions from local cache for infinite scroll
+    /// - Parameters:
+    ///   - accountId: The account ID to load transactions for
+    ///   - before: Load transactions before this date
+    ///   - limit: Maximum number of transactions to return (default 50)
+    /// - Returns: Array of older transactions from cache
+    func fetchMoreTransactions(
+        accountId: String,
+        before: Date,
+        limit: Int = 50
+    ) async -> [Transaction] {
+        guard let userId = currentUserId, let persistence = transactionPersistence else {
+            return []
+        }
+
+        return await persistence.loadTransactions(
+            for: userId,
+            plaidAccountId: accountId,
+            limit: limit,
+            before: before
+        )
+    }
+
     /// Fetches transactions for a specific Plaid item
     /// - Parameters:
     ///   - plaidItemId: The Plaid item ID to fetch transactions for
     ///   - forceRefresh: If true, bypasses cache and fetches fresh data
     /// - Returns: Array of transactions for that item
     func fetchTransactionsForItem(plaidItemId: String, forceRefresh: Bool = false) async throws -> [Transaction] {
-        // Check cache first
+        guard let userId = currentUserId else {
+            throw BankError.unauthorized
+        }
+
+        // 1. Check in-memory cache first
         if !forceRefresh, let cached = transactionsByItemId[plaidItemId] {
+            // Trigger background refresh if stale
+            if let persistence = transactionPersistence,
+               await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
+                Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+            }
             return cached
+        }
+
+        // 2. Check persisted cache
+        if !forceRefresh, let persistence = transactionPersistence {
+            let persisted = await persistence.loadAllTransactions(for: userId, plaidItemId: plaidItemId)
+            if !persisted.isEmpty {
+                transactionsByItemId[plaidItemId] = persisted
+                // Trigger background refresh if stale
+                if await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
+                    Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+                }
+                return persisted
+            }
+        }
+
+        // 3. No cache: fetch from network (blocking)
+        isLoadingTransactions = true
+        transactionsError = nil
+        defer { isLoadingTransactions = false }
+
+        do {
+            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
+            transactionsByItemId[plaidItemId] = fetchedTransactions
+
+            // Persist for future instant display
+            if let persistence = transactionPersistence {
+                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
+                await persistence.markFullSyncComplete(for: userId, plaidItemId: plaidItemId)
+            }
+
+            lastTransactionSyncAt = Date()
+            return fetchedTransactions
+        } catch let error as BankError {
+            transactionsError = error
+            throw error
+        } catch {
+            let bankError = BankError.networkError
+            transactionsError = bankError
+            throw bankError
+        }
+    }
+
+    // MARK: - Background Refresh
+
+    /// Refreshes transactions in background without blocking UI
+    private func backgroundRefreshTransactions(plaidItemId: String) async {
+        guard let userId = currentUserId else { return }
+
+        isSyncing = true
+        defer {
+            isSyncing = false
+            lastTransactionSyncAt = Date()
+        }
+
+        do {
+            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
+            transactionsByItemId[plaidItemId] = fetchedTransactions
+
+            if let persistence = transactionPersistence {
+                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
+                await persistence.markRecentSyncComplete(for: userId, plaidItemId: plaidItemId)
+            }
+
+            Logger.debug("BankDataManager: Background refresh completed for item \(plaidItemId)")
+        } catch {
+            Logger.warning("BankDataManager: Background refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Fetches transactions from network and persists them
+    private func fetchAndPersistTransactions(
+        plaidItemId: String,
+        accountId: String,
+        limit: Int
+    ) async throws -> [Transaction] {
+        guard let userId = currentUserId else {
+            throw BankError.unauthorized
         }
 
         isLoadingTransactions = true
@@ -430,7 +606,18 @@ final class BankDataManager {
         do {
             let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
             transactionsByItemId[plaidItemId] = fetchedTransactions
-            return fetchedTransactions
+
+            // Persist for future instant display
+            if let persistence = transactionPersistence {
+                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
+                await persistence.markFullSyncComplete(for: userId, plaidItemId: plaidItemId)
+            }
+
+            lastTransactionSyncAt = Date()
+
+            // Filter and return for the requested account
+            let filtered = fetchedTransactions.filter { $0.accountId == accountId }
+            return Array(filtered.prefix(limit))
         } catch let error as BankError {
             transactionsError = error
             throw error

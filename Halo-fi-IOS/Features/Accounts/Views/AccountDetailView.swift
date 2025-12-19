@@ -9,38 +9,64 @@ import SwiftUI
 
 struct AccountDetailView: View {
   let account: FinancialAccount
-  
+
   @Environment(BankDataManager.self) private var bankDataManager
   @State private var transactions: [Transaction] = []
-  @State private var isLoadingTransactions = false
+  @State private var isLoadingInitial = false  // Only for first load with no cache
   @State private var transactionError: String?
-  
+
   var body: some View {
     ZStack {
       Color.black.ignoresSafeArea()
-      
+
       VStack(spacing: 0) {
         // Account Header
         accountHeaderView
           .padding(.top, 20)
           .padding(.bottom, 24)
-        
+
         contentView
       }
     }
     .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .navigationBarTrailing) {
+        syncStatusIndicator
+      }
+    }
     .task {
       await loadTransactions(forceRefresh: false)
+    }
+  }
+
+  // MARK: - Sync Status Indicator
+  @ViewBuilder
+  private var syncStatusIndicator: some View {
+    if bankDataManager.isSyncing {
+      HStack(spacing: 4) {
+        ProgressView()
+          .scaleEffect(0.7)
+          .tint(.white)
+        Text("Syncing")
+          .font(.caption)
+          .foregroundColor(.gray)
+      }
+    } else if let lastSync = bankDataManager.lastTransactionSyncAt {
+      Text(lastSync.relativeDescription)
+        .font(.caption)
+        .foregroundColor(.gray)
     }
   }
   
   @ViewBuilder
   private var contentView: some View {
-    if isLoadingTransactions {
+    if isLoadingInitial && transactions.isEmpty {
+      // Only show spinner for initial load with no cached data
       ProgressView()
         .tint(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else if let error = transactionError {
+    } else if let error = transactionError, transactions.isEmpty {
+      // Only show error if we have no cached data to display
       VStack(spacing: 12) {
         Image(systemName: "exclamationmark.triangle")
           .font(.largeTitle)
@@ -51,7 +77,7 @@ struct AccountDetailView: View {
           .padding(.horizontal, 40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else if transactions.isEmpty {
+    } else if transactions.isEmpty && !isLoadingInitial {
       VStack(spacing: 12) {
         Image(systemName: "list.bullet.rectangle")
           .font(.largeTitle)
@@ -135,8 +161,11 @@ struct AccountDetailView: View {
   
   // MARK: - Helper Methods
   private func loadTransactions(forceRefresh: Bool) async {
-    if !forceRefresh {
-      isLoadingTransactions = true
+    // Only show initial loading spinner if we have no cached transactions
+    let hasCachedData = !transactions.isEmpty
+
+    if !hasCachedData && !forceRefresh {
+      isLoadingInitial = true
     }
     transactionError = nil
 
@@ -146,24 +175,25 @@ struct AccountDetailView: View {
         try await Task.sleep(nanoseconds: 500_000_000)
         transactions = MockTransactions.mockTransactions(for: account)
       } else if let plaidItemId = account.plaidItemId {
-        // Fetch real transactions from API
-        let allTransactions = try await bankDataManager.fetchTransactionsForItem(
+        // Fetch recent transactions using cache-then-network pattern
+        let fetched = try await bankDataManager.fetchRecentTransactions(
+          accountId: account.id,
           plaidItemId: plaidItemId,
-          forceRefresh: forceRefresh
+          limit: 50
         )
-        // Filter transactions for this specific account
-        transactions = allTransactions.filter { $0.accountId == account.id }
+        transactions = fetched
       } else {
         // No plaidItemId available
         transactions = []
       }
     } catch {
-      transactionError = "Failed to load transactions: \(error.localizedDescription)"
+      // Only show error if we have no cached data to display
+      if transactions.isEmpty {
+        transactionError = "Failed to load transactions: \(error.localizedDescription)"
+      }
     }
 
-    if !forceRefresh {
-      isLoadingTransactions = false
-    }
+    isLoadingInitial = false
   }
 }
 
