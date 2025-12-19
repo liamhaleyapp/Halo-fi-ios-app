@@ -9,57 +9,82 @@ import SwiftUI
 
 struct HomeView: View {
   @Environment(UserManager.self) private var userManager
-  @State private var showingVoiceConversation = false
-  @State private var showingAgentChat = false
-  
+  @State private var showingConversation = false
+
+  #if DEBUG
+  @State private var showingLegacyVoice = false
+  @State private var showingLegacyChat = false
+  #endif
+
   private var userName: String {
     userManager.currentUser?.firstName ?? "User"
   }
-  
+
   var body: some View {
     NavigationStack {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
-        
+
         VStack(spacing: 10) {
           // Header
           HomeHeader(userName: userName)
-          
-          // Voice conversation button
+
+          // Voice conversation button - opens unified ConversationView
           VoiceConversationButton {
-            showingVoiceConversation = true
+            showingConversation = true
           }
-          
-          // Test Agent Chat Button (for testing)
+
           #if DEBUG
-          Button(action: {
-            showingAgentChat = true
-          }) {
-            HStack {
-              Image(systemName: "message.circle.fill")
-              Text("Test Agent Chat")
+          // Legacy views for comparison testing
+          VStack(spacing: 8) {
+            Button(action: {
+              showingLegacyVoice = true
+            }) {
+              HStack {
+                Image(systemName: "mic.circle")
+                Text("Legacy Voice View")
+              }
+              .frame(maxWidth: .infinity)
+              .padding()
+              .background(Color.gray.opacity(0.3))
+              .foregroundColor(.primary)
+              .cornerRadius(12)
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.orange)
-            .foregroundColor(.white)
-            .cornerRadius(12)
+
+            Button(action: {
+              showingLegacyChat = true
+            }) {
+              HStack {
+                Image(systemName: "message.circle")
+                Text("Legacy Chat View")
+              }
+              .frame(maxWidth: .infinity)
+              .padding()
+              .background(Color.gray.opacity(0.3))
+              .foregroundColor(.primary)
+              .cornerRadius(12)
+            }
           }
           .padding(.horizontal, 20)
           #endif
-          
+
           // Action buttons
           ActionButtonsSection()
         }
       }
     }
     .navigationBarHidden(true)
-    .fullScreenCover(isPresented: $showingVoiceConversation) {
+    .fullScreenCover(isPresented: $showingConversation) {
+      ConversationView()
+    }
+    #if DEBUG
+    .fullScreenCover(isPresented: $showingLegacyVoice) {
       VoiceConversationView()
     }
-    .sheet(isPresented: $showingAgentChat) {
+    .sheet(isPresented: $showingLegacyChat) {
       AgentChatView()
     }
+    #endif
   }
 }
 
