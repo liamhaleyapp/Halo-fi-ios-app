@@ -41,27 +41,38 @@ public final class WebSocketConnection<Incoming: Decodable & Sendable, Outgoing:
   }
   
   private func receiveSingleMessage() async throws -> Incoming {
-    switch try await webSocketTask.receive() {
+    let result = try await webSocketTask.receive()
+
+    switch result {
     case let .data(messageData):
+      Logger.debug("WebSocket RECV (binary): \(messageData.count) bytes")
+      if let raw = String(data: messageData, encoding: .utf8) {
+        Logger.debug("WebSocket RECV raw: \(raw)")
+      }
+
       guard let message = try? decoder.decode(Incoming.self, from: messageData) else {
+        Logger.error("WebSocket: Failed to decode binary message")
         throw WebSocketConnectionError.decodingError
       }
-      
+
       return message
-      
+
     case let .string(text):
+      Logger.debug("WebSocket RECV (text): \(text)")
+
       guard
         let messageData = text.data(using: .utf8),
         let message = try? decoder.decode(Incoming.self, from: messageData)
       else {
+        Logger.error("WebSocket: Failed to decode text message")
         throw WebSocketConnectionError.decodingError
       }
-      
+
       return message
-      
+
     @unknown default:
       assertionFailure("Unknown message type")
-      
+
       webSocketTask.cancel(with: .unsupportedData, reason: nil)
       throw WebSocketConnectionError.decodingError
     }
@@ -71,12 +82,20 @@ public final class WebSocketConnection<Incoming: Decodable & Sendable, Outgoing:
 extension WebSocketConnection {
   func send(_ message: Outgoing) async throws {
     guard let messageData = try? encoder.encode(message) else {
+      Logger.error("WebSocket: Failed to encode message")
       throw WebSocketConnectionError.encodingError
     }
-    
+
+    // Log the outgoing JSON
+    let jsonString = String(data: messageData, encoding: .utf8) ?? ""
+    Logger.debug("WebSocket SEND: \(jsonString)")
+
     do {
-      try await webSocketTask.send(.data(messageData))
+      // Send as STRING instead of binary data (servers typically expect JSON as text)
+      try await webSocketTask.send(.string(jsonString))
+      Logger.debug("WebSocket: Message sent successfully")
     } catch {
+      Logger.error("WebSocket: Send failed - \(error)")
       throw WebSocketConnectionError.transportError
     }
   }

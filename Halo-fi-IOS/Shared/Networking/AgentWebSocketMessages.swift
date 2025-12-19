@@ -33,15 +33,17 @@ struct AgentResponsePayload: Codable, Sendable {
     let type: String
     let message: String
     let data: [String: AnyCodable]?
-    let status: String
+    let status: String?  // Server can send null
     let timestamp: String?
-    
+    let error: String?   // Server includes this field
+
     enum CodingKeys: String, CodingKey {
         case type
         case message
         case data
         case status
         case timestamp
+        case error
     }
 }
 
@@ -78,13 +80,15 @@ struct ErrorPayload: Codable, Sendable {
 struct ConnectionAckPayload: Codable, Sendable {
     let type: String
     let message: String
-    let sessionId: String?
+    let connectionId: String?  // Server sends "connection_id"
+    let sessionId: String?     // Some responses may use "session_id"
     let userId: String?
     let timestamp: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case type
         case message
+        case connectionId = "connection_id"
         case sessionId = "session_id"
         case userId = "user_id"
         case timestamp

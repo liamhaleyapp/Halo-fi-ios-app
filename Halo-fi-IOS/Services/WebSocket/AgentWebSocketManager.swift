@@ -40,29 +40,35 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     
     func connect() async throws {
         guard let accessToken = tokenStorage.getAccessToken() else {
+            Logger.error("AgentWebSocket: Missing access token")
             throw AgentWebSocketError.missingToken
         }
-        
+
         // Create session ID for this connection
         sessionId = UUID().uuidString
-        
+
         // Build WebSocket URL with token as query parameter
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
         urlComponents?.queryItems = [URLQueryItem(name: "token", value: accessToken)]
-        
+
         guard let url = urlComponents?.url else {
+            Logger.error("AgentWebSocket: Invalid URL")
             throw AgentWebSocketError.invalidURL
         }
-        
+
+        Logger.info("AgentWebSocket: Connecting to \(baseURL)/agent/ws")
+
         let webSocketTask = URLSession.shared.webSocketTask(with: url)
         webSocketConnection = WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>(
             webSocketTask: webSocketTask
         )
-        
+
         connectionStatus = .pending
         isConnected = true
         connectionStatus = .connected
-        
+
+        Logger.info("AgentWebSocket: Connection established, starting listener")
+
         // Start listening for messages
         Task {
             await startListening()
@@ -70,6 +76,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     }
     
     func disconnect() {
+        Logger.info("AgentWebSocket: Disconnecting")
         webSocketConnection?.close()
         webSocketConnection = nil
         isConnected = false
@@ -156,11 +163,12 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     private func handleConnectionAck(_ ack: ConnectionAckPayload) async {
         await MainActor.run {
-            currentSessionId = ack.sessionId
-            connectionAckMessage = "\(ack.message) - Session: \(ack.sessionId ?? "none")"
+            // Use connectionId if available, fallback to sessionId
+            currentSessionId = ack.connectionId ?? ack.sessionId
+            connectionAckMessage = "\(ack.message) - Session: \(currentSessionId ?? "none")"
             Logger.info("Connection acknowledged: \(ack.message)")
-            if let sessionId = ack.sessionId {
-                Logger.debug("Session ID: \(sessionId)")
+            if let connectionId = ack.connectionId {
+                Logger.debug("Connection ID: \(connectionId)")
             }
             if let userId = ack.userId {
                 Logger.debug("User ID: \(userId)")
@@ -173,23 +181,28 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     
     func sendMessage(_ message: String, context: [String: AnyCodable]? = nil) async throws {
         guard let connection = webSocketConnection else {
+            Logger.error("AgentWebSocket: Cannot send - not connected")
             throw AgentWebSocketError.disconnected
         }
-        
+
         // Reset streaming state for new message
         await MainActor.run {
             streamingText = ""
             isStreaming = false
         }
-        
+
         // Use the session ID from connection ack if available, otherwise use our generated one
         let payload = ClientMessagePayload(
             message: message,
             context: context,
             sessionId: currentSessionId ?? sessionId
         )
-        
+
+        Logger.info("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")
+
         try await connection.send(payload)
+
+        Logger.info("AgentWebSocket: Message sent successfully")
     }
 }
 
