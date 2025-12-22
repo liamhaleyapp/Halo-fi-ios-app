@@ -294,15 +294,25 @@ final class UserManager {
     }
 
     private func applySignInState(user: User) {
-        let isNewUser = currentUser?.id != user.id
         let hasExplicitOnboardingStatus = userDefaults.object(forKey: onboardingKey) != nil
 
+        // Only consider it a "different user" if we have a previous user in memory AND IDs differ
+        // If currentUser is nil (normal after app restart), we can't determine if it's a different user
+        let isDifferentUser = currentUser != nil && currentUser?.id != user.id
+
         let preservedOnboardingStatus: Bool
-        if isNewUser || !hasExplicitOnboardingStatus {
+        if hasExplicitOnboardingStatus && !isDifferentUser {
+            // User has completed onboarding before and this isn't a different user signing in
+            // Trust the persisted status
+            preservedOnboardingStatus = userDefaults.bool(forKey: onboardingKey)
+        } else if isDifferentUser {
+            // Different user signing in - reset onboarding
             preservedOnboardingStatus = false
             userDefaults.set(false, forKey: onboardingKey)
         } else {
-            preservedOnboardingStatus = isOnboarded
+            // No saved status - new user or fresh install
+            preservedOnboardingStatus = false
+            userDefaults.set(false, forKey: onboardingKey)
         }
 
         var newUser = user
