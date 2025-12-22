@@ -98,20 +98,12 @@ enum ConversationEvent {
 
 ## Quick Start
 
-### Using the New Unified View
-
 1. **Launch**: Tap the voice button on the Home screen
 2. **Connect**: The view auto-connects when appearing
 3. **Speak or Type**:
    - Tap the mic to start speaking
    - Or tap "Type instead" to switch to text input
 4. **View Responses**: Transcript shows all messages in large, accessible blocks
-
-### DEBUG Mode: Legacy Views
-
-In DEBUG builds, you can access the original views for comparison:
-- "Legacy Voice View" - Original `VoiceConversationView`
-- "Legacy Chat View" - Original `AgentChatView`
 
 ---
 
@@ -247,7 +239,6 @@ What's my spending trend?
 
 ## Code Locations
 
-### New Unified System
 | Component | Location |
 |-----------|----------|
 | Main View | `Features/Conversation/Views/ConversationView.swift` |
@@ -256,12 +247,6 @@ What's my spending trend?
 | Events | `Features/Conversation/Models/ConversationEvent.swift` |
 | TTS | `Services/Conversation/SpeechSynthesisService.swift` |
 | Haptics | `Services/Conversation/AudioFeedbackService.swift` |
-
-### Legacy System (DEBUG only)
-| Component | Location |
-|-----------|----------|
-| Voice View | `Features/Voice/Views/VoiceConversationView.swift` |
-| Chat View | `Features/Voice/Views/AgentChatView.swift` |
 | Voice Service | `Services/VoiceService.swift` |
 | Agent WebSocket | `Services/WebSocket/AgentWebSocketManager.swift` |
 

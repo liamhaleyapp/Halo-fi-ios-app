@@ -34,6 +34,9 @@ final class DIContainer {
     /// Transaction persistence for instant display on app reopen
     let transactionPersistence: TransactionPersistenceProtocol?
 
+    /// Account persistence for instant display on app reopen
+    let accountPersistence: AccountPersistenceProtocol?
+
     // MARK: - State Managers (Layer 4)
 
     /// User authentication state and profile
@@ -48,8 +51,13 @@ final class DIContainer {
     // MARK: - Initialization
 
     /// Creates the production dependency container with real implementations.
-    /// - Parameter transactionPersistence: Optional persistence for transactions (enables instant display)
-    init(transactionPersistence: TransactionPersistenceProtocol? = nil) {
+    /// - Parameters:
+    ///   - transactionPersistence: Optional persistence for transactions (enables instant display)
+    ///   - accountPersistence: Optional persistence for accounts (enables instant display)
+    init(
+        transactionPersistence: TransactionPersistenceProtocol? = nil,
+        accountPersistence: AccountPersistenceProtocol? = nil
+    ) {
         // Layer 1: Foundation
         let tokenStorage = TokenStorage()
         self.tokenStorage = tokenStorage
@@ -67,12 +75,14 @@ final class DIContainer {
 
         // Layer 3.5: Persistence
         self.transactionPersistence = transactionPersistence
+        self.accountPersistence = accountPersistence
 
         // Layer 4: State Managers
         let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
         let bankDataManager = BankDataManager(
             bankService: bankService,
-            transactionPersistence: transactionPersistence
+            transactionPersistence: transactionPersistence,
+            accountPersistence: accountPersistence
         )
         self.userManager = userManager
         self.bankDataManager = bankDataManager
@@ -89,23 +99,27 @@ final class DIContainer {
     ///   - authService: Custom auth service implementation
     ///   - bankService: Custom bank service implementation
     ///   - transactionPersistence: Custom transaction persistence implementation
+    ///   - accountPersistence: Custom account persistence implementation
     init(
         tokenStorage: TokenStorageProtocol,
         networkService: NetworkServiceProtocol,
         authService: AuthServiceProtocol,
         bankService: BankServiceProtocol,
-        transactionPersistence: TransactionPersistenceProtocol? = nil
+        transactionPersistence: TransactionPersistenceProtocol? = nil,
+        accountPersistence: AccountPersistenceProtocol? = nil
     ) {
         self.tokenStorage = tokenStorage
         self.networkService = networkService
         self.authService = authService
         self.bankService = bankService
         self.transactionPersistence = transactionPersistence
+        self.accountPersistence = accountPersistence
 
         let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
         let bankDataManager = BankDataManager(
             bankService: bankService,
-            transactionPersistence: transactionPersistence
+            transactionPersistence: transactionPersistence,
+            accountPersistence: accountPersistence
         )
         self.userManager = userManager
         self.bankDataManager = bankDataManager

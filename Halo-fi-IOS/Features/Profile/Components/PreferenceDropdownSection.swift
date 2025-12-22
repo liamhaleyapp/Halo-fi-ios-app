@@ -8,114 +8,117 @@
 import SwiftUI
 
 struct PreferenceDropdownSection: View {
-  let title: String
-  let subtitle: String
-  let icon: String
-  let selectedValue: String
-  @Binding var isExpanded: Bool
-  let options: [String]
-  var disabledOptions: Set<String> = []
-  let onSelection: (String) -> Void
-  
-  private var displaySelectedValue: String {
-    if disabledOptions.contains(selectedValue) {
-      return "\(selectedValue) (Coming Soon)"
+    let title: String
+    let subtitle: String
+    let icon: String
+    let options: [SelectionOption]
+    @Binding var selectedId: String
+
+    @State private var showingSheet = false
+
+    private var selectedTitle: String {
+        options.first(where: { $0.id == selectedId })?.title ?? "Select"
     }
-    return selectedValue
-  }
-  
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      // Header
-      HStack(spacing: 12) {
-        Image(systemName: icon)
-          .font(.title3)
-          .foregroundColor(Color.accentColor)
-          .frame(width: 20, height: 20)
-        
-        VStack(alignment: .leading, spacing: 2) {
-          Text(title)
-            .font(.title3)
-            .fontWeight(.semibold)
-            .foregroundColor(.primary)
-          
-          Text(subtitle)
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .lineLimit(2)
-        }
-        
-        Spacer()
-      }
-      
-      // Selected Value Button
-      Button(action: {
-        withAnimation(.easeInOut(duration: 0.2)) {
-          isExpanded.toggle()
-        }
-      }) {
-        HStack {
-          Text(displaySelectedValue)
-            .font(.headline)
-            .foregroundColor(.primary)
-            .fontWeight(.medium)
-          
-          Spacer()
-          
-          Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-            .font(.title3)
-            .foregroundColor(Color.accentColor)
-            .rotationEffect(.degrees(isExpanded ? 0 : 0))
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(Color.accentColor)
+                    .frame(width: 20, height: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            }
+
+            // Trigger row - left-aligned value, chevron on right
+            Button {
+                showingSheet = true
+            } label: {
+                HStack {
+                    Text(selectedTitle)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.tertiarySystemFill))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title): \(selectedTitle)")
+            .accessibilityHint("Tap to change \(title)")
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(
-          RoundedRectangle(cornerRadius: 10)
-            .fill(Color(.tertiarySystemFill))
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 10)
-            .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
-        )
-      }
-      .accessibilityLabel("\(title): \(selectedValue)")
-      .accessibilityHint("Tap to change \(title)")
-      
-      // Dropdown Options
-      if isExpanded {
-        VStack(spacing: 6) {
-          ForEach(options, id: \.self) { option in
-            PreferenceOptionButton(
-              option: option,
-              selectedValue: selectedValue,
-              isDisabled: disabledOptions.contains(option),
-              onSelection: onSelection
+        .padding(.vertical, 16)
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(16)
+        .sheet(isPresented: $showingSheet) {
+            SelectionListView(
+                title: title,
+                options: options,
+                selectedId: $selectedId
             )
-          }
+            .presentationDetents([.medium, .large])
         }
-        .transition(.opacity.combined(with: .move(edge: .top)))
-      }
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 16)
-    .background(Color.gray.opacity(0.08))
-    .cornerRadius(16)
-  }
 }
 
 #Preview {
-  ZStack {
-    Color.black.ignoresSafeArea()
-    PreferenceDropdownSection(
-      title: "Voice Language",
-      subtitle: "Choose your preferred language",
-      icon: "globe",
-      selectedValue: "English",
-      isExpanded: .constant(true),
-      options: ["English", "Spanish", "French"],
-      disabledOptions: ["Spanish"]
-    ) { _ in }
-    .padding()
-  }
+    ZStack {
+        Color.black.ignoresSafeArea()
+        VStack(spacing: 16) {
+            PreferenceDropdownSection(
+                title: "Voice Language",
+                subtitle: "Choose your preferred language",
+                icon: "globe",
+                options: [
+                    .init(id: "en", title: "English"),
+                    .init(id: "es", title: "Spanish", disabledReason: "Coming Soon"),
+                    .init(id: "fr", title: "French")
+                ],
+                selectedId: .constant("en")
+            )
+
+            PreferenceDropdownSection(
+                title: "Theme Mode",
+                subtitle: "Select your preferred visual theme",
+                icon: "paintbrush",
+                options: [
+                    .init(id: "system", title: "System"),
+                    .init(id: "light", title: "Light"),
+                    .init(id: "dark", title: "Dark")
+                ],
+                selectedId: .constant("system")
+            )
+        }
+        .padding()
+    }
 }

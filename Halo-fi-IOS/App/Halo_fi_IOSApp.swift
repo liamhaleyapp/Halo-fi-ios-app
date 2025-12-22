@@ -12,7 +12,7 @@ import RevenueCat
 @main
 // swiftlint:disable:next type_name
 struct Halo_fi_IOSApp: App {
-  /// SwiftData ModelContainer for transaction persistence
+  /// SwiftData ModelContainer for bank data persistence (transactions + accounts)
   private let modelContainer: ModelContainer
 
   /// Central dependency injection container - owns all services
@@ -40,13 +40,17 @@ struct Halo_fi_IOSApp: App {
   }
 
   init() {
-    // Initialize SwiftData container for transaction persistence
-    let modelContainer = TransactionModelContainer.create()
+    // Initialize SwiftData container for bank data persistence
+    let modelContainer = BankModelContainer.create()
     self.modelContainer = modelContainer
 
-    // Create persistence service and inject into DIContainer
+    // Create persistence services and inject into DIContainer
     let transactionPersistence = TransactionPersistence(modelContainer: modelContainer)
-    self._container = State(initialValue: DIContainer(transactionPersistence: transactionPersistence))
+    let accountPersistence = AccountPersistence(modelContainer: modelContainer)
+    self._container = State(initialValue: DIContainer(
+        transactionPersistence: transactionPersistence,
+        accountPersistence: accountPersistence
+    ))
 
     // Configure RevenueCat
     Purchases.logLevel = .error

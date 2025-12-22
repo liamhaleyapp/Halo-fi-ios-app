@@ -54,20 +54,27 @@ final class BankDataManager {
     private let bankService: BankServiceProtocol
     private let persistence = LinkedItemsPersistence()
     private let transactionPersistence: TransactionPersistenceProtocol?
+    private let accountPersistence: AccountPersistenceProtocol?
     private var currentUserId: String?
+
+    /// In-flight account refresh tasks keyed by (userId, plaidItemId) to prevent refresh storms
+    private var accountRefreshTasks: [String: Task<Void, Never>] = [:]
 
     // MARK: - Initialization
 
-    /// Creates a BankDataManager with optional transaction persistence
+    /// Creates a BankDataManager with optional persistence services
     /// - Parameters:
     ///   - bankService: Service for bank API calls
     ///   - transactionPersistence: Optional persistence for instant transaction display (nil disables caching)
+    ///   - accountPersistence: Optional persistence for instant account display (nil disables caching)
     init(
         bankService: BankServiceProtocol = BankService.shared,
-        transactionPersistence: TransactionPersistenceProtocol? = nil
+        transactionPersistence: TransactionPersistenceProtocol? = nil,
+        accountPersistence: AccountPersistenceProtocol? = nil
     ) {
         self.bankService = bankService
         self.transactionPersistence = transactionPersistence
+        self.accountPersistence = accountPersistence
     }
 
     // MARK: - User Session Management
@@ -77,6 +84,7 @@ final class BankDataManager {
         currentUserId = userId
         restoreLinkedItems()
         Task {
+            await restoreAccounts()
             await refreshIfStale()
         }
     }
@@ -89,6 +97,20 @@ final class BankDataManager {
             Logger.info("BankDataManager: Restored \(items.count) linked items from persistence")
         } else {
             linkedItems = nil
+        }
+    }
+
+    private func restoreAccounts() async {
+        guard let userId = currentUserId, let persistence = accountPersistence else { return }
+
+        let accountsByItem = await persistence.loadAllAccounts(for: userId)
+        if !accountsByItem.isEmpty {
+            accountsByItemId = accountsByItem
+            Logger.info("BankDataManager: Restored \(accountsByItem.values.flatMap { $0 }.count) accounts across \(accountsByItem.count) items")
+            // Debug: Show breakdown per item
+            for (itemId, accounts) in accountsByItem {
+                Logger.debug("BankDataManager: Item \(itemId.prefix(8))... has \(accounts.count) accounts")
+            }
         }
     }
 
@@ -168,6 +190,12 @@ final class BankDataManager {
                             guard self.currentUserId == userId else { return }
                             self.accountsByItemId[item.plaidItemId] = response.accounts
                         }
+
+                        // Persist accounts for instant display on next launch
+                        if let persistence = self.accountPersistence {
+                            await persistence.saveAccounts(response.accounts, for: userId, plaidItemId: item.plaidItemId)
+                            await persistence.markRefreshComplete(for: userId, plaidItemId: item.plaidItemId)
+                        }
                     } catch {
                         Logger.error("BankDataManager: Failed to refresh accounts for item")
                     }
@@ -198,10 +226,19 @@ final class BankDataManager {
         syncError = nil
         persistence.clear(for: userId)
 
-        // Clear persisted transactions
-        if let txnPersistence = transactionPersistence {
-            Task {
+        // Cancel any in-flight refresh tasks
+        for task in accountRefreshTasks.values {
+            task.cancel()
+        }
+        accountRefreshTasks = [:]
+
+        // Clear persisted data
+        Task {
+            if let txnPersistence = transactionPersistence {
                 await txnPersistence.clearTransactions(for: userId)
+            }
+            if let acctPersistence = accountPersistence {
+                await acctPersistence.clearAccounts(for: userId)
             }
         }
 
