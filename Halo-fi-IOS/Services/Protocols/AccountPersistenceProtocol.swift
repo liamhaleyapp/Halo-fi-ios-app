@@ -46,6 +46,9 @@ protocol AccountPersistenceProtocol: Sendable {
     /// Clear all accounts for a user (e.g., on sign out)
     func clearAccounts(for userId: String) async
 
+    /// Clear accounts for a specific Plaid item (e.g., on disconnect)
+    func clearAccounts(for userId: String, plaidItemId: String) async
+
     /// Clear all persisted data
     func clearAll() async
 }

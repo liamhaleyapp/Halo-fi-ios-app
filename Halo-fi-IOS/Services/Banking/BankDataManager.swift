@@ -246,6 +246,42 @@ final class BankDataManager {
         Logger.info("BankDataManager: Cleared all bank data")
     }
 
+    // MARK: - Disconnect Bank
+
+    /// Disconnects a bank and clears all associated local data.
+    /// - Important: Only clears local data AFTER server confirms disconnect.
+    /// - Parameter plaidItemId: The Plaid item ID to disconnect
+    func disconnectBank(plaidItemId: String) async throws {
+        guard let userId = currentUserId else {
+            throw BankError.unauthorized
+        }
+
+        // 1. Call API to revoke Plaid access (server-side)
+        try await bankService.disconnectBankAccount(plaidItemId: plaidItemId)
+
+        // 2. Only on success: clear all local data for this item
+
+        // Cancel any in-flight refresh tasks for this item
+        let taskKey = "\(userId)_\(plaidItemId)"
+        accountRefreshTasks[taskKey]?.cancel()
+        accountRefreshTasks.removeValue(forKey: taskKey)
+
+        // Remove from in-memory linked items
+        removeLinkedItem(plaidItemId: plaidItemId)
+
+        // Remove accounts from in-memory cache
+        accountsByItemId.removeValue(forKey: plaidItemId)
+
+        // Remove transactions from in-memory cache
+        transactionsByItemId.removeValue(forKey: plaidItemId)
+
+        // 3. Clear persisted data
+        await accountPersistence?.clearAccounts(for: userId, plaidItemId: plaidItemId)
+        await transactionPersistence?.clearTransactions(for: userId, plaidItemId: plaidItemId)
+
+        Logger.info("BankDataManager: Disconnected bank and cleared data for item \(plaidItemId)")
+    }
+
     // MARK: - Bank Linking Flow
 
     /// Exchanges collected public tokens for access tokens via backend

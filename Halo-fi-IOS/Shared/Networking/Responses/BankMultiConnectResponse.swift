@@ -102,7 +102,7 @@ struct SandboxPublicToken: Codable {
     }
 }
 
-struct ConnectedItem: Codable, Hashable {
+struct ConnectedItem: Codable, Hashable, Identifiable {
     let institutionId: String
     let institutionName: String
     let availableProducts: [String]?
@@ -113,6 +113,8 @@ struct ConnectedItem: Codable, Hashable {
     let lastSync: String?
     let createdAt: String?
     let updatedAt: String?
+
+    var id: String { plaidItemId }
     
     enum CodingKeys: String, CodingKey {
         case institutionId = "institution_id"

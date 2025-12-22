@@ -74,6 +74,9 @@ protocol TransactionPersistenceProtocol: Sendable {
     /// Clear all transactions for a user (e.g., on sign out)
     func clearTransactions(for userId: String) async
 
+    /// Clear transactions for a specific Plaid item (e.g., on disconnect)
+    func clearTransactions(for userId: String, plaidItemId: String) async
+
     /// Clear all persisted data
     func clearAll() async
 }

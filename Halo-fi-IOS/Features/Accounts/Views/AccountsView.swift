@@ -10,12 +10,13 @@ import SwiftUI
 struct AccountsView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(BankDataManager.self) private var bankDataManager
-  
+
   // MARK: - State Variables
   @State private var showingLinkNewAccount = false
   @State private var selectedItemId: String?
   @State private var isLoadingAccounts = false
   @State private var loadError: String?
+  @State private var selectedInstitution: ConnectedItem?
   
   var body: some View {
     NavigationStack {
@@ -39,11 +40,12 @@ struct AccountsView: View {
                   isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId,
                   bankDataManager: bankDataManager,
                   onTap: {
-                    Task {
-                      await fetchAccountsForItem(item)
-                    }
+                    selectedInstitution = item
                   }
                 )
+                .task {
+                  await fetchAccountsForItem(item)
+                }
               }
             }
           } else {
@@ -67,7 +69,7 @@ struct AccountsView: View {
         .padding(.top, 20)
         .padding(.bottom, 100)
       }
-      .navigationTitle("Accounts")
+      .navigationTitle("Manage Banks")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
@@ -90,6 +92,18 @@ struct AccountsView: View {
         },
         onBack: {
           showingLinkNewAccount = false
+        }
+      )
+    }
+    .sheet(item: $selectedInstitution) { institution in
+      InstitutionDetailSheet(
+        institution: institution,
+        onFixConnection: {
+          // TODO: Open Plaid Link in update mode for this item
+          // Requires backend to create update-mode Link token
+        },
+        onDisconnect: {
+          try await bankDataManager.disconnectBank(plaidItemId: institution.plaidItemId)
         }
       )
     }

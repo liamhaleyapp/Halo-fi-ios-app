@@ -8,8 +8,8 @@
 import SwiftUI
 
 enum SettingsDestination: Identifiable {
-  case profile, preferences, subscription, inviteFriends, about, accounts, webSocketTest
-  
+  case profile, preferences, subscription, inviteFriends, about, accounts
+
   var id: String {
     switch self {
     case .profile: return "profile"
@@ -18,7 +18,6 @@ enum SettingsDestination: Identifiable {
     case .inviteFriends: return "inviteFriends"
     case .about: return "about"
     case .accounts: return "accounts"
-    case .webSocketTest: return "webSocketTest"
     }
   }
 }
@@ -28,11 +27,7 @@ struct SettingsView: View {
   @Environment(SubscriptionService.self) private var subscriptionService
   
   @State private var destination: SettingsDestination?
-  
-#if DEBUG
-  @State private var showingWebSocketTest = false
-#endif
-  
+
   var body: some View {
     NavigationStack {
       ZStack {
@@ -73,8 +68,8 @@ struct SettingsView: View {
             )
             
             SettingsOption(
-              icon: "person.fill",
-              title: "Accounts",
+              icon: "building.2.fill",
+              title: "Manage Banks",
               action: {
                 destination = .accounts
               }
@@ -100,22 +95,14 @@ struct SettingsView: View {
             // Debug Section
             Divider()
               .padding(.vertical, 8)
-            
+
             Text("DEBUG")
               .font(.caption)
               .foregroundColor(.orange)
               .fontWeight(.bold)
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 4)
-            
-            SettingsOption(
-              icon: "network",
-              title: "WebSocket Test",
-              action: {
-                showingWebSocketTest = true
-              }
-            )
-            
+
             SettingsOption(
               icon: "arrow.counterclockwise",
               title: "Reset Onboarding",
@@ -154,9 +141,6 @@ struct SettingsView: View {
         
       case .accounts:
         AccountsView()
-        
-      case .webSocketTest:
-        WebSocketTestView()
       }
     }
   }

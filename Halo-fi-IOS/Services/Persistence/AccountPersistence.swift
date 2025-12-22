@@ -206,6 +206,37 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
         }
     }
 
+    func clearAccounts(for userId: String, plaidItemId: String) async {
+        let context = modelContainer.mainContext
+
+        do {
+            // Clear accounts for this specific item
+            let accountPredicate = #Predicate<PersistedAccount> {
+                $0.userId == userId && $0.plaidItemId == plaidItemId
+            }
+            let accountDescriptor = FetchDescriptor<PersistedAccount>(predicate: accountPredicate)
+            let accounts = try context.fetch(accountDescriptor)
+            for account in accounts {
+                context.delete(account)
+            }
+
+            // Clear sync state for this item
+            let syncPredicate = #Predicate<AccountSyncState> {
+                $0.userId == userId && $0.plaidItemId == plaidItemId
+            }
+            let syncDescriptor = FetchDescriptor<AccountSyncState>(predicate: syncPredicate)
+            let syncStates = try context.fetch(syncDescriptor)
+            for state in syncStates {
+                context.delete(state)
+            }
+
+            try context.save()
+            Logger.info("AccountPersistence: Cleared accounts for plaidItemId: \(plaidItemId)")
+        } catch {
+            Logger.error("AccountPersistence: Failed to clear accounts for item: \(error.localizedDescription)")
+        }
+    }
+
     func clearAll() async {
         let context = modelContainer.mainContext
 

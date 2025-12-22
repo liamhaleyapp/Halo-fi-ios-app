@@ -252,6 +252,37 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
         }
     }
 
+    func clearTransactions(for userId: String, plaidItemId: String) async {
+        let context = modelContainer.mainContext
+
+        do {
+            // Clear transactions for this specific item
+            let txnPredicate = #Predicate<PersistedTransaction> {
+                $0.userId == userId && $0.plaidItemId == plaidItemId
+            }
+            let txnDescriptor = FetchDescriptor<PersistedTransaction>(predicate: txnPredicate)
+            let transactions = try context.fetch(txnDescriptor)
+            for transaction in transactions {
+                context.delete(transaction)
+            }
+
+            // Clear sync state for this item
+            let syncPredicate = #Predicate<TransactionSyncState> {
+                $0.userId == userId && $0.plaidItemId == plaidItemId
+            }
+            let syncDescriptor = FetchDescriptor<TransactionSyncState>(predicate: syncPredicate)
+            let syncStates = try context.fetch(syncDescriptor)
+            for state in syncStates {
+                context.delete(state)
+            }
+
+            try context.save()
+            Logger.info("TransactionPersistence: Cleared transactions for plaidItemId: \(plaidItemId)")
+        } catch {
+            Logger.error("TransactionPersistence: Failed to clear transactions for item: \(error.localizedDescription)")
+        }
+    }
+
     func clearAll() async {
         let context = modelContainer.mainContext
 
