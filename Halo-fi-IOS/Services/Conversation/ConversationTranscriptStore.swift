@@ -34,6 +34,10 @@ final class ConversationTranscriptStore {
     private var streamingUserEntryId: UUID?
     private var streamingUserText: String = ""
 
+    /// Draft entry for live transcription (ElevenLabs STT)
+    private var draftEntryId: UUID?
+    private var draftText: String = ""
+
     // MARK: - Public Methods
 
     /// Append a new event and update entries
@@ -50,6 +54,78 @@ final class ConversationTranscriptStore {
         streamingAgentText = ""
         streamingUserEntryId = nil
         streamingUserText = ""
+        draftEntryId = nil
+        draftText = ""
+    }
+
+    // MARK: - Draft Management (ElevenLabs STT)
+
+    /// Update draft with new transcription text (replaces entire text, not appends)
+    /// ElevenLabs sends complete transcripts that may revise earlier words
+    func updateDraft(_ text: String) {
+        draftText = text
+
+        if let existingId = draftEntryId,
+           let index = entries.firstIndex(where: { $0.id == existingId }) {
+            // Update existing draft entry
+            entries[index].text = text
+        } else {
+            // Create new draft entry
+            let id = UUID()
+            draftEntryId = id
+            entries.append(TranscriptEntry(
+                id: id,
+                speaker: .userDraft,
+                text: text,
+                timestamp: Date(),
+                isStreaming: true
+            ))
+        }
+    }
+
+    /// Finalize draft into a permanent user message
+    /// Returns the finalized text (for sending to agent)
+    @discardableResult
+    func finalizeDraft() -> String? {
+        guard let id = draftEntryId,
+              let index = entries.firstIndex(where: { $0.id == id }) else {
+            return nil
+        }
+
+        let finalText = draftText
+
+        // Skip if empty or whitespace-only
+        guard !finalText.trimmingCharacters(in: .whitespaces).isEmpty else {
+            discardDraft()
+            return nil
+        }
+
+        // Convert draft to final user entry
+        entries[index] = TranscriptEntry(
+            id: id,
+            speaker: .user,
+            text: finalText,
+            timestamp: entries[index].timestamp,
+            isStreaming: false
+        )
+
+        // Clear draft state
+        draftEntryId = nil
+        draftText = ""
+
+        return finalText
+    }
+
+    /// Discard draft without sending (user cancelled or empty)
+    func discardDraft() {
+        guard let id = draftEntryId else { return }
+
+        // Remove draft entry from entries
+        entries.removeAll { $0.id == id }
+
+        // Clear draft state
+        draftEntryId = nil
+        draftText = ""
     }
 
     // MARK: - Event Processing
@@ -187,6 +263,16 @@ extension ConversationTranscriptStore {
     /// Whether there's currently streaming user speech
     var hasStreamingUserEntry: Bool {
         streamingUserEntryId != nil
+    }
+
+    /// Whether there's currently a draft entry (live transcription)
+    var hasDraftEntry: Bool {
+        draftEntryId != nil
+    }
+
+    /// Current draft text (if any)
+    var currentDraftText: String? {
+        draftEntryId != nil ? draftText : nil
     }
 
     /// The most recent entry (for scrolling to bottom)

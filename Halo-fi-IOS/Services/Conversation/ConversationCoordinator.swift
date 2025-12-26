@@ -41,27 +41,40 @@ final class ConversationCoordinator {
     private let agentWebSocket: AgentWebSocketManager
     private var speechService: SpeechSynthesisService?
     private var audioFeedback: AudioFeedbackService?
+    private let sttService: ElevenLabsSTTService
+
+    // MARK: - Transcript Store (for draft management)
+
+    private var transcriptStore: ConversationTranscriptStore?
 
     // MARK: - Private State
 
     private var currentAgentResponseId: UUID?
     private var pendingRetryMessage: String?
+    private var isVoiceSessionActive = false
 
     // MARK: - Initialization
 
     private init() {
         self.voiceService = VoiceService.shared
         self.agentWebSocket = AgentWebSocketManager.shared
+        self.sttService = ElevenLabsSTTService()
 
         setupNotifications()
         setupAgentCallbacks()
+        setupSTTCallbacks()
     }
 
     // MARK: - Dependency Injection (for services created after init)
 
-    func configure(speechService: SpeechSynthesisService, audioFeedback: AudioFeedbackService) {
+    func configure(
+        speechService: SpeechSynthesisService,
+        audioFeedback: AudioFeedbackService,
+        transcriptStore: ConversationTranscriptStore
+    ) {
         self.speechService = speechService
         self.audioFeedback = audioFeedback
+        self.transcriptStore = transcriptStore
 
         speechService.onSpeakingFinished = { [weak self] in
             Task { @MainActor in
@@ -81,14 +94,7 @@ final class ConversationCoordinator {
 
         do {
             try await agentWebSocket.connect()
-
-            // Try to connect voice service (non-blocking - voice is optional)
-            do {
-                try await voiceService.connect(userId: sessionId!)
-            } catch {
-                Logger.warning("Voice service unavailable: \(error.localizedDescription). Text mode will still work.")
-            }
-
+            // Voice (ElevenLabs STT) connects on-demand when user taps mic
             setState(.idle)
             emitEvent(.status("Connected to Halo"))
         } catch {
@@ -100,10 +106,12 @@ final class ConversationCoordinator {
     /// Disconnect from the backend
     func disconnect() {
         voiceService.stopRecording()
-        voiceService.disconnect()
+        sttService.disconnect()
         agentWebSocket.disconnect()
         speechService?.stop()
+        transcriptStore?.discardDraft()
 
+        isVoiceSessionActive = false
         sessionId = nil
         setState(.idle)
     }
@@ -125,13 +133,6 @@ final class ConversationCoordinator {
         guard state == .idle || state == .speaking else { return }
         guard interactionMode == .voice else { return }
 
-        // Check if voice service is connected
-        guard voiceService.isConnected else {
-            setState(.error("Voice not available"))
-            emitEvent(.errorEvent("Voice service is not connected. Please use text input instead."))
-            return
-        }
-
         // Stop TTS if speaking
         if state == .speaking {
             speechService?.stop()
@@ -149,38 +150,97 @@ final class ConversationCoordinator {
         do {
             setState(.listening)
             audioFeedback?.feedbackForStateChange(.listening)
+
+            // Connect to ElevenLabs STT (fetches fresh token each time)
+            try await sttService.connect()
+
+            // Wire audio buffers from VoiceService to STT service
+            voiceService.onAudioBuffer = { [weak self] buffer in
+                guard let self = self else { return }
+                Task {
+                    await self.sttService.sendAudioBuffer(buffer)
+                }
+            }
+
+            // Start recording
             try await voiceService.startRecording()
+            isVoiceSessionActive = true
+
         } catch {
+            // Clean up on failure
+            sttService.disconnect()
+            voiceService.onAudioBuffer = nil
+            isVoiceSessionActive = false
+
             setState(.error(error.localizedDescription))
-            emitEvent(.errorEvent("Failed to start recording: \(error.localizedDescription)"))
+            emitEvent(.errorEvent("Voice unavailable: \(error.localizedDescription)"))
         }
     }
 
-    /// Stop listening (voice mode)
+    /// Stop listening (voice mode) - user cancelled
     func stopListening() {
         guard state == .listening else { return }
 
+        // Stop recording and STT
         voiceService.stopRecording()
-        audioFeedback?.feedbackForStateChange(.processing)
-        setState(.processing)
+        voiceService.onAudioBuffer = nil
+        sttService.disconnect()
+        isVoiceSessionActive = false
+
+        // Discard draft (user cancelled)
+        transcriptStore?.discardDraft()
+
+        setState(.idle)
     }
 
-    /// Send a text message
+    /// Internal: Stop listening after committed transcript (VAD auto-stop)
+    private func stopListeningAndProcess() {
+        guard state == .listening else { return }
+
+        // Stop recording and STT
+        voiceService.stopRecording()
+        voiceService.onAudioBuffer = nil
+        sttService.disconnect()
+        isVoiceSessionActive = false
+
+        // Finalize draft and send to agent
+        if let finalText = transcriptStore?.finalizeDraft() {
+            audioFeedback?.feedbackForStateChange(.processing)
+            setState(.processing)
+
+            Task {
+                await sendTextInternal(finalText)
+            }
+        } else {
+            // Empty or invalid transcript - just go idle
+            setState(.idle)
+        }
+    }
+
+    /// Send a text message (from text input)
     func sendText(_ message: String) async {
         guard !message.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         guard state == .idle || state == .listening else { return }
 
-        // Stop listening if active
+        // Stop listening if active (without discarding - stopListening handles that)
         if state == .listening {
             voiceService.stopRecording()
+            voiceService.onAudioBuffer = nil
+            sttService.disconnect()
+            isVoiceSessionActive = false
+            transcriptStore?.discardDraft()
         }
 
-        // Emit user message event
+        // Emit user message event (for text input, need to show in UI)
         emitEvent(.userText(message))
 
         // Send to agent
         setState(.processing)
+        await sendTextInternal(message)
+    }
 
+    /// Internal: Send text to agent (used by both text input and voice finalization)
+    private func sendTextInternal(_ message: String) async {
         do {
             currentAgentResponseId = UUID()
 
@@ -207,6 +267,10 @@ final class ConversationCoordinator {
         // Stop recording if listening
         if muted && state == .listening {
             voiceService.stopRecording()
+            voiceService.onAudioBuffer = nil
+            sttService.disconnect()
+            isVoiceSessionActive = false
+            transcriptStore?.discardDraft()
             setState(.idle)
         }
 
@@ -317,6 +381,56 @@ final class ConversationCoordinator {
         }
     }
 
+    // MARK: - STT Callbacks (ElevenLabs)
+
+    private func setupSTTCallbacks() {
+        // Handle transcription updates (partial and final)
+        sttService.onTranscription = { [weak self] text, isFinal in
+            guard let self = self else { return }
+            guard self.isVoiceSessionActive else { return }
+
+            if isFinal {
+                // Committed transcript from VAD - auto-stop and process
+                self.stopListeningAndProcess()
+            } else {
+                // Partial transcript - update draft in UI
+                self.transcriptStore?.updateDraft(text)
+            }
+        }
+
+        // Handle STT errors
+        sttService.onError = { [weak self] error in
+            guard let self = self else { return }
+
+            Logger.error("STT error: \(error.localizedDescription)")
+
+            // Clean up voice session
+            self.voiceService.stopRecording()
+            self.voiceService.onAudioBuffer = nil
+            self.isVoiceSessionActive = false
+            self.transcriptStore?.discardDraft()
+
+            // Show error to user
+            self.setState(.error(error.localizedDescription))
+            self.emitEvent(.errorEvent("Voice transcription failed: \(error.localizedDescription)"))
+        }
+
+        // Handle STT disconnection
+        sttService.onDisconnected = { [weak self] in
+            guard let self = self else { return }
+
+            // Only handle unexpected disconnections (not user-initiated)
+            if self.isVoiceSessionActive && self.state == .listening {
+                Logger.warning("STT disconnected unexpectedly")
+                self.voiceService.stopRecording()
+                self.voiceService.onAudioBuffer = nil
+                self.isVoiceSessionActive = false
+                self.transcriptStore?.discardDraft()
+                self.setState(.idle)
+            }
+        }
+    }
+
     private func handleAgentResponseComplete(id: UUID) {
         // Response is complete, transition to speaking if we have text
         if !isPrivacyMode {
@@ -390,6 +504,10 @@ final class ConversationCoordinator {
         // Stop all audio activity when app goes to background
         if state == .listening {
             voiceService.stopRecording()
+            voiceService.onAudioBuffer = nil
+            sttService.disconnect()
+            isVoiceSessionActive = false
+            transcriptStore?.discardDraft()
         }
 
         if state == .speaking {

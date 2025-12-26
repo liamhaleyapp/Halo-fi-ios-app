@@ -58,7 +58,11 @@ final class ConversationViewModel {
         // Configure services if needed
         let speechService = SpeechSynthesisService()
         let audioFeedback = AudioFeedbackService()
-        coordinator.configure(speechService: speechService, audioFeedback: audioFeedback)
+        coordinator.configure(
+            speechService: speechService,
+            audioFeedback: audioFeedback,
+            transcriptStore: store
+        )
 
         // Connect to backend
         await coordinator.connect()

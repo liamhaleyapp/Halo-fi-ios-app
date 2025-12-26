@@ -90,15 +90,30 @@ enum APIEndpoints {
         static let createMultiItems = "/bank/sandbox/create-multi-items"
     }
 
+    // MARK: - Agent
+
+    enum Agent {
+        /// POST - Get ElevenLabs STT token for voice transcription.
+        static let sttToken = "/agent/stt/token"
+    }
+
     // MARK: - WebSocket
 
     enum WebSocket {
-        /// Voice conversation WebSocket endpoint.
+        /// Voice conversation WebSocket endpoint (deprecated - use ElevenLabs STT).
         static let voice = "/ws/voice"
 
-        /// Full WebSocket URL for voice.
+        /// Full WebSocket URL for voice (deprecated).
         static var voiceURL: String {
             baseURL.replacingOccurrences(of: "https://", with: "wss://") + voice
+        }
+
+        /// Agent WebSocket endpoint.
+        static let agent = "/agent/ws"
+
+        /// Full WebSocket URL for agent.
+        static var agentURL: String {
+            baseURL.replacingOccurrences(of: "https://", with: "wss://") + agent
         }
     }
 }

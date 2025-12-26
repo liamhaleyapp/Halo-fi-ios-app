@@ -39,13 +39,18 @@ struct TranscriptBlock: View {
                 Text(entry.text)
                     .font(.title3)
                     .fontWeight(.regular)
-                    .foregroundColor(.primary)
+                    .italic(entry.speaker.isDraft)
+                    .foregroundColor(entry.speaker.isDraft ? .secondary : .primary)
                     .lineSpacing(4)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Streaming indicator
+                // Streaming indicator (for agent) or listening indicator (for draft)
                 if entry.isStreaming {
-                    streamingIndicator
+                    if entry.speaker.isDraft {
+                        listeningIndicator
+                    } else {
+                        streamingIndicator
+                    }
                 }
             }
         }
@@ -79,12 +84,46 @@ struct TranscriptBlock: View {
         }
         .accessibilityHidden(true)
     }
+
+    @ViewBuilder
+    private var listeningIndicator: some View {
+        // Waveform bars for listening state
+        HStack(spacing: 3) {
+            ForEach(0..<4, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.secondary.opacity(0.6))
+                    .frame(width: 3, height: listeningBarHeight(for: index))
+                    .animation(
+                        .easeInOut(duration: 0.4)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.1),
+                        value: entry.isStreaming
+                    )
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func listeningBarHeight(for index: Int) -> CGFloat {
+        // Varying heights for waveform effect
+        let heights: [CGFloat] = [8, 14, 10, 12]
+        return heights[index % heights.count]
+    }
 }
 
 // MARK: - Preview
 
 #Preview {
     VStack(spacing: 16) {
+        // Draft (live transcription)
+        TranscriptBlock(entry: TranscriptEntry(
+            id: UUID(),
+            speaker: .userDraft,
+            text: "What's my checking...",
+            timestamp: Date(),
+            isStreaming: true
+        ))
+
         TranscriptBlock(entry: .user("What's my checking account balance?"))
 
         TranscriptBlock(entry: .agent(

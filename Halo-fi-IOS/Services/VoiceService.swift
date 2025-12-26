@@ -2,7 +2,9 @@
 //  VoiceService.swift
 //  Halo-fi-IOS
 //
-//  Created by Christopher Koski on 10/16/25.
+//  Audio capture service for voice input.
+//  Captures microphone audio and emits buffers via callback.
+//  Does not handle network - that's ElevenLabsSTTService's job.
 //
 
 import Foundation
@@ -16,11 +18,9 @@ final class VoiceService: NSObject {
     var isRecording = false
     var isPlaying = false
 
-    // Forward connection state from WebSocketManager
-    var isConnected: Bool { webSocketManager.isConnected }
-    var connectionStatus: ConnectionStatus { webSocketManager.connectionStatus }
+    /// Callback for audio buffers - set by external consumer (e.g., ElevenLabsSTTService)
+    var onAudioBuffer: ((AVAudioPCMBuffer) -> Void)?
 
-    private let webSocketManager = WebSocketManager.shared
     private var audioEngine: AVAudioEngine?
     private var audioPlayer: AVAudioPlayer?
     private var recordingSession: AVAudioSession?
@@ -40,17 +40,6 @@ final class VoiceService: NSObject {
         } catch {
             Logger.error("Failed to setup audio session: \(error)")
         }
-    }
-
-    // MARK: - Connection Management
-
-    func connect(userId: String) async throws {
-        try await webSocketManager.connect(userId: userId)
-        try await webSocketManager.sendVoiceStart()
-    }
-
-    func disconnect() {
-        webSocketManager.disconnect()
     }
 
     // MARK: - Recording
@@ -86,9 +75,11 @@ final class VoiceService: NSObject {
             throw VoiceError.audioEngineError
         }
 
+        Logger.info("VoiceService: Starting recording at \(recordingFormat.sampleRate) Hz, \(recordingFormat.channelCount) channels")
+
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             Task { @MainActor in
-                await self?.processAudioBuffer(buffer)
+                self?.handleAudioBuffer(buffer)
             }
         }
 
@@ -103,32 +94,15 @@ final class VoiceService: NSObject {
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine = nil
         isRecording = false
+
+        Logger.info("VoiceService: Stopped recording")
     }
 
-    // MARK: - Audio Processing
+    // MARK: - Audio Buffer Handling
 
-    private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) async {
-        guard let audioData = bufferToData(buffer) else { return }
-
-        do {
-            try await webSocketManager.sendVoiceAudio(audioData)
-        } catch {
-            Logger.error("Failed to send audio data: \(error)")
-        }
-    }
-
-    private func bufferToData(_ buffer: AVAudioPCMBuffer) -> Data? {
-        guard let channelData = buffer.floatChannelData?[0] else { return nil }
-
-        let frameCount = Int(buffer.frameLength)
-        let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
-
-        // Convert float samples to 16-bit PCM
-        let pcmData = samples.map { sample in
-            Int16(max(-32768, min(32767, sample * 32768)))
-        }
-
-        return Data(bytes: pcmData, count: pcmData.count * MemoryLayout<Int16>.size)
+    private func handleAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        // Emit buffer to callback (for ElevenLabsSTTService or other consumers)
+        onAudioBuffer?(buffer)
     }
 
     // MARK: - Audio Playback

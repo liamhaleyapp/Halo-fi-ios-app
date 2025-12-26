@@ -21,6 +21,7 @@ struct TranscriptEntry: Identifiable, Equatable {
     /// Speaker type for transcript entries
     enum Speaker: Equatable {
         case user
+        case userDraft  // Live transcription while speaking (tentative styling)
         case agent
         case system
     }
@@ -76,6 +77,8 @@ extension TranscriptEntry {
         switch speaker {
         case .user:
             return "You said"
+        case .userDraft:
+            return "Listening..."
         case .agent:
             return "Halo said"
         case .system:
@@ -109,6 +112,8 @@ extension TranscriptEntry.Speaker {
         switch self {
         case .user:
             return Color(.systemGray5)
+        case .userDraft:
+            return Color(.systemGray6)  // Lighter than final user message
         case .agent:
             return Color.blue.opacity(0.1)
         case .system:
@@ -121,10 +126,17 @@ extension TranscriptEntry.Speaker {
         switch self {
         case .user:
             return .secondary
+        case .userDraft:
+            return .secondary.opacity(0.7)  // More muted for draft
         case .agent:
             return .blue
         case .system:
             return .orange
         }
+    }
+
+    /// Whether this speaker type represents a draft/tentative entry
+    var isDraft: Bool {
+        self == .userDraft
     }
 }
