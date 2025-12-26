@@ -77,7 +77,7 @@ extension NetworkServiceProtocol {
 
 #if DEBUG
 /// Mock network service for unit tests and previews.
-actor MockNetworkService: NetworkServiceProtocol {
+final class MockNetworkService: NetworkServiceProtocol {
     var mockResponses: [String: Any] = [:]
     var mockError: Error?
 

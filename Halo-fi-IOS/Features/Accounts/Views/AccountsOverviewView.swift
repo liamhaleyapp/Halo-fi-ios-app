@@ -261,37 +261,27 @@ struct AccountsOverviewView: View {
   
   private func loadInitialData() async {
     isLoadingLinkedItems = true
-    
-    do {
-      // Fetch linked items if we don't have them
-      if bankDataManager.linkedItems == nil {
-        // Try to fetch accounts which may trigger linked items fetch
-        // For now, we'll rely on the linkedItems being set during onboarding
-        // If they're not set, we'll show empty state
-        print("🔵 AccountsOverviewView: Checking for linked items")
-      }
-      
-      // If we have linked items but no accounts loaded, fetch accounts for the first item
-      if let linkedItems = bankDataManager.linkedItems,
-         !linkedItems.isEmpty,
-         bankDataManager.accountsByItemId.isEmpty {
-        // Load accounts for the first institution to show summary
-        let firstItem = linkedItems[0]
-        if bankDataManager.accountsByItemId[firstItem.plaidItemId] == nil {
-          await fetchAccountsForItem(firstItem)
-        }
-      }
-      
-      await MainActor.run {
-        isLoadingLinkedItems = false
-      }
-    } catch {
-      await MainActor.run {
-        isLoadingLinkedItems = false
-        print("❌ AccountsOverviewView: Error loading data: \(error)")
-        // Errors are now handled in InstitutionAccountsView, not here
+
+    // Fetch linked items if we don't have them
+    if bankDataManager.linkedItems == nil {
+      // Try to fetch accounts which may trigger linked items fetch
+      // For now, we'll rely on the linkedItems being set during onboarding
+      // If they're not set, we'll show empty state
+      print("🔵 AccountsOverviewView: Checking for linked items")
+    }
+
+    // If we have linked items but no accounts loaded, fetch accounts for the first item
+    if let linkedItems = bankDataManager.linkedItems,
+       !linkedItems.isEmpty,
+       bankDataManager.accountsByItemId.isEmpty {
+      // Load accounts for the first institution to show summary
+      let firstItem = linkedItems[0]
+      if bankDataManager.accountsByItemId[firstItem.plaidItemId] == nil {
+        await fetchAccountsForItem(firstItem)
       }
     }
+
+    isLoadingLinkedItems = false
   }
   
   private func fetchAccountsForItem(_ item: ConnectedItem) async {

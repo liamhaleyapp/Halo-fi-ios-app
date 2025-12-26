@@ -9,6 +9,31 @@
 import Foundation
 import SwiftData
 
+// MARK: - Sendable Snapshot
+
+/// A Sendable snapshot of sync state for cross-actor use
+struct SyncStateInfo: Sendable {
+    let cursor: String?
+    let hasMore: Bool
+    let lastFullSyncAt: Date?
+    let lastRecentSyncAt: Date?
+    let totalTransactionCount: Int
+
+    var needsFullSync: Bool {
+        guard let lastFull = lastFullSyncAt else { return true }
+        let hoursSinceFullSync = Date().timeIntervalSince(lastFull) / 3600
+        return hoursSinceFullSync > 24
+    }
+
+    var needsRecentSync: Bool {
+        guard let lastRecent = lastRecentSyncAt else { return true }
+        let minutesSinceRecentSync = Date().timeIntervalSince(lastRecent) / 60
+        return minutesSinceRecentSync > 5
+    }
+}
+
+// MARK: - SwiftData Model
+
 @Model
 final class TransactionSyncState {
     // MARK: - Primary Key
@@ -88,5 +113,16 @@ final class TransactionSyncState {
         self.lastRecentSyncAt = Date()
         self.cursor = cursor
         self.hasMore = hasMore
+    }
+
+    /// Creates a Sendable snapshot for cross-actor use
+    func toSyncStateInfo() -> SyncStateInfo {
+        SyncStateInfo(
+            cursor: cursor,
+            hasMore: hasMore,
+            lastFullSyncAt: lastFullSyncAt,
+            lastRecentSyncAt: lastRecentSyncAt,
+            totalTransactionCount: totalTransactionCount
+        )
     }
 }

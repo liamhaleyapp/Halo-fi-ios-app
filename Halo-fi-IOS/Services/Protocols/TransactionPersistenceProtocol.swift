@@ -61,7 +61,7 @@ protocol TransactionPersistenceProtocol: Sendable {
     // MARK: - Sync State Queries
 
     /// Get the sync state for a Plaid item
-    func getSyncState(for userId: String, plaidItemId: String) async -> TransactionSyncState?
+    func getSyncState(for userId: String, plaidItemId: String) async -> SyncStateInfo?
 
     /// Check if a full sync is needed (never synced or >24h)
     func needsFullSync(for userId: String, plaidItemId: String) async -> Bool

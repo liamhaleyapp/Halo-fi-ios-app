@@ -201,7 +201,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
     // MARK: - Sync State Queries
 
-    func getSyncState(for userId: String, plaidItemId: String) async -> TransactionSyncState? {
+    func getSyncState(for userId: String, plaidItemId: String) async -> SyncStateInfo? {
         let context = modelContainer.mainContext
         let compositeId = "\(userId)_\(plaidItemId)"
 
@@ -210,7 +210,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
         do {
             let existing = try context.fetch(descriptor)
-            return existing.first
+            return existing.first?.toSyncStateInfo()
         } catch {
             Logger.error("TransactionPersistence: Failed to get sync state: \(error.localizedDescription)")
             return nil

@@ -9,6 +9,7 @@ import Foundation
 
 /// Protocol defining common WebSocket manager operations.
 /// Enables dependency injection and provides consistent interface.
+@MainActor
 protocol WebSocketManagerProtocol: AnyObject {
     /// Whether the WebSocket is currently connected
     var isConnected: Bool { get }
@@ -21,6 +22,7 @@ protocol WebSocketManagerProtocol: AnyObject {
 }
 
 /// Protocol for voice-specific WebSocket operations.
+@MainActor
 protocol VoiceWebSocketManagerProtocol: WebSocketManagerProtocol {
     /// Connects to the voice WebSocket server
     /// - Parameter userId: The user ID for the session
@@ -41,6 +43,7 @@ protocol VoiceWebSocketManagerProtocol: WebSocketManagerProtocol {
 }
 
 /// Protocol for agent chat WebSocket operations.
+@MainActor
 protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
     /// The last response from the agent
     var lastAgentResponse: String? { get }
