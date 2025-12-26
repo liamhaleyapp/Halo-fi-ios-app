@@ -32,7 +32,8 @@ struct ConversationView: View {
             // Transcript
             TranscriptView(
                 entries: viewModel.entries,
-                onCopyEntry: viewModel.copyEntry
+                onCopyEntry: viewModel.copyEntry,
+                isProcessing: viewModel.state == .processing
             )
 
             // Input area (voice or text mode)
@@ -78,7 +79,8 @@ struct ConversationView: View {
                 state: viewModel.state,
                 isEnabled: viewModel.isTextInputEnabled,
                 onSend: viewModel.sendTextMessage,
-                onSwitchToVoice: viewModel.switchToVoiceMode
+                onSwitchToVoice: viewModel.switchToVoiceMode,
+                onStopSpeaking: viewModel.toggleMicButton
             )
         }
     }

@@ -18,16 +18,23 @@ struct TextInputArea: View {
     let isEnabled: Bool
     let onSend: () -> Void
     let onSwitchToVoice: () -> Void
+    var onStopSpeaking: (() -> Void)?
 
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            // Compact mic button
+            // Compact mic button - stops TTS when speaking, otherwise switches to voice
             MicButtonCompact(
                 state: state,
-                isEnabled: isEnabled && state != .processing,
-                onTap: onSwitchToVoice
+                isEnabled: (isEnabled && state != .processing) || state == .speaking,
+                onTap: {
+                    if state == .speaking {
+                        onStopSpeaking?()
+                    } else {
+                        onSwitchToVoice()
+                    }
+                }
             )
 
             // Text field

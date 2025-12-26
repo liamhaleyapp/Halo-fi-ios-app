@@ -79,8 +79,8 @@ final class ConversationViewModel {
             case .idle:
                 await coordinator.startListening()
             case .speaking:
-                // Stop speaking and start listening
-                await coordinator.startListening()
+                // Stop current TTS (skip this message)
+                coordinator.stopSpeaking()
             default:
                 break
             }

@@ -62,6 +62,16 @@ final class VoiceService: NSObject {
             throw VoiceError.microphonePermissionDenied
         }
 
+        // Ensure audio session is active before accessing input node
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setActive(true)
+        } catch {
+            Logger.error("Failed to activate audio session: \(error)")
+            throw VoiceError.audioEngineError
+        }
+
         audioEngine = AVAudioEngine()
         guard let audioEngine = audioEngine else {
             throw VoiceError.audioEngineError
@@ -69,6 +79,12 @@ final class VoiceService: NSObject {
 
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        // Validate format has valid sample rate and channel count
+        guard recordingFormat.sampleRate > 0 && recordingFormat.channelCount > 0 else {
+            Logger.error("Invalid audio format: \(recordingFormat.sampleRate) Hz, \(recordingFormat.channelCount) channels")
+            throw VoiceError.audioEngineError
+        }
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             Task { @MainActor in

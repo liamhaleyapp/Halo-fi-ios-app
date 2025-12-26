@@ -99,7 +99,7 @@ struct MicButton: View {
 
     private var buttonGradient: LinearGradient {
         switch state {
-        case .listening:
+        case .listening, .speaking:
             return LinearGradient(
                 colors: [.red, .orange],
                 startPoint: .topLeading,
@@ -108,12 +108,6 @@ struct MicButton: View {
         case .processing:
             return LinearGradient(
                 colors: [.orange, .yellow],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .speaking:
-            return LinearGradient(
-                colors: [.green, .teal],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -128,12 +122,10 @@ struct MicButton: View {
 
     private var shadowColor: Color {
         switch state {
-        case .listening:
+        case .listening, .speaking:
             return .red
         case .processing:
             return .orange
-        case .speaking:
-            return .green
         default:
             return .blue
         }
@@ -146,7 +138,7 @@ struct MicButton: View {
         case .processing:
             return "ellipsis"
         case .speaking:
-            return "speaker.wave.2.fill"
+            return "stop.fill"
         default:
             return "mic.fill"
         }
@@ -154,14 +146,10 @@ struct MicButton: View {
 
     private var labelColor: Color {
         switch state {
-        case .listening:
+        case .listening, .speaking, .error:
             return .red
         case .processing:
             return .orange
-        case .speaking:
-            return .green
-        case .error:
-            return .red
         default:
             return .secondary
         }
@@ -174,7 +162,7 @@ struct MicButton: View {
         case .processing:
             return "Processing"
         case .speaking:
-            return "Halo is speaking"
+            return "Stop speaking"
         default:
             return "Start listening"
         }
@@ -187,7 +175,7 @@ struct MicButton: View {
         case .processing:
             return "Please wait"
         case .speaking:
-            return "Double tap to stop and speak"
+            return "Double tap to skip this message"
         default:
             return "Double tap to start speaking to Halo"
         }
@@ -207,19 +195,59 @@ struct MicButtonCompact: View {
     let isEnabled: Bool
     let onTap: () -> Void
 
+    private var iconName: String {
+        switch state {
+        case .listening:
+            return "waveform"
+        case .speaking:
+            return "stop.fill"
+        default:
+            return "mic.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch state {
+        case .listening, .speaking:
+            return .red
+        default:
+            return .blue
+        }
+    }
+
+    private var accessibilityLabelText: String {
+        switch state {
+        case .listening:
+            return "Stop listening"
+        case .speaking:
+            return "Stop speaking"
+        default:
+            return "Switch to voice"
+        }
+    }
+
+    private var accessibilityHintText: String {
+        switch state {
+        case .speaking:
+            return "Double tap to skip this message"
+        default:
+            return "Double tap to use voice input"
+        }
+    }
+
     var body: some View {
         Button(action: onTap) {
-            Image(systemName: state == .listening ? "waveform" : "mic.fill")
+            Image(systemName: iconName)
                 .font(.title2)
-                .foregroundColor(state == .listening ? .red : .blue)
+                .foregroundColor(iconColor)
                 .frame(width: 44, height: 44)
                 .background(Color(.systemGray5))
                 .clipShape(Circle())
         }
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1.0 : 0.3)
-        .accessibilityLabel(state == .listening ? "Stop listening" : "Switch to voice")
-        .accessibilityHint("Double tap to use voice input")
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(accessibilityHintText)
     }
 }
 
@@ -238,6 +266,7 @@ struct MicButtonCompact: View {
         HStack {
             MicButtonCompact(state: .idle, isEnabled: true) { }
             MicButtonCompact(state: .listening, isEnabled: true) { }
+            MicButtonCompact(state: .speaking, isEnabled: true) { }
             MicButtonCompact(state: .idle, isEnabled: false) { }
         }
     }

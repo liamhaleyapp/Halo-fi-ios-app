@@ -14,13 +14,15 @@ import SwiftUI
 struct TranscriptView: View {
     let entries: [TranscriptEntry]
     let onCopyEntry: ((TranscriptEntry) -> Void)?
+    var isProcessing: Bool = false
 
     @State private var isAtBottom = true
     @State private var showJumpToLatest = false
 
-    init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil) {
+    init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil, isProcessing: Bool = false) {
         self.entries = entries
         self.onCopyEntry = onCopyEntry
+        self.isProcessing = isProcessing
     }
 
     var body: some View {
@@ -36,6 +38,12 @@ struct TranscriptView: View {
                                     .onTapGesture(count: 2) {
                                         onCopyEntry?(entry)
                                     }
+                            }
+
+                            // Typing indicator when processing
+                            if isProcessing {
+                                TypingIndicator()
+                                    .id("typing")
                             }
 
                             // Bottom anchor for scrolling
@@ -62,6 +70,14 @@ struct TranscriptView: View {
                         if isAtBottom {
                             withAnimation(.easeOut(duration: 0.1)) {
                                 proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: isProcessing) { _, newValue in
+                        // Scroll to typing indicator when it appears
+                        if newValue && isAtBottom {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo("typing", anchor: .bottom)
                             }
                         }
                     }
@@ -164,4 +180,43 @@ struct TranscriptView: View {
 
 #Preview("Empty") {
     TranscriptView(entries: [])
+}
+
+#Preview("Processing") {
+    TranscriptView(
+        entries: [.user("What's my balance?")],
+        isProcessing: true
+    )
+}
+
+// MARK: - Typing Indicator
+
+struct TypingIndicator: View {
+    @State private var animating = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.secondary)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(animating ? 1.0 : 0.5)
+                    .opacity(animating ? 1.0 : 0.5)
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.6)
+                            .repeatForever()
+                            .delay(Double(index) * 0.2),
+                        value: animating
+                    )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemGray5))
+        .cornerRadius(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { animating = true }
+        .accessibilityLabel("Halo is typing")
+    }
 }

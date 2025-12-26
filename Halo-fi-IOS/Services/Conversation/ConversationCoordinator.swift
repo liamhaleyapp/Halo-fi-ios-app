@@ -81,6 +81,14 @@ final class ConversationCoordinator {
 
         do {
             try await agentWebSocket.connect()
+
+            // Try to connect voice service (non-blocking - voice is optional)
+            do {
+                try await voiceService.connect(userId: sessionId!)
+            } catch {
+                Logger.warning("Voice service unavailable: \(error.localizedDescription). Text mode will still work.")
+            }
+
             setState(.idle)
             emitEvent(.status("Connected to Halo"))
         } catch {
@@ -116,6 +124,13 @@ final class ConversationCoordinator {
     func startListening() async {
         guard state == .idle || state == .speaking else { return }
         guard interactionMode == .voice else { return }
+
+        // Check if voice service is connected
+        guard voiceService.isConnected else {
+            setState(.error("Voice not available"))
+            emitEvent(.errorEvent("Voice service is not connected. Please use text input instead."))
+            return
+        }
 
         // Stop TTS if speaking
         if state == .speaking {
@@ -186,10 +201,27 @@ final class ConversationCoordinator {
     func setMuted(_ muted: Bool) {
         isMuted = muted
 
+        // Propagate to speech service
+        speechService?.setMuted(muted)
+
+        // Stop recording if listening
         if muted && state == .listening {
             voiceService.stopRecording()
             setState(.idle)
         }
+
+        // Stop speaking immediately if muted
+        if muted && state == .speaking {
+            speechService?.stop()
+            setState(.idle)
+        }
+    }
+
+    /// Stop current TTS without affecting mute state (skip this message)
+    func stopSpeaking() {
+        guard state == .speaking else { return }
+        speechService?.stop()
+        setState(.idle)
     }
 
     /// Set privacy mode (TTS off, haptics only)
@@ -296,6 +328,12 @@ final class ConversationCoordinator {
 
     private func speakAgentResponse(_ text: String) {
         guard !isPrivacyMode else {
+            setState(.idle)
+            return
+        }
+
+        // Don't speak if muted (handles mute during .processing)
+        guard !isMuted else {
             setState(.idle)
             return
         }
