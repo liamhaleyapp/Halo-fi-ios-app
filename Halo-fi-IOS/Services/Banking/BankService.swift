@@ -267,6 +267,36 @@ final class BankService: BankServiceProtocol {
         }
     }
 
+    // MARK: - Get Linked Items
+    /// Fetches all linked items (connected institutions) for the authenticated user
+    /// - Returns: Full MultiItemsResponse including items and embedded accounts
+    /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getLinkedItems() async throws -> MultiItemsResponse {
+        Logger.info("Fetching linked items from server")
+
+        do {
+            let response: MultiItemsResponse = try await networkService.authenticatedRequest(
+                endpoint: APIEndpoints.Bank.multiItems,
+                method: .GET,
+                body: nil,
+                responseType: MultiItemsResponse.self
+            )
+            Logger.success("Fetched \(response.items.count) linked items from server")
+            return response
+        } catch let authError as AuthError {
+            // Return empty response for 404 (no items found)
+            if case .serverError(let code, _) = authError, code == 404 {
+                Logger.info("No linked items found (404)")
+                return MultiItemsResponse(success: true, items: [], totalItems: 0)
+            }
+            Logger.error("Error fetching linked items: \(authError)")
+            throw convertToBankError(authError)
+        } catch {
+            Logger.error("Unknown error fetching linked items: \(error)")
+            throw convertToBankError(error)
+        }
+    }
+
     // MARK: - Error Conversion Helper
 
     /// Converts AuthError or other errors to BankError for consistent API.

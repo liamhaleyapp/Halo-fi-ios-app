@@ -45,6 +45,9 @@ enum APIEndpoints {
         /// POST - Create Plaid Link token for multi-item flow.
         static let multiLinkCreate = "/bank/multi-link/create"
 
+        /// GET - Fetch all linked items (connected institutions).
+        static let multiItems = "/bank/multi-items"
+
         /// GET - Fetch all accounts summary.
         static let accounts = "/bank/accounts"
 

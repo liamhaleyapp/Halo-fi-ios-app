@@ -60,6 +60,12 @@ final class BankDataManager {
     /// In-flight account refresh tasks keyed by (userId, plaidItemId) to prevent refresh storms
     private var accountRefreshTasks: [String: Task<Void, Never>] = [:]
 
+    /// In-flight guard for linked items fetch to prevent duplicate API calls
+    private var linkedItemsFetchTask: Task<Void, Never>?
+
+    /// In-flight guard for refresh to prevent duplicate refresh storms
+    private var refreshTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     /// Creates a BankDataManager with optional persistence services
@@ -82,21 +88,141 @@ final class BankDataManager {
     /// Call after auth resolves with valid user
     func configureForUser(userId: String) {
         currentUserId = userId
-        restoreLinkedItems()
-        Task {
+
+        Task { @MainActor in
+            // 1. Restore linked items - return value for explicit ordering
+            let restoredItems = restoreLinkedItemsSync()
+
+            // 2. If persistence was empty, fetch from server
+            if restoredItems.isEmpty {
+                await fetchLinkedItemsFromServer()
+            }
+
+            // 3. Restore accounts from persistence
             await restoreAccounts()
+
+            // 4. Refresh if stale (single network call, guarded)
             await refreshIfStale()
+
+            // 5. Ensure accountsByItemId is populated
+            rebuildAccountsByItemId()
         }
     }
 
-    private func restoreLinkedItems() {
-        guard let userId = currentUserId else { return }
+    /// Synchronous restore that returns the result for explicit ordering
+    /// Must run on MainActor since it mutates linkedItems
+    private func restoreLinkedItemsSync() -> [ConnectedItem] {
+        guard let userId = currentUserId else { return [] }
 
-        if let items = persistence.load(for: userId) {
-            linkedItems = items
+        if let items = persistence.load(for: userId), !items.isEmpty {
+            linkedItems = items  // Set directly, don't re-persist
             Logger.info("BankDataManager: Restored \(items.count) linked items from persistence")
+            return items
+        }
+        return []
+    }
+
+    /// Fetch linked items from server with in-flight guard
+    /// Second callers await the same task instead of returning early
+    private func fetchLinkedItemsFromServer() async {
+        // If task already in-flight, await it instead of returning early
+        if let task = linkedItemsFetchTask {
+            await task.value
+            return
+        }
+
+        linkedItemsFetchTask = Task {
+            defer { linkedItemsFetchTask = nil }
+
+            do {
+                let response = try await bankService.getLinkedItems()
+
+                // Map server items to ConnectedItem and apply userId
+                var items = response.items.map { ConnectedItem(from: $0) }
+                if let userId = currentUserId {
+                    items = items.map { $0.withUserId(userId) }
+                }
+
+                guard !items.isEmpty else { return }
+
+                // Extract embedded accounts from each item
+                var embeddedAccountsByItemId: [String: [BankAccount]] = [:]
+                for serverItem in response.items {
+                    if let serverAccounts = serverItem.accounts, !serverAccounts.isEmpty {
+                        let bankAccounts = serverAccounts.map { $0.toBankAccount(plaidItemId: serverItem.plaidItemId) }
+                        embeddedAccountsByItemId[serverItem.plaidItemId] = bankAccounts
+                    }
+                }
+
+                await MainActor.run {
+                    setLinkedItems(items)  // Sets property + persists
+
+                    // Populate accountsByItemId with embedded accounts
+                    if !embeddedAccountsByItemId.isEmpty {
+                        for (itemId, accounts) in embeddedAccountsByItemId {
+                            accountsByItemId[itemId] = accounts
+                        }
+                        Logger.success("BankDataManager: Populated \(embeddedAccountsByItemId.count) items with \(embeddedAccountsByItemId.values.flatMap { $0 }.count) embedded accounts")
+                    }
+                }
+                Logger.success("BankDataManager: Fetched \(items.count) linked items from server")
+            } catch {
+                Logger.error("BankDataManager: Failed to fetch linked items: \(error)")
+                // Fallback: synthesize from accounts if available
+                await synthesizeLinkedItemsFromAccountsIfNeeded()
+            }
+        }
+
+        await linkedItemsFetchTask?.value
+    }
+
+    /// Fallback: If items endpoint fails but accounts exist, synthesize stubs
+    private func synthesizeLinkedItemsFromAccountsIfNeeded() async {
+        guard linkedItems?.isEmpty != false else { return }
+
+        // Check BOTH accountsByItemId AND accounts property for fallback
+        let allAccounts: [BankAccount]
+        if !accountsByItemId.isEmpty {
+            allAccounts = accountsByItemId.values.flatMap { $0 }
+        } else if let accounts = accounts, !accounts.isEmpty {
+            allAccounts = accounts
         } else {
-            linkedItems = nil
+            return  // No accounts to synthesize from
+        }
+
+        // Group by plaid_item_id and create stub ConnectedItems
+        // Filter out accounts with nil plaidItemId
+        let uniqueItemIds = Set(allAccounts.compactMap { $0.plaidItemId })
+        let stubs = uniqueItemIds.map { plaidItemId -> ConnectedItem in
+            ConnectedItem(
+                institutionId: "",
+                institutionName: "Unknown Institution",
+                availableProducts: nil,
+                itemId: "stub:\(plaidItemId)",  // Prefix to avoid collision with real IDs
+                userId: currentUserId ?? "",
+                plaidItemId: plaidItemId,
+                isActive: true,
+                lastSync: nil,
+                createdAt: nil,
+                updatedAt: nil
+            )
+        }
+
+        if !stubs.isEmpty {
+            await MainActor.run {
+                setLinkedItems(stubs)
+            }
+            Logger.warning("BankDataManager: Synthesized \(stubs.count) linked items from accounts (fallback)")
+        }
+    }
+
+    /// Rebuild accountsByItemId from accounts (always run to avoid stale state)
+    private func rebuildAccountsByItemId() {
+        if let accounts = accounts, !accounts.isEmpty {
+            // Filter to only accounts with plaidItemId and group by it
+            let accountsWithItemId = accounts.filter { $0.plaidItemId != nil }
+            accountsByItemId = Dictionary(grouping: accountsWithItemId, by: { $0.plaidItemId! })
+            Logger.debug("BankDataManager: Rebuilt accountsByItemId with \(accountsByItemId.count) items")
         }
     }
 
@@ -151,13 +277,25 @@ final class BankDataManager {
             return
         }
 
+        // If refresh already in-flight, await it instead of starting another
+        if let task = refreshTask {
+            Logger.debug("BankDataManager: Refresh already in progress, awaiting existing task")
+            await task.value
+            return
+        }
+
         let lastRefresh = persistence.getLastRefreshAt(for: userId)
         if let lastRefresh, Date().timeIntervalSince(lastRefresh) < refreshThreshold {
             Logger.debug("BankDataManager: Skipping refresh - last refresh was recent")
             return
         }
 
-        await refreshAllAccounts(for: userId)
+        refreshTask = Task {
+            defer { refreshTask = nil }
+            await refreshAllAccounts(for: userId)
+        }
+
+        await refreshTask?.value
     }
 
     private func refreshAllAccounts(for userId: String) async {
@@ -231,6 +369,10 @@ final class BankDataManager {
             task.cancel()
         }
         accountRefreshTasks = [:]
+        refreshTask?.cancel()
+        refreshTask = nil
+        linkedItemsFetchTask?.cancel()
+        linkedItemsFetchTask = nil
 
         // Clear persisted data
         Task {

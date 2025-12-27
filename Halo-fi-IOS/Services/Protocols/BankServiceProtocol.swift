@@ -59,6 +59,10 @@ protocol BankServiceProtocol {
     /// Checks the health status of bank services.
     /// - Returns: Health status response
     func checkBankHealth() async throws -> BankHealthResponse
+
+    /// Fetches all linked items (connected institutions) for the authenticated user.
+    /// - Returns: Full response including items and embedded accounts
+    func getLinkedItems() async throws -> MultiItemsResponse
 }
 
 // MARK: - Default Parameters Extension
@@ -141,6 +145,11 @@ actor MockBankService: BankServiceProtocol {
         return try decodeMockJSON("""
             {"status": "healthy", "timestamp": "2025-01-01T00:00:00Z"}
             """)
+    }
+
+    func getLinkedItems() async throws -> MultiItemsResponse {
+        guard shouldSucceed else { throw BankError.networkError }
+        return MultiItemsResponse(success: true, items: [], totalItems: 0)
     }
 
     private func decodeMockJSON<T: Decodable>(_ json: String) throws -> T {
