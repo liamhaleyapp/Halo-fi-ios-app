@@ -8,57 +8,86 @@
 import SwiftUI
 
 struct MainTabView: View {
-  @Environment(UserManager.self) private var userManager
-  @Environment(SubscriptionService.self) private var subscriptionService
-  @State private var selectedTab = 0
+    @Environment(UserManager.self) private var userManager
+    @Environment(SubscriptionService.self) private var subscriptionService
+    @State private var selectedTab = 0
 
-  var body: some View {
-    Group {
-      if userManager.isAuthenticated {
-        if userManager.isResolvingDestination {
-          // Show splash while determining destination (fetching account data)
-          PostLoginSplashView()
+    private enum AppRoute: Equatable {
+        case loggedOut
+        case resolving
+        case onboarding
+        case main
+    }
+
+    private var currentRoute: AppRoute {
+        if !userManager.isAuthenticated {
+            return .loggedOut
+        } else if userManager.isResolvingDestination {
+            return .resolving
         } else if !userManager.isOnboarded {
-          // User is authenticated but not onboarded - show unified onboarding flow
-          UnifiedOnboardingFlowView()
-            .dynamicTypeSize(.medium ... .accessibility5)
+            return .onboarding
         } else {
-          // User is fully onboarded - show main app
-          TabView(selection: $selectedTab) {
+            return .main
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            routeView
+                .id(currentRoute)
+        }
+        .animation(.easeInOut(duration: 0.3), value: currentRoute)
+        .onChange(of: currentRoute) { _, newRoute in
+            if newRoute != .main {
+                selectedTab = 0
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var routeView: some View {
+        switch currentRoute {
+        case .loggedOut:
+            OnboardingView()
+                .viewTransition(.fade)
+        case .resolving:
+            PostLoginSplashView()
+                .viewTransition(.fade)
+        case .onboarding:
+            UnifiedOnboardingFlowView()
+                .dynamicTypeSize(.medium ... .accessibility5)
+                .viewTransition(.fade)
+        case .main:
+            ZStack { tabContent }
+                .viewTransition(.fade)
+        }
+    }
+
+    private var tabContent: some View {
+        TabView(selection: $selectedTab) {
             HomeView()
-              .tabItem {
-                Label("Agent", systemImage: "mic.circle.fill")
-                  .accessibilityHint("Voice assistant and home screen")
-              }
-              .tag(0)
+                .tabItem {
+                    Label("Agent", systemImage: "mic.circle.fill")
+                        .accessibilityHint("Voice assistant and home screen")
+                }
+                .tag(0)
 
             AccountsOverviewView()
-              .tabItem {
-                Label("Account", systemImage: "creditcard.fill")
-                  .accessibilityHint("View and manage your financial accounts")
-              }
-              .tag(1)
+                .tabItem {
+                    Label("Account", systemImage: "creditcard.fill")
+                        .accessibilityHint("View and manage your financial accounts")
+                }
+                .tag(1)
 
             SettingsView()
-              .tabItem {
-                Label("Settings", systemImage: "gearshape.fill")
-                  .accessibilityHint("App settings and preferences")
-              }
-              .tag(2)
-          }
-          .accentColor(.blue)
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                        .accessibilityHint("App settings and preferences")
+                }
+                .tag(2)
         }
-      } else {
-        OnboardingView()
-      }
+        .accentColor(.blue)
     }
-    .onChange(of: userManager.isResolvingDestination) { _, isResolving in
-      // Reset to home tab when destination is resolved (after login)
-      if !isResolving {
-        selectedTab = 0
-      }
-    }
-  }
 }
 
 #Preview {

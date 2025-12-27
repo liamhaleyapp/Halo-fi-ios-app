@@ -32,17 +32,19 @@ struct UnifiedOnboardingFlowView: View {
     NavigationStack {
       ZStack {
         Color.black.ignoresSafeArea()
-        
+
         VStack(spacing: 0) {
           // Step indicator (hidden on sign up step)
           if coordinator.currentStep != .signUp {
             AccessibleOnboardingHeader(currentStep: coordinator.currentStep)
           }
-          
-          // Step content
+
+          // Step content with transitions
           stepContent
+            .id(coordinator.currentStep)
         }
-        
+        .animation(.easeInOut(duration: 0.3), value: coordinator.currentStep)
+
         // Close button overlay (shown after sign up)
         if coordinator.currentStep != .signUp {
           closeButtonOverlay
@@ -73,20 +75,23 @@ struct UnifiedOnboardingFlowView: View {
         coordinator: coordinator,
         onComplete: handleSignUpComplete
       )
-      
+      .viewTransition(.fade)
+
     case .subscription:
       SubscriptionOnboardingStep(
         coordinator: coordinator,
         onComplete: handleSubscriptionComplete,
         onBack: backActionForSubscription
       )
-      
+      .viewTransition(.slideForward)
+
     case .plaid:
       PlaidOnboardingStep(
         coordinator: coordinator,
         onComplete: handlePlaidComplete,
         onBack: { coordinator.previousStep() }
       )
+      .viewTransition(.slideForward)
     }
   }
   
