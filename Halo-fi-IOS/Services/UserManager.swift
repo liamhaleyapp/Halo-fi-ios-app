@@ -302,24 +302,36 @@ final class UserManager {
 
     private func applySignInState(user: User) {
         let hasExplicitOnboardingStatus = userDefaults.object(forKey: onboardingKey) != nil
+        let storedOnboardingValue = userDefaults.bool(forKey: onboardingKey)
 
-        // Only consider it a "different user" if we have a previous user in memory AND IDs differ
-        // If currentUser is nil (normal after app restart), we can't determine if it's a different user
-        let isDifferentUser = currentUser != nil && currentUser?.id != user.id
+        // Check both in-memory user AND persisted user to detect different users
+        // This handles app reinstall where Keychain tokens are cleared but UserDefaults persist
+        let previousUserId: String?
+        if let currentUser = currentUser {
+            previousUserId = currentUser.id
+        } else if let data = userDefaults.data(forKey: userKey),
+                  let persistedUser = try? JSONDecoder().decode(User.self, from: data) {
+            previousUserId = persistedUser.id
+        } else {
+            previousUserId = nil
+        }
+
+        // Only trust stored onboarding status if we can VERIFY it's the same user
+        // previousUserId must be non-nil AND match the new user's ID
+        let isSameUser = previousUserId != nil && previousUserId == user.id
+
+        Logger.info("UserManager.applySignInState: newUserId=\(user.id), previousUserId=\(previousUserId ?? "nil"), isSameUser=\(isSameUser), hasExplicitOnboardingStatus=\(hasExplicitOnboardingStatus), storedOnboardingValue=\(storedOnboardingValue)")
 
         let preservedOnboardingStatus: Bool
-        if hasExplicitOnboardingStatus && !isDifferentUser {
-            // User has completed onboarding before and this isn't a different user signing in
-            // Trust the persisted status
+        if hasExplicitOnboardingStatus && isSameUser {
+            // Same user returning - trust persisted status
             preservedOnboardingStatus = userDefaults.bool(forKey: onboardingKey)
-        } else if isDifferentUser {
-            // Different user signing in - reset onboarding
-            preservedOnboardingStatus = false
-            userDefaults.set(false, forKey: onboardingKey)
+            Logger.info("UserManager.applySignInState: Same user path - preservedOnboardingStatus=\(preservedOnboardingStatus)")
         } else {
-            // No saved status - new user or fresh install
+            // Different user, unknown user, or fresh install - reset onboarding
             preservedOnboardingStatus = false
             userDefaults.set(false, forKey: onboardingKey)
+            Logger.info("UserManager.applySignInState: New/different user path - reset to false")
         }
 
         var newUser = user
@@ -327,6 +339,12 @@ final class UserManager {
         currentUser = newUser
         isAuthenticated = true
         isLoading = false
+
+        // IMPORTANT: Update the UserManager's isOnboarded property (what MainTabView checks)
+        // Setting this also persists to UserDefaults via didSet
+        isOnboarded = preservedOnboardingStatus
+        Logger.info("UserManager.applySignInState: Final isOnboarded=\(isOnboarded)")
+
         saveUserToStorage()
 
         // Configure bank data manager for this user

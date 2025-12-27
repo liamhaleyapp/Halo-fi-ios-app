@@ -93,18 +93,21 @@ final class BankDataManager {
             // 1. Restore linked items - return value for explicit ordering
             let restoredItems = restoreLinkedItemsSync()
 
-            // 2. If persistence was empty, fetch from server
+            // 2. If persistence was empty, fetch from server (includes embedded accounts)
             if restoredItems.isEmpty {
                 await fetchLinkedItemsFromServer()
+                // fetchLinkedItemsFromServer populates accountsByItemId with embedded accounts
+                // and sets lastRefreshAt, so we can skip the rest
+                return
             }
 
-            // 3. Restore accounts from persistence
+            // 3. Restore accounts from persistence (only if we didn't fetch fresh from server)
             await restoreAccounts()
 
             // 4. Refresh if stale (single network call, guarded)
             await refreshIfStale()
 
-            // 5. Ensure accountsByItemId is populated
+            // 5. Ensure accountsByItemId is populated from accounts property
             rebuildAccountsByItemId()
         }
     }
@@ -157,12 +160,16 @@ final class BankDataManager {
                 await MainActor.run {
                     setLinkedItems(items)  // Sets property + persists
 
-                    // Populate accountsByItemId with embedded accounts
+                    // Populate accountsByItemId with embedded accounts (REPLACE, not merge)
                     if !embeddedAccountsByItemId.isEmpty {
-                        for (itemId, accounts) in embeddedAccountsByItemId {
-                            accountsByItemId[itemId] = accounts
-                        }
+                        // Clear existing and replace with fresh data
+                        accountsByItemId = embeddedAccountsByItemId
                         Logger.success("BankDataManager: Populated \(embeddedAccountsByItemId.count) items with \(embeddedAccountsByItemId.values.flatMap { $0 }.count) embedded accounts")
+
+                        // Mark as refreshed to prevent redundant refreshIfStale
+                        if let userId = currentUserId {
+                            persistence.setLastRefreshAt(Date(), for: userId)
+                        }
                     }
                 }
                 Logger.success("BankDataManager: Fetched \(items.count) linked items from server")
@@ -282,6 +289,26 @@ final class BankDataManager {
             Logger.debug("BankDataManager: Refresh already in progress, awaiting existing task")
             await task.value
             return
+        }
+
+        // If linked items fetch is in progress, wait for it - it will populate accounts
+        if let task = linkedItemsFetchTask {
+            Logger.debug("BankDataManager: Linked items fetch in progress, awaiting it")
+            await task.value
+            return
+        }
+
+        // Skip refresh if we already have accounts for all linked items
+        // This prevents race condition where view calls refreshIfStale before configureForUser finishes
+        if let items = linkedItems, !items.isEmpty {
+            let hasAllAccounts = items.allSatisfy { itemId in
+                guard let accounts = accountsByItemId[itemId.plaidItemId] else { return false }
+                return !accounts.isEmpty
+            }
+            if hasAllAccounts {
+                Logger.debug("BankDataManager: Skipping refresh - accounts already populated for all \(items.count) items")
+                return
+            }
         }
 
         let lastRefresh = persistence.getLastRefreshAt(for: userId)
