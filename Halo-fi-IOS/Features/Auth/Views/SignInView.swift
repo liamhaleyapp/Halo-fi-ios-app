@@ -105,8 +105,16 @@ struct SignInView: View {
 #endif
         }
         .padding(.horizontal, 20)
-        
+
         Spacer()
+
+#if DEBUG || TESTFLIGHT
+        // Build Info Banner
+        Text(AppEnvironment.buildTypeDescription)
+          .font(.caption2)
+          .foregroundColor(AppEnvironment.isProdPlaid ? .red : .orange)
+          .padding(.bottom, 8)
+#endif
       }
       .padding(.top, 40)
     }

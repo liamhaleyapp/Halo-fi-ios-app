@@ -41,11 +41,11 @@ class PlaidOnboardingViewModel {
         // Step 1: Create link token (or create items directly in sandbox mode)
         try await plaidManager.createLinkToken()
         
-#if DEBUG
-        // Check if we're in sandbox direct mode (items created directly, no Link UI)
-        // ⚠️ DEBUG ONLY - This code will not compile in release builds
+#if DIRECT_LINK_BYPASS
+        // Check if we're in direct mode (items created directly, no Link UI)
+        // Only available in builds with DIRECT_LINK_BYPASS flag
         if plaidManager.isSandboxDirectMode, let sandboxResponse = plaidManager.sandboxResponse {
-          // Sandbox path: Items were created directly, skip Link UI and proceed to onboarding
+          // Direct path: Items were created directly, skip Link UI and proceed to onboarding
           await handleSandboxDirectMode(
             sandboxResponse: sandboxResponse,
             bankDataManager: bankDataManager,
@@ -118,13 +118,13 @@ class PlaidOnboardingViewModel {
     }
   }
   
-  // MARK: - Sandbox Direct Mode Handler (DEBUG ONLY)
-  
-#if DEBUG
-  /// Handles the sandbox direct mode flow where items are created directly without Plaid Link UI
-  /// ⚠️ DEBUG ONLY - This method will not compile in release builds
-  /// 
-  /// In sandbox mode, items are created directly by the backend. We don't need to fetch accounts
+  // MARK: - Direct Mode Handler (DIRECT_LINK_BYPASS only)
+
+#if DIRECT_LINK_BYPASS
+  /// Handles the direct mode flow where items are created directly without Plaid Link UI
+  /// Only available in builds with DIRECT_LINK_BYPASS flag (Debug, TF-Sandbox)
+  ///
+  /// In direct mode, items are created directly by the backend. We don't need to fetch accounts
   /// immediately - accounts can be fetched later in AccountsView using the item IDs from the response.
   /// The sandbox response contains item IDs that can be used with `GET /bank/{item_id}/account`.
   private func handleSandboxDirectMode(
@@ -132,7 +132,7 @@ class PlaidOnboardingViewModel {
     bankDataManager: BankDataManager,
     userManager: UserManager
   ) async {
-    Logger.info("Plaid (Sandbox Direct): Items created directly, completing onboarding")
+    Logger.info("Plaid (Direct Mode): Items created directly, completing onboarding")
     Logger.debug("Sandbox response - Total items: \(sandboxResponse.totalItemsCreated ?? 0), Items count: \(sandboxResponse.items?.count ?? 0)")
 
     // Log created items for reference (accounts can be fetched later using these item IDs)
@@ -141,24 +141,24 @@ class PlaidOnboardingViewModel {
         Logger.debug("Created item [\(index)]: \(item.institutionName)")
       }
     }
-    
+
     // Store linked items in BankDataManager for display in AccountsView
     // The sandbox response has items in a different format, so we map them to ConnectedItem
     if let connectedItems = sandboxResponse.allConnectedItems {
       bankDataManager.setLinkedItems(connectedItems)
-      Logger.success("Plaid (Sandbox Direct): Stored \(connectedItems.count) linked items")
+      Logger.success("Plaid (Direct Mode): Stored \(connectedItems.count) linked items")
     }
 
     // Clear Plaid session state
     plaidManager.clearSession()
 
-    // In sandbox mode, items are created directly - no need to fetch accounts now
+    // In direct mode, items are created directly - no need to fetch accounts now
     // Accounts can be fetched on-demand in AccountsView using GET /bank/{item_id}/account
     await MainActor.run {
       isCompletingLinking = false
       hasStartedFlow = true
 
-      Logger.success("Plaid (Sandbox Direct): Items created successfully, completing onboarding")
+      Logger.success("Plaid (Direct Mode): Items created successfully, completing onboarding")
 
       userManager.completeOnboarding()
       if let onComplete = onComplete {
@@ -185,13 +185,9 @@ class PlaidOnboardingViewModel {
       let tokens = [linkSuccess.publicToken]
       Logger.info("Plaid: Starting completion with \(tokens.count) token(s)")
 
-      // Use sandbox endpoint when in sandbox environment (e.g., "continue as guest")
-      // TODO: Detect sandbox mode more reliably - for now, always use sandbox in development
-#if DEBUG
-      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: true)
-#else
-      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: false)
-#endif
+      // Use sandbox endpoint when in sandbox environment
+      let useSandbox = AppEnvironment.plaidEnv == .sandbox
+      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: useSandbox)
       Logger.success("Plaid: Linking response - Success: \(linkingResponse.success), Items: \(linkingResponse.totalItemsCreated ?? 0)")
       
       // Verify accounts were actually created before completing

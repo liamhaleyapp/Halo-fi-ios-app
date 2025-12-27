@@ -93,18 +93,19 @@ struct SettingsView: View {
               }
             )
             
-#if DEBUG
-            // Debug Section
+#if DEBUG || TESTFLIGHT
+            // Build Info Banner
             Divider()
               .padding(.vertical, 8)
 
-            Text("DEBUG")
+            Text(AppEnvironment.buildTypeDescription)
               .font(.caption)
-              .foregroundColor(.orange)
+              .foregroundColor(AppEnvironment.isProdPlaid ? .red : .orange)
               .fontWeight(.bold)
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 4)
 
+            #if DEBUG
             SettingsOption(
               icon: "arrow.counterclockwise",
               title: "Reset Onboarding",
@@ -112,6 +113,7 @@ struct SettingsView: View {
                 userManager.resetOnboarding()
               }
             )
+            #endif
 #endif
           }
           .padding(.horizontal, 20)
