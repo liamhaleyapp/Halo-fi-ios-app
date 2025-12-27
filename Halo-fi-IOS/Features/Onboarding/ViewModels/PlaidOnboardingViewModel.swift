@@ -369,22 +369,20 @@ class PlaidOnboardingViewModel {
   
   func bootstrapIfNeeded(userManager: UserManager, bankDataManager: BankDataManager) async {
     guard !hasStartedFlow else { return }
-    
+
     do {
       try await bankDataManager.fetchAccounts(forceRefresh: false)
       let hasAccounts = bankDataManager.accounts?.isEmpty == false
-      
+
       if hasAccounts {
         userManager.completeOnboarding()
         onComplete?() ?? onDismiss?()
         return
       }
-      
-      hasStartedFlow = true
-      startPlaidFlow(bankDataManager: bankDataManager, userManager: userManager)
+
+      // Don't auto-start Plaid - let user see intro and tap button
     } catch {
-      hasStartedFlow = true
-      startPlaidFlow(bankDataManager: bankDataManager, userManager: userManager)
+      // Don't auto-start on error either - show intro screen
     }
   }
 }
