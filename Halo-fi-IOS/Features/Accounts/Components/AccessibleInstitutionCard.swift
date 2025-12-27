@@ -50,19 +50,16 @@ struct AccessibleInstitutionCard: View {
   // MARK: - Body
   
   var body: some View {
-    VStack(spacing: 0) {
-      InstitutionHeaderView(
-        item: item,
-        accounts: accounts,
-        totalBalance: totalBalance,
-        currency: currency,
-        isLoading: isLoading
-      )
-      
-      AccountsPreviewSection(accounts: accounts)
-    }
+    InstitutionHeaderView(
+      item: item,
+      accounts: accounts,
+      totalBalance: totalBalance,
+      currency: currency,
+      isLoading: isLoading
+    )
     .background(Color.gray.opacity(0.05))
     .cornerRadius(16)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
     .accessibilityHint(accessibilityHint)
@@ -206,89 +203,6 @@ private struct AccountSummaryLabel: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Loading accounts")
-  }
-}
-
-// MARK: - Accounts Preview Section
-
-private struct AccountsPreviewSection: View {
-  let accounts: [BankAccount]?
-  
-  var body: some View {
-    Group {
-      if let accounts = accounts {
-        if accounts.isEmpty {
-          emptyAccountsView
-        } else {
-          accountsListView(accounts)
-        }
-      }
-    }
-  }
-  
-  private var emptyAccountsView: some View {
-    EmptyStateView.compact("No accounts found")
-  }
-  
-  private func accountsListView(_ accounts: [BankAccount]) -> some View {
-    VStack(spacing: 8) {
-      ForEach(accounts.prefix(3), id: \.id) { account in
-        AccountPreviewRow(account: account)
-      }
-      
-      if accounts.count > 3 {
-        moreAccountsLabel(count: accounts.count - 3)
-      }
-    }
-    .padding(.top, 8)
-    .padding(.bottom, 12)
-  }
-  
-  private func moreAccountsLabel(count: Int) -> some View {
-    HStack {
-      Text("+\(count) more account\(count == 1 ? "" : "s")")
-        .font(.caption)
-        .foregroundColor(.gray)
-      Spacer()
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 4)
-    .accessibilityLabel("\(count) more accounts")
-  }
-}
-
-// MARK: - Account Preview Row
-
-private struct AccountPreviewRow: View {
-  let account: BankAccount
-  
-  var body: some View {
-    HStack {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(account.name)
-          .font(.subheadline)
-          .foregroundColor(.white)
-        
-        Text(account.type.capitalized)
-          .font(.caption)
-          .foregroundColor(.gray)
-      }
-      
-      Spacer()
-      
-      Text(CurrencyFormatter.format(account.currentBalance, currency: account.currency))
-        .font(.subheadline)
-        .fontWeight(.medium)
-        .foregroundColor(.white)
-    }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 8)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(accountAccessibilityLabel)
-  }
-  
-  private var accountAccessibilityLabel: String {
-    "\(account.name), \(account.type.capitalized), ending in \(account.mask), Balance \(CurrencyFormatter.format(account.currentBalance, currency: account.currency))"
   }
 }
 

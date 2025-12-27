@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - Account Type Enum
-enum AccountType: Hashable {
+enum AccountType: Hashable, CaseIterable {
     case checking
     case savings
     case creditCard

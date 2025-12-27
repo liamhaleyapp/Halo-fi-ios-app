@@ -9,28 +9,39 @@ import SwiftUI
 
 struct AccountTypeFilterView: View {
   @Environment(BankDataManager.self) private var bankDataManager
-  
+
   let accountsByType: [String: [BankAccount]]
-  
-  private var accountTypes: [AccountType] {
-    [.checking, .savings, .creditCard, .investment, .loan]
-  }
-  
+
+  // Parent-managed expansion state
+  @State private var expandedTypes: Set<AccountType> = Set(AccountType.allCases)
+
+  // Deterministic ordering
+  private let orderedTypes: [AccountType] = [
+    .checking, .savings, .creditCard, .investment, .loan
+  ]
+
   var body: some View {
-    ScrollView {
-      VStack(spacing: 16) {
-        ForEach(accountTypes, id: \.self) { accountType in
-          if let accounts = accountsForType(accountType), !accounts.isEmpty {
-            AccountTypeSection(
-              accountType: accountType,
-              accounts: accounts
-            )
-          }
+    VStack(spacing: 16) {
+      ForEach(orderedTypes, id: \.self) { accountType in
+        if let accounts = accountsForType(accountType), !accounts.isEmpty {
+          AccountTypeSection(
+            accountType: accountType,
+            accounts: accounts,
+            isExpanded: expandedTypes.contains(accountType),
+            onToggle: { toggleExpansion(accountType) }
+          )
         }
       }
-      .padding(.horizontal, 20)
-      .padding(.top, 20)
-      .padding(.bottom, 100)
+    }
+  }
+
+  private func toggleExpansion(_ type: AccountType) {
+    withAnimation(.easeInOut(duration: 0.2)) {
+      if expandedTypes.contains(type) {
+        expandedTypes.remove(type)
+      } else {
+        expandedTypes.insert(type)
+      }
     }
   }
   
@@ -73,56 +84,70 @@ struct AccountTypeFilterView: View {
 struct AccountTypeSection: View {
   let accountType: AccountType
   let accounts: [BankAccount]
-  
+  let isExpanded: Bool
+  let onToggle: () -> Void
+
   private var totalBalance: Double {
     accounts.reduce(0) { $0 + $1.currentBalance }
   }
-  
+
   private var currency: String {
     accounts.first?.currency ?? "USD"
   }
-  
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      // Section Header
-      HStack {
-        Image(systemName: accountType.icon)
-          .font(.title3)
-          .foregroundColor(.teal)
-          .frame(width: 32, height: 32)
-          .accessibilityHidden(true)
-        
-        VStack(alignment: .leading, spacing: 4) {
-          Text(accountType.displayName)
+      // Tappable header
+      Button(action: onToggle) {
+        HStack {
+          Image(systemName: accountType.icon)
+            .font(.title3)
+            .foregroundColor(.teal)
+            .frame(width: 32, height: 32)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Text(accountType.displayName)
+              .font(.headline)
+              .foregroundColor(.white)
+
+            Text("\(accounts.count) account\(accounts.count == 1 ? "" : "s")")
+              .font(.caption)
+              .foregroundColor(.gray)
+          }
+
+          Spacer()
+
+          Text(CurrencyFormatter.format(totalBalance, currency: currency))
             .font(.headline)
+            .fontWeight(.semibold)
             .foregroundColor(.white)
-            .accessibilityAddTraits(.isHeader)
-          
-          Text("\(accounts.count) account\(accounts.count == 1 ? "" : "s")")
-            .font(.caption)
+
+          Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
             .foregroundColor(.gray)
+            .font(.caption)
         }
-        
-        Spacer()
-        
-        Text(CurrencyFormatter.format(totalBalance, currency: currency))
-          .font(.headline)
-          .fontWeight(.semibold)
-          .foregroundColor(.white)
-          .accessibilityLabel("Total balance, \(CurrencyFormatter.format(totalBalance, currency: currency))")
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(12)
+        .contentShape(Rectangle())
       }
-      .padding(.horizontal, 20)
-      .padding(.vertical, 12)
-      .background(Color.gray.opacity(0.1))
-      .cornerRadius(12)
-      
-      // Accounts List
-      VStack(spacing: 8) {
-        ForEach(accounts, id: \.id) { account in
-          AccountTypeRow(
-            account: account,
-            showInstitution: true
-          )
+      .buttonStyle(.plain)
+      .accessibilityLabel("\(accountType.displayName), \(accounts.count) account\(accounts.count == 1 ? "" : "s"), Total balance \(CurrencyFormatter.format(totalBalance, currency: currency))")
+      .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to expand")
+      .accessibilityAddTraits(.isHeader)
+
+      // Accounts list (conditional)
+      if isExpanded {
+        VStack(spacing: 8) {
+          ForEach(accounts, id: \.id) { account in
+            NavigationLink {
+              AccountDetailView(account: FinancialAccount(from: account))
+            } label: {
+              AccountTypeRow(account: account, showInstitution: true)
+            }
+            .buttonStyle(.plain)
+          }
         }
       }
     }
@@ -159,7 +184,7 @@ struct AccountTypeRow: View {
           .font(.subheadline)
           .fontWeight(.medium)
           .foregroundColor(.white)
-        
+
         HStack(spacing: 8) {
           if let institutionName = institutionName {
             Text(institutionName)
@@ -174,20 +199,26 @@ struct AccountTypeRow: View {
             .foregroundColor(.gray)
         }
       }
-      
+
       Spacer()
-      
+
       Text(CurrencyFormatter.format(account.currentBalance, currency: account.currency))
         .font(.subheadline)
         .fontWeight(.medium)
         .foregroundColor(.white)
+
+      Image(systemName: "chevron.right")
+        .foregroundColor(.gray)
+        .font(.caption)
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 12)
     .background(Color.gray.opacity(0.05))
     .cornerRadius(12)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
+    .accessibilityHint("Double tap to view account details")
   }
 
   private var accessibilityLabel: String {

@@ -135,12 +135,12 @@ struct AccountsOverviewView: View {
     Picker("View Mode", selection: $viewMode) {
       Text("By Institution").tag(AccountViewMode.institutions)
         .accessibilityLabel("View accounts by institution")
-      Text("By Type").tag(AccountViewMode.accountTypes)
-        .accessibilityLabel("View accounts by type")
+      Text("Accounts").tag(AccountViewMode.accountTypes)
+        .accessibilityLabel("View all accounts by type")
     }
     .pickerStyle(.segmented)
     .accessibilityLabel("Account view mode")
-    .accessibilityHint("Switch between viewing accounts by institution or by account type")
+    .accessibilityHint("Switch between viewing by institution or all accounts grouped by type")
   }
   
   // MARK: - Content View
