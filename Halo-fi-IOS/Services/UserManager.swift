@@ -8,6 +8,10 @@
 import SwiftUI
 import RevenueCat
 
+extension Notification.Name {
+    static let bankDataConfigurationComplete = Notification.Name("bankDataConfigurationComplete")
+}
+
 @Observable
 @MainActor
 final class UserManager {
@@ -15,20 +19,33 @@ final class UserManager {
     var isAuthenticated = false
     var isLoading = false
 
+    /// Whether we're still determining the user's destination after login
+    /// While true, show a splash screen. When false, show main app or onboarding based on isOnboarded.
+    var isResolvingDestination = false
+
     private let userDefaults = UserDefaults.standard
     private let userKey = "currentUser"
-    private let onboardingKey = "user_onboarding_completed"
+    private let legacyOnboardingKey = "user_onboarding_completed"  // Legacy global key for migration
     private let tokenStorage: TokenStorageProtocol
     private let authService: AuthServiceProtocol
+
+    /// Returns the per-user onboarding key for the given user ID
+    private func onboardingKey(for userId: String) -> String {
+        "user_onboarding_completed_\(userId)"
+    }
 
     /// Bank data manager - set via DI container after initialization
     private var bankDataManager: BankDataManager?
 
     // Onboarding state persisted independently of User object
     // This ensures onboarding status persists even when User object is refreshed from server
+    // Uses per-user key: "user_onboarding_completed_{userId}"
     var isOnboarded: Bool = false {
         didSet {
-            userDefaults.set(isOnboarded, forKey: onboardingKey)
+            // Store per-user onboarding status
+            if let userId = currentUser?.id {
+                userDefaults.set(isOnboarded, forKey: onboardingKey(for: userId))
+            }
 
             if var user = currentUser {
                 user.isOnboarded = isOnboarded
@@ -43,6 +60,21 @@ final class UserManager {
         self.authService = authService
         loadUserFromStorage()
         restoreOnboardingState()
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            forName: .bankDataConfigurationComplete,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+            let hasAccounts = notification.userInfo?["hasAccounts"] as? Bool ?? false
+            Task { @MainActor in
+                self.resolveDestination(hasAccounts: hasAccounts)
+            }
+        }
     }
 
     /// Sets the bank data manager dependency (called from DIContainer after initialization)
@@ -55,8 +87,14 @@ final class UserManager {
     }
 
     private func restoreOnboardingState() {
-        if userDefaults.object(forKey: onboardingKey) != nil {
-            isOnboarded = userDefaults.bool(forKey: onboardingKey)
+        guard let userId = currentUser?.id else {
+            isOnboarded = false
+            return
+        }
+
+        let userOnboardingKey = onboardingKey(for: userId)
+        if userDefaults.object(forKey: userOnboardingKey) != nil {
+            isOnboarded = userDefaults.bool(forKey: userOnboardingKey)
         } else {
             isOnboarded = currentUser?.isOnboarded ?? false
         }
@@ -163,7 +201,10 @@ final class UserManager {
 
     /// Checks if user has completed onboarding by checking persisted state or bank accounts
     func checkOnboardingStatus(bankDataManager: BankDataManager? = nil) async {
-        if userDefaults.object(forKey: onboardingKey) != nil {
+        guard let userId = currentUser?.id else { return }
+
+        let userOnboardingKey = onboardingKey(for: userId)
+        if userDefaults.object(forKey: userOnboardingKey) != nil {
             return
         }
 
@@ -301,54 +342,53 @@ final class UserManager {
     }
 
     private func applySignInState(user: User) {
-        let hasExplicitOnboardingStatus = userDefaults.object(forKey: onboardingKey) != nil
-        let storedOnboardingValue = userDefaults.bool(forKey: onboardingKey)
+        // Don't determine onboarding status yet - wait for account data
+        // This prevents race conditions and jarring transitions
 
-        // Check both in-memory user AND persisted user to detect different users
-        // This handles app reinstall where Keychain tokens are cleared but UserDefaults persist
-        let previousUserId: String?
-        if let currentUser = currentUser {
-            previousUserId = currentUser.id
-        } else if let data = userDefaults.data(forKey: userKey),
-                  let persistedUser = try? JSONDecoder().decode(User.self, from: data) {
-            previousUserId = persistedUser.id
-        } else {
-            previousUserId = nil
-        }
-
-        // Only trust stored onboarding status if we can VERIFY it's the same user
-        // previousUserId must be non-nil AND match the new user's ID
-        let isSameUser = previousUserId != nil && previousUserId == user.id
-
-        Logger.info("UserManager.applySignInState: newUserId=\(user.id), previousUserId=\(previousUserId ?? "nil"), isSameUser=\(isSameUser), hasExplicitOnboardingStatus=\(hasExplicitOnboardingStatus), storedOnboardingValue=\(storedOnboardingValue)")
-
-        let preservedOnboardingStatus: Bool
-        if hasExplicitOnboardingStatus && isSameUser {
-            // Same user returning - trust persisted status
-            preservedOnboardingStatus = userDefaults.bool(forKey: onboardingKey)
-            Logger.info("UserManager.applySignInState: Same user path - preservedOnboardingStatus=\(preservedOnboardingStatus)")
-        } else {
-            // Different user, unknown user, or fresh install - reset onboarding
-            preservedOnboardingStatus = false
-            userDefaults.set(false, forKey: onboardingKey)
-            Logger.info("UserManager.applySignInState: New/different user path - reset to false")
-        }
-
-        var newUser = user
-        newUser.isOnboarded = preservedOnboardingStatus
-        currentUser = newUser
+        currentUser = user
         isAuthenticated = true
         isLoading = false
+        isResolvingDestination = true  // Show splash while we fetch account data
 
-        // IMPORTANT: Update the UserManager's isOnboarded property (what MainTabView checks)
-        // Setting this also persists to UserDefaults via didSet
-        isOnboarded = preservedOnboardingStatus
-        Logger.info("UserManager.applySignInState: Final isOnboarded=\(isOnboarded)")
+        Logger.info("UserManager.applySignInState: userId=\(user.id), isResolvingDestination=true")
 
         saveUserToStorage()
 
-        // Configure bank data manager for this user
+        // Configure bank data manager - it will notify us when done via NotificationCenter
         bankDataManager?.configureForUser(userId: user.id)
+    }
+
+    /// Called after bank data is fetched to determine the user's destination
+    /// Source of truth: if user has accounts, they've completed onboarding
+    func resolveDestination(hasAccounts: Bool) {
+        guard let userId = currentUser?.id else {
+            isResolvingDestination = false
+            return
+        }
+
+        let userOnboardingKey = onboardingKey(for: userId)
+
+        if hasAccounts {
+            // User has accounts = they've completed onboarding
+            isOnboarded = true
+            // Persist this for future reference
+            userDefaults.set(true, forKey: userOnboardingKey)
+            Logger.info("UserManager.resolveDestination: User has accounts, isOnboarded=true")
+        } else {
+            // No accounts - check stored status as fallback (for edge cases)
+            if userDefaults.object(forKey: userOnboardingKey) != nil {
+                let storedValue = userDefaults.bool(forKey: userOnboardingKey)
+                isOnboarded = storedValue
+                Logger.info("UserManager.resolveDestination: No accounts, using stored status=\(storedValue)")
+            } else {
+                // No accounts and no stored status = new user, show onboarding
+                isOnboarded = false
+                Logger.info("UserManager.resolveDestination: No accounts, no stored status, isOnboarded=false")
+            }
+        }
+
+        isResolvingDestination = false
+        Logger.info("UserManager.resolveDestination: Complete - isOnboarded=\(isOnboarded)")
     }
 
     private func applyProfileData(

@@ -98,6 +98,7 @@ final class BankDataManager {
                 await fetchLinkedItemsFromServer()
                 // fetchLinkedItemsFromServer populates accountsByItemId with embedded accounts
                 // and sets lastRefreshAt, so we can skip the rest
+                notifyConfigurationComplete()
                 return
             }
 
@@ -109,7 +110,22 @@ final class BankDataManager {
 
             // 5. Ensure accountsByItemId is populated from accounts property
             rebuildAccountsByItemId()
+
+            // 6. Notify UserManager that configuration is complete
+            notifyConfigurationComplete()
         }
+    }
+
+    /// Posts notification that bank data configuration is complete
+    /// Used by UserManager to determine onboarding destination
+    private func notifyConfigurationComplete() {
+        let hasAccounts = !accountsByItemId.isEmpty || (accounts?.isEmpty == false)
+        Logger.info("BankDataManager: Configuration complete, hasAccounts=\(hasAccounts)")
+        NotificationCenter.default.post(
+            name: .bankDataConfigurationComplete,
+            object: nil,
+            userInfo: ["hasAccounts": hasAccounts]
+        )
     }
 
     /// Synchronous restore that returns the result for explicit ordering
@@ -164,7 +180,14 @@ final class BankDataManager {
                     if !embeddedAccountsByItemId.isEmpty {
                         // Clear existing and replace with fresh data
                         accountsByItemId = embeddedAccountsByItemId
-                        Logger.success("BankDataManager: Populated \(embeddedAccountsByItemId.count) items with \(embeddedAccountsByItemId.values.flatMap { $0 }.count) embedded accounts")
+
+                        // Also set the flat accounts array (used by PlaidOnboardingViewModel.bootstrapIfNeeded)
+                        // This prevents a redundant /bank/accounts fetch
+                        let allAccounts = embeddedAccountsByItemId.values.flatMap { $0 }
+                        self.accounts = allAccounts
+                        self.accountsLastFetched = Date()
+
+                        Logger.success("BankDataManager: Populated \(embeddedAccountsByItemId.count) items with \(allAccounts.count) embedded accounts")
 
                         // Mark as refreshed to prevent redundant refreshIfStale
                         if let userId = currentUserId {

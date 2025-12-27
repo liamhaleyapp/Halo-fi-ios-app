@@ -11,13 +11,14 @@ struct MainTabView: View {
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
   @State private var selectedTab = 0
-  
+
   var body: some View {
     Group {
       if userManager.isAuthenticated {
-        // Check if user needs to complete onboarding
-        // Use UserManager's isOnboarded property which persists independently
-        if !userManager.isOnboarded {
+        if userManager.isResolvingDestination {
+          // Show splash while determining destination (fetching account data)
+          PostLoginSplashView()
+        } else if !userManager.isOnboarded {
           // User is authenticated but not onboarded - show unified onboarding flow
           UnifiedOnboardingFlowView()
             .dynamicTypeSize(.medium ... .accessibility5)
@@ -30,14 +31,14 @@ struct MainTabView: View {
                   .accessibilityHint("Voice assistant and home screen")
               }
               .tag(0)
-            
+
             AccountsOverviewView()
               .tabItem {
                 Label("Account", systemImage: "creditcard.fill")
                   .accessibilityHint("View and manage your financial accounts")
               }
               .tag(1)
-            
+
             SettingsView()
               .tabItem {
                 Label("Settings", systemImage: "gearshape.fill")
@@ -49,6 +50,12 @@ struct MainTabView: View {
         }
       } else {
         OnboardingView()
+      }
+    }
+    .onChange(of: userManager.isResolvingDestination) { _, isResolving in
+      // Reset to home tab when destination is resolved (after login)
+      if !isResolving {
+        selectedTab = 0
       }
     }
   }
