@@ -25,8 +25,10 @@ enum SettingsDestination: Identifiable {
 struct SettingsView: View {
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
-  
+
   @State private var destination: SettingsDestination?
+  @State private var showLogoutConfirmation = false
+  @State private var isLoggingOut = false
 
   var body: some View {
     NavigationStack {
@@ -87,7 +89,7 @@ struct SettingsView: View {
               icon: "rectangle.portrait.and.arrow.right",
               title: "Logout",
               action: {
-                userManager.signOut()
+                showLogoutConfirmation = true
               }
             )
             
@@ -125,23 +127,41 @@ struct SettingsView: View {
       case .profile:
         ProfileView()
           .environment(userManager)
-        
+
       case .preferences:
         PreferencesView()
-        
+
       case .subscription:
         let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
         SubscriptionView(viewModel: viewModel)
-        
+
       case .inviteFriends:
         InviteFriendsView()
-        
+
       case .about:
         AboutView()
-        
+
       case .accounts:
         AccountsView()
       }
+    }
+    .alert("Log Out", isPresented: $showLogoutConfirmation) {
+      Button("Cancel", role: .cancel) { }
+      Button("Log Out", role: .destructive) {
+        performLogout()
+      }
+    } message: {
+      Text("Are you sure you want to log out?")
+    }
+    .loadingOverlay(isLoading: isLoggingOut, message: "Logging out...")
+  }
+
+  private func performLogout() {
+    isLoggingOut = true
+    // Brief delay for visual feedback before the view transitions
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+      userManager.signOut()
+      isLoggingOut = false
     }
   }
 }
