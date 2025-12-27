@@ -220,7 +220,14 @@ final class UserManager {
 
         let sanitizedFirstName = firstName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sanitizedLastName = lastName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sanitizedPhone = phone?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Normalize phone using USPhoneFormatting (same as sign-in/sign-up)
+        let sanitizedPhone: String?
+        if let phone = phone, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sanitizedPhone = USPhoneFormatting.formatForAPI(phone)
+        } else {
+            sanitizedPhone = nil
+        }
 
         let request = UpdateUserProfileRequest(
             firstName: sanitizedFirstName,

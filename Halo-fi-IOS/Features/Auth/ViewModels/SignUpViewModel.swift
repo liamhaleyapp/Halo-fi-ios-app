@@ -39,11 +39,6 @@ class SignUpViewModel {
     email.trimmingCharacters(in: .whitespacesAndNewlines)
   }
   
-  /// Keep only digits from user-entered phone (e.g., "(555) 123-4567" → "5551234567")
-  private var normalizedPhoneDigits: String {
-    phoneNumber
-      .filter { $0.isNumber }
-  }
   
   var dateOfBirthRange: ClosedRange<Date> {
     let calendar = Calendar.current
@@ -70,8 +65,10 @@ class SignUpViewModel {
   }
   
   private var isPhoneValid: Bool {
-    // Require at least 10 digits (US style)
-    normalizedPhoneDigits.count >= 10
+    if case .valid = USPhoneFormatting.validate(phoneNumber) {
+      return true
+    }
+    return false
   }
   
   private var isPasswordValid: Bool {
@@ -117,13 +114,8 @@ class SignUpViewModel {
   
   var phoneError: String? {
     guard hasAttemptedSubmit else { return nil }
-    if normalizedPhoneDigits.isEmpty {
-      return "Phone number is required."
-    }
-    if !isPhoneValid {
-      return "Enter a valid phone number (10 digits)."
-    }
-    return nil
+    let result = USPhoneFormatting.validate(phoneNumber)
+    return USPhoneFormatting.errorMessage(for: result)
   }
   
   var passwordError: String? {
@@ -179,10 +171,14 @@ class SignUpViewModel {
     
     isLoading = true
     defer { isLoading = false }
-    
+
     do {
-      let fullPhone = "+1" + normalizedPhoneDigits
-      
+      guard let fullPhone = USPhoneFormatting.formatForAPI(phoneNumber) else {
+        errorMessage = "Invalid phone number format."
+        showingError = true
+        return
+      }
+
       try await userManager.signUp(
         firstName: trimmedFirstName,
         lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),

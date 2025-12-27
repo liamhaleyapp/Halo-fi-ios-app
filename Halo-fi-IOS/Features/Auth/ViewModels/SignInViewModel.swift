@@ -21,12 +21,11 @@ class SignInViewModel {
   var hasAttemptedSubmit = false
   
   // Helpers
-  private var normalizedPhoneDigits: String {
-    phoneNumber.filter { $0.isNumber }
-  }
-  
   private var isPhoneValid: Bool {
-    normalizedPhoneDigits.count >= 10
+    if case .valid = USPhoneFormatting.validate(phoneNumber) {
+      return true
+    }
+    return false
   }
   
   private var isPasswordValid: Bool {
@@ -36,9 +35,8 @@ class SignInViewModel {
   // Per-field errors
   var phoneError: String? {
     guard hasAttemptedSubmit else { return nil }
-    if normalizedPhoneDigits.isEmpty { return "Phone number is required." }
-    if !isPhoneValid { return "Enter a valid phone number (10 digits)." }
-    return nil
+    let result = USPhoneFormatting.validate(phoneNumber)
+    return USPhoneFormatting.errorMessage(for: result)
   }
   
   var passwordError: String? {
@@ -65,9 +63,13 @@ class SignInViewModel {
     
     isLoading = true
     defer { isLoading = false }
-    
+
     do {
-      let fullPhone = "+1" + normalizedPhoneDigits
+      guard let fullPhone = USPhoneFormatting.formatForAPI(phoneNumber) else {
+        errorMessage = "Invalid phone number format."
+        showingError = true
+        return
+      }
       try await userManager.signIn(phoneNumber: fullPhone, password: password)
       
       // Decide onboarding outcome

@@ -119,7 +119,19 @@ final class NetworkService: NetworkServiceProtocol {
     }
 
     private func parseErrorResponse(data: Data, statusCode: Int) -> AuthError {
-        // Handle validation errors (400, 422)
+        // Log raw response for debugging
+        if let rawString = String(data: data, encoding: .utf8) {
+            Logger.debug("Error response (status \(statusCode)): \(rawString)")
+        }
+
+        // 1. Try APIErrorResponse: {"success": false, "error": "..."} or {"error": "..."}
+        if let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data),
+           let errorMessage = apiError.errorMessage, !errorMessage.isEmpty {
+            Logger.debug("API error: \(errorMessage)")
+            return .serverError(statusCode, errorMessage)
+        }
+
+        // 2. Handle validation errors (400, 422)
         if statusCode == 400 || statusCode == 422 {
             if let validationError = try? JSONDecoder().decode(ValidationError.self, from: data) {
                 Logger.debug("Validation error: \(validationError.detail.map { $0.msg }.joined(separator: ", "))")
@@ -142,20 +154,43 @@ final class NetworkService: NetworkServiceProtocol {
             }
         }
 
-        // Extract detail from other error responses
+        // 3. Extract detail from other error responses using fallback chain
         let errorDetail = extractErrorDetail(from: data)
         Logger.error("Request failed: status=\(statusCode), detail=\(errorDetail ?? "none")")
         return .serverError(statusCode, errorDetail)
     }
 
     private func extractErrorDetail(from data: Data) -> String? {
+        // 1. Try APIErrorResponse format
+        if let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data),
+           let errorMessage = apiError.errorMessage, !errorMessage.isEmpty {
+            return errorMessage
+        }
+
+        // 2. Try SimpleErrorResponse format ({"detail": "..."})
         if let simpleError = try? JSONDecoder().decode(SimpleErrorResponse.self, from: data) {
             return simpleError.detail
         }
 
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let detail = json["detail"] as? String {
-            return detail
+        // 3. Try raw JSON with error, message, or detail keys
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let error = json["error"] as? String, !error.isEmpty {
+                return error
+            }
+            if let message = json["message"] as? String, !message.isEmpty {
+                return message
+            }
+            if let detail = json["detail"] as? String, !detail.isEmpty {
+                return detail
+            }
+        }
+
+        // 4. Try plain text response
+        if let plainText = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !plainText.isEmpty,
+           !plainText.hasPrefix("{"),  // Not JSON
+           !plainText.hasPrefix("<") {  // Not HTML
+            return plainText
         }
 
         return nil
