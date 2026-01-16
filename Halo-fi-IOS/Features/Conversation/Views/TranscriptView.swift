@@ -17,7 +17,6 @@ struct TranscriptView: View {
     var isProcessing: Bool = false
 
     @State private var isAtBottom = true
-    @State private var showJumpToLatest = false
 
     init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil, isProcessing: Bool = false) {
         self.entries = entries
@@ -46,23 +45,28 @@ struct TranscriptView: View {
                                     .id("typing")
                             }
 
-                            // Bottom anchor for scrolling
-                            Color.clear
-                                .frame(height: 1)
-                                .id("bottom")
+                            // Bottom anchor for scrolling and position tracking
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(
+                                        key: BottomAnchorPreferenceKey.self,
+                                        value: geo.frame(in: .named("transcriptScroll")).minY
+                                    )
+                            }
+                            .frame(height: 1)
+                            .id("bottom")
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                         .padding(.bottom, 80) // Space for jump button
                     }
+                    .coordinateSpace(name: "transcriptScroll")
                     .onChange(of: entries.count) { oldCount, newCount in
                         // Auto-scroll to bottom on new entries if already at bottom
                         if isAtBottom && newCount > oldCount {
                             withAnimation(.easeOut(duration: 0.3)) {
                                 proxy.scrollTo("bottom", anchor: .bottom)
                             }
-                        } else if newCount > oldCount {
-                            showJumpToLatest = true
                         }
                     }
                     .onChange(of: entries.last?.text) { _, _ in
@@ -85,23 +89,22 @@ struct TranscriptView: View {
                         // Scroll to bottom on appear
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
-                    // Track scroll position
-                    .simultaneousGesture(
-                        DragGesture()
-                            .onChanged { _ in
-                                // User is scrolling, assume they moved away from bottom
-                                isAtBottom = false
-                                showJumpToLatest = !entries.isEmpty
-                            }
-                    )
-                    // Jump to latest button action
+                    .onPreferenceChange(BottomAnchorPreferenceKey.self) { bottomY in
+                        let viewportHeight = geometry.size.height
+                        let threshold: CGFloat = 20
+                        let newIsAtBottom = bottomY <= viewportHeight + threshold
+
+                        // Only update if changed to avoid view churn
+                        if newIsAtBottom != isAtBottom {
+                            isAtBottom = newIsAtBottom
+                        }
+                    }
+                    // Jump to latest button
                     .overlay(alignment: .bottom) {
-                        if showJumpToLatest && !entries.isEmpty {
+                        if !isAtBottom && !entries.isEmpty {
                             jumpToLatestButton {
                                 withAnimation {
                                     proxy.scrollTo("bottom", anchor: .bottom)
-                                    isAtBottom = true
-                                    showJumpToLatest = false
                                 }
                             }
                             .padding(.bottom, 16)
@@ -187,6 +190,15 @@ struct TranscriptView: View {
         entries: [.user("What's my balance?")],
         isProcessing: true
     )
+}
+
+// MARK: - Preference Key
+
+private struct BottomAnchorPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 // MARK: - Typing Indicator
