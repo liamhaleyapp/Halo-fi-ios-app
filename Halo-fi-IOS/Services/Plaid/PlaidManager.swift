@@ -43,10 +43,30 @@ class PlaidManager {
     }
 
     // Direct create mode - bypass Link UI entirely
+    // Step 1: Create the link first (this creates the PlaidUser on the backend)
     Logger.debug("PlaidManager: Starting link token creation (DIRECT MODE)")
-    Logger.debug("PlaidManager: Endpoint: /bank/sandbox/create-multi-items")
+    Logger.debug("PlaidManager: Step 1 - Creating link to establish PlaidUser")
+    Logger.debug("PlaidManager: Endpoint: /bank/multi-link/create")
 
     do {
+      let linkResponse: PlaidLinkResponse = try await networkService.authenticatedRequest(
+        endpoint: "/bank/multi-link/create",
+        method: .POST,
+        body: requestBody,
+        responseType: PlaidLinkResponse.self
+      )
+
+      Logger.debug("PlaidManager: Link creation - success: \(linkResponse.success)")
+
+      guard linkResponse.success else {
+        Logger.debug("PlaidManager: Link creation failed")
+        throw PlaidError.linkTokenCreationFailed
+      }
+
+      // Step 2: Now create sandbox items (PlaidUser now exists)
+      Logger.debug("PlaidManager: Step 2 - Creating sandbox items")
+      Logger.debug("PlaidManager: Endpoint: /bank/sandbox/create-multi-items")
+
       let sandboxResponse: BankMultiConnectResponse = try await networkService.authenticatedRequest(
         endpoint: "/bank/sandbox/create-multi-items",
         method: .POST,
