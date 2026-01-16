@@ -149,7 +149,7 @@ final class ConversationViewModel {
 
     var isTextInputEnabled: Bool {
         switch state {
-        case .idle, .listening:
+        case .idle, .listening, .speaking:
             return true
         default:
             return false
