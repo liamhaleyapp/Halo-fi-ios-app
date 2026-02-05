@@ -147,34 +147,53 @@ final class ConversationCoordinator {
             return
         }
 
+        // Show connecting state while establishing STT connection
+        setState(.connecting)
+
         do {
-            setState(.listening)
-            audioFeedback?.feedbackForStateChange(.listening)
+            // Set up callback to start recording when session is ready
+            sttService.onSessionReady = { [weak self] in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    do {
+                        // Wire audio buffers from VoiceService to STT service
+                        self.voiceService.onAudioBuffer = { [weak self] buffer in
+                            guard let self = self else { return }
+                            Task {
+                                await self.sttService.sendAudioBuffer(buffer)
+                            }
+                        }
+
+                        // Start recording now that session is ready
+                        try await self.voiceService.startRecording()
+                        self.isVoiceSessionActive = true
+
+                        // Transition to listening state
+                        self.setState(.listening)
+                        self.audioFeedback?.feedbackForStateChange(.listening)
+                    } catch {
+                        self.handleVoiceSetupError(error)
+                    }
+                }
+            }
 
             // Connect to ElevenLabs STT (fetches fresh token each time)
             try await sttService.connect()
 
-            // Wire audio buffers from VoiceService to STT service
-            voiceService.onAudioBuffer = { [weak self] buffer in
-                guard let self = self else { return }
-                Task {
-                    await self.sttService.sendAudioBuffer(buffer)
-                }
-            }
-
-            // Start recording
-            try await voiceService.startRecording()
-            isVoiceSessionActive = true
-
         } catch {
-            // Clean up on failure
-            sttService.disconnect()
-            voiceService.onAudioBuffer = nil
-            isVoiceSessionActive = false
-
-            setState(.error(error.localizedDescription))
-            emitEvent(.errorEvent("Voice unavailable: \(error.localizedDescription)"))
+            handleVoiceSetupError(error)
         }
+    }
+
+    private func handleVoiceSetupError(_ error: Error) {
+        // Clean up on failure
+        sttService.onSessionReady = nil
+        sttService.disconnect()
+        voiceService.onAudioBuffer = nil
+        isVoiceSessionActive = false
+
+        setState(.error(error.localizedDescription))
+        emitEvent(.errorEvent("Voice unavailable: \(error.localizedDescription)"))
     }
 
     /// Stop listening (voice mode) - finalize and send transcript

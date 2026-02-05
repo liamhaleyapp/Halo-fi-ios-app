@@ -105,7 +105,7 @@ struct MicButton: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .processing:
+        case .processing, .connecting:
             return LinearGradient(
                 colors: [.orange, .yellow],
                 startPoint: .topLeading,
@@ -124,7 +124,7 @@ struct MicButton: View {
         switch state {
         case .listening, .speaking:
             return .red
-        case .processing:
+        case .processing, .connecting:
             return .orange
         default:
             return .blue
@@ -135,7 +135,7 @@ struct MicButton: View {
         switch state {
         case .listening:
             return "waveform"
-        case .processing:
+        case .processing, .connecting:
             return "ellipsis"
         case .speaking:
             return "stop.fill"
@@ -148,7 +148,7 @@ struct MicButton: View {
         switch state {
         case .listening, .speaking, .error:
             return .red
-        case .processing:
+        case .processing, .connecting:
             return .orange
         default:
             return .secondary

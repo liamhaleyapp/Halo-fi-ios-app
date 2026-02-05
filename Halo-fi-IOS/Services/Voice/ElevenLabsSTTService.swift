@@ -60,6 +60,9 @@ final class ElevenLabsSTTService {
     /// Called when connection is lost
     var onDisconnected: (() -> Void)?
 
+    /// Called when session is ready to receive audio (session_started received)
+    var onSessionReady: (() -> Void)?
+
     // MARK: - Private Properties
 
     private let networkService: NetworkServiceProtocol
@@ -337,6 +340,7 @@ final class ElevenLabsSTTService {
             Logger.info("ElevenLabsSTT: Session started - ready to receive audio")
             // Config is already set via the token/URL - just start sending audio
             isSessionReady = true
+            onSessionReady?()
 
         case .unknown(let rawText):
             // Log at info level to catch any unhandled server messages
