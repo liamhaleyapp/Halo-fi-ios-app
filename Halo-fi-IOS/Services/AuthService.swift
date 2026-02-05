@@ -105,4 +105,25 @@ final class AuthService: AuthServiceProtocol {
     func logout(accessToken: String) async throws {
         throw AuthError.notImplemented
     }
+
+    // MARK: - Delete Account
+
+    func deleteAccount(userId: String) async throws {
+        let endpoint = "/users/\(userId)"
+        Logger.debug("""
+        🗑️ DELETE Account Request:
+           Method: DELETE
+           Endpoint: \(endpoint)
+           Full URL: \(APIEndpoints.baseURL)\(endpoint)
+           User ID: \(userId)
+           Body: nil
+        """)
+
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: endpoint,
+            method: .DELETE,
+            body: nil,
+            responseType: EmptyResponse.self
+        )
+    }
 }

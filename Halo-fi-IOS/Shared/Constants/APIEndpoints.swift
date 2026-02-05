@@ -70,9 +70,9 @@ enum APIEndpoints {
         static let multiItemsSync = "/bank/multi-items/sync"
 
         /// POST - Sync a specific item.
-        /// Usage: `Bank.syncItem(plaidItemId)`
-        static func syncItem(_ plaidItemId: String) -> String {
-            "/bank/sync/\(plaidItemId)"
+        /// Usage: `Bank.syncItem(itemId)` where itemId is the internal UUID (not plaid_item_id)
+        static func syncItem(_ itemId: String) -> String {
+            "/bank/sync/\(itemId)"
         }
 
         /// DELETE - Disconnect a bank account.

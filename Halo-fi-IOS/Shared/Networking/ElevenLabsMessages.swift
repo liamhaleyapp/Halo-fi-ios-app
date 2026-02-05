@@ -5,7 +5,7 @@
 //  WebSocket message types for ElevenLabs Scribe v2 Realtime STT.
 //
 //  Protocol:
-//  - Audio input: Binary frames (raw PCM data)
+//  - Audio input: JSON frames with base64-encoded PCM (input_audio_chunk)
 //  - Transcription output: JSON text frames
 //
 
@@ -17,7 +17,7 @@ import Foundation
 struct ElevenLabsTranscriptEvent: Codable {
     let messageType: String
     let text: String
-    let isFinal: Bool
+    let isFinal: Bool?  // Optional - not present in partial_transcript
     let confidence: Double?
     let words: [TranscriptWord]?
 
@@ -31,7 +31,8 @@ struct ElevenLabsTranscriptEvent: Codable {
 
     /// Check if this is a final/committed transcript
     var isCommitted: Bool {
-        isFinal || messageType == "final_transcript"
+        // final_transcript message type OR explicit is_final flag
+        messageType == "final_transcript" || (isFinal ?? false)
     }
 }
 

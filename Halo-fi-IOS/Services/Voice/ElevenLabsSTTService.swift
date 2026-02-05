@@ -179,8 +179,24 @@ final class ElevenLabsSTTService {
         }
 
         do {
-            // Send as binary frame (raw PCM)
-            try await task.send(.data(pcmData))
+            // ElevenLabs expects audio wrapped in input_audio_chunk JSON message
+            let audioBase64 = pcmData.base64EncodedString()
+            let sampleRate = currentToken?.config.sampleRate ?? 16000
+
+            let message: [String: Any] = [
+                "message_type": "input_audio_chunk",
+                "audio_base_64": audioBase64,
+                "commit": false,
+                "sample_rate": sampleRate
+            ]
+
+            let jsonData = try JSONSerialization.data(withJSONObject: message)
+            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+                Logger.error("ElevenLabsSTT: Failed to encode audio message")
+                return
+            }
+
+            try await task.send(.string(jsonString))
         } catch {
             Logger.error("ElevenLabsSTT: Failed to send audio (\(pcmData.count) bytes): \(error)")
             handleConnectionError(error)
@@ -318,17 +334,9 @@ final class ElevenLabsSTTService {
             onError?(ElevenLabsSTTError.connectionFailed(event.error))
 
         case .sessionStarted:
-            Logger.info("ElevenLabsSTT: Session started - sending audio config")
-
-            // Send audio configuration before starting to send audio
-            Task {
-                await sendAudioConfig()
-                // Only mark ready after config is sent
-                await MainActor.run {
-                    self.isSessionReady = true
-                    Logger.info("ElevenLabsSTT: Ready to receive audio")
-                }
-            }
+            Logger.info("ElevenLabsSTT: Session started - ready to receive audio")
+            // Config is already set via the token/URL - just start sending audio
+            isSessionReady = true
 
         case .unknown(let rawText):
             // Log at info level to catch any unhandled server messages
@@ -358,27 +366,4 @@ final class ElevenLabsSTTService {
         onDisconnected?()
     }
 
-    /// Send audio configuration to ElevenLabs after session starts
-    private func sendAudioConfig() async {
-        guard let webSocketTask = webSocketTask else { return }
-
-        // Build config based on what we'll actually send
-        let config: [String: Any] = [
-            "type": "configure",
-            "sample_rate": 16000,
-            "encoding": "pcm_s16le",
-            "channels": 1
-        ]
-
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: config)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                Logger.info("ElevenLabsSTT: Sending config: \(jsonString)")
-                try await webSocketTask.send(.string(jsonString))
-                Logger.info("ElevenLabsSTT: Config sent successfully")
-            }
-        } catch {
-            Logger.error("ElevenLabsSTT: Failed to send config: \(error)")
-        }
-    }
 }

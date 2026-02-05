@@ -29,6 +29,8 @@ struct SettingsView: View {
   @State private var destination: SettingsDestination?
   @State private var showLogoutConfirmation = false
   @State private var isLoggingOut = false
+  @State private var showDeleteAccountConfirmation = false
+  @State private var isDeletingAccount = false
 
   var body: some View {
     NavigationStack {
@@ -113,6 +115,14 @@ struct SettingsView: View {
                 userManager.resetOnboarding()
               }
             )
+
+            SettingsOption(
+              icon: "trash.fill",
+              title: "Delete Account",
+              action: {
+                showDeleteAccountConfirmation = true
+              }
+            )
             #endif
 #endif
           }
@@ -155,15 +165,45 @@ struct SettingsView: View {
     } message: {
       Text("Are you sure you want to log out?")
     }
+    .alert("Delete Account", isPresented: $showDeleteAccountConfirmation) {
+      Button("Cancel", role: .cancel) { }
+      Button("Delete", role: .destructive) {
+        Task {
+          await performDeleteAccount()
+        }
+      }
+    } message: {
+      Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+    }
     .loadingOverlay(isLoading: isLoggingOut, message: "Logging out...")
+    .loadingOverlay(isLoading: isDeletingAccount, message: "Deleting account...")
   }
 
   private func performLogout() {
     isLoggingOut = true
     // Brief delay for visual feedback before the view transitions
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+      subscriptionService.clearCachedState()
       userManager.signOut()
       isLoggingOut = false
+    }
+  }
+
+  private func performDeleteAccount() async {
+    guard let userId = userManager.currentUser?.id else { return }
+
+    isDeletingAccount = true
+    do {
+      try await AuthService.shared.deleteAccount(userId: userId)
+      isDeletingAccount = false
+
+      // Clear all local state for deleted user
+      userManager.resetOnboarding()
+      subscriptionService.clearCachedState()
+      userManager.signOut()
+    } catch {
+      isDeletingAccount = false
+      Logger.error("Failed to delete account: \(error)")
     }
   }
 }

@@ -89,23 +89,24 @@ class SubscriptionViewModel {
       if !subscriptionService.isLoading {
         await subscriptionService.initialize()
       }
-      
+
       guard !subscriptionService.availablePackages.isEmpty else {
         activeEvent = .purchase(message: "Products are still loading. Please wait a moment and try again.")
         return .productsNotReady
       }
     }
-    
+
     isLoadingPurchase = true
     let productId = selectedPlan.productId(for: billingCycle)
-    
+    let purchasedPlanName = selectedPlan.displayName  // Capture before any updates
+
     do {
       let result = try await subscriptionService.purchase(productId: productId)
       isLoadingPurchase = false
-      
+
       if result.success {
         updateSelectedPlanFromSubscription()
-        activeEvent = .purchase(message: "Successfully subscribed to \(selectedPlan.displayName)!")
+        activeEvent = .purchase(message: "Successfully subscribed to \(purchasedPlanName)!")
         return .success
       } else {
         activeEvent = .purchase(message: "Purchase completed but subscription status is pending.")

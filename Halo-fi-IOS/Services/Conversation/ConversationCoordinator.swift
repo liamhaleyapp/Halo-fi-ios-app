@@ -177,31 +177,43 @@ final class ConversationCoordinator {
         }
     }
 
-    /// Stop listening (voice mode) - user cancelled
+    /// Stop listening (voice mode) - finalize and send transcript
     func stopListening() {
         guard state == .listening else { return }
+
+        // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
+        isVoiceSessionActive = false
 
         // Stop recording and STT
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
         sttService.disconnect()
-        isVoiceSessionActive = false
 
-        // Discard draft (user cancelled)
-        transcriptStore?.discardDraft()
+        // Finalize draft and send to agent
+        if let finalText = transcriptStore?.finalizeDraft(), !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
+            audioFeedback?.feedbackForStateChange(.processing)
+            setState(.processing)
 
-        setState(.idle)
+            Task {
+                await sendTextInternal(finalText)
+            }
+        } else {
+            // Empty or no transcript - just go idle
+            setState(.idle)
+        }
     }
 
     /// Internal: Stop listening after committed transcript (VAD auto-stop)
     private func stopListeningAndProcess() {
         guard state == .listening else { return }
 
+        // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
+        isVoiceSessionActive = false
+
         // Stop recording and STT
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
         sttService.disconnect()
-        isVoiceSessionActive = false
 
         // Finalize draft and send to agent
         if let finalText = transcriptStore?.finalizeDraft() {

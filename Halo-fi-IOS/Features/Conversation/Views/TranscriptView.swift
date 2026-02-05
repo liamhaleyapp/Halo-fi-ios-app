@@ -60,6 +60,7 @@ struct TranscriptView: View {
                         .padding(.top, 16)
                         .padding(.bottom, 80) // Space for jump button
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .coordinateSpace(name: "transcriptScroll")
                     .onChange(of: entries.count) { oldCount, newCount in
                         // Auto-scroll to bottom on new entries if already at bottom

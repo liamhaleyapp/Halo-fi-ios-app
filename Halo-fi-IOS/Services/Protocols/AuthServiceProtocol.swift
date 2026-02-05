@@ -51,6 +51,11 @@ protocol AuthServiceProtocol {
     /// Logs out the current user.
     /// - Parameter accessToken: The current access token
     func logout(accessToken: String) async throws
+
+    /// Deletes the user account and all associated data.
+    /// - Parameter userId: The user's ID to delete
+    /// - Note: This is a destructive operation. All data will be permanently deleted.
+    func deleteAccount(userId: String) async throws
 }
 
 // MARK: - Mock Implementation for Testing
@@ -101,6 +106,12 @@ actor MockAuthService: AuthServiceProtocol {
     }
 
     func logout(accessToken: String) async throws {
+        guard shouldSucceed else {
+            throw AuthError.networkError
+        }
+    }
+
+    func deleteAccount(userId: String) async throws {
         guard shouldSucceed else {
             throw AuthError.networkError
         }

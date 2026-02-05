@@ -296,8 +296,8 @@ struct AccountsOverviewView: View {
     isLoadingAccounts = true
     
     do {
-      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.plaidItemId) (\(item.institutionName))")
-      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.plaidItemId)
+      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
+      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
       
       await MainActor.run {
         bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts

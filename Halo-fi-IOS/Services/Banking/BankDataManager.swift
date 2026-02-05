@@ -372,7 +372,7 @@ final class BankDataManager {
                 group.addTask { [weak self] in
                     guard let self else { return }
                     do {
-                        let response = try await self.fetchAccountsForItem(itemId: item.plaidItemId)
+                        let response = try await self.fetchAccountsForItem(itemId: item.itemId)
                         await MainActor.run {
                             // Final check: don't write if user changed during fetch
                             guard self.currentUserId == userId else { return }
