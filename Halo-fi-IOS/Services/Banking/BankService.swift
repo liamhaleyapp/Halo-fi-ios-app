@@ -169,7 +169,7 @@ final class BankService: BankServiceProtocol {
         do {
             let response: TransactionsResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.syncTransactions(plaidItemId),
-                method: .GET,
+                method: .POST,
                 body: nil,
                 responseType: TransactionsResponse.self
             )
