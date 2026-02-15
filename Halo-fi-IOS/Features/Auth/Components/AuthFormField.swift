@@ -47,7 +47,7 @@ struct AuthFormField: View {
       }
       .textFieldStyle(CustomTextFieldStyle())
       .keyboardType(keyboardType)
-      .autocapitalization(.none)
+      .autocapitalization(autocapitalizationType)
       .textContentType(textContentType)
       .accessibilityLabel(title)
       .accessibilityHint("Enter your \(title.lowercased())")
@@ -60,6 +60,15 @@ struct AuthFormField: View {
       return text.isEmpty ? "No \(title.lowercased()) entered" : "\(title) entered"
     } else {
       return text.isEmpty ? placeholder : text
+    }
+  }
+
+  private var autocapitalizationType: UITextAutocapitalizationType {
+    switch textContentType {
+    case .givenName, .familyName, .name, .middleName, .nickname:
+      return .words
+    default:
+      return .none
     }
   }
 }

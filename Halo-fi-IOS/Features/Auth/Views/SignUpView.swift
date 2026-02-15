@@ -36,7 +36,8 @@ struct SignUpView: View {
             AuthFormField(
               title: "First Name",
               placeholder: "Enter your first name",
-              text: $viewModel.firstName
+              text: $viewModel.firstName,
+              textContentType: .givenName
             )
             if let error = viewModel.firstNameError {
               validationText(error)
@@ -45,7 +46,8 @@ struct SignUpView: View {
             AuthFormField(
               title: "Last Name",
               placeholder: "Enter your last name",
-              text: $viewModel.lastName
+              text: $viewModel.lastName,
+              textContentType: .familyName
             )
             
             DateOfBirthField(selectedDate: viewModel.dateOfBirth) {
