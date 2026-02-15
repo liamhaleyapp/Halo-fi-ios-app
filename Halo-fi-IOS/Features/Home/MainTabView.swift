@@ -93,6 +93,17 @@ struct MainTabView: View {
                 .tag(2)
         }
         .accentColor(.blue)
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    if horizontal < -50 && selectedTab < 2 {
+                        selectedTab += 1
+                    } else if horizontal > 50 && selectedTab > 0 {
+                        selectedTab -= 1
+                    }
+                }
+        )
     }
 }
 

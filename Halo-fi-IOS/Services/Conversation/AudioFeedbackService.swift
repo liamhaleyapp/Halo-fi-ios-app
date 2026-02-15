@@ -190,11 +190,9 @@ final class AudioFeedbackService {
 
     /// Play feedback for tab switching
     func playTabSwitchFeedback() {
-        // Prepare for immediate response
-        selectionGenerator.prepare()
-
-        // Selection haptic (designed for navigation)
-        selectionGenerator.selectionChanged()
+        // Medium haptic for noticeable feedback
+        mediumImpactGenerator.prepare()
+        mediumImpactGenerator.impactOccurred()
 
         // Custom earcon sound
         tabSwitchSound?.currentTime = 0

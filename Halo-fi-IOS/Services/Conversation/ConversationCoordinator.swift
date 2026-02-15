@@ -126,6 +126,9 @@ final class ConversationCoordinator {
         }
 
         interactionMode = mode
+
+        // Play tab switch feedback (sound + haptic)
+        audioFeedback.playTabSwitchFeedback()
     }
 
     /// Start listening (voice mode)
