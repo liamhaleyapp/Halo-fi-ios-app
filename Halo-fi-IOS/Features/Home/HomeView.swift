@@ -33,10 +33,11 @@ struct HomeView: View {
           ActionButtonsSection()
         }
       }
-    }
-    .navigationBarHidden(true)
-    .fullScreenCover(isPresented: $showingConversation) {
-      ConversationView()
+      .navigationBarHidden(true)
+      .navigationDestination(isPresented: $showingConversation) {
+        ConversationView()
+          .navigationBarHidden(true)
+      }
     }
   }
 }

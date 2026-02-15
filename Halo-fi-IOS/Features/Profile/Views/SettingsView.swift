@@ -7,26 +7,14 @@
 
 import SwiftUI
 
-enum SettingsDestination: Identifiable {
+enum SettingsDestination: Hashable {
   case profile, preferences, subscription, inviteFriends, about, accounts
-
-  var id: String {
-    switch self {
-    case .profile: return "profile"
-    case .preferences: return "preferences"
-    case .subscription: return "subscription"
-    case .inviteFriends: return "inviteFriends"
-    case .about: return "about"
-    case .accounts: return "accounts"
-    }
-  }
 }
 
 struct SettingsView: View {
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
 
-  @State private var destination: SettingsDestination?
   @State private var showLogoutConfirmation = false
   @State private var isLoggingOut = false
   @State private var showDeleteAccountConfirmation = false
@@ -36,57 +24,33 @@ struct SettingsView: View {
     NavigationStack {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
-        
+
         ScrollView {
           VStack(spacing: 8) {
-            SettingsOption(
-              icon: "person.fill",
-              title: "Profile",
-              action: {
-                destination = .profile
-              }
-            )
-            
-            SettingsOption(
-              icon: "hexagon.fill",
-              title: "Preferences",
-              action: {
-                destination = .preferences
-              }
-            )
-            
-            SettingsOption(
-              icon: "diamond.fill",
-              title: "Subscription",
-              action: {
-                destination = .subscription
-              }
-            )
-            
-            SettingsOption(
-              icon: "person.2.fill",
-              title: "Invite Friends",
-              action: {
-                destination = .inviteFriends
-              }
-            )
-            
-            SettingsOption(
-              icon: "building.2.fill",
-              title: "Manage Banks",
-              action: {
-                destination = .accounts
-              }
-            )
-            
-            SettingsOption(
-              icon: "info.circle.fill",
-              title: "About",
-              action: {
-                destination = .about
-              }
-            )
-            
+            NavigationLink(value: SettingsDestination.profile) {
+              SettingsOptionLabel(icon: "person.fill", title: "Profile")
+            }
+
+            NavigationLink(value: SettingsDestination.preferences) {
+              SettingsOptionLabel(icon: "hexagon.fill", title: "Preferences")
+            }
+
+            NavigationLink(value: SettingsDestination.subscription) {
+              SettingsOptionLabel(icon: "diamond.fill", title: "Subscription")
+            }
+
+            NavigationLink(value: SettingsDestination.inviteFriends) {
+              SettingsOptionLabel(icon: "person.2.fill", title: "Invite Friends")
+            }
+
+            NavigationLink(value: SettingsDestination.accounts) {
+              SettingsOptionLabel(icon: "building.2.fill", title: "Manage Banks")
+            }
+
+            NavigationLink(value: SettingsDestination.about) {
+              SettingsOptionLabel(icon: "info.circle.fill", title: "About")
+            }
+
             SettingsOption(
               icon: "rectangle.portrait.and.arrow.right",
               title: "Logout",
@@ -94,7 +58,7 @@ struct SettingsView: View {
                 showLogoutConfirmation = true
               }
             )
-            
+
 #if DEBUG || TESTFLIGHT
             // Build Info Banner
             Divider()
@@ -133,28 +97,28 @@ struct SettingsView: View {
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.large)
-    }
-    .fullScreenCover(item: $destination) { dest in
-      switch dest {
-      case .profile:
-        ProfileView()
-          .environment(userManager)
+      .navigationDestination(for: SettingsDestination.self) { destination in
+        switch destination {
+        case .profile:
+          ProfileView()
+            .environment(userManager)
 
-      case .preferences:
-        PreferencesView()
+        case .preferences:
+          PreferencesView()
 
-      case .subscription:
-        let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
-        SubscriptionView(viewModel: viewModel)
+        case .subscription:
+          let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
+          SubscriptionView(viewModel: viewModel)
 
-      case .inviteFriends:
-        InviteFriendsView()
+        case .inviteFriends:
+          InviteFriendsView()
 
-      case .about:
-        AboutView()
+        case .about:
+          AboutView()
 
-      case .accounts:
-        AccountsView()
+        case .accounts:
+          AccountsView()
+        }
       }
     }
     .alert("Log Out", isPresented: $showLogoutConfirmation) {
@@ -205,6 +169,36 @@ struct SettingsView: View {
       isDeletingAccount = false
       Logger.error("Failed to delete account: \(error)")
     }
+  }
+}
+
+/// Label-only view for NavigationLink styling
+private struct SettingsOptionLabel: View {
+  let icon: String
+  let title: String
+
+  var body: some View {
+    HStack(spacing: 16) {
+      Image(systemName: icon)
+        .font(.title3)
+        .foregroundColor(.blue)
+        .frame(width: 28, height: 28)
+
+      Text(title)
+        .font(.body)
+        .fontWeight(.medium)
+        .foregroundColor(.primary)
+
+      Spacer()
+
+      Image(systemName: "chevron.right")
+        .font(.caption)
+        .foregroundColor(.gray)
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
+    .background(Color.gray.opacity(0.1))
+    .cornerRadius(12)
   }
 }
 

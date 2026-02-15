@@ -132,7 +132,7 @@ struct AccountTypeSection: View {
         .cornerRadius(12)
         .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
+      .buttonStyle(HapticPlainButtonStyle())
       .accessibilityLabel("\(accountType.displayName), \(accounts.count) account\(accounts.count == 1 ? "" : "s"), Total balance \(CurrencyFormatter.format(totalBalance, currency: currency))")
       .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to expand")
       .accessibilityAddTraits(.isHeader)
@@ -146,7 +146,7 @@ struct AccountTypeSection: View {
             } label: {
               AccountTypeRow(account: account, showInstitution: true)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HapticPlainButtonStyle())
           }
         }
       }

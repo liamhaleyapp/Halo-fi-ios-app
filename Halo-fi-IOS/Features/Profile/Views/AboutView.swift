@@ -17,40 +17,25 @@ struct AboutView: View {
   @State private var showingBugReport = false
   
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(spacing: 12) {
-          WhatIsHaloFiSection()
-          OurMissionSection()
-          MeetTheTeamButtonSection { showingTeam = true }
-          DataSecuritySection()
-          LegalAndSupportSection(
-            onTermsTap: { showingTerms = true },
-            onPrivacyTap: { showingPrivacy = true },
-            onContactSupportTap: { showingContactSupport = true },
-            onBugReportTap: { showingBugReport = true }
-          )
-          AppVersionSection()
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 100)
+    ScrollView {
+      VStack(spacing: 12) {
+        WhatIsHaloFiSection()
+        OurMissionSection()
+        MeetTheTeamButtonSection { showingTeam = true }
+        DataSecuritySection()
+        LegalAndSupportSection(
+          onTermsTap: { showingTerms = true },
+          onPrivacyTap: { showingPrivacy = true },
+          onContactSupportTap: { showingContactSupport = true },
+          onBugReportTap: { showingBugReport = true }
+        )
+        AppVersionSection()
       }
-      .navigationTitle("About")
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            dismiss()
-          } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "chevron.left")
-              Text("Settings")
-            }
-          }
-          .accessibilityLabel("Back to Settings")
-        }
-      }
+      .padding(.horizontal, 20)
+      .padding(.bottom, 100)
     }
+    .navigationTitle("About")
+    .navigationBarTitleDisplayMode(.large)
     .sheet(isPresented: $showingTeam) {
       TeamView()
     }

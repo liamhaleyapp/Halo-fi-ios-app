@@ -65,6 +65,6 @@ struct PlanOptionCard: View {
           .stroke(isSelected ? Color.purple : Color.clear, lineWidth: 2)
       )
     }
-    .buttonStyle(PlainButtonStyle())
+    .buttonStyle(HapticPlainButtonStyle())
   }
 }

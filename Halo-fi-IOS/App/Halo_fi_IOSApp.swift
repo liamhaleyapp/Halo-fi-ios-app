@@ -60,6 +60,7 @@ struct Halo_fi_IOSApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
+        .buttonStyle(HapticButtonStyle())
         .modelContainer(modelContainer)
         .environment(container)
         .environment(container.userManager)

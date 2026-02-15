@@ -61,7 +61,7 @@ struct VoiceConversationButton: View {
       )
       .contentShape(Rectangle())
     }
-    .buttonStyle(PlainButtonStyle())
+    .buttonStyle(HapticPlainButtonStyle())
     .accessibilityLabel("Start voice conversation")
     .accessibilityHint("Starts a voice conversation with your financial assistant")
   }

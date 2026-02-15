@@ -198,4 +198,19 @@ final class AudioFeedbackService {
         tabSwitchSound?.currentTime = 0
         tabSwitchSound?.play()
     }
+
+    // MARK: - Button Feedback
+
+    /// Play light haptic feedback for button taps
+    func playButtonTapFeedback() {
+        selectionGenerator.prepare()
+        selectionGenerator.selectionChanged()
+    }
+}
+
+// MARK: - Shared Instance
+
+extension AudioFeedbackService {
+    /// Shared instance for global haptic feedback access
+    static let shared = AudioFeedbackService()
 }

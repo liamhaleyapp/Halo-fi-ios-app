@@ -20,19 +20,7 @@
 		</dict>
 		<dict>
 			<key>INAlternativeAppName</key>
-			<string>Halo Fi</string>
-			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>HAY low FYE</string>
-		</dict>
-		<dict>
-			<key>INAlternativeAppName</key>
 			<string>Halo Fee</string>
-			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>HAY low FYE</string>
-		</dict>
-		<dict>
-			<key>INAlternativeAppName</key>
-			<string>Hello Fi</string>
 			<key>INAlternativeAppNamePronunciationHint</key>
 			<string>HAY low FYE</string>
 		</dict>

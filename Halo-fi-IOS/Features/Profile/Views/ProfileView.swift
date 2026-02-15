@@ -26,76 +26,61 @@ struct ProfileView: View {
   @State private var originalDateOfBirth: Date?
   
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(spacing: 32) {
-          // Personal Information Section
-          VStack(spacing: 24) {
-            ProfileField(
-              title: "First Name",
-              value: $firstName,
-              placeholder: "Enter your first name",
-              icon: "person.fill"
-            )
-            
-            ProfileField(
-              title: "Last Name",
-              value: $lastName,
-              placeholder: "Enter your last name",
-              icon: "person.fill"
-            )
-            
-            ProfileField(
-              title: "Email Address",
-              value: $email,
-              placeholder: "Enter your email",
-              icon: "envelope.fill",
-              keyboardType: .emailAddress,
-              isDisabled: true
-            )
-            
-            ProfileField(
-              title: "Phone Number",
-              value: $phoneNumber,
-              placeholder: "Enter your phone number",
-              icon: "phone.fill",
-              keyboardType: .phonePad,
-              isDisabled: true
-            )
-            
-            // Date of Birth
-            DateOfBirthField(selectedDate: dateOfBirth ?? Date()) {
-              showingDatePicker = true
-            }
+    ScrollView {
+      VStack(spacing: 32) {
+        // Personal Information Section
+        VStack(spacing: 24) {
+          ProfileField(
+            title: "First Name",
+            value: $firstName,
+            placeholder: "Enter your first name",
+            icon: "person.fill"
+          )
+
+          ProfileField(
+            title: "Last Name",
+            value: $lastName,
+            placeholder: "Enter your last name",
+            icon: "person.fill"
+          )
+
+          ProfileField(
+            title: "Email Address",
+            value: $email,
+            placeholder: "Enter your email",
+            icon: "envelope.fill",
+            keyboardType: .emailAddress,
+            isDisabled: true
+          )
+
+          ProfileField(
+            title: "Phone Number",
+            value: $phoneNumber,
+            placeholder: "Enter your phone number",
+            icon: "phone.fill",
+            keyboardType: .phonePad,
+            isDisabled: true
+          )
+
+          // Date of Birth
+          DateOfBirthField(selectedDate: dateOfBirth ?? Date()) {
+            showingDatePicker = true
           }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 24)
-          .background(Color.gray.opacity(0.08))
-          .cornerRadius(20)
-          
-          // Save Button
-          SaveProfileButton(isEnabled: hasChanges && !isSaving, onSave: saveProfile)
-          
-          Spacer(minLength: 40)
         }
-        .padding(.top, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(20)
+
+        // Save Button
+        SaveProfileButton(isEnabled: hasChanges && !isSaving, onSave: saveProfile)
+
+        Spacer(minLength: 40)
       }
-      .navigationTitle("Profile")
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            dismiss()
-          } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "chevron.left")
-              Text("Settings")
-            }
-          }
-          .accessibilityLabel("Back to Settings")
-        }
-      }
+      .padding(.top, 10)
     }
+    .navigationTitle("Profile")
+    .navigationBarTitleDisplayMode(.large)
     .sheet(isPresented: $showingDatePicker) {
       DatePickerSheet(selectedDate: Binding(
         get: { dateOfBirth ?? Date() },

@@ -57,6 +57,7 @@ struct ConversationView: View {
             .presentationDetents([.medium])
         }
         .dynamicTypeSize(.medium ... .accessibility5)
+        .toolbar(.hidden, for: .tabBar)
     }
 
     // MARK: - Input Area

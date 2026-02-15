@@ -67,75 +67,55 @@ struct PreferencesView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background
-                Color(.systemBackground).ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 16) {
+                // Voice Assistant Language
+                PreferenceDropdownSection(
+                    title: "Voice Assistant Language",
+                    subtitle: "Choose your preferred language for voice interactions",
+                    icon: "globe",
+                    options: languageOptions,
+                    selectedId: $voiceLanguage
+                )
 
-                // Content
-                VStack(spacing: 16) {
-                    // Voice Assistant Language
-                    PreferenceDropdownSection(
-                        title: "Voice Assistant Language",
-                        subtitle: "Choose your preferred language for voice interactions",
-                        icon: "globe",
-                        options: languageOptions,
-                        selectedId: $voiceLanguage
-                    )
+                // Theme Mode
+                PreferenceDropdownSection(
+                    title: "Theme Mode",
+                    subtitle: "Select your preferred visual theme",
+                    icon: "paintbrush",
+                    options: themeModeOptions,
+                    selectedId: $themeMode
+                )
 
-                    // Theme Mode
-                    PreferenceDropdownSection(
-                        title: "Theme Mode",
-                        subtitle: "Select your preferred visual theme",
-                        icon: "paintbrush",
-                        options: themeModeOptions,
-                        selectedId: $themeMode
-                    )
+                // Voice Agent
+                PreferenceDropdownSection(
+                    title: "Voice Agent",
+                    subtitle: "Choose your preferred voice assistant",
+                    icon: "person.wave.2",
+                    options: voiceAgentOptions,
+                    selectedId: $voiceAgent
+                )
 
-                    // Voice Agent
-                    PreferenceDropdownSection(
-                        title: "Voice Agent",
-                        subtitle: "Choose your preferred voice assistant",
-                        icon: "person.wave.2",
-                        options: voiceAgentOptions,
-                        selectedId: $voiceAgent
-                    )
+                // Voice Speed
+                PreferenceDropdownSection(
+                    title: "Voice Speed",
+                    subtitle: "Adjust how fast the voice assistant speaks",
+                    icon: "speedometer",
+                    options: voiceSpeedOptions,
+                    selectedId: $voiceSpeed
+                )
 
-                    // Voice Speed
-                    PreferenceDropdownSection(
-                        title: "Voice Speed",
-                        subtitle: "Adjust how fast the voice assistant speaks",
-                        icon: "speedometer",
-                        options: voiceSpeedOptions,
-                        selectedId: $voiceSpeed
-                    )
+                Spacer(minLength: 40)
 
-                    Spacer()
+                // Save Button
+                SavePreferencesButton(onSave: savePreferences)
 
-                    // Save Button
-                    SavePreferencesButton(onSave: savePreferences)
-
-                    Spacer(minLength: 20)
-                }
-                .padding(.top, 5)
+                Spacer(minLength: 100)
             }
-            .navigationTitle("Preferences")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("Settings")
-                        }
-                        .foregroundColor(.primary)
-                    }
-                    .accessibilityLabel("Back to Settings")
-                }
-            }
+            .padding(.top, 10)
         }
+        .navigationTitle("Preferences")
+        .navigationBarTitleDisplayMode(.large)
         .preferredColorScheme(selectedColorScheme)
     }
 

@@ -19,72 +19,57 @@ struct AccountsView: View {
   @State private var selectedInstitution: ConnectedItem?
   
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(spacing: 16) {
-          LinkNewAccountSection {
-            showingLinkNewAccount = true
-          }
-          
-          // Linked Institutions Section
-          if let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-              Text("Linked Institutions")
-                .font(.headline)
-                .foregroundColor(.gray)
-              
-              ForEach(linkedItems, id: \.itemId) { item in
-                LinkedItemCard(
-                  item: item,
-                  accounts: bankDataManager.accountsByItemId[item.plaidItemId],
-                  isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId,
-                  bankDataManager: bankDataManager,
-                  onTap: {
-                    selectedInstitution = item
-                  }
-                )
-                .task {
-                  await fetchAccountsForItem(item)
+    ScrollView {
+      VStack(spacing: 16) {
+        LinkNewAccountSection {
+          showingLinkNewAccount = true
+        }
+
+        // Linked Institutions Section
+        if let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty {
+          VStack(alignment: .leading, spacing: 12) {
+            Text("Linked Institutions")
+              .font(.headline)
+              .foregroundColor(.gray)
+
+            ForEach(linkedItems, id: \.itemId) { item in
+              LinkedItemCard(
+                item: item,
+                accounts: bankDataManager.accountsByItemId[item.plaidItemId],
+                isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId,
+                bankDataManager: bankDataManager,
+                onTap: {
+                  selectedInstitution = item
                 }
+              )
+              .task {
+                await fetchAccountsForItem(item)
               }
             }
-          } else {
-            // Empty state
-            EmptyStateView(
-              icon: "building.2",
-              title: "No linked accounts",
-              message: "Tap \"Link New Account\" to connect your bank"
-            )
           }
-          
-          // Error message
-          if let error = loadError {
-            Text(error)
-              .font(.caption)
-              .foregroundColor(.red)
-              .padding(.horizontal)
-          }
+        } else {
+          // Empty state
+          EmptyStateView(
+            icon: "building.2",
+            title: "No linked accounts",
+            message: "Tap \"Link New Account\" to connect your bank"
+          )
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 100)
-      }
-      .navigationTitle("Manage Banks")
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            dismiss()
-          } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "chevron.left")
-              Text("Settings")
-            }
-          }
-          .accessibilityLabel("Back to Settings")
+
+        // Error message
+        if let error = loadError {
+          Text(error)
+            .font(.caption)
+            .foregroundColor(.red)
+            .padding(.horizontal)
         }
       }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
+      .padding(.bottom, 100)
     }
+    .navigationTitle("Manage Banks")
+    .navigationBarTitleDisplayMode(.large)
     .fullScreenCover(isPresented: $showingLinkNewAccount) {
       PlaidOnboardingScreen(
         onComplete: {
@@ -232,7 +217,7 @@ struct LinkedItemCard: View {
               .padding(.horizontal, 20)
               .padding(.vertical, 8)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HapticPlainButtonStyle())
           }
 
           if accounts.count > 3 {

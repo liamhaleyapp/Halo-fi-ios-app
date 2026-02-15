@@ -11,33 +11,32 @@ struct SettingsOption: View {
   let icon: String
   let title: String
   let action: () -> Void
-  
+
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 20) {
-        
+      HStack(spacing: 16) {
         Image(systemName: icon)
-          .font(.title2)
-          .foregroundColor(.accentColor)
-          .frame(width: 32, height: 32)
-          .accessibilityHidden(true) // decorative
-        
-        Text(title)
           .font(.title3)
+          .foregroundColor(.blue)
+          .frame(width: 28, height: 28)
+          .accessibilityHidden(true)
+
+        Text(title)
+          .font(.body)
           .fontWeight(.medium)
           .foregroundColor(.primary)
-        
+
         Spacer()
-        
+
         Image(systemName: "chevron.right")
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundColor(Color(.tertiaryLabel))
+          .font(.caption)
+          .foregroundColor(.gray)
           .accessibilityHidden(true)
       }
-      .padding(.horizontal, 30)
-      .padding(.vertical, 24)
-      .background(Color(.secondarySystemBackground))
-      .cornerRadius(16)
+      .padding(.horizontal, 16)
+      .padding(.vertical, 14)
+      .background(Color.gray.opacity(0.1))
+      .cornerRadius(12)
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(title)

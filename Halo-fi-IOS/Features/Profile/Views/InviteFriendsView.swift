@@ -22,30 +22,15 @@ struct InviteFriendsView: View {
   private let referralCode = "HALO123"
   
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(spacing: 16) {
-          referralSummarySection
-          inviteSection
-          Spacer()
-        }
-      }
-      .navigationTitle("Invite Friends")
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            dismiss()
-          } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "chevron.left")
-              Text("Settings")
-            }
-          }
-          .accessibilityLabel("Back to Settings")
-        }
+    ScrollView {
+      VStack(spacing: 16) {
+        referralSummarySection
+        inviteSection
+        Spacer()
       }
     }
+    .navigationTitle("Invite Friends")
+    .navigationBarTitleDisplayMode(.large)
     .alert("Invite Sent!", isPresented: $showingInviteSent) {
       Button("OK") { }
     } message: {

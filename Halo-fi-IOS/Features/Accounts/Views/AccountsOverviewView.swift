@@ -174,7 +174,7 @@ struct AccountsOverviewView: View {
               isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId
             )
           }
-          .buttonStyle(.plain)
+          .buttonStyle(HapticPlainButtonStyle())
         }
       }
     }

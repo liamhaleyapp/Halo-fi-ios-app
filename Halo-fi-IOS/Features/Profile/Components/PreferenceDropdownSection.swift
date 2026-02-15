@@ -72,7 +72,7 @@ struct PreferenceDropdownSection: View {
                 )
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HapticPlainButtonStyle())
             .accessibilityLabel("\(title): \(selectedTitle)")
             .accessibilityHint("Tap to change \(title)")
         }

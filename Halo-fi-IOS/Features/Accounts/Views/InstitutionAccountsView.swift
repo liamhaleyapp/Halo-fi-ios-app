@@ -139,7 +139,7 @@ struct InstitutionAccountsView: View {
         } label: {
           BankAccountRow(account: account)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HapticPlainButtonStyle())
       }
     }
   }

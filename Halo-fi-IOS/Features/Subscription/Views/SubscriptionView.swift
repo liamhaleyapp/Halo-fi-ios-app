@@ -31,127 +31,127 @@ struct SubscriptionView: View {
   @State private var showingCancelConfirmation = false
   
   var body: some View {
-    NavigationStack {
-      ZStack {
-        // Content
-        ScrollView {
-          VStack(spacing: 16) {
-            currentPlanSection
-            planOptionsSection
-            billingCycleSection
-            SubscriptionActionButtonsSection(
-              hasActiveSubscription: viewModel.hasActiveSubscription,
-              isOnboarding: isOnboarding,
-              isBusy: viewModel.isBusy,
-              selectedPlanName: viewModel.selectedPlan.displayName,
-              onContinue: onContinue,
-              onSubscribe: {
-                Task {
-                  _ = await viewModel.handlePurchase()
-                }
-              },
-              onChangePlan: {
-                showingChangePlan = true
-              },
-              onRestore: {
-                Task {
-                  _ = await viewModel.handleRestorePurchases()
-                }
-              },
-              onUpdatePayment: {
-                showingPaymentMethod = true
-              },
-              onCancelSubscription: {
-                showingCancelConfirmation = true
-              }
-            )
+    subscriptionContent
+      .task {
+        await viewModel.onAppear()
+      }
+      .alert(item: $viewModel.activeEvent) { event in
+        switch event {
+        case .purchase(let message):
+          return Alert(
+            title: Text("Purchase"),
+            message: Text(message),
+            dismissButton: .default(Text("OK"))
+          )
+        case .restore(let message):
+          return Alert(
+            title: Text("Restore Purchases"),
+            message: Text(message),
+            dismissButton: .default(Text("OK"))
+          )
+        case .info(let message):
+          return Alert(
+            title: Text("Info"),
+            message: Text(message),
+            dismissButton: .default(Text("OK"))
+          )
+        }
+      }
+      .alert("Change Plan", isPresented: $showingChangePlan) {
+        Button("Cancel", role: .cancel) { }
+        Button("Change", role: .destructive) {
+          Task {
+            _ = await viewModel.handlePurchase()
           }
         }
-        
-        // Loading overlay
-        if viewModel.isBusy {
-          Color(.systemBackground).opacity(0.7)
-            .ignoresSafeArea()
-          
-          VStack(spacing: 16) {
-            ProgressView()
-              .scaleEffect(1.5)
-            Text("Processing...")
-              .foregroundColor(.primary)
-              .font(.subheadline)
-          }
+      } message: {
+        Text("Plan change will take effect at your next billing cycle.")
+      }
+      .alert("Update Payment Method", isPresented: $showingPaymentMethod) {
+        Button("OK") { }
+      } message: {
+        Text("You can update your payment method in Settings > Apple ID > Subscriptions or App Store.")
+      }
+      .alert("Cancel Subscription", isPresented: $showingCancelConfirmation) {
+        Button("Cancel", role: .cancel) { }
+        Button("Yes, Cancel", role: .destructive) {
+          viewModel.handleCancelSubscription()
         }
+      } message: {
+        // swiftlint:disable:next line_length
+        Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")
       }
-      .navigationTitle(isOnboarding ? "" : "Subscription")
-      .navigationBarTitleDisplayMode(isOnboarding ? .automatic : .large)
-      .toolbar {
-        if !isOnboarding {
-          ToolbarItem(placement: .topBarLeading) {
-            Button {
-              dismiss()
-            } label: {
-              HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                Text("Settings")
-              }
-            }
-            .accessibilityLabel("Back to Settings")
-          }
-        }
+  }
+
+  @ViewBuilder
+  private var subscriptionContent: some View {
+    if isOnboarding {
+      // Onboarding uses its own NavigationStack
+      NavigationStack {
+        mainContent
+          .navigationBarHidden(true)
       }
-      .navigationBarHidden(isOnboarding)
-    }
-    .task {
-      await viewModel.onAppear()
-    }
-    .alert(item: $viewModel.activeEvent) { event in
-      switch event {
-      case .purchase(let message):
-        return Alert(
-          title: Text("Purchase"),
-          message: Text(message),
-          dismissButton: .default(Text("OK"))
-        )
-      case .restore(let message):
-        return Alert(
-          title: Text("Restore Purchases"),
-          message: Text(message),
-          dismissButton: .default(Text("OK"))
-        )
-      case .info(let message):
-        return Alert(
-          title: Text("Info"),
-          message: Text(message),
-          dismissButton: .default(Text("OK"))
-        )
-      }
-    }
-    .alert("Change Plan", isPresented: $showingChangePlan) {
-      Button("Cancel", role: .cancel) { }
-      Button("Change", role: .destructive) {
-        Task {
-          _ = await viewModel.handlePurchase()
-        }
-      }
-    } message: {
-      Text("Plan change will take effect at your next billing cycle.")
-    }
-    .alert("Update Payment Method", isPresented: $showingPaymentMethod) {
-      Button("OK") { }
-    } message: {
-      Text("You can update your payment method in Settings > Apple ID > Subscriptions or App Store.")
-    }
-    .alert("Cancel Subscription", isPresented: $showingCancelConfirmation) {
-      Button("Cancel", role: .cancel) { }
-      Button("Yes, Cancel", role: .destructive) {
-        viewModel.handleCancelSubscription()
-      }
-    } message: {
-      // swiftlint:disable:next line_length
-      Text("Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period. You can also manage this in Settings > Apple ID > Subscriptions.")
+    } else {
+      // Settings flow inherits NavigationStack from parent
+      mainContent
+        .navigationTitle("Subscription")
+        .navigationBarTitleDisplayMode(.large)
     }
   }
-  
+
+  private var mainContent: some View {
+    ZStack {
+      // Content
+      ScrollView {
+        VStack(spacing: 16) {
+          currentPlanSection
+          planOptionsSection
+          billingCycleSection
+          SubscriptionActionButtonsSection(
+            hasActiveSubscription: viewModel.hasActiveSubscription,
+            isOnboarding: isOnboarding,
+            isBusy: viewModel.isBusy,
+            selectedPlanName: viewModel.selectedPlan.displayName,
+            onContinue: onContinue,
+            onSubscribe: {
+              Task {
+                _ = await viewModel.handlePurchase()
+              }
+            },
+            onChangePlan: {
+              showingChangePlan = true
+            },
+            onRestore: {
+              Task {
+                _ = await viewModel.handleRestorePurchases()
+              }
+            },
+            onUpdatePayment: {
+              showingPaymentMethod = true
+            },
+            onCancelSubscription: {
+              showingCancelConfirmation = true
+            }
+          )
+        }
+      }
+
+      // Loading overlay
+      if viewModel.isBusy {
+        Color(.systemBackground).opacity(0.7)
+          .ignoresSafeArea()
+
+        VStack(spacing: 16) {
+          ProgressView()
+            .scaleEffect(1.5)
+          Text("Processing...")
+            .foregroundColor(.primary)
+            .font(.subheadline)
+        }
+      }
+    }
+  }
+
   // MARK: - Current Plan Section
   private var currentPlanSection: some View {
     VStack(spacing: 12) {
