@@ -59,7 +59,8 @@ struct SignUpView: View {
               title: "Phone Number",
               placeholder: "Enter your phone number",
               text: $viewModel.phoneNumber,
-              keyboardType: .phonePad
+              keyboardType: .phonePad,
+              textContentType: .username
             )
             if let error = viewModel.phoneError {
               validationText(error)
@@ -69,7 +70,8 @@ struct SignUpView: View {
               title: "Email",
               placeholder: "Enter your email",
               text: $viewModel.email,
-              keyboardType: .emailAddress
+              keyboardType: .emailAddress,
+              textContentType: .emailAddress
             )
             if let error = viewModel.emailError {
               validationText(error)
@@ -79,7 +81,8 @@ struct SignUpView: View {
               title: "Password",
               placeholder: "Create a password",
               text: $viewModel.password,
-              isSecure: true
+              isSecure: true,
+              textContentType: .newPassword
             )
             if let error = viewModel.passwordError {
               validationText(error)
@@ -89,7 +92,8 @@ struct SignUpView: View {
               title: "Confirm Password",
               placeholder: "Confirm your password",
               text: $viewModel.confirmPassword,
-              isSecure: true
+              isSecure: true,
+              textContentType: .newPassword
             )
             if let error = viewModel.confirmPasswordError {
               validationText(error)

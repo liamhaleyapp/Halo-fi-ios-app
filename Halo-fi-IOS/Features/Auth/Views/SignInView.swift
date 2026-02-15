@@ -37,7 +37,8 @@ struct SignInView: View {
             title: "Phone Number",
             placeholder: "Enter your phone number",
             text: $viewModel.phoneNumber,
-            keyboardType: .phonePad
+            keyboardType: .phonePad,
+            textContentType: .username
           )
           if let error = viewModel.phoneError {
             validationText(error)
@@ -47,7 +48,8 @@ struct SignInView: View {
             title: "Password",
             placeholder: "Enter your password",
             text: $viewModel.password,
-            isSecure: true
+            isSecure: true,
+            textContentType: .password
           )
           if let error = viewModel.passwordError {
             validationText(error)

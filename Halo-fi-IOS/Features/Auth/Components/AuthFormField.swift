@@ -13,19 +13,22 @@ struct AuthFormField: View {
   @Binding var text: String
   let isSecure: Bool
   let keyboardType: UIKeyboardType
-  
+  let textContentType: UITextContentType?
+
   init(
     title: String,
     placeholder: String,
     text: Binding<String>,
     isSecure: Bool = false,
-    keyboardType: UIKeyboardType = .default
+    keyboardType: UIKeyboardType = .default,
+    textContentType: UITextContentType? = nil
   ) {
     self.title = title
     self.placeholder = placeholder
     self._text = text
     self.isSecure = isSecure
     self.keyboardType = keyboardType
+    self.textContentType = textContentType
   }
   
   var body: some View {
@@ -45,6 +48,7 @@ struct AuthFormField: View {
       .textFieldStyle(CustomTextFieldStyle())
       .keyboardType(keyboardType)
       .autocapitalization(.none)
+      .textContentType(textContentType)
       .accessibilityLabel(title)
       .accessibilityHint("Enter your \(title.lowercased())")
       .accessibilityValue(accessibilityValueText)
