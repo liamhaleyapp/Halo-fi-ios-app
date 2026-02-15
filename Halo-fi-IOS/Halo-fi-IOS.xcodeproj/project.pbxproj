@@ -14,6 +14,12 @@
 		0CB170BC2E5251F500BF97C8 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 0CB170BB2E5251F500BF97C8 /* Storage */; };
 		9E08DB572EB2F2B800473197 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E08DB562EB2F2B700473197 /* StoreKit.framework */; };
 		9E08DB602EB3F4EC00473197 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9E08DB5F2EB3F4EC00473197 /* RevenueCat */; };
+		9E16C4932F40C58F00B135F0 /* listening_stop.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48E2F40C58F00B135F0 /* listening_stop.aif */; };
+		9E16C4942F40C58F00B135F0 /* pop_drip.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48F2F40C58F00B135F0 /* pop_drip.aif */; };
+		9E16C4952F40C58F00B135F0 /* listening_start.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48D2F40C58F00B135F0 /* listening_start.aif */; };
+		9E16C4962F40C58F00B135F0 /* agent_complete.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48B2F40C58F00B135F0 /* agent_complete.mp3 */; };
+		9E16C4972F40C58F00B135F0 /* agent_typing.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48C2F40C58F00B135F0 /* agent_typing.aif */; };
+		9E16C4982F40C58F00B135F0 /* tab_switch.wav in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C4902F40C58F00B135F0 /* tab_switch.wav */; };
 		9E3B37CC2E9467F3002E54AD /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E3B37CB2E9467F3002E54AD /* LinkKit */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +45,12 @@
 		0C39AABF2E4EBF9C00CF16A0 /* Halo-fi-IOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C39AAC92E4EBF9C00CF16A0 /* Halo-fi-IOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9E08DB562EB2F2B700473197 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		9E16C48B2F40C58F00B135F0 /* agent_complete.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = agent_complete.mp3; sourceTree = "<group>"; };
+		9E16C48C2F40C58F00B135F0 /* agent_typing.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = agent_typing.aif; sourceTree = "<group>"; };
+		9E16C48D2F40C58F00B135F0 /* listening_start.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = listening_start.aif; sourceTree = "<group>"; };
+		9E16C48E2F40C58F00B135F0 /* listening_stop.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = listening_stop.aif; sourceTree = "<group>"; };
+		9E16C48F2F40C58F00B135F0 /* pop_drip.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = pop_drip.aif; sourceTree = "<group>"; };
+		9E16C4902F40C58F00B135F0 /* tab_switch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = tab_switch.wav; sourceTree = "<group>"; };
 		9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Halo-fi-IOS-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -148,6 +160,7 @@
 		0C39AAA62E4EBF9A00CF16A0 = {
 			isa = PBXGroup;
 			children = (
+				9E16C4922F40C58F00B135F0 /* Resources */,
 				9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */,
 				9EDDB70F2E9D8BD200295AB4 /* Shared */,
 				9E95D7352E8DB15C003087CE /* Tests */,
@@ -177,6 +190,27 @@
 				9E08DB562EB2F2B700473197 /* StoreKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		9E16C4912F40C58F00B135F0 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				9E16C48B2F40C58F00B135F0 /* agent_complete.mp3 */,
+				9E16C48C2F40C58F00B135F0 /* agent_typing.aif */,
+				9E16C48D2F40C58F00B135F0 /* listening_start.aif */,
+				9E16C48E2F40C58F00B135F0 /* listening_stop.aif */,
+				9E16C48F2F40C58F00B135F0 /* pop_drip.aif */,
+				9E16C4902F40C58F00B135F0 /* tab_switch.wav */,
+			);
+			path = Sounds;
+			sourceTree = "<group>";
+		};
+		9E16C4922F40C58F00B135F0 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9E16C4912F40C58F00B135F0 /* Sounds */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -312,6 +346,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9E16C4932F40C58F00B135F0 /* listening_stop.aif in Resources */,
+				9E16C4942F40C58F00B135F0 /* pop_drip.aif in Resources */,
+				9E16C4952F40C58F00B135F0 /* listening_start.aif in Resources */,
+				9E16C4962F40C58F00B135F0 /* agent_complete.mp3 in Resources */,
+				9E16C4972F40C58F00B135F0 /* agent_typing.aif in Resources */,
+				9E16C4982F40C58F00B135F0 /* tab_switch.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

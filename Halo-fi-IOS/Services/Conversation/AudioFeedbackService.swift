@@ -6,6 +6,7 @@
 //  Provides earcons (short audio cues) and haptic feedback.
 //
 
+import AudioToolbox
 import AVFoundation
 import UIKit
 
@@ -13,14 +14,19 @@ import UIKit
 final class AudioFeedbackService {
     // MARK: - Haptic Generators
 
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let lightImpactGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let mediumImpactGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
     private let notificationGenerator = UINotificationFeedbackGenerator()
+    private let selectionGenerator = UISelectionFeedbackGenerator()
 
-    // MARK: - Audio Players (for future earcon support)
+    // MARK: - Audio Players
 
     private var startListeningSound: AVAudioPlayer?
     private var stopListeningSound: AVAudioPlayer?
-    private var errorSound: AVAudioPlayer?
+    private var agentTypingSound: AVAudioPlayer?
+    private var agentCompleteSound: AVAudioPlayer?
+    private var tabSwitchSound: AVAudioPlayer?
 
     // MARK: - Initialization
 
@@ -32,26 +38,51 @@ final class AudioFeedbackService {
     // MARK: - Preparation
 
     private func prepare() {
-        impactGenerator.prepare()
+        lightImpactGenerator.prepare()
+        mediumImpactGenerator.prepare()
+        heavyImpactGenerator.prepare()
         notificationGenerator.prepare()
+        selectionGenerator.prepare()
     }
 
     private func loadSounds() {
-        // Placeholder for future earcon sound files
-        // When sound files are added to Resources/Sounds/:
-        //
-        // if let url = Bundle.main.url(forResource: "earcon_start", withExtension: "wav") {
-        //     startListeningSound = try? AVAudioPlayer(contentsOf: url)
-        //     startListeningSound?.prepareToPlay()
-        // }
-        //
-        // Similar for stopListeningSound and errorSound
+        // Load custom earcon sounds from Resources/Sounds/
+        if let url = Bundle.main.url(forResource: "listening_start", withExtension: "aif") {
+            startListeningSound = try? AVAudioPlayer(contentsOf: url)
+            startListeningSound?.prepareToPlay()
+            startListeningSound?.volume = 0.7
+        }
+
+        if let url = Bundle.main.url(forResource: "listening_stop", withExtension: "aif") {
+            stopListeningSound = try? AVAudioPlayer(contentsOf: url)
+            stopListeningSound?.prepareToPlay()
+            stopListeningSound?.volume = 0.7
+        }
+
+        if let url = Bundle.main.url(forResource: "agent_typing", withExtension: "aif") {
+            agentTypingSound = try? AVAudioPlayer(contentsOf: url)
+            agentTypingSound?.prepareToPlay()
+            agentTypingSound?.volume = 0.5
+        }
+
+        if let url = Bundle.main.url(forResource: "agent_complete", withExtension: "mp3") {
+            agentCompleteSound = try? AVAudioPlayer(contentsOf: url)
+            agentCompleteSound?.prepareToPlay()
+            agentCompleteSound?.volume = 0.6
+        }
+
+        if let url = Bundle.main.url(forResource: "tab_switch", withExtension: "wav") {
+            tabSwitchSound = try? AVAudioPlayer(contentsOf: url)
+            tabSwitchSound?.prepareToPlay()
+            tabSwitchSound?.volume = 0.5
+        }
     }
 
     // MARK: - State Change Feedback
 
     /// Provide feedback for a state change
     func feedbackForStateChange(_ state: ConversationState) {
+
         switch state {
         case .listening:
             playStartListeningFeedback()
@@ -82,32 +113,34 @@ final class AudioFeedbackService {
     // MARK: - Feedback Actions
 
     private func playStartListeningFeedback() {
-        // Haptic
-        impactGenerator.impactOccurred(intensity: 0.7)
+        // Single medium haptic - subtle but noticeable
+        mediumImpactGenerator.prepare()
+        mediumImpactGenerator.impactOccurred()
 
-        // Earcon (when available)
+        // Custom earcon sound
+        startListeningSound?.currentTime = 0
         startListeningSound?.play()
     }
 
     private func playProcessingFeedback() {
-        // Light haptic
-        impactGenerator.impactOccurred(intensity: 0.5)
+        // Medium haptic
+        mediumImpactGenerator.prepare()
+        mediumImpactGenerator.impactOccurred()
     }
 
     private func playIdleFeedback() {
-        // Very light haptic
-        impactGenerator.impactOccurred(intensity: 0.3)
+        // Medium haptic - done recording
+        mediumImpactGenerator.prepare()
+        mediumImpactGenerator.impactOccurred()
 
-        // Earcon (when available)
+        // Custom earcon sound
+        stopListeningSound?.currentTime = 0
         stopListeningSound?.play()
     }
 
     private func playErrorFeedback() {
         // Error haptic
         notificationGenerator.notificationOccurred(.error)
-
-        // Earcon (when available)
-        errorSound?.play()
     }
 
     private func playDisconnectedFeedback() {
@@ -126,6 +159,45 @@ final class AudioFeedbackService {
 
     /// Play a custom impact
     func playImpact(intensity: CGFloat = 0.5) {
-        impactGenerator.impactOccurred(intensity: intensity)
+        mediumImpactGenerator.impactOccurred(intensity: intensity)
+    }
+
+    // MARK: - Agent Feedback
+
+    /// Play feedback when agent starts typing/responding
+    func playAgentTypingFeedback() {
+        // Light haptic - agent is responding
+        lightImpactGenerator.prepare()
+        lightImpactGenerator.impactOccurred()
+
+        // Custom earcon sound
+        agentTypingSound?.currentTime = 0
+        agentTypingSound?.play()
+    }
+
+    /// Play feedback when agent message is complete
+    func playAgentMessageCompleteFeedback() {
+        // Success haptic
+        notificationGenerator.prepare()
+        notificationGenerator.notificationOccurred(.success)
+
+        // Custom earcon sound
+        agentCompleteSound?.currentTime = 0
+        agentCompleteSound?.play()
+    }
+
+    // MARK: - Navigation Feedback
+
+    /// Play feedback for tab switching
+    func playTabSwitchFeedback() {
+        // Prepare for immediate response
+        selectionGenerator.prepare()
+
+        // Selection haptic (designed for navigation)
+        selectionGenerator.selectionChanged()
+
+        // Custom earcon sound
+        tabSwitchSound?.currentTime = 0
+        tabSwitchSound?.play()
     }
 }

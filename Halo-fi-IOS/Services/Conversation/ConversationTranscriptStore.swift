@@ -24,6 +24,14 @@ final class ConversationTranscriptStore {
     /// Derived entries for UI rendering
     private(set) var entries: [TranscriptEntry] = []
 
+    // MARK: - Feedback Callbacks
+
+    /// Called when agent starts typing (first delta of a new response)
+    var onAgentTypingStarted: (() -> Void)?
+
+    /// Called when agent message is complete
+    var onAgentMessageComplete: (() -> Void)?
+
     // MARK: - Streaming State
 
     /// Currently streaming agent entry (if any)
@@ -232,6 +240,9 @@ final class ConversationTranscriptStore {
                 timestamp: timestamp,
                 isStreaming: true
             ))
+
+            // Trigger typing feedback (only once per response)
+            onAgentTypingStarted?()
         }
     }
 
@@ -242,13 +253,16 @@ final class ConversationTranscriptStore {
             entries[index].text = text
             entries[index].isStreaming = false
         } else {
-            // No streaming entry exists, create final entry
+            // No streaming entry exists - create final entry directly
             entries.append(.agent(text, id: id, timestamp: timestamp))
         }
 
         // Clear streaming state
         streamingAgentEntryId = nil
         streamingAgentText = ""
+
+        // Trigger message complete feedback
+        onAgentMessageComplete?()
     }
 }
 

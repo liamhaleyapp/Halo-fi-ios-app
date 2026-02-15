@@ -17,6 +17,7 @@ final class ConversationViewModel {
 
     let coordinator: ConversationCoordinator
     let store: ConversationTranscriptStore
+    private let audioFeedback = AudioFeedbackService()
 
     // MARK: - Local State
 
@@ -57,12 +58,16 @@ final class ConversationViewModel {
     func onAppear() async {
         // Configure services if needed
         let speechService = SpeechSynthesisService()
-        let audioFeedback = AudioFeedbackService()
         coordinator.configure(
             speechService: speechService,
             audioFeedback: audioFeedback,
             transcriptStore: store
         )
+
+        // Wire up accessibility feedback callbacks
+        store.onAgentMessageComplete = { [weak self] in
+            self?.audioFeedback.playAgentMessageCompleteFeedback()
+        }
 
         // Connect to backend
         await coordinator.connect()

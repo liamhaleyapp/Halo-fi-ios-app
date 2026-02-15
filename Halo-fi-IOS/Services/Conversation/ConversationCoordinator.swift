@@ -40,7 +40,7 @@ final class ConversationCoordinator {
     private let voiceService: VoiceService
     private let agentWebSocket: AgentWebSocketManager
     private var speechService: SpeechSynthesisService?
-    private var audioFeedback: AudioFeedbackService?
+    private var audioFeedback: AudioFeedbackService = AudioFeedbackService()
     private let sttService: ElevenLabsSTTService
 
     // MARK: - Transcript Store (for draft management)
@@ -164,13 +164,16 @@ final class ConversationCoordinator {
                             }
                         }
 
-                        // Start recording now that session is ready
+                        // Trigger feedback BEFORE recording (audio session setup can block haptics)
+                        self.setState(.listening)
+                        self.audioFeedback.feedbackForStateChange(.listening)
+
+                        // Small delay to let haptic/sound complete before audio session changes
+                        try await Task.sleep(nanoseconds: 150_000_000) // 150ms
+
+                        // Now start recording
                         try await self.voiceService.startRecording()
                         self.isVoiceSessionActive = true
-
-                        // Transition to listening state
-                        self.setState(.listening)
-                        self.audioFeedback?.feedbackForStateChange(.listening)
                     } catch {
                         self.handleVoiceSetupError(error)
                     }
@@ -200,6 +203,9 @@ final class ConversationCoordinator {
     func stopListening() {
         guard state == .listening else { return }
 
+        // Play stop listening feedback immediately
+        audioFeedback.feedbackForStateChange(.idle)
+
         // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
         isVoiceSessionActive = false
 
@@ -210,7 +216,6 @@ final class ConversationCoordinator {
 
         // Finalize draft and send to agent
         if let finalText = transcriptStore?.finalizeDraft(), !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
-            audioFeedback?.feedbackForStateChange(.processing)
             setState(.processing)
 
             Task {
@@ -226,6 +231,9 @@ final class ConversationCoordinator {
     private func stopListeningAndProcess() {
         guard state == .listening else { return }
 
+        // Play stop listening feedback immediately
+        audioFeedback.feedbackForStateChange(.idle)
+
         // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
         isVoiceSessionActive = false
 
@@ -236,7 +244,6 @@ final class ConversationCoordinator {
 
         // Finalize draft and send to agent
         if let finalText = transcriptStore?.finalizeDraft() {
-            audioFeedback?.feedbackForStateChange(.processing)
             setState(.processing)
 
             Task {
@@ -282,28 +289,24 @@ final class ConversationCoordinator {
             ]
 
             try await agentWebSocket.sendMessage(message, context: context)
+
+            // Delay to let the listening_stop sound finish before playing typing sound
+            try? await Task.sleep(nanoseconds: 400_000_000) // 400ms
+
+            // Play "agent typing" feedback now that message is sent (waiting for response)
+            audioFeedback.playAgentTypingFeedback()
         } catch {
             setState(.error(error.localizedDescription))
             emitEvent(.errorEvent("Failed to send message: \(error.localizedDescription)"))
         }
     }
 
-    /// Set muted state
+    /// Set muted state (only affects TTS/sounds, not voice recording)
     func setMuted(_ muted: Bool) {
         isMuted = muted
 
         // Propagate to speech service
         speechService?.setMuted(muted)
-
-        // Stop recording if listening
-        if muted && state == .listening {
-            voiceService.stopRecording()
-            voiceService.onAudioBuffer = nil
-            sttService.disconnect()
-            isVoiceSessionActive = false
-            transcriptStore?.discardDraft()
-            setState(.idle)
-        }
 
         // Stop speaking immediately if muted
         if muted && state == .speaking {
@@ -396,7 +399,7 @@ final class ConversationCoordinator {
 
                 self.setState(.error(error.error))
                 self.emitEvent(.errorEvent(error.error))
-                self.audioFeedback?.feedbackForStateChange(.error(error.error))
+                self.audioFeedback.feedbackForStateChange(.error(error.error))
             }
         }
 

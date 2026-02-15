@@ -11,6 +11,7 @@ struct MainTabView: View {
     @Environment(UserManager.self) private var userManager
     @Environment(SubscriptionService.self) private var subscriptionService
     @State private var selectedTab = 0
+    @State private var feedbackService = AudioFeedbackService()
 
     private enum AppRoute: Equatable {
         case loggedOut
@@ -40,6 +41,11 @@ struct MainTabView: View {
         .onChange(of: currentRoute) { _, newRoute in
             if newRoute != .main {
                 selectedTab = 0
+            }
+        }
+        .onChange(of: selectedTab) { oldTab, newTab in
+            if oldTab != newTab {
+                feedbackService.playTabSwitchFeedback()
             }
         }
     }
