@@ -159,31 +159,31 @@ final class BankService: BankServiceProtocol {
     }
 
     // MARK: - Get Transactions for Item
-    /// Fetches transactions for a specific Plaid item
-    /// - Parameter plaidItemId: The Plaid item ID to fetch transactions for
+    /// Fetches transactions for a specific bank item
+    /// - Parameter itemId: The internal bank item UUID (not plaid_item_id)
     /// - Returns: Array of Transaction objects
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
-    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction] {
-        Logger.info("Fetching transactions for item \(plaidItemId)")
+    func getTransactionsForItem(itemId: String) async throws -> [Transaction] {
+        Logger.info("Fetching transactions for item \(itemId)")
 
         do {
             let response: TransactionsResponse = try await networkService.authenticatedRequest(
-                endpoint: APIEndpoints.Bank.syncTransactions(plaidItemId),
-                method: .POST,
+                endpoint: APIEndpoints.Bank.syncTransactions(itemId),
+                method: .GET,
                 body: nil,
                 responseType: TransactionsResponse.self
             )
-            Logger.success("Fetched \(response.transactions.count) transactions for item \(plaidItemId)")
+            Logger.success("Fetched \(response.transactions.count) transactions for item \(itemId)")
             return response.transactions
         } catch let authError as AuthError {
             if case .serverError(let code, _) = authError, code == 404 {
-                Logger.warning("No transactions found for item \(plaidItemId)")
+                Logger.warning("No transactions found for item \(itemId)")
                 return []
             }
-            Logger.error("Error fetching transactions for item \(plaidItemId): \(authError)")
+            Logger.error("Error fetching transactions for item \(itemId): \(authError)")
             throw convertToBankError(authError)
         } catch {
-            Logger.error("Unknown error fetching transactions for item \(plaidItemId): \(error)")
+            Logger.error("Unknown error fetching transactions for item \(itemId): \(error)")
             throw convertToBankError(error)
         }
     }
@@ -215,14 +215,14 @@ final class BankService: BankServiceProtocol {
         }
     }
     
-    /// Syncs bank data for a specific Plaid item
-    /// - Parameter plaidItemId: The Plaid item ID to sync
+    /// Syncs bank data for a specific bank item
+    /// - Parameter itemId: The internal bank item UUID to sync
     /// - Returns: BankSyncResponse with sync results
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
-    func syncBankData(plaidItemId: String) async throws -> BankSyncResponse {
+    func syncBankData(itemId: String) async throws -> BankSyncResponse {
         do {
             return try await networkService.authenticatedRequest(
-                endpoint: APIEndpoints.Bank.syncItem(plaidItemId),
+                endpoint: APIEndpoints.Bank.syncItem(itemId),
                 method: .POST,
                 body: nil,
                 responseType: BankSyncResponse.self
@@ -233,16 +233,19 @@ final class BankService: BankServiceProtocol {
     }
     
     // MARK: - Disconnect Bank Account
-    /// Disconnects a bank account by Plaid item ID
-    /// - Parameter plaidItemId: The Plaid item ID to disconnect
+    /// Disconnects a bank account by item ID
+    /// - Parameter itemId: The internal bank item UUID to disconnect
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
-    func disconnectBankAccount(plaidItemId: String) async throws {
+    func disconnectBankAccount(itemId: String) async throws {
+        let requestBody = BankMultiItemsSyncRequest(itemIds: [itemId])
+        let bodyData = try JSONEncoder().encode(requestBody)
+
         do {
             // EmptyResponse handles DELETE operations that return no body (200/204)
             let _: EmptyResponse = try await networkService.authenticatedRequest(
-                endpoint: APIEndpoints.Bank.disconnect(plaidItemId),
+                endpoint: APIEndpoints.Bank.multiItemsDelete,
                 method: .DELETE,
-                body: nil,
+                body: bodyData,
                 responseType: EmptyResponse.self
             )
         } catch {

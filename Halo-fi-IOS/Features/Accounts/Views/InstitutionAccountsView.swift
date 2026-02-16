@@ -217,7 +217,7 @@ struct InstitutionAccountsView: View {
   
   private func loadAccounts() async {
     // Check if we already have accounts cached
-    if let cachedAccounts = bankDataManager.accountsByItemId[item.plaidItemId] {
+    if let cachedAccounts = bankDataManager.accountsByItemId[item.itemId] {
       await MainActor.run {
         self.accounts = cachedAccounts
         self.isLoadingAccounts = false
@@ -235,7 +235,7 @@ struct InstitutionAccountsView: View {
       let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
 
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
+        bankDataManager.accountsByItemId[item.itemId] = response.accounts
         self.accounts = response.accounts
         self.isLoadingAccounts = false
         Logger.success("InstitutionAccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")

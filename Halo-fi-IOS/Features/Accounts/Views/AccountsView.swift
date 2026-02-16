@@ -35,8 +35,8 @@ struct AccountsView: View {
             ForEach(linkedItems, id: \.itemId) { item in
               LinkedItemCard(
                 item: item,
-                accounts: bankDataManager.accountsByItemId[item.plaidItemId],
-                isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId,
+                accounts: bankDataManager.accountsByItemId[item.itemId],
+                isLoading: isLoadingAccounts && selectedItemId == item.itemId,
                 bankDataManager: bankDataManager,
                 onTap: {
                   selectedInstitution = item
@@ -88,7 +88,7 @@ struct AccountsView: View {
           // Requires backend to create update-mode Link token
         },
         onDisconnect: {
-          try await bankDataManager.disconnectBank(plaidItemId: institution.plaidItemId)
+          try await bankDataManager.disconnectBank(itemId: institution.itemId)
         }
       )
     }
@@ -101,12 +101,12 @@ struct AccountsView: View {
     guard !isLoadingAccounts else { return }
 
     // Check if we already have accounts for this item
-    if bankDataManager.accountsByItemId[item.plaidItemId] != nil {
-      Logger.info("AccountsView: Accounts already fetched for item \(item.plaidItemId)")
+    if bankDataManager.accountsByItemId[item.itemId] != nil {
+      Logger.info("AccountsView: Accounts already fetched for item \(item.itemId)")
       return
     }
 
-    selectedItemId = item.plaidItemId
+    selectedItemId = item.itemId
     isLoadingAccounts = true
     loadError = nil
 
@@ -115,7 +115,7 @@ struct AccountsView: View {
       let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
 
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
+        bankDataManager.accountsByItemId[item.itemId] = response.accounts
         isLoadingAccounts = false
         selectedItemId = nil
         Logger.success("AccountsView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")

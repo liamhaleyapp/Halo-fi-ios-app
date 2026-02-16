@@ -170,8 +170,8 @@ struct AccountsOverviewView: View {
           NavigationLink(value: item) {
             AccessibleInstitutionCard(
               item: item,
-              accounts: bankDataManager.accountsByItemId[item.plaidItemId],
-              isLoading: isLoadingAccounts && selectedItemId == item.plaidItemId
+              accounts: bankDataManager.accountsByItemId[item.itemId],
+              isLoading: isLoadingAccounts && selectedItemId == item.itemId
             )
           }
           .buttonStyle(HapticPlainButtonStyle())
@@ -276,7 +276,7 @@ struct AccountsOverviewView: View {
        bankDataManager.accountsByItemId.isEmpty {
       // Load accounts for the first institution to show summary
       let firstItem = linkedItems[0]
-      if bankDataManager.accountsByItemId[firstItem.plaidItemId] == nil {
+      if bankDataManager.accountsByItemId[firstItem.itemId] == nil {
         await fetchAccountsForItem(firstItem)
       }
     }
@@ -286,21 +286,21 @@ struct AccountsOverviewView: View {
   
   private func fetchAccountsForItem(_ item: ConnectedItem) async {
     guard !isLoadingAccounts else { return }
-    
-    if bankDataManager.accountsByItemId[item.plaidItemId] != nil {
-      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.plaidItemId)")
+
+    if bankDataManager.accountsByItemId[item.itemId] != nil {
+      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.itemId)")
       return
     }
-    
-    selectedItemId = item.plaidItemId
+
+    selectedItemId = item.itemId
     isLoadingAccounts = true
-    
+
     do {
       print("🔵 AccountsOverviewView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
       let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
-      
+
       await MainActor.run {
-        bankDataManager.accountsByItemId[item.plaidItemId] = response.accounts
+        bankDataManager.accountsByItemId[item.itemId] = response.accounts
         isLoadingAccounts = false
         selectedItemId = nil
         print("✅ AccountsOverviewView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")

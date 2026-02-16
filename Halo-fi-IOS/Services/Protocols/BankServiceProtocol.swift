@@ -37,24 +37,24 @@ protocol BankServiceProtocol {
     /// - Returns: Array of transactions
     func getTransactions(accountId: String?, limit: Int?, offset: Int?) async throws -> [Transaction]
 
-    /// Fetches transactions for a specific Plaid item.
-    /// - Parameter plaidItemId: The Plaid item ID to fetch transactions for
+    /// Fetches transactions for a specific bank item.
+    /// - Parameter itemId: The internal bank item UUID (not plaid_item_id)
     /// - Returns: Array of transactions for that item
-    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction]
+    func getTransactionsForItem(itemId: String) async throws -> [Transaction]
 
     /// Syncs bank data for multiple items at once.
     /// - Parameter itemIds: Array of item IDs to sync
     /// - Returns: Response with sync results
     func syncMultipleItems(itemIds: [String]) async throws -> BankSyncResponse
 
-    /// Syncs bank data for a specific Plaid item.
-    /// - Parameter plaidItemId: The Plaid item ID to sync
+    /// Syncs bank data for a specific bank item.
+    /// - Parameter itemId: The internal bank item UUID to sync
     /// - Returns: Response with sync results
-    func syncBankData(plaidItemId: String) async throws -> BankSyncResponse
+    func syncBankData(itemId: String) async throws -> BankSyncResponse
 
     /// Disconnects a bank account.
-    /// - Parameter plaidItemId: The Plaid item ID to disconnect
-    func disconnectBankAccount(plaidItemId: String) async throws
+    /// - Parameter itemId: The internal bank item UUID to disconnect
+    func disconnectBankAccount(itemId: String) async throws
 
     /// Checks the health status of bank services.
     /// - Returns: Health status response
@@ -117,7 +117,7 @@ actor MockBankService: BankServiceProtocol {
         return mockTransactions
     }
 
-    func getTransactionsForItem(plaidItemId: String) async throws -> [Transaction] {
+    func getTransactionsForItem(itemId: String) async throws -> [Transaction] {
         guard shouldSucceed else { throw BankError.networkError }
         return mockTransactions
     }
@@ -129,14 +129,14 @@ actor MockBankService: BankServiceProtocol {
             """)
     }
 
-    func syncBankData(plaidItemId: String) async throws -> BankSyncResponse {
+    func syncBankData(itemId: String) async throws -> BankSyncResponse {
         guard shouldSucceed else { throw BankError.networkError }
         return try decodeMockJSON("""
             {"success": true, "message": "Mock sync"}
             """)
     }
 
-    func disconnectBankAccount(plaidItemId: String) async throws {
+    func disconnectBankAccount(itemId: String) async throws {
         guard shouldSucceed else { throw BankError.networkError }
     }
 

@@ -60,10 +60,10 @@ enum APIEndpoints {
         /// GET - Fetch transactions with optional filters (deprecated).
         static let transactions = "/bank/transactions"
 
-        /// POST - Sync transactions for a specific item.
-        /// Usage: `Bank.syncTransactions(plaidItemId)`
-        static func syncTransactions(_ plaidItemId: String) -> String {
-            "/bank/sync/transactions?plaid_item_id=\(plaidItemId)"
+        /// GET - Sync and get transactions for a specific item.
+        /// Usage: `Bank.syncTransactions(itemId)` where itemId is the internal UUID (not plaid_item_id)
+        static func syncTransactions(_ itemId: String) -> String {
+            "/bank/sync/\(itemId)/transactions"
         }
 
         /// POST - Sync multiple items.
@@ -75,11 +75,9 @@ enum APIEndpoints {
             "/bank/sync/\(itemId)"
         }
 
-        /// DELETE - Disconnect a bank account.
-        /// Usage: `Bank.disconnect(plaidItemId)`
-        static func disconnect(_ plaidItemId: String) -> String {
-            "/bank/disconnect/\(plaidItemId)"
-        }
+        /// DELETE - Disconnect multiple bank items.
+        /// Usage: `Bank.multiItemsDelete` with body containing item_ids array
+        static let multiItemsDelete = "/bank/multi-items/delete"
 
         /// GET - Check bank service health.
         static let health = "/bank/health"

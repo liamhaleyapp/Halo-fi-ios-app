@@ -20,19 +20,20 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
 
     // MARK: - Loading
 
-    func loadAccounts(for userId: String, plaidItemId: String) async -> [BankAccount] {
+    func loadAccounts(for userId: String, itemId: String) async -> [BankAccount] {
         let context = modelContainer.mainContext
 
         do {
+            // Note: plaidItemId field stores the itemId value
             let predicate = #Predicate<PersistedAccount> {
                 $0.userId == userId &&
-                $0.plaidItemId == plaidItemId
+                $0.plaidItemId == itemId
             }
             let descriptor = FetchDescriptor<PersistedAccount>(predicate: predicate)
 
             let persisted = try context.fetch(descriptor)
             let accounts = persisted.compactMap { $0.toBankAccount() }
-            Logger.debug("AccountPersistence: Loaded \(accounts.count) accounts for item \(plaidItemId)")
+            Logger.debug("AccountPersistence: Loaded \(accounts.count) accounts for item \(itemId)")
             return accounts
         } catch {
             Logger.error("AccountPersistence: Failed to load accounts: \(error.localizedDescription)")
@@ -59,6 +60,7 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
                 seenCompositeIds.insert(item.compositeId)
 
                 if let account = item.toBankAccount() {
+                    // plaidItemId field stores itemId
                     grouped[item.plaidItemId, default: []].append(account)
                 }
             }
@@ -76,16 +78,16 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
 
     // MARK: - Write Operations
 
-    func saveAccounts(_ accounts: [BankAccount], for userId: String, plaidItemId: String) async {
+    func saveAccounts(_ accounts: [BankAccount], for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
 
         // Build a set of incoming account IDs for delete-missing logic
         let incomingAccountIds = Set(accounts.map { $0.idAccount })
 
-        // Fetch existing persisted accounts for this user+item
+        // Fetch existing persisted accounts for this user+item (plaidItemId field stores itemId)
         let predicate = #Predicate<PersistedAccount> {
             $0.userId == userId &&
-            $0.plaidItemId == plaidItemId
+            $0.plaidItemId == itemId
         }
         let descriptor = FetchDescriptor<PersistedAccount>(predicate: predicate)
 
@@ -102,11 +104,11 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
                     // Update existing
                     persisted.update(from: account)
                 } else {
-                    // Insert new
+                    // Insert new (plaidItemId parameter stores itemId)
                     let persisted = PersistedAccount(
                         from: account,
                         userId: userId,
-                        plaidItemId: plaidItemId
+                        plaidItemId: itemId
                     )
                     context.insert(persisted)
                 }
@@ -119,7 +121,7 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
             }
 
             try context.save()
-            Logger.debug("AccountPersistence: Saved \(accounts.count) accounts for item \(plaidItemId)")
+            Logger.debug("AccountPersistence: Saved \(accounts.count) accounts for item \(itemId)")
         } catch {
             Logger.error("AccountPersistence: Failed to save accounts: \(error.localizedDescription)")
         }
@@ -127,16 +129,16 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
 
     // MARK: - Sync State
 
-    func needsRefresh(for userId: String, plaidItemId: String) async -> Bool {
-        guard let state = await getSyncState(for: userId, plaidItemId: plaidItemId) else {
+    func needsRefresh(for userId: String, itemId: String) async -> Bool {
+        guard let state = await getSyncState(for: userId, itemId: itemId) else {
             return true  // No state means we've never synced
         }
         return state.needsRefresh
     }
 
-    func markRefreshComplete(for userId: String, plaidItemId: String) async {
+    func markRefreshComplete(for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
         let predicate = #Predicate<AccountSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<AccountSyncState>(predicate: predicate)
@@ -144,10 +146,10 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
         do {
             let existing = try context.fetch(descriptor)
 
-            // Count accounts for this item
+            // Count accounts for this item (plaidItemId field stores itemId)
             let accountPredicate = #Predicate<PersistedAccount> {
                 $0.userId == userId &&
-                $0.plaidItemId == plaidItemId
+                $0.plaidItemId == itemId
             }
             let accountDescriptor = FetchDescriptor<PersistedAccount>(predicate: accountPredicate)
             let accountCount = try context.fetchCount(accountDescriptor)
@@ -155,13 +157,13 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
             if let state = existing.first {
                 state.markRefreshComplete(accountCount: accountCount)
             } else {
-                let state = AccountSyncState(userId: userId, plaidItemId: plaidItemId)
+                let state = AccountSyncState(userId: userId, plaidItemId: itemId)
                 state.markRefreshComplete(accountCount: accountCount)
                 context.insert(state)
             }
 
             try context.save()
-            Logger.debug("AccountPersistence: Marked refresh complete for item \(plaidItemId)")
+            Logger.debug("AccountPersistence: Marked refresh complete for item \(itemId)")
         } catch {
             Logger.error("AccountPersistence: Failed to mark refresh complete: \(error.localizedDescription)")
         }
@@ -169,9 +171,9 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
 
     // MARK: - Private Helpers
 
-    private func getSyncState(for userId: String, plaidItemId: String) async -> AccountSyncState? {
+    private func getSyncState(for userId: String, itemId: String) async -> AccountSyncState? {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
         let predicate = #Predicate<AccountSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<AccountSyncState>(predicate: predicate)
@@ -206,13 +208,13 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
         }
     }
 
-    func clearAccounts(for userId: String, plaidItemId: String) async {
+    func clearAccounts(for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
 
         do {
-            // Clear accounts for this specific item
+            // Clear accounts for this specific item (plaidItemId field stores itemId)
             let accountPredicate = #Predicate<PersistedAccount> {
-                $0.userId == userId && $0.plaidItemId == plaidItemId
+                $0.userId == userId && $0.plaidItemId == itemId
             }
             let accountDescriptor = FetchDescriptor<PersistedAccount>(predicate: accountPredicate)
             let accounts = try context.fetch(accountDescriptor)
@@ -222,7 +224,7 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
 
             // Clear sync state for this item
             let syncPredicate = #Predicate<AccountSyncState> {
-                $0.userId == userId && $0.plaidItemId == plaidItemId
+                $0.userId == userId && $0.plaidItemId == itemId
             }
             let syncDescriptor = FetchDescriptor<AccountSyncState>(predicate: syncPredicate)
             let syncStates = try context.fetch(syncDescriptor)
@@ -231,7 +233,7 @@ final class AccountPersistence: AccountPersistenceProtocol, @unchecked Sendable 
             }
 
             try context.save()
-            Logger.info("AccountPersistence: Cleared accounts for plaidItemId: \(plaidItemId)")
+            Logger.info("AccountPersistence: Cleared accounts for itemId: \(itemId)")
         } catch {
             Logger.error("AccountPersistence: Failed to clear accounts for item: \(error.localizedDescription)")
         }

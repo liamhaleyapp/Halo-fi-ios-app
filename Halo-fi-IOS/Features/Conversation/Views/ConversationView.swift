@@ -91,7 +91,7 @@ struct ConversationView: View {
 
 #Preview {
     ConversationView()
-}
+} 
 
 #Preview("With Messages") {
     let viewModel = ConversationViewModel()

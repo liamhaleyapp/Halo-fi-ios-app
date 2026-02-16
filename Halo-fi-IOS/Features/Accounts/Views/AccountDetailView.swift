@@ -174,16 +174,17 @@ struct AccountDetailView: View {
       if account.id.hasPrefix("mock-") {
         try await Task.sleep(nanoseconds: 500_000_000)
         transactions = MockTransactions.mockTransactions(for: account)
-      } else if let plaidItemId = account.plaidItemId {
+      } else if let plaidItemId = account.plaidItemId,
+                let itemId = bankDataManager.getItemId(for: plaidItemId) {
         // Fetch recent transactions using cache-then-network pattern
         let fetched = try await bankDataManager.fetchRecentTransactions(
           accountId: account.id,
-          plaidItemId: plaidItemId,
+          itemId: itemId,
           limit: 50
         )
         transactions = fetched
       } else {
-        // No plaidItemId available
+        // No plaidItemId or itemId available
         transactions = []
       }
     } catch {

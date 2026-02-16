@@ -57,7 +57,7 @@ final class BankDataManager {
     private let accountPersistence: AccountPersistenceProtocol?
     private var currentUserId: String?
 
-    /// In-flight account refresh tasks keyed by (userId, plaidItemId) to prevent refresh storms
+    /// In-flight account refresh tasks keyed by (userId, itemId) to prevent refresh storms
     private var accountRefreshTasks: [String: Task<Void, Never>] = [:]
 
     /// In-flight guard for linked items fetch to prevent duplicate API calls
@@ -164,12 +164,12 @@ final class BankDataManager {
 
                 guard !items.isEmpty else { return }
 
-                // Extract embedded accounts from each item
+                // Extract embedded accounts from each item (keyed by internal itemId)
                 var embeddedAccountsByItemId: [String: [BankAccount]] = [:]
                 for serverItem in response.items {
                     if let serverAccounts = serverItem.accounts, !serverAccounts.isEmpty {
                         let bankAccounts = serverAccounts.map { $0.toBankAccount(plaidItemId: serverItem.plaidItemId) }
-                        embeddedAccountsByItemId[serverItem.plaidItemId] = bankAccounts
+                        embeddedAccountsByItemId[serverItem.itemId] = bankAccounts
                     }
                 }
 
@@ -247,13 +247,27 @@ final class BankDataManager {
     }
 
     /// Rebuild accountsByItemId from accounts (always run to avoid stale state)
+    /// Keys by internal itemId, looking up from linkedItems
     private func rebuildAccountsByItemId() {
-        if let accounts = accounts, !accounts.isEmpty {
-            // Filter to only accounts with plaidItemId and group by it
-            let accountsWithItemId = accounts.filter { $0.plaidItemId != nil }
-            accountsByItemId = Dictionary(grouping: accountsWithItemId, by: { $0.plaidItemId! })
-            Logger.debug("BankDataManager: Rebuilt accountsByItemId with \(accountsByItemId.count) items")
+        guard let accounts = accounts, !accounts.isEmpty else { return }
+
+        // Build lookup from plaidItemId -> itemId using linkedItems
+        var plaidToItemId: [String: String] = [:]
+        if let items = linkedItems {
+            for item in items {
+                plaidToItemId[item.plaidItemId] = item.itemId
+            }
         }
+
+        var newCache: [String: [BankAccount]] = [:]
+        for account in accounts {
+            guard let plaidItemId = account.plaidItemId else { continue }
+            // Use itemId from linkedItems, fallback to plaidItemId if not found
+            let key = plaidToItemId[plaidItemId] ?? plaidItemId
+            newCache[key, default: []].append(account)
+        }
+        accountsByItemId = newCache
+        Logger.debug("BankDataManager: Rebuilt accountsByItemId with \(accountsByItemId.count) items")
     }
 
     private func restoreAccounts() async {
@@ -287,15 +301,15 @@ final class BankDataManager {
 
     func addLinkedItem(_ item: ConnectedItem) {
         var current = linkedItems ?? []
-        if !current.contains(where: { $0.plaidItemId == item.plaidItemId }) {
+        if !current.contains(where: { $0.itemId == item.itemId }) {
             current.append(item)
         }
         setLinkedItems(current)
     }
 
-    func removeLinkedItem(plaidItemId: String) {
+    func removeLinkedItem(itemId: String) {
         guard var current = linkedItems else { return }
-        current.removeAll { $0.plaidItemId == plaidItemId }
+        current.removeAll { $0.itemId == itemId }
         setLinkedItems(current.isEmpty ? nil : current)
     }
 
@@ -324,8 +338,8 @@ final class BankDataManager {
         // Skip refresh if we already have accounts for all linked items
         // This prevents race condition where view calls refreshIfStale before configureForUser finishes
         if let items = linkedItems, !items.isEmpty {
-            let hasAllAccounts = items.allSatisfy { itemId in
-                guard let accounts = accountsByItemId[itemId.plaidItemId] else { return false }
+            let hasAllAccounts = items.allSatisfy { item in
+                guard let accounts = accountsByItemId[item.itemId] else { return false }
                 return !accounts.isEmpty
             }
             if hasAllAccounts {
@@ -376,13 +390,13 @@ final class BankDataManager {
                         await MainActor.run {
                             // Final check: don't write if user changed during fetch
                             guard self.currentUserId == userId else { return }
-                            self.accountsByItemId[item.plaidItemId] = response.accounts
+                            self.accountsByItemId[item.itemId] = response.accounts
                         }
 
                         // Persist accounts for instant display on next launch
                         if let persistence = self.accountPersistence {
-                            await persistence.saveAccounts(response.accounts, for: userId, plaidItemId: item.plaidItemId)
-                            await persistence.markRefreshComplete(for: userId, plaidItemId: item.plaidItemId)
+                            await persistence.saveAccounts(response.accounts, for: userId, itemId: item.itemId)
+                            await persistence.markRefreshComplete(for: userId, itemId: item.itemId)
                         }
                     } catch {
                         Logger.error("BankDataManager: Failed to refresh accounts for item")
@@ -442,36 +456,36 @@ final class BankDataManager {
 
     /// Disconnects a bank and clears all associated local data.
     /// - Important: Only clears local data AFTER server confirms disconnect.
-    /// - Parameter plaidItemId: The Plaid item ID to disconnect
-    func disconnectBank(plaidItemId: String) async throws {
+    /// - Parameter itemId: The internal bank item UUID to disconnect
+    func disconnectBank(itemId: String) async throws {
         guard let userId = currentUserId else {
             throw BankError.unauthorized
         }
 
-        // 1. Call API to revoke Plaid access (server-side)
-        try await bankService.disconnectBankAccount(plaidItemId: plaidItemId)
+        // 1. Call API to revoke access (server-side)
+        try await bankService.disconnectBankAccount(itemId: itemId)
 
         // 2. Only on success: clear all local data for this item
 
         // Cancel any in-flight refresh tasks for this item
-        let taskKey = "\(userId)_\(plaidItemId)"
+        let taskKey = "\(userId)_\(itemId)"
         accountRefreshTasks[taskKey]?.cancel()
         accountRefreshTasks.removeValue(forKey: taskKey)
 
         // Remove from in-memory linked items
-        removeLinkedItem(plaidItemId: plaidItemId)
+        removeLinkedItem(itemId: itemId)
 
         // Remove accounts from in-memory cache
-        accountsByItemId.removeValue(forKey: plaidItemId)
+        accountsByItemId.removeValue(forKey: itemId)
 
         // Remove transactions from in-memory cache
-        transactionsByItemId.removeValue(forKey: plaidItemId)
+        transactionsByItemId.removeValue(forKey: itemId)
 
         // 3. Clear persisted data
-        await accountPersistence?.clearAccounts(for: userId, plaidItemId: plaidItemId)
-        await transactionPersistence?.clearTransactions(for: userId, plaidItemId: plaidItemId)
+        await accountPersistence?.clearAccounts(for: userId, itemId: itemId)
+        await transactionPersistence?.clearTransactions(for: userId, itemId: itemId)
 
-        Logger.info("BankDataManager: Disconnected bank and cleared data for item \(plaidItemId)")
+        Logger.info("BankDataManager: Disconnected bank and cleared data for item \(itemId)")
     }
 
     // MARK: - Bank Linking Flow
@@ -532,7 +546,7 @@ final class BankDataManager {
     }
 
     private func syncConnectedItems(_ connectedItems: [ConnectedItem]) async {
-        let itemIds = connectedItems.map { $0.plaidItemId }
+        let itemIds = connectedItems.map { $0.itemId }
         Logger.info("Syncing \(itemIds.count) items...")
 
         do {
@@ -702,12 +716,12 @@ final class BankDataManager {
     /// Fetches recent transactions for a specific account with instant cache display
     /// - Parameters:
     ///   - accountId: The account ID to fetch transactions for
-    ///   - plaidItemId: The Plaid item ID the account belongs to
+    ///   - itemId: The internal bank item UUID
     ///   - limit: Maximum number of transactions to return (default 50)
     /// - Returns: Array of transactions for that account, from cache or network
     func fetchRecentTransactions(
         accountId: String,
-        plaidItemId: String,
+        itemId: String,
         limit: Int = 50
     ) async throws -> [Transaction] {
         guard let userId = currentUserId else {
@@ -718,30 +732,36 @@ final class BankDataManager {
         if let persistence = transactionPersistence {
             let cached = await persistence.loadTransactions(
                 for: userId,
-                plaidAccountId: accountId,
+                accountId: accountId,
                 limit: limit,
                 before: nil
             )
+            let needsFullSync = await persistence.needsFullSync(for: userId, itemId: itemId)
 
-            if !cached.isEmpty {
+            // Return if we have transactions OR we've already synced (empty is a valid state)
+            if !cached.isEmpty || !needsFullSync {
                 // Trigger background refresh if stale
-                if await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
-                    Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+                if await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                    Task { await backgroundRefreshTransactions(itemId: itemId) }
                 }
                 return cached
             }
         }
 
-        // 2. Check in-memory cache
-        if let cached = transactionsByItemId[plaidItemId] {
+        // 2. Check in-memory cache - if we've fetched for this item, use the result
+        // (even if this specific account has no transactions)
+        if let cached = transactionsByItemId[itemId] {
             let filtered = cached.filter { $0.accountId == accountId }
-            if !filtered.isEmpty {
-                return Array(filtered.prefix(limit))
+            // Trigger background refresh if stale
+            if let persistence = transactionPersistence,
+               await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                Task { await backgroundRefreshTransactions(itemId: itemId) }
             }
+            return Array(filtered.prefix(limit))
         }
 
         // 3. No cache: fetch from network (blocking)
-        return try await fetchAndPersistTransactions(plaidItemId: plaidItemId, accountId: accountId, limit: limit)
+        return try await fetchAndPersistTransactions(itemId: itemId, accountId: accountId, limit: limit)
     }
 
     /// Loads more transactions from local cache for infinite scroll
@@ -761,40 +781,43 @@ final class BankDataManager {
 
         return await persistence.loadTransactions(
             for: userId,
-            plaidAccountId: accountId,
+            accountId: accountId,
             limit: limit,
             before: before
         )
     }
 
-    /// Fetches transactions for a specific Plaid item
+    /// Fetches transactions for a specific bank item
     /// - Parameters:
-    ///   - plaidItemId: The Plaid item ID to fetch transactions for
+    ///   - itemId: The internal bank item UUID
     ///   - forceRefresh: If true, bypasses cache and fetches fresh data
     /// - Returns: Array of transactions for that item
-    func fetchTransactionsForItem(plaidItemId: String, forceRefresh: Bool = false) async throws -> [Transaction] {
+    func fetchTransactionsForItem(itemId: String, forceRefresh: Bool = false) async throws -> [Transaction] {
         guard let userId = currentUserId else {
             throw BankError.unauthorized
         }
 
         // 1. Check in-memory cache first
-        if !forceRefresh, let cached = transactionsByItemId[plaidItemId] {
+        if !forceRefresh, let cached = transactionsByItemId[itemId] {
             // Trigger background refresh if stale
             if let persistence = transactionPersistence,
-               await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
-                Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+               await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                Task { await backgroundRefreshTransactions(itemId: itemId) }
             }
             return cached
         }
 
         // 2. Check persisted cache
         if !forceRefresh, let persistence = transactionPersistence {
-            let persisted = await persistence.loadAllTransactions(for: userId, plaidItemId: plaidItemId)
-            if !persisted.isEmpty {
-                transactionsByItemId[plaidItemId] = persisted
+            let persisted = await persistence.loadAllTransactions(for: userId, itemId: itemId)
+            let needsFullSync = await persistence.needsFullSync(for: userId, itemId: itemId)
+
+            // Return if we have transactions OR we've already synced (empty is a valid state)
+            if !persisted.isEmpty || !needsFullSync {
+                transactionsByItemId[itemId] = persisted
                 // Trigger background refresh if stale
-                if await persistence.needsRecentSync(for: userId, plaidItemId: plaidItemId) {
-                    Task { await backgroundRefreshTransactions(plaidItemId: plaidItemId) }
+                if await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                    Task { await backgroundRefreshTransactions(itemId: itemId) }
                 }
                 return persisted
             }
@@ -806,13 +829,13 @@ final class BankDataManager {
         defer { isLoadingTransactions = false }
 
         do {
-            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
-            transactionsByItemId[plaidItemId] = fetchedTransactions
+            let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
+            transactionsByItemId[itemId] = fetchedTransactions
 
             // Persist for future instant display
             if let persistence = transactionPersistence {
-                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
-                await persistence.markFullSyncComplete(for: userId, plaidItemId: plaidItemId)
+                await persistence.saveTransactions(fetchedTransactions, for: userId, itemId: itemId)
+                await persistence.markFullSyncComplete(for: userId, itemId: itemId)
             }
 
             lastTransactionSyncAt = Date()
@@ -830,7 +853,8 @@ final class BankDataManager {
     // MARK: - Background Refresh
 
     /// Refreshes transactions in background without blocking UI
-    private func backgroundRefreshTransactions(plaidItemId: String) async {
+    /// - Parameter itemId: The internal bank item UUID
+    private func backgroundRefreshTransactions(itemId: String) async {
         guard let userId = currentUserId else { return }
 
         isSyncing = true
@@ -840,23 +864,27 @@ final class BankDataManager {
         }
 
         do {
-            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
-            transactionsByItemId[plaidItemId] = fetchedTransactions
+            let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
+            transactionsByItemId[itemId] = fetchedTransactions
 
             if let persistence = transactionPersistence {
-                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
-                await persistence.markRecentSyncComplete(for: userId, plaidItemId: plaidItemId)
+                await persistence.saveTransactions(fetchedTransactions, for: userId, itemId: itemId)
+                await persistence.markRecentSyncComplete(for: userId, itemId: itemId)
             }
 
-            Logger.debug("BankDataManager: Background refresh completed for item \(plaidItemId)")
+            Logger.debug("BankDataManager: Background refresh completed for item \(itemId)")
         } catch {
             Logger.warning("BankDataManager: Background refresh failed: \(error.localizedDescription)")
         }
     }
 
     /// Fetches transactions from network and persists them
+    /// - Parameters:
+    ///   - itemId: The internal bank item UUID
+    ///   - accountId: The account ID to filter transactions for
+    ///   - limit: Maximum number of transactions to return
     private func fetchAndPersistTransactions(
-        plaidItemId: String,
+        itemId: String,
         accountId: String,
         limit: Int
     ) async throws -> [Transaction] {
@@ -869,13 +897,13 @@ final class BankDataManager {
         defer { isLoadingTransactions = false }
 
         do {
-            let fetchedTransactions = try await bankService.getTransactionsForItem(plaidItemId: plaidItemId)
-            transactionsByItemId[plaidItemId] = fetchedTransactions
+            let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
+            transactionsByItemId[itemId] = fetchedTransactions
 
             // Persist for future instant display
             if let persistence = transactionPersistence {
-                await persistence.saveTransactions(fetchedTransactions, for: userId, plaidItemId: plaidItemId)
-                await persistence.markFullSyncComplete(for: userId, plaidItemId: plaidItemId)
+                await persistence.saveTransactions(fetchedTransactions, for: userId, itemId: itemId)
+                await persistence.markFullSyncComplete(for: userId, itemId: itemId)
             }
 
             lastTransactionSyncAt = Date()
@@ -895,14 +923,14 @@ final class BankDataManager {
 
     // MARK: - Sync Management
 
-    /// Syncs bank data for a specific Plaid item
-    /// - Parameter plaidItemId: The Plaid item ID to sync
-    func syncBankData(plaidItemId: String) async throws {
+    /// Syncs bank data for a specific bank item
+    /// - Parameter itemId: The internal bank item UUID to sync
+    func syncBankData(itemId: String) async throws {
         isSyncing = true
         syncError = nil
 
         do {
-            _ = try await bankService.syncBankData(plaidItemId: plaidItemId)
+            _ = try await bankService.syncBankData(itemId: itemId)
 
             isSyncing = false
 
@@ -951,6 +979,13 @@ final class BankDataManager {
 
     // MARK: - Helper Methods
 
+    /// Looks up the internal item UUID for a given Plaid item ID
+    /// - Parameter plaidItemId: The Plaid item ID to look up
+    /// - Returns: The internal item UUID, or nil if not found
+    func getItemId(for plaidItemId: String) -> String? {
+        linkedItems?.first { $0.plaidItemId == plaidItemId }?.itemId
+    }
+
     /// Gets account by ID
     func getAccount(by id: String) -> BankAccount? {
         accounts?.first { $0.idAccount == id }
@@ -975,13 +1010,13 @@ final class BankDataManager {
 
     // MARK: - Account Grouping Helpers
 
-    /// Groups all accounts by institution (plaid item ID)
+    /// Groups all accounts by institution (internal item ID)
     func accountsGroupedByInstitution() -> [String: [BankAccount]] {
         guard let linkedItems = linkedItems else { return [:] }
 
         var grouped: [String: [BankAccount]] = [:]
         for item in linkedItems {
-            grouped[item.plaidItemId] = accountsByItemId[item.plaidItemId] ?? []
+            grouped[item.itemId] = accountsByItemId[item.itemId] ?? []
         }
         return grouped
     }

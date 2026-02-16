@@ -22,7 +22,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
     func loadTransactions(
         for userId: String,
-        plaidAccountId: String,
+        accountId: String,
         limit: Int,
         before: Date?
     ) async -> [Transaction] {
@@ -34,7 +34,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             if let beforeDate = before {
                 let predicate = #Predicate<PersistedTransaction> {
                     $0.userId == userId &&
-                    $0.plaidAccountId == plaidAccountId &&
+                    $0.plaidAccountId == accountId &&
                     $0.transactionDate < beforeDate
                 }
                 descriptor = FetchDescriptor<PersistedTransaction>(
@@ -44,7 +44,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             } else {
                 let predicate = #Predicate<PersistedTransaction> {
                     $0.userId == userId &&
-                    $0.plaidAccountId == plaidAccountId
+                    $0.plaidAccountId == accountId
                 }
                 descriptor = FetchDescriptor<PersistedTransaction>(
                     predicate: predicate,
@@ -55,7 +55,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             descriptor.fetchLimit = limit
 
             let persisted = try context.fetch(descriptor)
-            Logger.debug("TransactionPersistence: Loaded \(persisted.count) transactions for account \(plaidAccountId)")
+            Logger.debug("TransactionPersistence: Loaded \(persisted.count) transactions for account \(accountId)")
             return persisted.map { $0.toTransaction() }
         } catch {
             Logger.error("TransactionPersistence: Failed to load transactions: \(error.localizedDescription)")
@@ -65,13 +65,14 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
     // MARK: - Bulk Loading
 
-    func loadAllTransactions(for userId: String, plaidItemId: String) async -> [Transaction] {
+    func loadAllTransactions(for userId: String, itemId: String) async -> [Transaction] {
         let context = modelContainer.mainContext
 
         do {
+            // Note: plaidItemId field stores the itemId value
             let predicate = #Predicate<PersistedTransaction> {
                 $0.userId == userId &&
-                $0.plaidItemId == plaidItemId
+                $0.plaidItemId == itemId
             }
             let descriptor = FetchDescriptor<PersistedTransaction>(
                 predicate: predicate,
@@ -79,7 +80,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             )
 
             let persisted = try context.fetch(descriptor)
-            Logger.debug("TransactionPersistence: Loaded all \(persisted.count) transactions for item \(plaidItemId)")
+            Logger.debug("TransactionPersistence: Loaded all \(persisted.count) transactions for item \(itemId)")
             return persisted.map { $0.toTransaction() }
         } catch {
             Logger.error("TransactionPersistence: Failed to load all transactions: \(error.localizedDescription)")
@@ -89,7 +90,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
     // MARK: - Write Operations
 
-    func saveTransactions(_ transactions: [Transaction], for userId: String, plaidItemId: String) async {
+    func saveTransactions(_ transactions: [Transaction], for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
 
         for transaction in transactions {
@@ -105,11 +106,11 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
                     // Update existing transaction
                     persisted.update(from: transaction)
                 } else {
-                    // Insert new transaction
+                    // Insert new transaction (plaidItemId field stores itemId)
                     let persisted = PersistedTransaction(
                         from: transaction,
                         userId: userId,
-                        plaidItemId: plaidItemId,
+                        plaidItemId: itemId,
                         plaidAccountId: transaction.accountId
                     )
                     context.insert(persisted)
@@ -121,16 +122,17 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
         do {
             try context.save()
-            Logger.debug("TransactionPersistence: Saved \(transactions.count) transactions for item \(plaidItemId)")
+            Logger.debug("TransactionPersistence: Saved \(transactions.count) transactions for item \(itemId)")
         } catch {
             Logger.error("TransactionPersistence: Failed to commit transaction save: \(error.localizedDescription)")
         }
     }
 
-    func updateSyncState(cursor: String?, hasMore: Bool, for userId: String, plaidItemId: String) async {
+    func updateSyncState(cursor: String?, hasMore: Bool, for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
+        // Note: plaidItemId field stores the itemId value
         let predicate = #Predicate<TransactionSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<TransactionSyncState>(predicate: predicate)
 
@@ -140,7 +142,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
                 state.cursor = cursor
                 state.hasMore = hasMore
             } else {
-                let state = TransactionSyncState(userId: userId, plaidItemId: plaidItemId)
+                let state = TransactionSyncState(userId: userId, plaidItemId: itemId)
                 state.cursor = cursor
                 state.hasMore = hasMore
                 context.insert(state)
@@ -151,9 +153,9 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
         }
     }
 
-    func markFullSyncComplete(for userId: String, plaidItemId: String) async {
+    func markFullSyncComplete(for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
         let predicate = #Predicate<TransactionSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<TransactionSyncState>(predicate: predicate)
@@ -164,21 +166,21 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
                 state.lastFullSyncAt = Date()
                 state.lastRecentSyncAt = Date()
             } else {
-                let state = TransactionSyncState(userId: userId, plaidItemId: plaidItemId)
+                let state = TransactionSyncState(userId: userId, plaidItemId: itemId)
                 state.lastFullSyncAt = Date()
                 state.lastRecentSyncAt = Date()
                 context.insert(state)
             }
             try context.save()
-            Logger.debug("TransactionPersistence: Marked full sync complete for item \(plaidItemId)")
+            Logger.debug("TransactionPersistence: Marked full sync complete for item \(itemId)")
         } catch {
             Logger.error("TransactionPersistence: Failed to mark full sync complete: \(error.localizedDescription)")
         }
     }
 
-    func markRecentSyncComplete(for userId: String, plaidItemId: String) async {
+    func markRecentSyncComplete(for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
         let predicate = #Predicate<TransactionSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<TransactionSyncState>(predicate: predicate)
@@ -188,12 +190,12 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             if let state = existing.first {
                 state.lastRecentSyncAt = Date()
             } else {
-                let state = TransactionSyncState(userId: userId, plaidItemId: plaidItemId)
+                let state = TransactionSyncState(userId: userId, plaidItemId: itemId)
                 state.lastRecentSyncAt = Date()
                 context.insert(state)
             }
             try context.save()
-            Logger.debug("TransactionPersistence: Marked recent sync complete for item \(plaidItemId)")
+            Logger.debug("TransactionPersistence: Marked recent sync complete for item \(itemId)")
         } catch {
             Logger.error("TransactionPersistence: Failed to mark recent sync complete: \(error.localizedDescription)")
         }
@@ -201,9 +203,9 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
     // MARK: - Sync State Queries
 
-    func getSyncState(for userId: String, plaidItemId: String) async -> SyncStateInfo? {
+    func getSyncState(for userId: String, itemId: String) async -> SyncStateInfo? {
         let context = modelContainer.mainContext
-        let compositeId = "\(userId)_\(plaidItemId)"
+        let compositeId = "\(userId)_\(itemId)"
 
         let predicate = #Predicate<TransactionSyncState> { $0.compositeId == compositeId }
         let descriptor = FetchDescriptor<TransactionSyncState>(predicate: predicate)
@@ -217,15 +219,15 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
         }
     }
 
-    func needsFullSync(for userId: String, plaidItemId: String) async -> Bool {
-        guard let state = await getSyncState(for: userId, plaidItemId: plaidItemId) else {
+    func needsFullSync(for userId: String, itemId: String) async -> Bool {
+        guard let state = await getSyncState(for: userId, itemId: itemId) else {
             return true  // No state means we've never synced
         }
         return state.needsFullSync
     }
 
-    func needsRecentSync(for userId: String, plaidItemId: String) async -> Bool {
-        guard let state = await getSyncState(for: userId, plaidItemId: plaidItemId) else {
+    func needsRecentSync(for userId: String, itemId: String) async -> Bool {
+        guard let state = await getSyncState(for: userId, itemId: itemId) else {
             return true  // No state means we've never synced
         }
         return state.needsRecentSync
@@ -252,13 +254,13 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
         }
     }
 
-    func clearTransactions(for userId: String, plaidItemId: String) async {
+    func clearTransactions(for userId: String, itemId: String) async {
         let context = modelContainer.mainContext
 
         do {
-            // Clear transactions for this specific item
+            // Clear transactions for this specific item (plaidItemId field stores itemId)
             let txnPredicate = #Predicate<PersistedTransaction> {
-                $0.userId == userId && $0.plaidItemId == plaidItemId
+                $0.userId == userId && $0.plaidItemId == itemId
             }
             let txnDescriptor = FetchDescriptor<PersistedTransaction>(predicate: txnPredicate)
             let transactions = try context.fetch(txnDescriptor)
@@ -268,7 +270,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
             // Clear sync state for this item
             let syncPredicate = #Predicate<TransactionSyncState> {
-                $0.userId == userId && $0.plaidItemId == plaidItemId
+                $0.userId == userId && $0.plaidItemId == itemId
             }
             let syncDescriptor = FetchDescriptor<TransactionSyncState>(predicate: syncPredicate)
             let syncStates = try context.fetch(syncDescriptor)
@@ -277,7 +279,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
             }
 
             try context.save()
-            Logger.info("TransactionPersistence: Cleared transactions for plaidItemId: \(plaidItemId)")
+            Logger.info("TransactionPersistence: Cleared transactions for itemId: \(itemId)")
         } catch {
             Logger.error("TransactionPersistence: Failed to clear transactions for item: \(error.localizedDescription)")
         }
