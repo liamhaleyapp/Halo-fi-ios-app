@@ -59,6 +59,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
 			);
@@ -68,6 +69,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 			);
 			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;
 		};
@@ -620,7 +622,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -639,7 +641,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -657,7 +659,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.Halo.Halo-fi-IOSUITests";
@@ -674,7 +676,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.Halo.Halo-fi-IOSUITests";
@@ -781,7 +783,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -799,7 +801,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.Halo.Halo-fi-IOSUITests";
@@ -906,7 +908,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -924,7 +926,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7LB9TPJJZ6;
+				DEVELOPMENT_TEAM = 3TB8D2484F;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.Halo.Halo-fi-IOSUITests";

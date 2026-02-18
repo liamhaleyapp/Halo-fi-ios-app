@@ -71,9 +71,16 @@ final class AuthService: AuthServiceProtocol {
 
     // MARK: - Refresh Token
 
-    // TODO: Implement when refresh endpoint is available in the API
-    func refreshToken(refreshToken: String) async throws -> LoginResponse {
-        throw AuthError.notImplemented
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
+        let request = RefreshTokenRequest(refreshToken: refreshToken)
+        let requestBody = try JSONEncoder().encode(request)
+
+        return try await networkService.publicRequest(
+            endpoint: "/auth/refresh-token",
+            method: .POST,
+            body: requestBody,
+            responseType: RefreshTokenResponse.self
+        )
     }
 
     // MARK: - Get User Profile

@@ -7,6 +7,40 @@
 
 import Foundation
 
+// MARK: - Token Refresh Coordinator
+
+/// Coordinates token refresh to prevent multiple simultaneous refresh calls.
+/// Uses Swift actor for thread-safe coordination since NetworkService is not @MainActor.
+private actor TokenRefreshCoordinator {
+    private var refreshTask: Task<RefreshTokenResponse, Error>?
+
+    /// Ensures only one refresh happens at a time. Concurrent callers await the same task.
+    func refreshIfNeeded(
+        using refreshToken: String,
+        refreshCall: @escaping (String) async throws -> RefreshTokenResponse
+    ) async throws -> RefreshTokenResponse {
+        // If refresh already in progress, await it
+        if let existingTask = refreshTask {
+            return try await existingTask.value
+        }
+
+        // Start new refresh
+        let task = Task {
+            defer { refreshTask = nil }
+            return try await refreshCall(refreshToken)
+        }
+        refreshTask = task
+        return try await task.value
+    }
+}
+
+// MARK: - Session Expiry Notification
+
+extension Notification.Name {
+    /// Posted when the session is no longer valid and the user should be signed out.
+    static let sessionExpired = Notification.Name("sessionExpired")
+}
+
 // MARK: - Network Service
 
 final class NetworkService: NetworkServiceProtocol {
@@ -15,6 +49,7 @@ final class NetworkService: NetworkServiceProtocol {
     private let baseURL: String
     private let session: URLSession
     private let tokenStorage: TokenStorageProtocol
+    private let refreshCoordinator = TokenRefreshCoordinator()
 
     init(
         baseURL: String = "https://halofiapp-production.up.railway.app",
@@ -32,6 +67,59 @@ final class NetworkService: NetworkServiceProtocol {
         endpoint: String,
         method: HTTPMethod = .GET,
         body: Data? = nil,
+        responseType: T.Type
+    ) async throws -> T {
+        // First attempt
+        do {
+            return try await performAuthenticatedRequest(
+                endpoint: endpoint,
+                method: method,
+                body: body,
+                responseType: responseType
+            )
+        } catch AuthError.tokenExpired {
+            // Attempt refresh and retry
+            guard let refreshToken = tokenStorage.getRefreshToken() else {
+                Logger.error("No refresh token available for retry")
+                throw AuthError.tokenExpired
+            }
+
+            do {
+                let refreshResponse = try await refreshCoordinator.refreshIfNeeded(
+                    using: refreshToken,
+                    refreshCall: performTokenRefresh
+                )
+
+                // Save new tokens
+                tokenStorage.saveTokensWithExpiration(
+                    accessToken: refreshResponse.accessToken,
+                    refreshToken: refreshResponse.refreshToken,
+                    expiresAt: refreshResponse.expiresAt
+                )
+
+                Logger.debug("Token refreshed successfully, retrying request")
+
+                // Retry original request with new token
+                return try await performAuthenticatedRequest(
+                    endpoint: endpoint,
+                    method: method,
+                    body: body,
+                    responseType: responseType
+                )
+            } catch {
+                Logger.error("Token refresh failed: \(error.localizedDescription)")
+                // Notify observers that session is invalid
+                await notifySessionExpired()
+                throw AuthError.tokenExpired
+            }
+        }
+    }
+
+    /// Performs the actual authenticated request without retry logic.
+    private func performAuthenticatedRequest<T: Codable>(
+        endpoint: String,
+        method: HTTPMethod,
+        body: Data?,
         responseType: T.Type
     ) async throws -> T {
         let request = try createAuthenticatedRequest(
@@ -55,6 +143,25 @@ final class NetworkService: NetworkServiceProtocol {
         }
 
         return try handleResponse(data: data, httpResponse: httpResponse, responseType: T.self)
+    }
+
+    /// Performs token refresh via the refresh endpoint.
+    private func performTokenRefresh(_ refreshToken: String) async throws -> RefreshTokenResponse {
+        let request = RefreshTokenRequest(refreshToken: refreshToken)
+        let requestBody = try JSONEncoder().encode(request)
+
+        return try await publicRequest(
+            endpoint: "/auth/refresh-token",
+            method: .POST,
+            body: requestBody,
+            responseType: RefreshTokenResponse.self
+        )
+    }
+
+    /// Notifies the app that the session has expired and user should be signed out.
+    @MainActor
+    private func notifySessionExpired() {
+        NotificationCenter.default.post(name: .sessionExpired, object: nil)
     }
 
     // MARK: - Public Requests (No Authentication)
@@ -226,12 +333,6 @@ final class NetworkService: NetworkServiceProtocol {
         return request
     }
 
-    // MARK: - Token Refresh (Not Implemented)
-
-    private func refreshTokenAndRetry(refreshToken: String) async throws {
-        // TODO: Implement when refresh token endpoint is available
-        throw AuthError.notImplemented
-    }
 }
 
 // MARK: - HTTP Method Enum

@@ -36,8 +36,8 @@ protocol AuthServiceProtocol {
 
     /// Refreshes an expired access token.
     /// - Parameter refreshToken: The refresh token to use
-    /// - Returns: New LoginResponse with fresh tokens
-    func refreshToken(refreshToken: String) async throws -> LoginResponse
+    /// - Returns: RefreshTokenResponse with fresh tokens
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
 
     /// Fetches the authenticated user's profile.
     /// - Returns: UserProfileResponse with profile data
@@ -87,7 +87,7 @@ actor MockAuthService: AuthServiceProtocol {
         }
     }
 
-    func refreshToken(refreshToken: String) async throws -> LoginResponse {
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
         throw AuthError.notImplemented
     }
 

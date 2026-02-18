@@ -75,6 +75,22 @@ final class UserManager {
                 self.resolveDestination(hasAccounts: hasAccounts)
             }
         }
+
+        NotificationCenter.default.addObserver(
+            forName: .sessionExpired,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleSessionExpired()
+            }
+        }
+    }
+
+    /// Called when NetworkService determines the session is no longer valid.
+    private func handleSessionExpired() {
+        Logger.warning("Session expired - signing out user")
+        signOut()
     }
 
     /// Sets the bank data manager dependency (called from DIContainer after initialization)
@@ -468,7 +484,28 @@ final class UserManager {
     // MARK: - Token Management
 
     private func refreshTokensIfNeeded(refreshToken: String) async {
-        // TODO: Implement when refresh token endpoint is available
-        signOut()
+        do {
+            let response = try await authService.refreshToken(refreshToken: refreshToken)
+
+            // Save new tokens
+            tokenStorage.saveTokensWithExpiration(
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                expiresAt: response.expiresAt
+            )
+
+            // Restore user from storage (user data doesn't change, just tokens)
+            if let data = userDefaults.data(forKey: userKey),
+               let user = try? JSONDecoder().decode(User.self, from: data) {
+                currentUser = user
+                isAuthenticated = true
+                bankDataManager?.configureForUser(userId: user.id)
+            }
+
+            Logger.debug("Token refresh successful during app launch")
+        } catch {
+            Logger.error("Token refresh failed during app launch: \(error.localizedDescription)")
+            signOut()
+        }
     }
 }
