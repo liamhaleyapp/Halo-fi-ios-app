@@ -9,28 +9,50 @@ import SwiftUI
 
 struct TransactionRow: View {
   let transaction: Transaction
-  
+
   private var displayName: String {
     transaction.merchantName ?? transaction.name
   }
-  
+
   private var categoryName: String {
     if let categories = transaction.category, !categories.isEmpty {
       return categories.joined(separator: " • ")
     }
     return "Uncategorized"
   }
-  
+
   private var formattedDate: String {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
-    
+
     if let date = formatter.date(from: transaction.transactionDate) {
       formatter.dateFormat = "MMM d"
       return formatter.string(from: date)
     }
-    
+
     return transaction.transactionDate
+  }
+
+  private var accessibilityLabel: String {
+    var label = displayName
+
+    // Amount with appropriate sign description
+    let formattedAmount = transaction.amount.formatted(.currency(code: transaction.currency))
+    if transaction.amount >= 0 {
+      label += ", Received \(formattedAmount)"
+    } else {
+      label += ", Spent \(formattedAmount.replacingOccurrences(of: "-", with: ""))"
+    }
+
+    // Date
+    label += ", \(formattedDate)"
+
+    // Pending status
+    if transaction.pending {
+      label += ", Pending"
+    }
+
+    return label
   }
   
   var body: some View {
@@ -80,6 +102,8 @@ struct TransactionRow: View {
     }
     .padding(.vertical, 12)
     .listRowBackground(Color.gray.opacity(0.15))
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityLabel)
   }
 }
 

@@ -7,51 +7,25 @@
 
 import SwiftUI
 
-enum AccountViewMode {
-  case institutions
-  case accountTypes
-}
-
 struct AccountsOverviewView: View {
   @Environment(BankDataManager.self) private var bankDataManager
   @State private var showingPlaidOnboarding = false
-  @State private var viewMode: AccountViewMode = .institutions
   @State private var isLoadingLinkedItems = false
-  @State private var isLoadingAccounts = false
-  @State private var selectedItemId: String?
   @State private var hasAppeared = false
   @State private var navigationPath = NavigationPath()
-  
+  @State private var searchText = ""
+
   var body: some View {
     NavigationStack(path: $navigationPath) {
       ZStack {
         Color.black.ignoresSafeArea()
-        
-        ScrollView {
-          VStack(spacing: 20) {
 
-            // Summary Section
-            if hasData {
-              summarySection
-            }
-            
-            // Filter Toggle
-            if hasData {
-              filterToggleSection
-            }
-            
-            // Content based on view mode
-            if isLoadingLinkedItems && !hasAppeared {
-              loadingView
-            } else if hasData {
-              contentView
-            } else {
-              emptyStateView
-            }
-          }
-          .padding(.horizontal, 20)
-          .padding(.top, 20)
-          .padding(.bottom, 100)
+        if isLoadingLinkedItems && !hasAppeared {
+          loadingView
+        } else if hasData {
+          institutionsList
+        } else {
+          emptyStateView
         }
       }
       .navigationTitle("Accounts")
@@ -63,15 +37,14 @@ struct AccountsOverviewView: View {
           } label: {
             Image(systemName: "plus.app")
           }
-          .accessibilityLabel("Add bank account")
-          .accessibilityHint("Connect a new bank account")
+          .accessibilityLabel("Add account")
+          .accessibilityHint("Opens secure bank linking flow")
         }
       }
       .onAppear {
         if !hasAppeared {
           hasAppeared = true
           Task {
-            // Trigger auto-refresh of accounts if stale (uses persisted linkedItems)
             await bankDataManager.refreshIfStale()
             await loadInitialData()
           }
@@ -85,234 +58,203 @@ struct AccountsOverviewView: View {
       }
     }
   }
-  
-  // MARK: - Summary Section
-  
-  private var summarySection: some View {
-    let totalBalance = bankDataManager.totalBalance()
-    let accountCount = bankDataManager.totalAccountCount()
-    let currency = bankDataManager.accountsByItemId.values.flatMap { $0 }.first?.currency ?? "USD"
-    
-    return VStack(spacing: 12) {
-      HStack {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("Total Balance")
-            .font(.subheadline)
-            .foregroundColor(.gray)
-            .accessibilityAddTraits(.isHeader)
-          
-          Text(CurrencyFormatter.format(totalBalance, currency: currency))
-            .font(.title)
-            .fontWeight(.bold)
-            .foregroundColor(.white)
-            .accessibilityLabel("Total balance, \(CurrencyFormatter.format(totalBalance, currency: currency))")
-        }
-        
-        Spacer()
-        
-        VStack(alignment: .trailing, spacing: 4) {
-          Text("Accounts")
-            .font(.subheadline)
-            .foregroundColor(.gray)
-            .accessibilityAddTraits(.isHeader)
-          
-          Text("\(accountCount)")
-            .font(.title)
-            .fontWeight(.bold)
-            .foregroundColor(.white)
-            .accessibilityLabel("\(accountCount) account\(accountCount == 1 ? "" : "s")")
-        }
-      }
-      .padding(20)
-      .background(Color.gray.opacity(0.1))
-      .cornerRadius(16)
-    }
-  }
-  
-  // MARK: - Filter Toggle Section
-  
-  private var filterToggleSection: some View {
-    Picker("View Mode", selection: $viewMode) {
-      Text("By Institution").tag(AccountViewMode.institutions)
-        .accessibilityLabel("View accounts by institution")
-      Text("Accounts").tag(AccountViewMode.accountTypes)
-        .accessibilityLabel("View all accounts by type")
-    }
-    .pickerStyle(.segmented)
-    .accessibilityLabel("Account view mode")
-    .accessibilityHint("Switch between viewing by institution or all accounts grouped by type")
-  }
-  
-  // MARK: - Content View
-  
-  @ViewBuilder
-  private var contentView: some View {
-    switch viewMode {
-    case .institutions:
-      institutionsView
-    case .accountTypes:
-      accountTypesView
-    }
-  }
-  
-  // MARK: - Institutions View
-  
-  private var institutionsView: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      if let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty {
-        Text("Linked Institutions")
-          .font(.headline)
-          .foregroundColor(.gray)
-          .accessibilityAddTraits(.isHeader)
-          .padding(.top, 8)
-        
-        ForEach(linkedItems, id: \.itemId) { item in
-          NavigationLink(value: item) {
-            AccessibleInstitutionCard(
-              item: item,
-              accounts: bankDataManager.accountsByItemId[item.itemId],
-              isLoading: isLoadingAccounts && selectedItemId == item.itemId
-            )
+
+  // MARK: - Institutions List
+
+  private var institutionsList: some View {
+    ScrollView {
+      LazyVStack(spacing: 12) {
+        // Search field
+        searchField
+          .padding(.bottom, 8)
+
+        // Connected institutions section
+        if !connectedInstitutions.isEmpty {
+          Section {
+            ForEach(connectedInstitutions, id: \.itemId) { item in
+              institutionRow(item)
+            }
+          } header: {
+            sectionHeader("Connected", count: connectedInstitutions.count)
           }
-          .buttonStyle(HapticPlainButtonStyle())
+        }
+
+        // Needs attention section
+        if !needsAttentionInstitutions.isEmpty {
+          Section {
+            ForEach(needsAttentionInstitutions, id: \.itemId) { item in
+              institutionRow(item)
+            }
+          } header: {
+            sectionHeader("Needs Attention", count: needsAttentionInstitutions.count)
+          }
         }
       }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
+      .padding(.bottom, 100)
     }
   }
-  
-  // MARK: - Account Types View
-  
-  private var accountTypesView: some View {
-    AccountTypeFilterView(
-      accountsByType: bankDataManager.accountsGroupedByType()
-    )
+
+  // MARK: - Search Field
+
+  private var searchField: some View {
+    HStack(spacing: 12) {
+      Image(systemName: "magnifyingglass")
+        .foregroundColor(.gray)
+        .accessibilityHidden(true)
+
+      TextField("Search institutions", text: $searchText)
+        .foregroundColor(.white)
+        .autocorrectionDisabled()
+        .accessibilityLabel("Search institutions")
+        .accessibilityHint("Type to filter your linked banks")
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
+    .background(Color.gray.opacity(0.15))
+    .cornerRadius(12)
   }
-  
+
+  // MARK: - Section Header
+
+  private func sectionHeader(_ title: String, count: Int) -> some View {
+    HStack {
+      Text(title)
+        .font(.headline)
+        .foregroundColor(.gray)
+
+      Spacer()
+
+      Text("\(count)")
+        .font(.subheadline)
+        .foregroundColor(.gray.opacity(0.7))
+    }
+    .padding(.top, 16)
+    .padding(.bottom, 8)
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(.isHeader)
+    .accessibilityLabel("\(title), \(count) institution\(count == 1 ? "" : "s")")
+  }
+
+  // MARK: - Institution Row
+
+  private func institutionRow(_ item: ConnectedItem) -> some View {
+    NavigationLink(value: item) {
+      AccessibleInstitutionCard(
+        item: item,
+        accounts: bankDataManager.accountsByItemId[item.itemId],
+        isLoading: false
+      )
+    }
+    .buttonStyle(HapticPlainButtonStyle())
+  }
+
+  // MARK: - Filtered Institutions
+
+  private var filteredInstitutions: [ConnectedItem] {
+    guard let linkedItems = bankDataManager.linkedItems else { return [] }
+
+    if searchText.isEmpty {
+      return linkedItems
+    }
+
+    return linkedItems.filter { item in
+      item.institutionName.localizedCaseInsensitiveContains(searchText)
+    }
+  }
+
+  private var connectedInstitutions: [ConnectedItem] {
+    filteredInstitutions.filter { $0.isActive }
+  }
+
+  private var needsAttentionInstitutions: [ConnectedItem] {
+    filteredInstitutions.filter { !$0.isActive }
+  }
+
   // MARK: - Loading View
-  
+
   private var loadingView: some View {
     VStack(spacing: 16) {
       ProgressView()
         .scaleEffect(1.2)
-        .accessibilityLabel("Loading accounts")
-      
-      Text("Loading accounts...")
+        .tint(.white)
+
+      Text("Loading institutions...")
         .font(.body)
         .foregroundColor(.gray)
-        .accessibilityLabel("Loading accounts, please wait")
     }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 40)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Loading institutions, please wait")
   }
-  
+
   // MARK: - Empty State View
-  
+
   private var emptyStateView: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 20) {
       Image(systemName: "building.2")
-        .font(.system(size: 48))
+        .font(.system(size: 56))
         .foregroundColor(.gray.opacity(0.5))
         .accessibilityHidden(true)
-      
-      Text("No Accounts Linked")
-        .font(.headline)
-        .foregroundColor(.white)
-        .accessibilityAddTraits(.isHeader)
-      
-      Text("Connect your bank accounts to get started")
-        .font(.subheadline)
-        .foregroundColor(.gray)
-        .multilineTextAlignment(.center)
-        .accessibilityLabel("No accounts linked. Connect your bank accounts to get started.")
-      
+
+      VStack(spacing: 8) {
+        Text("No Linked Institutions")
+          .font(.title3)
+          .fontWeight(.semibold)
+          .foregroundColor(.white)
+
+        Text("Connect your bank to view accounts and transactions")
+          .font(.body)
+          .foregroundColor(.gray)
+          .multilineTextAlignment(.center)
+          .padding(.horizontal, 40)
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("No linked institutions. Connect your bank to view accounts and transactions.")
+
       Button {
         showingPlaidOnboarding = true
       } label: {
-        HStack {
+        HStack(spacing: 8) {
           Image(systemName: "plus.circle.fill")
             .accessibilityHidden(true)
-          Text("Link New Account")
+          Text("Link Your First Account")
         }
         .font(.body)
         .fontWeight(.semibold)
         .foregroundColor(.white)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 14)
         .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
-        .cornerRadius(12)
+        .cornerRadius(14)
       }
-      .accessibilityLabel("Link new account")
-      .accessibilityHint("Double tap to connect a new bank account")
+      .accessibilityLabel("Link your first account")
+      .accessibilityHint("Opens secure bank linking flow")
     }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 40)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding(.bottom, 100)
   }
-  
+
   // MARK: - Computed Properties
-  
+
   private var hasData: Bool {
     guard let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty else {
       return false
     }
     return true
   }
-  
+
   // MARK: - Data Loading
-  
+
   private func loadInitialData() async {
     isLoadingLinkedItems = true
 
-    // Fetch linked items if we don't have them
     if bankDataManager.linkedItems == nil {
-      // Try to fetch accounts which may trigger linked items fetch
-      // For now, we'll rely on the linkedItems being set during onboarding
-      // If they're not set, we'll show empty state
-      print("🔵 AccountsOverviewView: Checking for linked items")
-    }
-
-    // If we have linked items but no accounts loaded, fetch accounts for the first item
-    if let linkedItems = bankDataManager.linkedItems,
-       !linkedItems.isEmpty,
-       bankDataManager.accountsByItemId.isEmpty {
-      // Load accounts for the first institution to show summary
-      let firstItem = linkedItems[0]
-      if bankDataManager.accountsByItemId[firstItem.itemId] == nil {
-        await fetchAccountsForItem(firstItem)
-      }
+      Logger.info("AccountsOverviewView: Checking for linked items")
     }
 
     isLoadingLinkedItems = false
-  }
-  
-  private func fetchAccountsForItem(_ item: ConnectedItem) async {
-    guard !isLoadingAccounts else { return }
-
-    if bankDataManager.accountsByItemId[item.itemId] != nil {
-      print("🔵 AccountsOverviewView: Accounts already fetched for item \(item.itemId)")
-      return
-    }
-
-    selectedItemId = item.itemId
-    isLoadingAccounts = true
-
-    do {
-      print("🔵 AccountsOverviewView: Fetching accounts for item \(item.itemId) (\(item.institutionName))")
-      let response = try await bankDataManager.fetchAccountsForItem(itemId: item.itemId)
-
-      await MainActor.run {
-        bankDataManager.accountsByItemId[item.itemId] = response.accounts
-        isLoadingAccounts = false
-        selectedItemId = nil
-        print("✅ AccountsOverviewView: Fetched \(response.accounts.count) accounts for \(item.institutionName)")
-      }
-    } catch {
-      await MainActor.run {
-        isLoadingAccounts = false
-        selectedItemId = nil
-        print("❌ AccountsOverviewView: Error fetching accounts: \(error)")
-        // Errors are now handled in InstitutionAccountsView, not here
-      }
-    }
   }
 }
 
