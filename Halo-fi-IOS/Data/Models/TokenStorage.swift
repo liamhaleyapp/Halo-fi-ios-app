@@ -8,7 +8,8 @@ import Foundation
 import Security
 
 struct TokenStorage: TokenStorageProtocol {
-  private let service = "com.halofi.ios"
+  /// Environment-specific service name to isolate sandbox/production auth state
+  private let service = AppEnvironment.isProdPlaid ? "com.halofi.ios.prod" : "com.halofi.ios.sandbox"
   private let accessTokenAccount = "accessToken"
   private let refreshTokenAccount = "refreshToken"
   private let tokenExpiryAccount = "tokenExpiry"
