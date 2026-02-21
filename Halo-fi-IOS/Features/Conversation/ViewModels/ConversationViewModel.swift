@@ -56,6 +56,9 @@ final class ConversationViewModel {
     // MARK: - Lifecycle
 
     func onAppear() async {
+        // Play audio feedback when conversation opens
+        audioFeedback.playConversationStartFeedback()
+
         // Configure services if needed
         let speechService = SpeechSynthesisService()
         coordinator.configure(

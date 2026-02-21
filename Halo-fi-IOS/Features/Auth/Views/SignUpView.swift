@@ -144,10 +144,10 @@ struct SignUpView: View {
             in: viewModel.dateOfBirthRange,
             displayedComponents: .date
           )
-          .datePickerStyle(.wheel)
+          .datePickerStyle(.graphical)
           .labelsHidden()
           .padding()
-          
+
           Spacer()
         }
         .background(Color.black)
@@ -162,7 +162,7 @@ struct SignUpView: View {
           }
         }
       }
-      .presentationDetents([.medium])
+      .presentationDetents([.large])
     }
     .alert("Sign Up Error", isPresented: $viewModel.showingError) {
       Button("OK") { }

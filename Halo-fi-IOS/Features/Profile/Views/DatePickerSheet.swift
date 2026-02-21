@@ -29,7 +29,7 @@ struct DatePickerSheet: View {
             selection: $selectedDate,
             displayedComponents: .date
           )
-          .datePickerStyle(WheelDatePickerStyle())
+          .datePickerStyle(.graphical)
           .accentColor(.blue)
           .colorScheme(.dark)
           

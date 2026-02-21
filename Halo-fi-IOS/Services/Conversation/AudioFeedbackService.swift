@@ -27,6 +27,7 @@ final class AudioFeedbackService {
     private var agentTypingSound: AVAudioPlayer?
     private var agentCompleteSound: AVAudioPlayer?
     private var tabSwitchSound: AVAudioPlayer?
+    private var conversationStartSound: AVAudioPlayer?
 
     // MARK: - Initialization
 
@@ -75,6 +76,12 @@ final class AudioFeedbackService {
             tabSwitchSound = try? AVAudioPlayer(contentsOf: url)
             tabSwitchSound?.prepareToPlay()
             tabSwitchSound?.volume = 0.5
+        }
+
+        if let url = Bundle.main.url(forResource: "pop_drip", withExtension: "aif") {
+            conversationStartSound = try? AVAudioPlayer(contentsOf: url)
+            conversationStartSound?.prepareToPlay()
+            conversationStartSound?.volume = 0.6
         }
     }
 
@@ -197,6 +204,19 @@ final class AudioFeedbackService {
         // Custom earcon sound
         tabSwitchSound?.currentTime = 0
         tabSwitchSound?.play()
+    }
+
+    // MARK: - Conversation Feedback
+
+    /// Play feedback when conversation view opens
+    func playConversationStartFeedback() {
+        // Success haptic to indicate conversation is ready
+        notificationGenerator.prepare()
+        notificationGenerator.notificationOccurred(.success)
+
+        // Custom earcon sound
+        conversationStartSound?.currentTime = 0
+        conversationStartSound?.play()
     }
 
     // MARK: - Button Feedback

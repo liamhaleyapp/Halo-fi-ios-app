@@ -8,12 +8,7 @@
 import SwiftUI
 
 struct HomeView: View {
-  @Environment(UserManager.self) private var userManager
   @State private var showingConversation = false
-
-  private var userName: String {
-    userManager.currentUser?.firstName ?? "User"
-  }
 
   var body: some View {
     NavigationStack {
@@ -21,9 +16,6 @@ struct HomeView: View {
         Color(.systemBackground).ignoresSafeArea()
 
         VStack(spacing: 10) {
-          // Header
-          HomeHeader(userName: userName)
-
           // Voice conversation button - opens unified ConversationView
           VoiceConversationButton {
             showingConversation = true

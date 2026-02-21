@@ -42,17 +42,6 @@ struct ActionButtonsSection: View {
       ) {
         // TODO: Navigate to Spending Check
       }
-      
-      ActionButton(
-        title: "Financial Coaching",
-        gradient: LinearGradient(
-          colors: [Color.white.opacity(0.9), Color.gray.opacity(0.7)],
-          startPoint: .leading,
-          endPoint: .trailing
-        )
-      ) {
-        // TODO: Navigate to Financial Coaching
-      }
     }
     .padding(.horizontal, 20)
     .padding(.bottom, 80)

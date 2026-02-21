@@ -36,6 +36,10 @@ class PlaidOnboardingViewModel {
   // MARK: - Public Methods
   
   func startPlaidFlow(bankDataManager: BankDataManager, userManager: UserManager) {
+    // Prevent multiple invocations (e.g., double-taps or view reappearing)
+    guard !isLoading && !hasStartedFlow else { return }
+    hasStartedFlow = true
+
     Task {
       do {
         // Step 1: Create link token (or create items directly in sandbox mode)
