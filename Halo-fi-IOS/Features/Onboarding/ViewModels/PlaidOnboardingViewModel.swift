@@ -29,9 +29,15 @@ class PlaidOnboardingViewModel {
   var onComplete: (() -> Void)?
   var onBack: (() -> Void)?
   var onDismiss: (() -> Void)?
-  
-  let plaidManager = PlaidManager()
+
+  // PlaidManager must be injected from the environment so OAuth redirects work
+  // The app-level PlaidManager receives OAuth redirects via .onOpenURL
+  private(set) var plaidManager: PlaidManager
   var linkHandler: Handler? { plaidManager.linkHandler }
+
+  init(plaidManager: PlaidManager) {
+    self.plaidManager = plaidManager
+  }
   
   // MARK: - Public Methods
   
@@ -185,70 +191,58 @@ class PlaidOnboardingViewModel {
     // Clear Plaid session state (handler no longer needed)
     plaidManager.clearSession()
 
-    do {
-      let tokens = [linkSuccess.publicToken]
-      Logger.info("Plaid: Starting completion with \(tokens.count) token(s)")
+    // Multi-Item Link Flow:
+    // - Backend receives ITEM_ADD_RESULT webhook and exchanges tokens automatically
+    // - onSuccess callback has EMPTY publicToken (this is expected!)
+    // - We poll for accounts until they appear (backend already processed)
+    Logger.info("PlaidOnboardingVM: Waiting for backend webhook processing...")
 
-      // Use sandbox endpoint when in sandbox environment
-      let useSandbox = AppEnvironment.plaidEnv == .sandbox
-      let linkingResponse = try await bankDataManager.completeLinking(with: tokens, useSandbox: useSandbox)
-      Logger.success("Plaid: Linking response - Success: \(linkingResponse.success), Items: \(linkingResponse.totalItemsCreated ?? 0)")
-      
-      // Verify accounts were actually created before completing
-      // Give backend a moment to sync
-      Logger.debug("Plaid: Waiting for backend sync...")
-      try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+    // Poll for accounts with retry logic
+    let maxRetries = 10
+    let retryDelayMs: UInt64 = 500_000_000 // 500ms
 
-      Logger.info("Plaid: Fetching accounts...")
-      try? await bankDataManager.fetchAccounts(forceRefresh: true)
-      
-      await MainActor.run {
-        isCompletingLinking = false
+    var accountsFound = false
 
-        // Double-check that accounts exist before completing
+    for attempt in 1...maxRetries {
+      Logger.debug("PlaidOnboardingVM: Polling for accounts (attempt \(attempt)/\(maxRetries))")
+
+      do {
+        try await bankDataManager.fetchAccounts(forceRefresh: true)
         let accounts = bankDataManager.accounts
-        let hasAccounts = accounts?.isEmpty == false
 
-        Logger.debug("Plaid: Account check - Count: \(accounts?.count ?? 0), Has accounts: \(hasAccounts)")
-
-        if hasAccounts {
-          Logger.success("Plaid: Accounts found, completing onboarding")
-          userManager.completeOnboarding()
-          // Call completion handler if provided (for unified onboarding flow)
-          // Otherwise use dismiss callback
-          if let onComplete = onComplete {
-            onComplete()
-          } else {
-            onDismiss?()
-          }
-        } else {
-          Logger.warning("Plaid: No accounts found after linking")
-          // Accounts weren't created - show error but don't restart flow
-          errorMessage = "Connection completed but accounts weren't found. Please try again."
-          showingError = true
-          hasStartedFlow = false // Allow retry
+        if let accounts = accounts, !accounts.isEmpty {
+          Logger.success("PlaidOnboardingVM: Found \(accounts.count) accounts on attempt \(attempt)")
+          accountsFound = true
+          break
         }
+      } catch {
+        Logger.warning("PlaidOnboardingVM: fetchAccounts error on attempt \(attempt): \(error.localizedDescription)")
       }
-    } catch {
-      await MainActor.run {
-        isCompletingLinking = false
-        
-        // Check if it's an authentication error
-        if let authError = error as? AuthError {
-          switch authError {
-          case .tokenExpired, .invalidCredentials:
-            errorMessage = authError.errorDescription ?? "Your session has expired. Please sign in again."
-            shouldSignOut = true
-          default:
-            errorMessage = "Failed to complete connection: \(authError.localizedDescription)"
-          }
-        } else if let bankError = error as? BankError {
-          // Use the bank error's description
-          errorMessage = bankError.errorDescription ?? "Failed to complete connection: \(error.localizedDescription)"
+
+      // Wait before next retry (unless it's the last attempt)
+      if attempt < maxRetries {
+        try? await Task.sleep(nanoseconds: retryDelayMs)
+      }
+    }
+
+    await MainActor.run {
+      isCompletingLinking = false
+
+      if accountsFound {
+        Logger.success("PlaidOnboardingVM: Accounts found, completing onboarding")
+        userManager.completeOnboarding()
+
+        if let onComplete = onComplete {
+          onComplete()
         } else {
-          errorMessage = "Failed to complete connection: \(error.localizedDescription)"
+          onDismiss?()
         }
+      } else {
+        Logger.warning("PlaidOnboardingVM: No accounts found after \(maxRetries) attempts")
+        // User may have exited without connecting any banks, or webhook is delayed
+        errorMessage = "No accounts were connected. Please try again or wait a moment and retry."
         showingError = true
+        hasStartedFlow = false // Allow retry
       }
     }
   }

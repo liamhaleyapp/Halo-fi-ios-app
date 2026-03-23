@@ -14,6 +14,7 @@ struct AccountsOverviewView: View {
   @State private var hasAppeared = false
   @State private var navigationPath = NavigationPath()
   @State private var searchText = ""
+  @State private var isRefreshing = false
 
   var body: some View {
     NavigationStack(path: $navigationPath) {
@@ -31,7 +32,23 @@ struct AccountsOverviewView: View {
       .navigationTitle("Accounts")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
-        ToolbarItem(placement: .navigationBarTrailing) {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+          Button {
+            Task {
+              isRefreshing = true
+              await bankDataManager.refreshLinkedItems()
+              isRefreshing = false
+            }
+          } label: {
+            if isRefreshing {
+              ProgressView()
+            } else {
+              Image(systemName: "arrow.clockwise")
+            }
+          }
+          .disabled(isRefreshing)
+          .accessibilityLabel("Refresh accounts")
+
           Button {
             showingPlaidOnboarding = true
           } label: {

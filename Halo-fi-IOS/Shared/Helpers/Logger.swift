@@ -12,8 +12,8 @@ enum Logger {
 
     // MARK: - Configuration
 
-    /// Set to false to disable all logging in production.
-    #if DEBUG
+    /// Logging is enabled in DEBUG and TESTFLIGHT builds, disabled in App Store.
+    #if DEBUG || TESTFLIGHT
     private static let isEnabled = true
     #else
     private static let isEnabled = false

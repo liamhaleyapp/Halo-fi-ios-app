@@ -14,8 +14,14 @@ class PlaidManager {
   var linkToken: String = ""
   var isCreatingLinkToken = false
   var linkHandler: Handler?
-  
+
+  /// Stored link_session_id from Plaid onEvent callback (for multi-item link webhook routing)
+  private(set) var linkSessionId: String?
+  /// Flag indicating if session has been registered with backend
+  private(set) var isSessionRegistered = false
+
   private let networkService = NetworkService.shared
+  private let bankService = BankService.shared
   
   // MARK: - Configuration (DIRECT_LINK_BYPASS Mode)
 
@@ -134,20 +140,26 @@ class PlaidManager {
     guard !linkToken.isEmpty else {
       return nil
     }
-    
+
     // Create the configuration with the link token and callbacks
     var configuration = LinkTokenConfiguration(token: linkToken) { success in
       onSuccess(success)
     }
-    
+
     configuration.onExit = { exit in
       onExit(exit)
     }
     
-    configuration.onEvent = { _ in
-      // Handle Plaid events if needed
+    // Capture link_session_id for multi-item link webhook routing
+    configuration.onEvent = { [weak self] event in
+      Logger.debug("PlaidManager: onEvent callback triggered")
+      Task { @MainActor in
+        self?.handleLinkEvent(event)
+      }
     }
-    
+
+    Logger.debug("PlaidManager: Handler configuration created with onEvent callback")
+
     // Create the handler using Plaid.create
     let result = Plaid.create(configuration)
     switch result {
@@ -181,13 +193,60 @@ class PlaidManager {
     // This method just validates that it's a Plaid redirect URL
     let isPlaidRedirect = (url.scheme == "halofi" || url.scheme == "plaid") &&
                           (url.host == "plaid-oauth" || url.host == "oauth")
-    
+
     // If we have an active handler, LinkKit will automatically process the redirect
     // when the handler processes the OAuth flow. The redirect URL is passed to the handler
     // through the system's URL handling mechanism.
     return isPlaidRedirect
   }
   
+  // MARK: - Link Event Handling (Multi-Item Link)
+
+  /// Handles Plaid Link events, capturing link_session_id for webhook routing
+  private func handleLinkEvent(_ event: LinkEvent) {
+    let eventName = String(describing: event.eventName)
+
+    // Log error events
+    if eventName.lowercased().contains("error") {
+      Logger.error("PlaidManager: Link error event: \(event.metadata)")
+    }
+
+    // Capture link_session_id from event metadata (available on all events)
+    let sessionId = event.metadata.linkSessionID
+    guard !sessionId.isEmpty else {
+      Logger.warning("PlaidManager: linkSessionID is empty, skipping registration")
+      return
+    }
+
+    // Only register once per session
+    guard linkSessionId != sessionId else {
+      Logger.debug("PlaidManager: Session already registered, skipping")
+      return
+    }
+
+    linkSessionId = sessionId
+    Logger.info("PlaidManager: Captured link_session_id: \(sessionId.prefix(20))...")
+
+    // Register with backend for webhook routing (fire and forget)
+    Task {
+      await registerLinkSessionWithBackend(sessionId: sessionId)
+    }
+  }
+
+  /// Registers link_session_id with backend for webhook routing
+  private func registerLinkSessionWithBackend(sessionId: String) async {
+    guard !isSessionRegistered else { return }
+
+    do {
+      try await bankService.registerLinkSession(sessionId: sessionId)
+      isSessionRegistered = true
+      Logger.success("PlaidManager: Link session registered with backend")
+    } catch {
+      // Non-fatal - webhooks may still work via other mechanisms
+      Logger.warning("PlaidManager: Failed to register link session: \(error.localizedDescription)")
+    }
+  }
+
   // MARK: - Security: Clear Sensitive Data
 
   /// Clears all Plaid session state
@@ -196,6 +255,8 @@ class PlaidManager {
     linkHandler = nil
     linkToken = ""
     isCreatingLinkToken = false
+    linkSessionId = nil
+    isSessionRegistered = false
 #if DIRECT_LINK_BYPASS
     sandboxResponse = nil
     isSandboxDirectMode = false

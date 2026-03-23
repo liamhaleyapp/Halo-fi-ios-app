@@ -496,18 +496,16 @@ final class BankDataManager {
     func completeLinking(with publicTokens: [String], useSandbox: Bool = false) async throws -> BankMultiConnectResponse {
         let sanitizedTokens = useSandbox ? publicTokens.filter { !$0.isEmpty } : publicTokens
 
-        Logger.info("Connecting bank accounts (tokens: \(sanitizedTokens.count), sandbox: \(useSandbox))")
+        Logger.info("BankDataManager: completeLinking started (tokens: \(sanitizedTokens.count), sandbox: \(useSandbox))")
 
         let response = try await connectMultipleBankAccounts(
             publicTokens: sanitizedTokens.isEmpty && useSandbox ? [""] : sanitizedTokens,
             useSandbox: useSandbox
         )
 
-        Logger.debug("Connection response: success=\(response.success), items=\(response.allConnectedItems?.count ?? 0)")
-
         guard response.success else {
             let message = response.message ?? "Unable to connect bank accounts."
-            Logger.error("Connection failed: \(message)")
+            Logger.error("BankDataManager: Connection failed - \(message)")
             throw BankError.multiConnectFailed(message)
         }
 

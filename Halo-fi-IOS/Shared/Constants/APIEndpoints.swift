@@ -81,6 +81,10 @@ enum APIEndpoints {
 
         /// GET - Check bank service health.
         static let health = "/bank/health"
+
+        /// POST - Register link session ID for webhook processing.
+        /// Maps link_session_id to user in Redis for multi-item link webhooks.
+        static let linkSessionRegister = "/bank/link-session/register"
     }
 
     // MARK: - Sandbox (Debug Only)

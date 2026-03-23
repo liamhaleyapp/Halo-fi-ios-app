@@ -26,14 +26,18 @@ final class BankService: BankServiceProtocol {
         let requestBody = BankMultiConnectRequest(publicTokens: publicTokens)
         let bodyData = try JSONEncoder().encode(requestBody)
 
+        Logger.info("BankService: Connecting \(publicTokens.count) bank account(s)")
+
         do {
-            return try await networkService.authenticatedRequest(
+            let response: BankMultiConnectResponse = try await networkService.authenticatedRequest(
                 endpoint: APIEndpoints.Bank.multiConnect,
                 method: .POST,
                 body: bodyData,
                 responseType: BankMultiConnectResponse.self
             )
+            return response
         } catch {
+            Logger.error("BankService: Multi-connect error: \(error)")
             throw convertToBankError(error)
         }
     }
@@ -297,6 +301,32 @@ final class BankService: BankServiceProtocol {
         } catch {
             Logger.error("Unknown error fetching linked items: \(error)")
             throw convertToBankError(error)
+        }
+    }
+
+    // MARK: - Register Link Session (Multi-Item Link)
+
+    /// Registers a Plaid Link session ID for webhook processing
+    /// The backend maps link_session_id → user_id in Redis (30 min TTL)
+    /// This allows webhooks to identify which user connected accounts
+    /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
+    func registerLinkSession(sessionId: String) async throws {
+        let requestBody = ["link_session_id": sessionId]
+        let bodyData = try JSONEncoder().encode(requestBody)
+
+        Logger.info("BankService: Registering link session: \(sessionId.prefix(20))...")
+
+        do {
+            let _: EmptyResponse = try await networkService.authenticatedRequest(
+                endpoint: APIEndpoints.Bank.linkSessionRegister,
+                method: .POST,
+                body: bodyData,
+                responseType: EmptyResponse.self
+            )
+            Logger.success("BankService: Link session registered successfully")
+        } catch {
+            // Non-fatal - log but don't throw. Webhooks may still work via other mechanisms.
+            Logger.warning("BankService: Failed to register link session: \(error.localizedDescription)")
         }
     }
 

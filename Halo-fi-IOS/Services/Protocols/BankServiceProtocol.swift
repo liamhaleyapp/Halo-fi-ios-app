@@ -63,6 +63,11 @@ protocol BankServiceProtocol {
     /// Fetches all linked items (connected institutions) for the authenticated user.
     /// - Returns: Full response including items and embedded accounts
     func getLinkedItems() async throws -> MultiItemsResponse
+
+    /// Registers a Plaid Link session ID for webhook processing (multi-item link).
+    /// Maps link_session_id → user_id in Redis for webhook routing.
+    /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
+    func registerLinkSession(sessionId: String) async throws
 }
 
 // MARK: - Default Parameters Extension
@@ -150,6 +155,11 @@ actor MockBankService: BankServiceProtocol {
     func getLinkedItems() async throws -> MultiItemsResponse {
         guard shouldSucceed else { throw BankError.networkError }
         return MultiItemsResponse(success: true, items: [], totalItems: 0)
+    }
+
+    func registerLinkSession(sessionId: String) async throws {
+        guard shouldSucceed else { throw BankError.networkError }
+        // Mock implementation - does nothing
     }
 
     private func decodeMockJSON<T: Decodable>(_ json: String) throws -> T {
