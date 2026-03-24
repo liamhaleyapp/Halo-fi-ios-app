@@ -69,16 +69,13 @@ struct AccountsView: View {
       .padding(.bottom, 100)
     }
     .navigationTitle("Manage Banks")
-    .navigationBarTitleDisplayMode(.large)
-    .fullScreenCover(isPresented: $showingLinkNewAccount) {
-      PlaidOnboardingScreen(
-        onComplete: {
-          showingLinkNewAccount = false
-        },
-        onBack: {
-          showingLinkNewAccount = false
-        }
+    .navigationBarTitleDisplayMode(.inline)
+    .navigationDestination(isPresented: $showingLinkNewAccount) {
+      PlaidOnboardingView(
+        onComplete: { showingLinkNewAccount = false },
+        onBack: { showingLinkNewAccount = false }
       )
+      .navigationBarTitleDisplayMode(.inline)
     }
     .sheet(item: $selectedInstitution) { institution in
       InstitutionDetailSheet(
@@ -205,7 +202,7 @@ struct LinkedItemCard: View {
 
                 Spacer()
 
-                Text(formatCurrency(account.currentBalance, currency: account.currency))
+                Text(formatCurrency(account.currentBalance ?? 0, currency: account.currency))
                   .font(.subheadline)
                   .fontWeight(.medium)
                   .foregroundColor(.white)

@@ -29,8 +29,7 @@ struct PlaidOnboardingScreen: View {
         onBack: onBack,
         isOnboarding: isOnboarding
       )
-      .navigationTitle("Connect Bank")
-      .navigationBarTitleDisplayMode(.large)
+      .navigationBarTitleDisplayMode(.inline)
     }
   }
 }

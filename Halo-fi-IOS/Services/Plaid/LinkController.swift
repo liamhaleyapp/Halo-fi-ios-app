@@ -34,9 +34,7 @@ struct LinkController: UIViewControllerRepresentable {
 
         fileprivate func present(_ handler: Handler, in viewController: UIViewController) {
             handler.open(presentUsing: .custom({ linkViewController in
-                // Always use dark mode for Plaid Link for better visual consistency
-                linkViewController.overrideUserInterfaceStyle = .dark
-                linkViewController.view.backgroundColor = .black
+                linkViewController.view.backgroundColor = .clear
                 
                 viewController.addChild(linkViewController)
                 viewController.view.addSubview(linkViewController.view)
@@ -60,9 +58,7 @@ struct LinkController: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         let viewController = UIViewController()
         
-        // Always use dark mode for Plaid Link for better visual consistency
-        viewController.overrideUserInterfaceStyle = .dark
-        viewController.view.backgroundColor = .black
+        viewController.view.backgroundColor = .clear
         
         // Configure status bar style
         viewController.setNeedsStatusBarAppearanceUpdate()

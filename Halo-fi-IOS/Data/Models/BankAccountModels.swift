@@ -13,8 +13,8 @@ struct BankAccount: Codable, Identifiable {
     let mask: String
     let type: String
     let subtype: String
-    let currentBalance: Double
-    let availableBalance: Double
+    let currentBalance: Double?
+    let availableBalance: Double?
     let currency: String
     let idAccount: String
     let plaidItemId: String?

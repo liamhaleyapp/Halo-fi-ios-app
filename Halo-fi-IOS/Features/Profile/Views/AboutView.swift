@@ -35,7 +35,7 @@ struct AboutView: View {
       .padding(.bottom, 100)
     }
     .navigationTitle("About")
-    .navigationBarTitleDisplayMode(.large)
+    .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingTeam) {
       TeamView()
     }

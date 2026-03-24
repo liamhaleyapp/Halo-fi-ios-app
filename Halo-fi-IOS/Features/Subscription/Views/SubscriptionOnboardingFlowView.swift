@@ -122,16 +122,13 @@ struct SubscriptionOnboardingFlowView: View {
         }
       }
     }
-    .fullScreenCover(isPresented: $showingPlaidOnboarding) {
-      PlaidOnboardingScreen(
-        onComplete: {
-          showingPlaidOnboarding = false
-        },
-        onBack: {
-          showingPlaidOnboarding = false
-        },
+    .navigationDestination(isPresented: $showingPlaidOnboarding) {
+      PlaidOnboardingView(
+        onComplete: { showingPlaidOnboarding = false },
+        onBack: { showingPlaidOnboarding = false },
         isOnboarding: true
       )
+      .navigationBarTitleDisplayMode(.inline)
     }
     .onAppear {
       // Initialize subscription service if not already initialized

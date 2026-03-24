@@ -80,7 +80,7 @@ struct ProfileView: View {
       .padding(.top, 10)
     }
     .navigationTitle("Profile")
-    .navigationBarTitleDisplayMode(.large)
+    .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingDatePicker) {
       DatePickerSheet(selectedDate: Binding(
         get: { dateOfBirth ?? Date() },

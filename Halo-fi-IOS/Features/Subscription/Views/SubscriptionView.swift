@@ -95,7 +95,7 @@ struct SubscriptionView: View {
       // Settings flow inherits NavigationStack from parent
       mainContent
         .navigationTitle("Subscription")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
   }
 

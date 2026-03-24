@@ -57,21 +57,6 @@ struct PlaidOnboardingView: View {
         LoadingView()
       }
     }
-    .toolbar {
-      if let onBack = viewModel?.onBack {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            onBack()
-          } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "chevron.left")
-              Text("Back")
-            }
-          }
-          .accessibilityLabel("Go back to previous step")
-        }
-      }
-    }
     .task {
       // Initialize viewModel with the environment's PlaidManager
       if viewModel == nil {

@@ -115,7 +115,7 @@ struct PreferencesView: View {
             .padding(.top, 10)
         }
         .navigationTitle("Preferences")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(selectedColorScheme)
     }
 

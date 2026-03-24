@@ -19,6 +19,7 @@ struct SignInView: View {
   @State private var showingForgotPassword = false
   
   var body: some View {
+    NavigationStack {
     ZStack {
       // Background
       Color.black.ignoresSafeArea()
@@ -130,14 +131,16 @@ struct SignInView: View {
     .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
       SubscriptionOnboardingFlowView()
     }
-    .fullScreenCover(isPresented: $showingPlaidOnboarding) {
+    .navigationDestination(isPresented: $showingPlaidOnboarding) {
       PlaidOnboardingView(isOnboarding: true)
+        .navigationBarTitleDisplayMode(.inline)
     }
     .alert("Sign In Error", isPresented: $viewModel.showingError) {
       Button("OK") { }
     } message: {
       Text(viewModel.errorMessage)
     }
+    } // NavigationStack
   }
   
   @ViewBuilder

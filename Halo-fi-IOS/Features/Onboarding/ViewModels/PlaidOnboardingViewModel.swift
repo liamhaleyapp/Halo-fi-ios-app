@@ -206,17 +206,14 @@ class PlaidOnboardingViewModel {
     for attempt in 1...maxRetries {
       Logger.debug("PlaidOnboardingVM: Polling for accounts (attempt \(attempt)/\(maxRetries))")
 
-      do {
-        try await bankDataManager.fetchAccounts(forceRefresh: true)
-        let accounts = bankDataManager.accounts
+      // forceRefresh fetches linked items from server + accounts for each item
+      await bankDataManager.forceRefresh()
+      let accounts = bankDataManager.accounts
 
-        if let accounts = accounts, !accounts.isEmpty {
-          Logger.success("PlaidOnboardingVM: Found \(accounts.count) accounts on attempt \(attempt)")
-          accountsFound = true
-          break
-        }
-      } catch {
-        Logger.warning("PlaidOnboardingVM: fetchAccounts error on attempt \(attempt): \(error.localizedDescription)")
+      if let accounts = accounts, !accounts.isEmpty {
+        Logger.success("PlaidOnboardingVM: Found \(accounts.count) accounts on attempt \(attempt)")
+        accountsFound = true
+        break
       }
 
       // Wait before next retry (unless it's the last attempt)

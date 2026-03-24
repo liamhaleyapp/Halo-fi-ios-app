@@ -183,9 +183,9 @@ struct BankAccountRow: View {
 
     // Use appropriate wording based on account type
     if account.type.lowercased() == "credit" {
-      label += ", Amount owed \(CurrencyFormatter.format(abs(account.currentBalance), currency: account.currency))"
+      label += ", Amount owed \(CurrencyFormatter.format(abs(account.currentBalance ?? 0), currency: account.currency))"
     } else {
-      label += ", Balance \(CurrencyFormatter.format(account.currentBalance, currency: account.currency))"
+      label += ", Balance \(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))"
     }
 
     return label
@@ -224,10 +224,10 @@ struct BankAccountRow: View {
 
       Spacer()
 
-      Text(CurrencyFormatter.format(account.currentBalance, currency: account.currency))
+      Text(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))
         .font(.body)
         .fontWeight(.medium)
-        .foregroundColor(account.currentBalance >= 0 ? .green : .red)
+        .foregroundColor((account.currentBalance ?? 0) >= 0 ? .green : .red)
 
       Image(systemName: "chevron.right")
         .font(.caption)

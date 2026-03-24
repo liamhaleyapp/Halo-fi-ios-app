@@ -30,7 +30,7 @@ struct InviteFriendsView: View {
       }
     }
     .navigationTitle("Invite Friends")
-    .navigationBarTitleDisplayMode(.large)
+    .navigationBarTitleDisplayMode(.inline)
     .alert("Invite Sent!", isPresented: $showingInviteSent) {
       Button("OK") { }
     } message: {

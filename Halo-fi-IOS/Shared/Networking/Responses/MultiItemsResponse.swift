@@ -70,7 +70,7 @@ struct ServerEmbeddedAccount: Codable {
     let mask: String
     let type: String
     let subtype: String
-    let balance: Double
+    let balance: Double?
 
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id"
@@ -88,8 +88,8 @@ struct ServerEmbeddedAccount: Codable {
             mask: mask,
             type: type,
             subtype: subtype,
-            currentBalance: balance,
-            availableBalance: balance,  // Use same as current since not provided
+            currentBalance: balance ?? 0,
+            availableBalance: balance ?? 0,  // Use same as current since not provided
             currency: "USD",  // Default, not provided in embedded response
             idAccount: accountId,
             plaidItemId: plaidItemId,

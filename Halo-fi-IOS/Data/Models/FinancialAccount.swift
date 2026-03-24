@@ -21,7 +21,7 @@ struct FinancialAccount: Identifiable {
         self.id = bankAccount.idAccount
         self.type = AccountType.from(bankAccount.type)
         self.name = bankAccount.name
-        self.balance = bankAccount.currentBalance
+        self.balance = bankAccount.currentBalance ?? 0
         self.nickname = bankAccount.name
         self.isSynced = bankAccount.isActive
         self.plaidItemId = plaidItemId ?? bankAccount.plaidItemId

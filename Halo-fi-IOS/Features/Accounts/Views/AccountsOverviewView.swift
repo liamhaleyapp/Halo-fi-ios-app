@@ -50,8 +50,9 @@ struct AccountsOverviewView: View {
           }
         }
       }
-      .sheet(isPresented: $showingPlaidOnboarding) {
+      .navigationDestination(isPresented: $showingPlaidOnboarding) {
         PlaidOnboardingView()
+          .navigationBarTitleDisplayMode(.inline)
       }
       .navigationDestination(for: ConnectedItem.self) { item in
         InstitutionAccountsView(item: item)

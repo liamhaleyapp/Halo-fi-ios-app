@@ -328,6 +328,8 @@ final class BankDataManager {
 
         refreshTask = Task {
             defer { refreshTask = nil }
+            // Fetch linked items first so refreshAllAccounts has items to iterate
+            await fetchLinkedItemsFromServer()
             await refreshAllAccounts(for: userId)
         }
 
@@ -1058,7 +1060,7 @@ final class BankDataManager {
 
     /// Calculates total balance across all accounts
     func totalBalance() -> Double {
-        accountsByItemId.values.flatMap { $0 }.reduce(0) { $0 + $1.currentBalance }
+        accountsByItemId.values.flatMap { $0 }.reduce(0) { $0 + ($1.currentBalance ?? 0) }
     }
 
     /// Gets total account count
@@ -1078,6 +1080,6 @@ final class BankDataManager {
 
     /// Gets total balance for a specific institution
     func totalBalanceForInstitution(itemId: String) -> Double {
-        accountsForInstitution(itemId: itemId).reduce(0) { $0 + $1.currentBalance }
+        accountsForInstitution(itemId: itemId).reduce(0) { $0 + ($1.currentBalance ?? 0) }
     }
 }
