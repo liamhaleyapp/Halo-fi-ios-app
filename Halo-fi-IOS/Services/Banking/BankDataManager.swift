@@ -313,6 +313,27 @@ final class BankDataManager {
         setLinkedItems(current.isEmpty ? nil : current)
     }
 
+    // MARK: - Force Refresh
+
+    func forceRefresh() async {
+        guard let userId = currentUserId else {
+            Logger.debug("BankDataManager: forceRefresh - no user")
+            return
+        }
+
+        if let task = refreshTask {
+            await task.value
+            return
+        }
+
+        refreshTask = Task {
+            defer { refreshTask = nil }
+            await refreshAllAccounts(for: userId)
+        }
+
+        await refreshTask?.value
+    }
+
     // MARK: - Auto-Refresh on Launch
 
     func refreshIfStale() async {

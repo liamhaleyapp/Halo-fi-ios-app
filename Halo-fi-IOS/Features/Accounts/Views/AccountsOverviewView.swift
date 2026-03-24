@@ -94,6 +94,9 @@ struct AccountsOverviewView: View {
       .padding(.top, 20)
       .padding(.bottom, 100)
     }
+    .refreshable {
+      await bankDataManager.forceRefresh()
+    }
   }
 
   // MARK: - Search Field
