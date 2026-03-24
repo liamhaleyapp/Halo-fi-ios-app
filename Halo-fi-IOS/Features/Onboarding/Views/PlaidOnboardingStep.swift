@@ -17,6 +17,6 @@ struct PlaidOnboardingStep: View {
   @State private var hasCheckedAccounts = false
   
   var body: some View {
-    PlaidOnboardingView(onComplete: onComplete, onBack: onBack)
+    PlaidOnboardingView(onComplete: onComplete, onBack: onBack, isOnboarding: true)
   }
 }

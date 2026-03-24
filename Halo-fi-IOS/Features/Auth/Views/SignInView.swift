@@ -131,7 +131,7 @@ struct SignInView: View {
       SubscriptionOnboardingFlowView()
     }
     .fullScreenCover(isPresented: $showingPlaidOnboarding) {
-      PlaidOnboardingView()
+      PlaidOnboardingView(isOnboarding: true)
     }
     .alert("Sign In Error", isPresented: $viewModel.showingError) {
       Button("OK") { }

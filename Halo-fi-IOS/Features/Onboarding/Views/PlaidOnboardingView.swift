@@ -19,12 +19,16 @@ struct PlaidOnboardingView: View {
   var onComplete: (() -> Void)?
   var onBack: (() -> Void)?
 
+  var isOnboarding = false
+
   init(
     onComplete: (() -> Void)? = nil,
-    onBack: (() -> Void)? = nil
+    onBack: (() -> Void)? = nil,
+    isOnboarding: Bool = false
   ) {
     self.onComplete = onComplete
     self.onBack = onBack
+    self.isOnboarding = isOnboarding
   }
 
   var body: some View {
@@ -81,11 +85,14 @@ struct PlaidOnboardingView: View {
       viewModel.onBack = onBack
       viewModel.onDismiss = { dismiss() }
 
-      // 2. Check accounts and maybe start flow
-      await viewModel.bootstrapIfNeeded(
-        userManager: userManager,
-        bankDataManager: bankDataManager
-      )
+      // 2. During onboarding, skip Plaid if accounts already exist.
+      //    When linking additional accounts, always show the intro.
+      if isOnboarding {
+        await viewModel.bootstrapIfNeeded(
+          userManager: userManager,
+          bankDataManager: bankDataManager
+        )
+      }
     }
     .alert("Connection Error", isPresented: Binding(
       get: { viewModel?.showingError ?? false },

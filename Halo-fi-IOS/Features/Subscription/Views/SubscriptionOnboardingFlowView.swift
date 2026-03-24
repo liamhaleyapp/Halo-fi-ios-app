@@ -129,7 +129,8 @@ struct SubscriptionOnboardingFlowView: View {
         },
         onBack: {
           showingPlaidOnboarding = false
-        }
+        },
+        isOnboarding: true
       )
     }
     .onAppear {
