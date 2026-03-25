@@ -138,7 +138,13 @@ class SubscriptionService {
       
       return (true, purchaseResult.customerInfo)
     } catch let error as ErrorCode {
-      // Handle RevenueCat specific errors
+      // Handle "already subscribed" — auto-restore instead of showing error
+      if error == .productAlreadyPurchasedError {
+        try await restorePurchases()
+        if hasActiveSubscription {
+          return (true, customerInfo)
+        }
+      }
       throw SubscriptionError.purchaseFailed(error.localizedDescription)
     } catch {
       // Re-throw our custom errors
