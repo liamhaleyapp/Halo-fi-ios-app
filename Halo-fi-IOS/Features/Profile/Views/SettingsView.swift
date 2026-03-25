@@ -18,6 +18,7 @@ struct SettingsView: View {
   @State private var showLogoutConfirmation = false
   @State private var isLoggingOut = false
   @State private var showDeleteAccountConfirmation = false
+  @State private var showDeleteAccountFinalConfirmation = false
   @State private var isDeletingAccount = false
 
   var body: some View {
@@ -79,6 +80,8 @@ struct SettingsView: View {
                 userManager.resetOnboarding()
               }
             )
+            #endif
+#endif
 
             SettingsOption(
               icon: "trash.fill",
@@ -87,8 +90,6 @@ struct SettingsView: View {
                 showDeleteAccountConfirmation = true
               }
             )
-            #endif
-#endif
           }
           .padding(.horizontal, 20)
           .padding(.top, 20)
@@ -131,13 +132,21 @@ struct SettingsView: View {
     }
     .alert("Delete Account", isPresented: $showDeleteAccountConfirmation) {
       Button("Cancel", role: .cancel) { }
-      Button("Delete", role: .destructive) {
+      Button("Continue", role: .destructive) {
+        showDeleteAccountFinalConfirmation = true
+      }
+    } message: {
+      Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+    }
+    .alert("Are you absolutely sure?", isPresented: $showDeleteAccountFinalConfirmation) {
+      Button("Cancel", role: .cancel) { }
+      Button("Delete My Account", role: .destructive) {
         Task {
           await performDeleteAccount()
         }
       }
     } message: {
-      Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+      Text("All your data, linked banks, and account history will be permanently removed. This cannot be reversed.")
     }
     .loadingOverlay(isLoading: isLoggingOut, message: "Logging out...")
     .loadingOverlay(isLoading: isDeletingAccount, message: "Deleting account...")
