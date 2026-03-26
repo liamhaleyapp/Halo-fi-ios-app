@@ -59,10 +59,10 @@ final class ConversationViewModel {
         // Play audio feedback when conversation opens
         audioFeedback.playConversationStartFeedback()
 
-        // Configure services if needed
-        let speechService = SpeechSynthesisService()
+        // Configure services
+        let streamingAudioPlayer = StreamingAudioPlayer()
         coordinator.configure(
-            speechService: speechService,
+            streamingAudioPlayer: streamingAudioPlayer,
             audioFeedback: audioFeedback,
             transcriptStore: store
         )

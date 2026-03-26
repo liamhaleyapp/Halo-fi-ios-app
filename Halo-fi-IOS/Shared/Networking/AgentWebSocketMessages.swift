@@ -13,17 +13,21 @@ struct ClientMessagePayload: Codable, Sendable {
     let message: String
     let context: [String: AnyCodable]?
     let sessionId: String?
-    
+    let streamAudio: Bool?
+
     enum CodingKeys: String, CodingKey {
         case message
         case context
         case sessionId = "session_id"
+        case streamAudio = "stream_audio"
     }
-    
-    init(message: String, context: [String: AnyCodable]? = nil, sessionId: String? = nil) {
+
+    init(message: String, context: [String: AnyCodable]? = nil,
+         sessionId: String? = nil, streamAudio: Bool? = nil) {
         self.message = message
         self.context = context
         self.sessionId = sessionId
+        self.streamAudio = streamAudio
     }
 }
 
@@ -95,6 +99,43 @@ struct ConnectionAckPayload: Codable, Sendable {
     }
 }
 
+struct AcknowledgmentPayload: Codable, Sendable {
+    let type: String
+    let text: String?
+    let data: [String: AnyCodable]?
+
+    enum CodingKeys: String, CodingKey {
+        case type, text, data
+    }
+}
+
+struct AudioChunkPayload: Codable, Sendable {
+    let type: String
+    let audio: String
+    let timestamp: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, audio, timestamp
+    }
+}
+
+struct AudioCompletePayload: Codable, Sendable {
+    let type: String
+    let message: String?
+    let text: String?
+    let data: [String: AnyCodable]?
+    let timestamp: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, message, text, data, timestamp
+    }
+
+    /// The response text — server may use either "message" or "text"
+    var responseText: String {
+        message ?? text ?? ""
+    }
+}
+
 // MARK: - Union Types for WebSocket
 
 enum AgentIncomingMessage: Codable, Sendable {
@@ -102,15 +143,19 @@ enum AgentIncomingMessage: Codable, Sendable {
     case streamChunk(StreamChunkPayload)
     case error(ErrorPayload)
     case connectionAck(ConnectionAckPayload)
-    
+    case acknowledgment(AcknowledgmentPayload)
+    case audioChunk(AudioChunkPayload)
+    case audioComplete(AudioCompletePayload)
+    case unknown(String)
+
     enum CodingKeys: String, CodingKey {
         case type
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
-        
+
         switch type {
         case "agent_response":
             let payload = try AgentResponsePayload(from: decoder)
@@ -124,15 +169,20 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "connection_ack":
             let payload = try ConnectionAckPayload(from: decoder)
             self = .connectionAck(payload)
+        case "acknowledgment":
+            let payload = try AcknowledgmentPayload(from: decoder)
+            self = .acknowledgment(payload)
+        case "audio_chunk":
+            let payload = try AudioChunkPayload(from: decoder)
+            self = .audioChunk(payload)
+        case "audio_complete":
+            let payload = try AudioCompletePayload(from: decoder)
+            self = .audioComplete(payload)
         default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown message type: \(type)"
-            )
+            self = .unknown(type)
         }
     }
-    
+
     func encode(to encoder: Encoder) throws {
         switch self {
         case .agentResponse(let payload):
@@ -143,6 +193,14 @@ enum AgentIncomingMessage: Codable, Sendable {
             try payload.encode(to: encoder)
         case .connectionAck(let payload):
             try payload.encode(to: encoder)
+        case .acknowledgment(let payload):
+            try payload.encode(to: encoder)
+        case .audioChunk(let payload):
+            try payload.encode(to: encoder)
+        case .audioComplete(let payload):
+            try payload.encode(to: encoder)
+        case .unknown:
+            break
         }
     }
 }

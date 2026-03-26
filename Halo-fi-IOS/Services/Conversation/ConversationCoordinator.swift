@@ -39,7 +39,7 @@ final class ConversationCoordinator {
 
     private let voiceService: VoiceService
     private let agentWebSocket: AgentWebSocketManager
-    private var speechService: SpeechSynthesisService?
+    private var streamingAudioPlayer: StreamingAudioPlayer?
     private var audioFeedback: AudioFeedbackService = AudioFeedbackService()
     private let sttService: ElevenLabsSTTService
 
@@ -68,15 +68,15 @@ final class ConversationCoordinator {
     // MARK: - Dependency Injection (for services created after init)
 
     func configure(
-        speechService: SpeechSynthesisService,
+        streamingAudioPlayer: StreamingAudioPlayer,
         audioFeedback: AudioFeedbackService,
         transcriptStore: ConversationTranscriptStore
     ) {
-        self.speechService = speechService
+        self.streamingAudioPlayer = streamingAudioPlayer
         self.audioFeedback = audioFeedback
         self.transcriptStore = transcriptStore
 
-        speechService.onSpeakingFinished = { [weak self] in
+        streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in
                 self?.handleSpeakingFinished()
             }
@@ -108,7 +108,7 @@ final class ConversationCoordinator {
         voiceService.stopRecording()
         sttService.disconnect()
         agentWebSocket.disconnect()
-        speechService?.stop()
+        streamingAudioPlayer?.stop()
         transcriptStore?.discardDraft()
 
         isVoiceSessionActive = false
@@ -138,7 +138,7 @@ final class ConversationCoordinator {
 
         // Stop TTS if speaking
         if state == .speaking {
-            speechService?.stop()
+            streamingAudioPlayer?.stop()
         }
 
         // Check permission
@@ -308,12 +308,12 @@ final class ConversationCoordinator {
     func setMuted(_ muted: Bool) {
         isMuted = muted
 
-        // Propagate to speech service
-        speechService?.setMuted(muted)
+        // Propagate to streaming audio player
+        streamingAudioPlayer?.setMuted(muted)
 
         // Stop speaking immediately if muted
         if muted && state == .speaking {
-            speechService?.stop()
+            streamingAudioPlayer?.stop()
             setState(.idle)
         }
     }
@@ -321,7 +321,7 @@ final class ConversationCoordinator {
     /// Stop current TTS without affecting mute state (skip this message)
     func stopSpeaking() {
         guard state == .speaking else { return }
-        speechService?.stop()
+        streamingAudioPlayer?.stop()
         setState(.idle)
     }
 
@@ -330,7 +330,7 @@ final class ConversationCoordinator {
         isPrivacyMode = enabled
 
         if enabled && state == .speaking {
-            speechService?.stop()
+            streamingAudioPlayer?.stop()
             setState(.idle)
         }
     }
@@ -378,7 +378,7 @@ final class ConversationCoordinator {
             }
         }
 
-        // Handle complete responses
+        // Handle complete responses (text-only fallback when no audio stream)
         agentWebSocket.onAgentResponse = { [weak self] response in
             Task { @MainActor in
                 guard let self = self else { return }
@@ -388,8 +388,36 @@ final class ConversationCoordinator {
                 // Emit final event
                 self.emitEvent(.agentFinal(response.message, id: responseId))
 
-                // Speak the response
-                self.speakAgentResponse(response.message)
+                // If not already handling an audio stream, just go idle
+                if self.streamingAudioPlayer?.isPlaying != true {
+                    self.setState(.idle)
+                }
+
+                self.currentAgentResponseId = nil
+            }
+        }
+
+        // Handle audio chunks — accumulate for playback
+        agentWebSocket.onAudioChunk = { [weak self] chunk in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                Logger.debug("ConversationCoordinator: Audio chunk received, player=\(self.streamingAudioPlayer != nil), isPlaying=\(self.streamingAudioPlayer?.isPlaying ?? false)")
+
+                self.streamingAudioPlayer?.appendAudioChunk(chunk.audio)
+            }
+        }
+
+        // Handle audio complete — decode accumulated MP3 and play, emit final text
+        agentWebSocket.onAudioComplete = { [weak self] complete in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                let responseId = self.currentAgentResponseId ?? UUID()
+                self.emitEvent(.agentFinal(complete.responseText, id: responseId))
+
+                // Now decode and play the full accumulated MP3
+                self.playAccumulatedAudio()
 
                 self.currentAgentResponseId = nil
             }
@@ -477,26 +505,15 @@ final class ConversationCoordinator {
         }
     }
 
-    private func speakAgentResponse(_ text: String) {
-        guard !isPrivacyMode else {
-            setState(.idle)
-            return
-        }
-
-        // Don't speak if muted (handles mute during .processing)
-        guard !isMuted else {
-            setState(.idle)
-            return
-        }
-
-        guard !UIAccessibility.isVoiceOverRunning else {
-            // VoiceOver is on, don't use TTS (let user read transcript)
+    private func playAccumulatedAudio() {
+        guard !isPrivacyMode, !isMuted, !UIAccessibility.isVoiceOverRunning else {
+            Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted), voiceOver=\(UIAccessibility.isVoiceOverRunning)")
             setState(.idle)
             return
         }
 
         setState(.speaking)
-        speechService?.speak(text)
+        streamingAudioPlayer?.playAccumulatedAudio()
     }
 
     // MARK: - Accessibility Announcements
@@ -548,7 +565,7 @@ final class ConversationCoordinator {
         }
 
         if state == .speaking {
-            speechService?.stop()
+            streamingAudioPlayer?.stop()
         }
 
         // Emit paused status

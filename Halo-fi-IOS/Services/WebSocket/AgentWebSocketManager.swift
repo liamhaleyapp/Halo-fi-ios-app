@@ -31,6 +31,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     var onStreamChunk: ((StreamChunkPayload) -> Void)?
     var onError: ((ErrorPayload) -> Void)?
     var onConnectionAck: ((ConnectionAckPayload) -> Void)?
+    var onAudioChunk: ((AudioChunkPayload) -> Void)?
+    var onAudioComplete: ((AudioCompletePayload) -> Void)?
 
     private init(tokenStorage: TokenStorageProtocol = TokenStorage()) {
         self.tokenStorage = tokenStorage
@@ -115,6 +117,14 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             await handleError(error)
         case .connectionAck(let ack):
             await handleConnectionAck(ack)
+        case .acknowledgment(let ack):
+            Logger.info("Agent acknowledgment: \(ack.text ?? "no text")")
+        case .audioChunk(let chunk):
+            await handleAudioChunk(chunk)
+        case .audioComplete(let complete):
+            await handleAudioComplete(complete)
+        case .unknown(let type):
+            Logger.warning("AgentWebSocket: Unknown message type: \(type)")
         }
     }
     
@@ -161,6 +171,16 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         onError?(error)
     }
 
+    private func handleAudioChunk(_ chunk: AudioChunkPayload) async {
+        Logger.debug("Audio chunk received: \(chunk.audio.count) base64 chars")
+        onAudioChunk?(chunk)
+    }
+
+    private func handleAudioComplete(_ complete: AudioCompletePayload) async {
+        Logger.info("Audio complete. Text: \(complete.responseText.prefix(80))...")
+        onAudioComplete?(complete)
+    }
+
     private func handleConnectionAck(_ ack: ConnectionAckPayload) async {
         await MainActor.run {
             // Use connectionId if available, fallback to sessionId
@@ -195,7 +215,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         let payload = ClientMessagePayload(
             message: message,
             context: context,
-            sessionId: currentSessionId ?? sessionId
+            sessionId: currentSessionId ?? sessionId,
+            streamAudio: true
         )
 
         Logger.info("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")
