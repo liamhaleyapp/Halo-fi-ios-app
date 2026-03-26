@@ -39,9 +39,9 @@ struct TransactionRow: View {
     // Amount with appropriate sign description
     let formattedAmount = transaction.amount.formatted(.currency(code: transaction.currency))
     if transaction.amount >= 0 {
-      label += ", Received \(formattedAmount)"
+      label += ", Spent \(formattedAmount)"
     } else {
-      label += ", Spent \(formattedAmount.replacingOccurrences(of: "-", with: ""))"
+      label += ", Received \(formattedAmount.replacingOccurrences(of: "-", with: ""))"
     }
 
     // Date
@@ -59,12 +59,12 @@ struct TransactionRow: View {
     HStack(spacing: 16) {
       // Transaction icon/indicator
       Circle()
-        .fill(transaction.amount >= 0 ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
+        .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
         .frame(width: 40, height: 40)
         .overlay(
-          Image(systemName: transaction.amount >= 0 ? "arrow.down" : "arrow.up")
+          Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
             .font(.caption)
-            .foregroundColor(transaction.amount >= 0 ? .green : .red)
+            .foregroundColor(transaction.amount >= 0 ? .red : .green)
         )
       
       VStack(alignment: .leading, spacing: 4) {
@@ -93,7 +93,7 @@ struct TransactionRow: View {
         Text(transaction.amount, format: .currency(code: transaction.currency))
           .font(.body)
           .fontWeight(.semibold)
-          .foregroundColor(transaction.amount >= 0 ? .green : .red)
+          .foregroundColor(transaction.amount >= 0 ? .red : .green)
         
         Text(formattedDate)
           .font(.caption)
