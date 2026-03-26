@@ -96,7 +96,7 @@ final class ConversationCoordinator {
             try await agentWebSocket.connect()
             // Voice (ElevenLabs STT) connects on-demand when user taps mic
             setState(.idle)
-            emitEvent(.status("Connected to Halo"))
+            emitEvent(.status("How can I help?"))
         } catch {
             setState(.error(error.localizedDescription))
             emitEvent(.errorEvent("Failed to connect: \(error.localizedDescription)"))

@@ -68,7 +68,7 @@ struct AccountsView: View {
       .padding(.top, 20)
       .padding(.bottom, 100)
     }
-    .navigationTitle("Manage Banks")
+    .navigationTitle("Manage Linked Accounts")
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(isPresented: $showingLinkNewAccount) {
       PlaidOnboardingView(

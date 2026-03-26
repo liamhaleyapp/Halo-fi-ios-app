@@ -203,19 +203,19 @@ struct AccountsOverviewView: View {
         .accessibilityHidden(true)
 
       VStack(spacing: 8) {
-        Text("No Linked Institutions")
+        Text("No Linked Accounts")
           .font(.title3)
           .fontWeight(.semibold)
           .foregroundColor(.white)
 
-        Text("Connect your bank to view accounts and transactions")
+        Text("Connect your financial accounts to view live data")
           .font(.body)
           .foregroundColor(.gray)
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }
       .accessibilityElement(children: .combine)
-      .accessibilityLabel("No linked institutions. Connect your bank to view accounts and transactions.")
+      .accessibilityLabel("No linked accounts. Connect your financial accounts to view live data.")
 
       Button {
         showingPlaidOnboarding = true

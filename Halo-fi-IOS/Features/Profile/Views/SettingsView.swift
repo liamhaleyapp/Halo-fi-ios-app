@@ -45,7 +45,7 @@ struct SettingsView: View {
             }
 
             NavigationLink(value: SettingsDestination.accounts) {
-              SettingsOptionLabel(icon: "building.2.fill", title: "Manage Banks")
+              SettingsOptionLabel(icon: "building.2.fill", title: "Manage Linked Accounts")
             }
 
             NavigationLink(value: SettingsDestination.about) {
