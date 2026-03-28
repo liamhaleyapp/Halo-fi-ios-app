@@ -65,7 +65,8 @@ struct AboutView: View {
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
             }
-            
+            .accessibilityLabel("Go back")
+
             Spacer()
             
             Text("About")
@@ -137,12 +138,15 @@ struct AboutView: View {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.gray)
                     .font(.caption)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
             .cornerRadius(16)
         }
+        .accessibilityLabel("Meet the Team")
+        .accessibilityHint("Double-tap to learn about the Halo Fi founders")
     }
     
     // MARK: - Data Security Section
@@ -521,13 +525,15 @@ struct ContactSupportView: View {
                         Text("How can we help you?")
                             .font(.body)
                             .foregroundColor(.white)
-                        
+
                         TextField("Your message...", text: $message, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(4...8)
+                            .accessibilityLabel("Support message")
+                            .accessibilityHint("Type your message to the support team")
                     }
                     .padding(.horizontal, 20)
-                    
+
                     Button(action: {
                         showingSent = true
                     }) {
@@ -542,6 +548,8 @@ struct ContactSupportView: View {
                     }
                     .padding(.horizontal, 20)
                     .disabled(message.isEmpty)
+                    .accessibilityLabel("Send message")
+                    .accessibilityHint(message.isEmpty ? "Type a message first" : "Double-tap to send your message")
                     
                     Spacer()
                 }
@@ -596,9 +604,11 @@ struct BugReportView: View {
                         TextField("Describe the issue or share your feedback...", text: $bugDescription, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(4...8)
+                            .accessibilityLabel("Bug report or feedback")
+                            .accessibilityHint("Describe the issue or share your feedback")
                     }
                     .padding(.horizontal, 20)
-                    
+
                     Button(action: {
                         showingSent = true
                     }) {
@@ -613,6 +623,8 @@ struct BugReportView: View {
                     }
                     .padding(.horizontal, 20)
                     .disabled(bugDescription.isEmpty)
+                    .accessibilityLabel("Submit report")
+                    .accessibilityHint(bugDescription.isEmpty ? "Describe the issue first" : "Double-tap to submit your report")
                     
                     Spacer()
                 }

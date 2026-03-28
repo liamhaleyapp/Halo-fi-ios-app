@@ -71,7 +71,8 @@ struct SignUpView: View {
                         .background(Color.white.opacity(0.2))
                         .clipShape(Circle())
                 }
-                
+                .accessibilityLabel("Go back")
+
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -104,45 +105,53 @@ struct SignUpView: View {
             Text("First Name")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             TextField("Enter your first name", text: $firstName)
                 .textFieldStyle(CustomTextFieldStyle())
                 .autocapitalization(.words)
+                .accessibilityLabel("First name")
+                .accessibilityHint("Enter your first name")
         }
     }
-    
+
     private var emailField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Email")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             TextField("Enter your email", text: $email)
                 .textFieldStyle(CustomTextFieldStyle())
                 .keyboardType(.emailAddress)
                 .autocapitalization(.none)
+                .accessibilityLabel("Email address")
+                .accessibilityHint("Enter your email address")
         }
     }
-    
+
     private var passwordField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Password")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             SecureField("Create a password", text: $password)
                 .textFieldStyle(CustomTextFieldStyle())
+                .accessibilityLabel("Password")
+                .accessibilityHint("Create a password, minimum 8 characters")
         }
     }
-    
+
     private var confirmPasswordField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Confirm Password")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             SecureField("Confirm your password", text: $confirmPassword)
                 .textFieldStyle(CustomTextFieldStyle())
+                .accessibilityLabel("Confirm password")
+                .accessibilityHint("Re-enter your password to confirm")
         }
     }
     
@@ -170,6 +179,8 @@ struct SignUpView: View {
         }
         .disabled(isLoading || !isFormValid)
         .opacity(isFormValid ? 1.0 : 0.6)
+        .accessibilityLabel(isLoading ? "Creating account" : "Create account")
+        .accessibilityHint(isFormValid ? "Double-tap to create your account" : "Fill in all fields first")
     }
     
     // MARK: - Form Validation

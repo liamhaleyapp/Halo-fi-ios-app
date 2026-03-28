@@ -59,7 +59,8 @@ struct SubscriptionView: View {
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
             }
-            
+            .accessibilityLabel("Go back")
+
             Spacer()
             
             Text("Subscription")
@@ -181,13 +182,16 @@ struct SubscriptionView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
-                    billingCycle == .monthly ? 
-                        AnyShapeStyle(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing)) : 
+                    billingCycle == .monthly ?
+                        AnyShapeStyle(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing)) :
                         AnyShapeStyle(Color.gray.opacity(0.1))
                 )
         }
+        .accessibilityLabel("Monthly billing")
+        .accessibilityValue(billingCycle == .monthly ? "Selected" : "Not selected")
+        .accessibilityAddTraits(billingCycle == .monthly ? [.isSelected] : [])
     }
-    
+
     // MARK: - Yearly Button
     private var yearlyButton: some View {
         Button(action: {
@@ -202,11 +206,14 @@ struct SubscriptionView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
-                    billingCycle == .yearly ? 
-                        AnyShapeStyle(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing)) : 
+                    billingCycle == .yearly ?
+                        AnyShapeStyle(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing)) :
                         AnyShapeStyle(Color.gray.opacity(0.1))
                 )
         }
+        .accessibilityLabel("Yearly billing, save twenty percent")
+        .accessibilityValue(billingCycle == .yearly ? "Selected" : "Not selected")
+        .accessibilityAddTraits(billingCycle == .yearly ? [.isSelected] : [])
     }
     
     // MARK: - Action Buttons Section
@@ -349,6 +356,11 @@ struct PlanOptionCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(plan.displayName) plan, \(billingCycle == .monthly ? plan.monthlyPrice : plan.yearlyPrice)")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Double-tap to select the \(plan.displayName) plan")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

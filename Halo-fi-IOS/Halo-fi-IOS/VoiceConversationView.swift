@@ -2,6 +2,7 @@ import SwiftUI
 
 struct VoiceConversationView: View {
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isMuted = false
     @State private var isListening = true
     @State private var pulseScale: CGFloat = 1.0
@@ -37,14 +38,14 @@ struct VoiceConversationView: View {
                             )
                         )
                         .frame(width: 200, height: 200)
-                        .scaleEffect(pulseScale)
+                        .scaleEffect(reduceMotion ? 1.0 : pulseScale)
                         .opacity(0.6)
                         .animation(
-                            Animation.easeInOut(duration: 2.0)
+                            reduceMotion ? nil : Animation.easeInOut(duration: 2.0)
                                 .repeatForever(autoreverses: true),
                             value: pulseScale
                         )
-                    
+
                     // Middle rotating ring
                     Circle()
                         .stroke(
@@ -56,13 +57,13 @@ struct VoiceConversationView: View {
                             lineWidth: 3
                         )
                         .frame(width: 160, height: 160)
-                        .rotationEffect(.degrees(rotationAngle))
+                        .rotationEffect(.degrees(reduceMotion ? 0 : rotationAngle))
                         .animation(
-                            Animation.linear(duration: 8.0)
+                            reduceMotion ? nil : Animation.linear(duration: 8.0)
                                 .repeatForever(autoreverses: false),
                             value: rotationAngle
                         )
-                    
+
                     // Inner microphone icon
                     Image(systemName: "mic.fill")
                         .font(.system(size: 60))
@@ -91,6 +92,7 @@ struct VoiceConversationView: View {
                         )
                         .shadow(color: .blue.opacity(0.5), radius: 30, x: 0, y: 0)
                 }
+                .accessibilityHidden(true)
                 
                 // Status text below mic graphic
                 Text(isListening ? "Listening..." : "Muted")
@@ -99,6 +101,7 @@ struct VoiceConversationView: View {
                     .foregroundColor(.white)
                     .padding(.top, 30)
                     .opacity(isListening ? 1.0 : 0.7)
+                    .accessibilityLabel(isListening ? "Halo is listening" : "Microphone is muted")
                 
                 Spacer()
                 
@@ -122,7 +125,7 @@ struct VoiceConversationView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(
                                     LinearGradient(
-                                        colors: isMuted ? 
+                                        colors: isMuted ?
                                             [Color.orange.opacity(0.8), Color.red.opacity(0.8)] :
                                             [Color.blue.opacity(0.8), Color.purple.opacity(0.8)],
                                         startPoint: .topLeading,
@@ -134,7 +137,7 @@ struct VoiceConversationView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(
                                     LinearGradient(
-                                        colors: isMuted ? 
+                                        colors: isMuted ?
                                             [Color.orange, Color.red] :
                                             [Color.blue, Color.purple],
                                         startPoint: .topLeading,
@@ -144,7 +147,10 @@ struct VoiceConversationView: View {
                                 )
                         )
                     }
-                    
+                    .accessibilityLabel(isMuted ? "Unmute microphone" : "Mute microphone")
+                    .accessibilityHint("Double-tap to toggle microphone")
+                    .accessibilityValue("Currently \(isMuted ? "muted" : "unmuted")")
+
                     // End button
                     Button(action: {
                         presentationMode.wrappedValue.dismiss()
@@ -180,14 +186,18 @@ struct VoiceConversationView: View {
                                 )
                         )
                     }
+                    .accessibilityLabel("End conversation")
+                    .accessibilityHint("Double-tap to end the voice conversation")
                 }
                 .padding(.bottom, 50)
             }
         }
         .onAppear {
-            // Start animations
-            pulseScale = 1.2
-            rotationAngle = 360
+            // Start animations (respects Reduce Motion preference)
+            if !reduceMotion {
+                pulseScale = 1.2
+                rotationAngle = 360
+            }
         }
         .navigationBarHidden(true)
     }

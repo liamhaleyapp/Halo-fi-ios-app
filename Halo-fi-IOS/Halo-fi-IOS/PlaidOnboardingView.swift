@@ -49,7 +49,9 @@ struct PlaidOnboardingView: View {
                     dismiss()
                 }
                 .foregroundColor(.white)
-                
+                .accessibilityLabel("Cancel bank connection")
+                .accessibilityHint("Double-tap to cancel and go back")
+
                 Spacer()
                 
                 Text("Connect Your Bank")
@@ -86,15 +88,18 @@ struct PlaidOnboardingView: View {
             ProgressView()
                 .scaleEffect(1.5)
                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            
+                .accessibilityLabel("Loading")
+
             Text("Setting up secure connection...")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             Text("This may take a few moments")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.7))
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Setting up secure bank connection. This may take a few moments.")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             LinearGradient(

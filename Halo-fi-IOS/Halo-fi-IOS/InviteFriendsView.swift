@@ -54,7 +54,8 @@ struct InviteFriendsView: View {
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
             }
-            
+            .accessibilityLabel("Go back")
+
             Spacer()
             
             Text("Invite Friends")
@@ -119,6 +120,8 @@ struct InviteFriendsView: View {
                             .background(LinearGradient(colors: [Color.teal, Color.blue], startPoint: .leading, endPoint: .trailing))
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel("Copy referral link")
+                    .accessibilityHint("Double-tap to copy your referral link to clipboard")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -146,6 +149,8 @@ struct InviteFriendsView: View {
                             .font(.caption)
                             .foregroundColor(.purple)
                     }
+                    .accessibilityLabel("Copy referral code")
+                    .accessibilityHint("Double-tap to copy code \(referralCode) to clipboard")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -219,6 +224,8 @@ struct InviteFriendsView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                     )
+                    .accessibilityLabel("Friend's email address")
+                    .accessibilityHint("Enter an email address to send the invite")
             } else {
                 TextField("Enter phone number", text: $invitePhone)
                     .font(.subheadline)
@@ -232,6 +239,8 @@ struct InviteFriendsView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                     )
+                    .accessibilityLabel("Friend's phone number")
+                    .accessibilityHint("Enter a phone number to send the invite")
             }
             
             // Send Invite Button

@@ -27,7 +27,8 @@ struct ProfileView: View {
                             .background(Color.gray.opacity(0.2))
                             .clipShape(Circle())
                     }
-                    
+                    .accessibilityLabel("Go back")
+
                     Spacer()
                     
                     Text("Profile")
@@ -79,14 +80,15 @@ struct ProfileView: View {
                                         .font(.title3)
                                         .foregroundColor(.blue)
                                         .frame(width: 20, height: 20)
-                                    
+                                        .accessibilityHidden(true)
+
                                     Text("Date of Birth")
                                         .font(.headline)
                                         .foregroundColor(.white)
-                                    
+
                                     Spacer()
                                 }
-                                
+
                                 Button(action: {
                                     showingDatePicker = true
                                 }) {
@@ -94,17 +96,21 @@ struct ProfileView: View {
                                         Text(dateOfBirth, style: .date)
                                             .foregroundColor(.white)
                                             .padding(.leading, 16)
-                                        
+
                                         Spacer()
-                                        
+
                                         Image(systemName: "chevron.right")
                                             .foregroundColor(.gray)
                                             .padding(.trailing, 16)
+                                            .accessibilityHidden(true)
                                     }
                                     .frame(height: 50)
                                     .background(Color.gray.opacity(0.15))
                                     .cornerRadius(12)
                                 }
+                                .accessibilityLabel("Date of birth")
+                                .accessibilityValue(dateOfBirth.formatted(date: .long, time: .omitted))
+                                .accessibilityHint("Double-tap to change your date of birth")
                             }
                         }
                         .padding(.horizontal, 20)
@@ -138,6 +144,8 @@ struct ProfileView: View {
                         }
                         .disabled(!hasChanges)
                         .opacity(hasChanges ? 1.0 : 0.5)
+                        .accessibilityLabel("Save changes")
+                        .accessibilityHint(hasChanges ? "Double-tap to save your profile changes" : "No changes to save")
                         .padding(.horizontal, 20)
                         
                         Spacer(minLength: 40)
@@ -179,7 +187,7 @@ struct ProfileField: View {
     let placeholder: String
     let icon: String
     var keyboardType: UIKeyboardType = .default
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -187,14 +195,15 @@ struct ProfileField: View {
                     .font(.title3)
                     .foregroundColor(.blue)
                     .frame(width: 20, height: 20)
-                
+                    .accessibilityHidden(true)
+
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Spacer()
             }
-            
+
             TextField(placeholder, text: $value)
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
@@ -204,6 +213,8 @@ struct ProfileField: View {
                 .keyboardType(keyboardType)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .accessibilityLabel(title)
+                .accessibilityHint("Enter your \(title.lowercased())")
         }
     }
 }

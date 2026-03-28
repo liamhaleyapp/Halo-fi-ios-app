@@ -53,17 +53,21 @@ struct HomeView: View {
                                             )
                                     )
                                     .shadow(color: .blue.opacity(0.5), radius: 20, x: 0, y: 0)
-                                
+
                                 // Mic icon for voice conversation
                                 Image(systemName: "mic.fill")
                                     .font(.system(size: 50, weight: .medium))
                                     .foregroundColor(.white)
                             }
                         }
-                        
+                        .accessibilityLabel("Start voice conversation")
+                        .accessibilityHint("Double-tap to begin talking to Halo financial assistant")
+                        .accessibilityAddTraits(.startsMediaSession)
+
                         Text("Tap to start conversation")
                             .font(.headline)
                             .foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                     .padding(80)
                     .overlay(
@@ -140,7 +144,7 @@ struct ActionButton: View {
     let title: String
     let gradient: LinearGradient
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack {
@@ -148,18 +152,21 @@ struct ActionButton: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
             .background(gradient)
             .cornerRadius(16)
         }
+        .accessibilityLabel(title)
+        .accessibilityHint("Double-tap to open \(title)")
     }
 }
 

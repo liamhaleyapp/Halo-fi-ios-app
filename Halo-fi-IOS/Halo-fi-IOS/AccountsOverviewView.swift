@@ -130,22 +130,30 @@ struct AccountCategorySection: View {
                                     .fontWeight(.semibold)
                                     .foregroundColor(.white)
                             }
-                            
+
                             Spacer()
-                            
-                            Image(systemName: account.trend == .up ? "arrow.up" : "arrow.down")
-                                .font(.caption)
-                                .foregroundColor(account.trend == .up ? .green : .red)
-                                .frame(width: 24, height: 24)
-                                .background(
-                                    Circle()
-                                        .fill(account.trend == .up ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
-                                )
+
+                            HStack(spacing: 4) {
+                                Text(account.trend == .up ? "Up" : "Down")
+                                    .font(.caption2)
+                                    .foregroundColor(account.trend == .up ? .green : .red)
+                                Image(systemName: account.trend == .up ? "arrow.up" : "arrow.down")
+                                    .font(.caption)
+                                    .foregroundColor(account.trend == .up ? .green : .red)
+                                    .frame(width: 24, height: 24)
+                                    .background(
+                                        Circle()
+                                            .fill(account.trend == .up ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
+                                    )
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(6)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(account.name), \(account.balance)")
+                        .accessibilityValue("Trending \(account.trend == .up ? "up" : "down")")
                     }
                 }
             }

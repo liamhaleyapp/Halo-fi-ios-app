@@ -77,7 +77,8 @@ struct SignInView: View {
                         .background(Color.white.opacity(0.2))
                         .clipShape(Circle())
                 }
-                
+                .accessibilityLabel("Go back")
+
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -110,22 +111,26 @@ struct SignInView: View {
             Text("Email")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             TextField("Enter your email", text: $email)
                 .textFieldStyle(CustomTextFieldStyle())
                 .keyboardType(.emailAddress)
                 .autocapitalization(.none)
+                .accessibilityLabel("Email address")
+                .accessibilityHint("Enter your email to sign in")
         }
     }
-    
+
     private var passwordField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Password")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             SecureField("Enter your password", text: $password)
                 .textFieldStyle(CustomTextFieldStyle())
+                .accessibilityLabel("Password")
+                .accessibilityHint("Enter your password to sign in")
         }
     }
     
@@ -153,6 +158,8 @@ struct SignInView: View {
         }
         .disabled(isLoading || !isFormValid)
         .opacity(isFormValid ? 1.0 : 0.6)
+        .accessibilityLabel(isLoading ? "Signing in" : "Sign in")
+        .accessibilityHint(isFormValid ? "Double-tap to sign in" : "Fill in email and password first")
     }
     
     // MARK: - Form Validation

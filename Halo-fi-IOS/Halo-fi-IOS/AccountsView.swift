@@ -82,6 +82,8 @@ struct AccountsView: View {
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
             }
+            .accessibilityLabel("Go back")
+            .accessibilityHint("Double-tap to return to previous screen")
             
             Spacer()
             
@@ -126,8 +128,10 @@ struct AccountsView: View {
             .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
             .cornerRadius(16)
         }
+        .accessibilityLabel("Link new account")
+        .accessibilityHint("Double-tap to connect a new bank account")
     }
-    
+
     // MARK: - Connected Institutions Section
     private var connectedInstitutionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -155,35 +159,41 @@ struct AccountsView: View {
                         .font(.title2)
                         .foregroundColor(.teal)
                         .frame(width: 32, height: 32)
-                    
+                        .accessibilityHidden(true)
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(institution.name)
                             .font(.body)
                             .fontWeight(.medium)
                             .foregroundColor(.white)
-                        
+
                         HStack(spacing: 8) {
                             Circle()
                                 .fill(institution.status.color)
                                 .frame(width: 8, height: 8)
-                            
+                                .accessibilityHidden(true)
+
                             Text(institution.status.displayText)
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .foregroundColor(.gray)
                         .font(.caption)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 30)
                 .padding(.vertical, 24)
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(16)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(institution.name), \(institution.status.displayText)")
+            .accessibilityHint("Double-tap to view account details")
             
             // Accounts Preview
             VStack(spacing: 6) {
@@ -214,23 +224,29 @@ struct AccountsView: View {
                 .font(.caption)
                 .foregroundColor(.teal)
                 .frame(width: 20, height: 20)
-            
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.nickname)
                     .font(.caption)
                     .foregroundColor(.white)
-                
+
                 Text(account.type.displayName)
                     .font(.caption2)
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
+
             if account.isSynced {
-                Text(account.balance.formatted(.currency(code: "USD")))
-                    .font(.caption)
-                    .foregroundColor(account.balance >= 0 ? .green : .red)
+                HStack(spacing: 4) {
+                    Text(account.balance >= 0 ? "Balance" : "Owed")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                    Text(account.balance.formatted(.currency(code: "USD")))
+                        .font(.caption)
+                        .foregroundColor(account.balance >= 0 ? .green : .red)
+                }
             } else {
                 Text("Not synced")
                     .font(.caption)
@@ -241,6 +257,9 @@ struct AccountsView: View {
         .padding(.vertical, 12)
         .background(Color.gray.opacity(0.05))
         .cornerRadius(12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(account.nickname), \(account.type.displayName)")
+        .accessibilityValue(account.isSynced ? "\(account.balance >= 0 ? "Balance" : "Owed") \(account.balance.formatted(.currency(code: "USD")))" : "Not synced")
     }
 }
 
@@ -463,31 +482,37 @@ struct InstitutionDetailsView: View {
                 .font(.title3)
                 .foregroundColor(.teal)
                 .frame(width: 24, height: 24)
-            
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(account.nickname)
                     .font(.body)
                     .fontWeight(.medium)
                     .foregroundColor(.white)
-                
+
                 Text(account.name)
                     .font(.caption)
                     .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing, spacing: 4) {
                 if account.isSynced {
-                    Text(account.balance.formatted(.currency(code: "USD")))
-                        .font(.body)
-                        .foregroundColor(account.balance >= 0 ? .green : .red)
+                    HStack(spacing: 4) {
+                        Text(account.balance >= 0 ? "Balance" : "Owed")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                        Text(account.balance.formatted(.currency(code: "USD")))
+                            .font(.body)
+                            .foregroundColor(account.balance >= 0 ? .green : .red)
+                    }
                 } else {
                     Text("Not synced")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
-                
+
                 Text(account.type.displayName)
                     .font(.caption2)
                     .foregroundColor(.gray)
@@ -497,6 +522,9 @@ struct InstitutionDetailsView: View {
         .padding(.vertical, 20)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(account.nickname), \(account.type.displayName)")
+        .accessibilityValue(account.isSynced ? "\(account.balance >= 0 ? "Balance" : "Owed") \(account.balance.formatted(.currency(code: "USD")))" : "Not synced")
     }
 }
 
