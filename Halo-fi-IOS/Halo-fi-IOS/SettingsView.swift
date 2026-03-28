@@ -118,6 +118,7 @@ struct SettingsView: View {
 }
 
 struct SettingsOption: View {
+    @Environment(\.haloHighContrast) private var highContrast
     let icon: String
     let title: String
     let action: () -> Void
@@ -140,13 +141,17 @@ struct SettingsOption: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.gray)
+                    .foregroundColor(highContrast ? .white : .gray)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 24)
-            .background(Color.gray.opacity(0.1))
+            .background(highContrast ? Color.gray.opacity(0.25) : Color.gray.opacity(0.1))
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(highContrast ? 0.5 : 0), lineWidth: 1)
+            )
         }
         .accessibilityLabel(title)
         .accessibilityHint("Double-tap to open \(title)")

@@ -113,6 +113,8 @@ struct OnboardingView: View {
                         .animation(.easeInOut, value: currentPage)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Page \(currentPage + 1) of \(onboardingPages.count)")
             
             // Action Buttons
             VStack(spacing: 16) {
@@ -131,7 +133,9 @@ struct OnboardingView: View {
                         )
                         .cornerRadius(16)
                 }
-                
+                .accessibilityLabel("Get Started")
+                .accessibilityHint("Double-tap to create a new account")
+
                 // Sign In Button
                 Button(action: {
                     showingSignIn = true
@@ -140,6 +144,8 @@ struct OnboardingView: View {
                         .font(.body)
                         .foregroundColor(.blue)
                 }
+                .accessibilityLabel("Sign in")
+                .accessibilityHint("Double-tap if you already have an account")
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)

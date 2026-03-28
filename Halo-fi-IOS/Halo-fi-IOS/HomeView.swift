@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(\.userManager) private var userManager
+    @Environment(\.haloHighContrast) private var highContrast
     @State private var showingVoiceConversation = false
     
     private var userName: String {
@@ -141,6 +142,7 @@ struct HomeView: View {
 }
 
 struct ActionButton: View {
+    @Environment(\.haloHighContrast) private var highContrast
     let title: String
     let gradient: LinearGradient
     let action: () -> Void
@@ -164,6 +166,10 @@ struct ActionButton: View {
             .padding(.vertical, 24)
             .background(gradient)
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white, lineWidth: highContrast ? 2 : 0)
+            )
         }
         .accessibilityLabel(title)
         .accessibilityHint("Double-tap to open \(title)")

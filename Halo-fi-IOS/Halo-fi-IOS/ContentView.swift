@@ -8,8 +8,25 @@
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("themeMode") private var themeMode = "Dark"
+
     var body: some View {
         MainTabView()
+            .dynamicTypeSize(.large ... .accessibility3)
+            .environment(\.haloHighContrast, themeMode == "High-Contrast")
+    }
+}
+
+// MARK: - High Contrast Environment Key
+
+private struct HaloHighContrastKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var haloHighContrast: Bool {
+        get { self[HaloHighContrastKey.self] }
+        set { self[HaloHighContrastKey.self] = newValue }
     }
 }
 

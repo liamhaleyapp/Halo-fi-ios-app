@@ -92,12 +92,13 @@ struct AccountsOverviewView: View {
 }
 
 struct AccountCategorySection: View {
+    @Environment(\.haloHighContrast) private var highContrast
     let title: String
     let icon: String
     let color: Color
     let accounts: [Account]
     var isHighlighted: Bool = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -159,11 +160,11 @@ struct AccountCategorySection: View {
             }
         }
         .padding(8)
-        .background(Color.gray.opacity(0.1))
+        .background(highContrast ? Color.gray.opacity(0.25) : Color.gray.opacity(0.1))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isHighlighted ? Color.blue : Color.clear, lineWidth: 2)
+                .stroke(isHighlighted ? Color.blue : (highContrast ? Color.white.opacity(0.3) : Color.clear), lineWidth: highContrast ? 1.5 : 2)
         )
     }
 }

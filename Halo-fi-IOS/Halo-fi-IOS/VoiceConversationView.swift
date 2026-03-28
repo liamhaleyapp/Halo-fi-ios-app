@@ -3,6 +3,7 @@ import SwiftUI
 struct VoiceConversationView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.haloHighContrast) private var highContrast
     @State private var isMuted = false
     @State private var isListening = true
     @State private var pulseScale: CGFloat = 1.0
@@ -100,7 +101,7 @@ struct VoiceConversationView: View {
                     .fontWeight(.medium)
                     .foregroundColor(.white)
                     .padding(.top, 30)
-                    .opacity(isListening ? 1.0 : 0.7)
+                    .opacity(isListening ? 1.0 : (highContrast ? 0.9 : 0.7))
                     .accessibilityLabel(isListening ? "Halo is listening" : "Microphone is muted")
                 
                 Spacer()
