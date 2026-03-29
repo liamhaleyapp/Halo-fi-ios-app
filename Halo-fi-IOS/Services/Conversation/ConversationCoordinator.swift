@@ -96,7 +96,7 @@ final class ConversationCoordinator {
             try await agentWebSocket.connect()
             // Voice (ElevenLabs STT) connects on-demand when user taps mic
             setState(.idle)
-            emitEvent(.status("How can I help?"))
+            // Backend sends a personalized greeting with TTS on connect
         } catch {
             setState(.error(error.localizedDescription))
             emitEvent(.errorEvent("Failed to connect: \(error.localizedDescription)"))
@@ -506,8 +506,8 @@ final class ConversationCoordinator {
     }
 
     private func playAccumulatedAudio() {
-        guard !isPrivacyMode, !isMuted, !UIAccessibility.isVoiceOverRunning else {
-            Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted), voiceOver=\(UIAccessibility.isVoiceOverRunning)")
+        guard !isPrivacyMode, !isMuted else {
+            Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted)")
             setState(.idle)
             return
         }

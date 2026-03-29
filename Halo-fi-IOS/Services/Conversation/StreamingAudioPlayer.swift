@@ -72,9 +72,10 @@ final class StreamingAudioPlayer {
 
     /// Decode the accumulated MP3 data and play it.
     func playAccumulatedAudio() {
-        guard !isMuted, !UIAccessibility.isVoiceOverRunning else {
-            Logger.info("StreamingAudioPlayer: Skipping playback (muted or VoiceOver)")
+        guard !isMuted else {
+            Logger.info("StreamingAudioPlayer: Skipping playback (muted)")
             mp3Data = Data()
+            onPlaybackFinished?()
             return
         }
 
