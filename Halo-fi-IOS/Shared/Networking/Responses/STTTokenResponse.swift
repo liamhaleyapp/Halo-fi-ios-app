@@ -21,6 +21,7 @@ struct STTTokenResponse: Codable {
         let commitStrategy: String
         let languageCode: String
         let includeTimestamps: Bool
+        let contextPrompt: String?
 
         enum CodingKeys: String, CodingKey {
             case audioFormat = "audio_format"
@@ -28,6 +29,7 @@ struct STTTokenResponse: Codable {
             case commitStrategy = "commit_strategy"
             case languageCode = "language_code"
             case includeTimestamps = "include_timestamps"
+            case contextPrompt = "context_prompt"
         }
     }
 

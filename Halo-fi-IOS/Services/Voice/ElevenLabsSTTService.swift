@@ -113,10 +113,14 @@ final class ElevenLabsSTTService {
             throw ElevenLabsSTTError.connectionFailed("Invalid WebSocket URL")
         }
 
-        // Add token to URL if needed (some APIs expect it as query param)
+        // Add token and context prompt to URL query params
         var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
         var queryItems = urlComponents?.queryItems ?? []
         queryItems.append(URLQueryItem(name: "token", value: token.token))
+        if let contextPrompt = token.config?.contextPrompt, !contextPrompt.isEmpty {
+            queryItems.append(URLQueryItem(name: "context_prompt", value: contextPrompt))
+            Logger.info("ElevenLabsSTT: Using context prompt for improved accuracy")
+        }
         urlComponents?.queryItems = queryItems
 
         guard let finalURL = urlComponents?.url else {
