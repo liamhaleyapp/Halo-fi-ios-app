@@ -118,6 +118,11 @@ final class ConversationViewModel {
         }
     }
 
+    /// Send a text message programmatically (e.g., from quick action buttons)
+    func sendText(_ message: String) async {
+        await coordinator.sendText(message)
+    }
+
     func toggleMute() {
         coordinator.setMuted(!isMuted)
     }

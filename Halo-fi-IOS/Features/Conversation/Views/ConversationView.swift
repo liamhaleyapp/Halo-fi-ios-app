@@ -18,6 +18,9 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = ConversationViewModel()
 
+    /// Optional prompt to auto-send after connecting (e.g., from quick action buttons)
+    var initialPrompt: String? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -43,6 +46,12 @@ struct ConversationView: View {
         .onAppear {
             Task {
                 await viewModel.onAppear()
+                // Auto-send initial prompt if provided (from quick action buttons)
+                if let prompt = initialPrompt, !prompt.isEmpty {
+                    // Small delay to let greeting arrive first
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    await viewModel.sendText(prompt)
+                }
             }
         }
         .onDisappear {

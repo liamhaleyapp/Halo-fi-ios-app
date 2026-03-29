@@ -8,32 +8,37 @@
 import SwiftUI
 
 struct HomeView: View {
-  @State private var showingConversation = false
+    @State private var showingConversation = false
+    @State private var initialPrompt: String? = nil
 
-  var body: some View {
-    NavigationStack {
-      ZStack {
-        Color(.systemBackground).ignoresSafeArea()
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
 
-        VStack(spacing: 10) {
-          // Voice conversation button - opens unified ConversationView
-          VoiceConversationButton {
-            showingConversation = true
-          }
+                VStack(spacing: 10) {
+                    // Voice conversation button - opens unified ConversationView
+                    VoiceConversationButton {
+                        initialPrompt = nil
+                        showingConversation = true
+                    }
 
-          // Action buttons
-          ActionButtonsSection()
+                    // Quick action buttons
+                    ActionButtonsSection(onAction: { prompt in
+                        initialPrompt = prompt
+                        showingConversation = true
+                    })
+                }
+            }
+            .navigationBarHidden(true)
+            .navigationDestination(isPresented: $showingConversation) {
+                ConversationView(initialPrompt: initialPrompt)
+                    .navigationBarHidden(true)
+            }
         }
-      }
-      .navigationBarHidden(true)
-      .navigationDestination(isPresented: $showingConversation) {
-        ConversationView()
-          .navigationBarHidden(true)
-      }
     }
-  }
 }
 
 #Preview {
-  HomeView()
+    HomeView()
 }
