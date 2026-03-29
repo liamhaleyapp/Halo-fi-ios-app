@@ -18,6 +18,8 @@ struct OnboardingBottomSection: View {
         VStack(spacing: 24) {
             // Page Indicators
             PageIndicator(currentPage: currentPage, totalPages: totalPages)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Page \(currentPage + 1) of \(totalPages)")
             
             // Action Buttons
             VStack(spacing: 16) {
@@ -40,6 +42,8 @@ struct OnboardingBottomSection: View {
                             .font(.body)
                             .foregroundColor(.blue)
                     }
+                    .accessibilityLabel("Sign in")
+                    .accessibilityHint("Double-tap if you already have an account")
                 }
             }
             .padding(.horizontal, 20)

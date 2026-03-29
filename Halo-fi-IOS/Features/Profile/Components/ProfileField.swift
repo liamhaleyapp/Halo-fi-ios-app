@@ -37,6 +37,8 @@ struct ProfileField: View {
         .disableAutocorrection(true)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.6 : 1.0)
+        .accessibilityLabel(title)
+        .accessibilityHint("Enter your \(title.lowercased())")
     }
   }
 }

@@ -66,5 +66,10 @@ struct PlanOptionCard: View {
       )
     }
     .buttonStyle(HapticPlainButtonStyle())
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(plan.displayName) plan, \(billingCycle == .monthly ? plan.monthlyPrice : plan.yearlyPrice)")
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    .accessibilityHint("Double-tap to select the \(plan.displayName) plan")
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
   }
 }

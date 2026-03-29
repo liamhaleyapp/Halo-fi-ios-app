@@ -3,213 +3,226 @@
 //  Halo-fi-IOS
 //
 //  Created by Christopher Koski on 10/1/25.
+//  Updated with Accessibility, Security sections and enhanced content.
 //
 
 import SwiftUI
 
 // MARK: - What is Halo Fi Section
 struct WhatIsHaloFiSection: View {
-  var body: some View {
-    InfoCard {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("What is Halo Fi?")
-          .font(.headline)
-          .foregroundColor(.gray)
-        
-        // swiftlint:disable:next line_length
-        Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
-          .font(.body)
-          .foregroundColor(.white)
-          .multilineTextAlignment(.leading)
-          .lineLimit(nil)
-      }
+    var body: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("What is Halo Fi?")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+
+                Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
-  }
 }
 
 // MARK: - Our Mission Section
 struct OurMissionSection: View {
-  var body: some View {
-    InfoCard {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Our Mission")
-          .font(.headline)
-          .foregroundColor(.gray)
-        
-        // swiftlint:disable:next line_length
-        Text("To bring visibility to personal finances through accessible and intelligent technology—empowering everyone, especially those with visual impairments.")
-          .font(.body)
-          .foregroundColor(.white)
-          .multilineTextAlignment(.leading)
-          .lineLimit(nil)
-      }
+    var body: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Our Mission")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+
+                Text("To bring visibility to personal finances through accessible and intelligent technology \u{2014} empowering everyone, especially those with visual impairments.")
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
-  }
 }
 
-// MARK: - Meet the Team Button Section
-struct MeetTheTeamButtonSection: View {
-  let onTap: () -> Void
-  
-  var body: some View {
-    ActionButton(
-      title: "Meet the Team",
-      gradient: LinearGradient(
-        colors: [Color.indigo, Color.purple],
-        startPoint: .leading,
-        endPoint: .trailing
-      )
-    ) {
-      onTap()
+// MARK: - Accessibility Features Section
+struct AccessibilityFeaturesSection: View {
+    var body: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Accessibility")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+
+                featureRow(icon: "waveform", color: .blue, text: "Voice-first design for hands-free use")
+                featureRow(icon: "eye.fill", color: .green, text: "Full VoiceOver support")
+                featureRow(icon: "textformat.size", color: .orange, text: "Dynamic Type for adjustable text sizes")
+                featureRow(icon: "circle.lefthalf.filled", color: .purple, text: "High contrast mode")
+                featureRow(icon: "hand.raised.fill", color: .teal, text: "Respects Reduce Motion preferences")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Accessibility features: voice-first design, VoiceOver support, Dynamic Type, high contrast mode, and Reduce Motion support")
     }
-  }
+
+    private func featureRow(icon: String, color: Color, text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .font(.body)
+                .frame(width: 24)
+            Text(text)
+                .font(.body)
+                .foregroundColor(.white)
+            Spacer()
+        }
+    }
 }
 
 // MARK: - Data Security Section
 struct DataSecuritySection: View {
-  var body: some View {
-    InfoCard {
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Data Security")
-          .font(.headline)
-          .foregroundColor(.gray)
-        
-        HStack(spacing: 12) {
-          Image(systemName: "lock.shield.fill")
-            .foregroundColor(.teal)
-            .font(.title3)
-          
-          Text("End-to-end encryption")
-            .font(.body)
-            .foregroundColor(.white)
-          
-          Spacer()
+    var body: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Data Security")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+
+                featureRow(icon: "lock.shield.fill", color: .teal, text: "AES-256 encryption at rest and in transit")
+                featureRow(icon: "key.fill", color: .yellow, text: "Bank credentials never stored")
+                featureRow(icon: "checkmark.seal.fill", color: .green, text: "Plaid-secured bank connections")
+                featureRow(icon: "eye.slash.fill", color: .blue, text: "Read-only access to financial data")
+            }
         }
-      }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Data security: AES-256 encryption, bank credentials never stored, Plaid-secured connections, read-only access")
     }
-  }
+
+    private func featureRow(icon: String, color: Color, text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .font(.body)
+                .frame(width: 24)
+            Text(text)
+                .font(.body)
+                .foregroundColor(.white)
+            Spacer()
+        }
+    }
 }
 
-// MARK: - Legal and Support Section
-struct LegalAndSupportSection: View {
-  let onTermsTap: () -> Void
-  let onPrivacyTap: () -> Void
-  let onContactSupportTap: () -> Void
-  let onBugReportTap: () -> Void
-  
-  var body: some View {
-    VStack(spacing: 16) {
-      // Legal Links
-      VStack(spacing: 12) {
-        Button(action: onTermsTap) {
-          HStack {
-            Text("Terms of Service")
-              .font(.body)
-              .foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-              .foregroundColor(.gray)
-              .font(.caption)
-          }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
-          .background(Color.gray.opacity(0.1))
-          .cornerRadius(16)
+// MARK: - Legal Section
+struct LegalSection: View {
+    let onTermsTap: () -> Void
+    let onPrivacyTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            aboutButton(title: "Terms of Service", icon: "doc.text.fill", color: .blue, action: onTermsTap)
+                .accessibilityHint("Double-tap to view terms of service")
+            aboutButton(title: "Privacy Policy", icon: "hand.raised.fill", color: .purple, action: onPrivacyTap)
+                .accessibilityHint("Double-tap to view privacy policy")
         }
-        
-        Button(action: onPrivacyTap) {
-          HStack {
-            Text("Privacy Policy")
-              .font(.body)
-              .foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-              .foregroundColor(.gray)
-              .font(.caption)
-          }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
-          .background(Color.gray.opacity(0.1))
-          .cornerRadius(16)
-        }
-      }
-      
-      // Support & Feedback
-      VStack(spacing: 12) {
-        Button(action: onContactSupportTap) {
-          HStack {
-            Text("Contact Support")
-              .font(.body)
-              .foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-              .foregroundColor(.gray)
-              .font(.caption)
-          }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
-          .background(Color.gray.opacity(0.1))
-          .cornerRadius(16)
-        }
-        
-        Button(action: onBugReportTap) {
-          HStack {
-            Text("Report a Bug / Feedback")
-              .font(.body)
-              .foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-              .foregroundColor(.gray)
-              .font(.caption)
-          }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
-          .background(Color.gray.opacity(0.1))
-          .cornerRadius(16)
-        }
-      }
     }
-  }
+
+    private func aboutButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.body)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.body)
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(16)
+        }
+    }
+}
+
+// MARK: - Support Section
+struct SupportSection: View {
+    let onHelpTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            aboutButton(title: "Help & Feedback", icon: "questionmark.circle.fill", color: .green, action: onHelpTap)
+                .accessibilityHint("Double-tap to get help or send feedback")
+        }
+    }
+
+    private func aboutButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.body)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.body)
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(16)
+        }
+    }
 }
 
 // MARK: - App Version Section
 struct AppVersionSection: View {
-  var body: some View {
-    VStack(spacing: 16) {
-      // App Version
-      HStack {
-        Text("App Version: v1.0.0")
-          .font(.body)
-          .foregroundColor(.gray)
-        Spacer()
-      }
-      .padding(.horizontal, 20)
-      .padding(.vertical, 12)
-      .background(Color.gray.opacity(0.1))
-      .cornerRadius(16)
+    var body: some View {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+
+        HStack {
+            Text("Version \(version) (\(build))")
+                .font(.footnote)
+                .foregroundColor(.gray)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .accessibilityLabel("App version \(version), build \(build)")
     }
-  }
 }
 
 // MARK: - Preview
 #Preview {
-  ZStack {
-    Color.black.ignoresSafeArea()
-    ScrollView {
-      VStack(spacing: 12) {
-        WhatIsHaloFiSection()
-        OurMissionSection()
-        MeetTheTeamButtonSection(onTap: {})
-        DataSecuritySection()
-        LegalAndSupportSection(
-          onTermsTap: {},
-          onPrivacyTap: {},
-          onContactSupportTap: {},
-          onBugReportTap: {}
-        )
-        AppVersionSection()
-      }
-      .padding()
+    ZStack {
+        Color.black.ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 12) {
+                WhatIsHaloFiSection()
+                OurMissionSection()
+                AccessibilityFeaturesSection()
+                DataSecuritySection()
+                LegalSection(onTermsTap: {}, onPrivacyTap: {})
+                SupportSection(onHelpTap: {})
+                AppVersionSection()
+            }
+            .padding()
+        }
     }
-  }
 }
