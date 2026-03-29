@@ -383,6 +383,8 @@ final class ConversationCoordinator {
             Task { @MainActor in
                 guard let self = self else { return }
 
+                self.audioFeedback.stopProcessingPulse()
+
                 let responseId = self.currentAgentResponseId ?? UUID()
 
                 // Emit final event
@@ -401,6 +403,9 @@ final class ConversationCoordinator {
         agentWebSocket.onAudioChunk = { [weak self] chunk in
             Task { @MainActor in
                 guard let self = self else { return }
+
+                // Stop processing pulse on first audio chunk
+                self.audioFeedback.stopProcessingPulse()
 
                 Logger.debug("ConversationCoordinator: Audio chunk received, player=\(self.streamingAudioPlayer != nil), isPlaying=\(self.streamingAudioPlayer?.isPlaying ?? false)")
 
@@ -428,9 +433,23 @@ final class ConversationCoordinator {
             Task { @MainActor in
                 guard let self = self else { return }
 
+                self.audioFeedback.stopProcessingPulse()
                 self.setState(.error(error.error))
                 self.emitEvent(.errorEvent(error.error))
                 self.audioFeedback.feedbackForStateChange(.error(error.error))
+            }
+        }
+
+        // Handle acknowledgment (agent is thinking)
+        agentWebSocket.onAcknowledgment = { [weak self] ack in
+            Task { @MainActor in
+                guard let self = self else { return }
+                Logger.info("ConversationCoordinator: Agent acknowledged, thinking...")
+                // Acknowledgment text is shown in transcript
+                if let text = ack.text, !text.isEmpty {
+                    let responseId = self.currentAgentResponseId ?? UUID()
+                    self.emitEvent(.status(text))
+                }
             }
         }
 

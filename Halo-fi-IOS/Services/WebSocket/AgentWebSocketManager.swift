@@ -31,6 +31,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     var onStreamChunk: ((StreamChunkPayload) -> Void)?
     var onError: ((ErrorPayload) -> Void)?
     var onConnectionAck: ((ConnectionAckPayload) -> Void)?
+    var onAcknowledgment: ((AcknowledgmentPayload) -> Void)?
     var onAudioChunk: ((AudioChunkPayload) -> Void)?
     var onAudioComplete: ((AudioCompletePayload) -> Void)?
 
@@ -119,6 +120,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             await handleConnectionAck(ack)
         case .acknowledgment(let ack):
             Logger.info("Agent acknowledgment: \(ack.text ?? "no text")")
+            onAcknowledgment?(ack)
         case .audioChunk(let chunk):
             await handleAudioChunk(chunk)
         case .audioComplete(let complete):

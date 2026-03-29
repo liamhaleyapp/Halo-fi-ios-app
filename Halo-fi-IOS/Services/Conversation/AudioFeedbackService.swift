@@ -129,10 +129,36 @@ final class AudioFeedbackService {
         startListeningSound?.play()
     }
 
+    private var processingPulseTask: Task<Void, Never>?
+
     private func playProcessingFeedback() {
-        // Medium haptic
+        // Initial haptic + sound
         mediumImpactGenerator.prepare()
         mediumImpactGenerator.impactOccurred()
+
+        agentTypingSound?.currentTime = 0
+        agentTypingSound?.play()
+
+        // Start repeating haptic pulse while thinking
+        startProcessingPulse()
+    }
+
+    private func startProcessingPulse() {
+        stopProcessingPulse()
+        processingPulseTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                guard !Task.isCancelled else { break }
+                lightImpactGenerator.prepare()
+                lightImpactGenerator.impactOccurred(intensity: 0.4)
+            }
+        }
+    }
+
+    /// Stop the processing pulse (call when response arrives)
+    func stopProcessingPulse() {
+        processingPulseTask?.cancel()
+        processingPulseTask = nil
     }
 
     private func playIdleFeedback() {
