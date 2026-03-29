@@ -2,41 +2,36 @@ import SwiftUI
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
-    
-    // MARK: - State Variables
-    @State private var showingTeam = false
+    @Environment(\.haloHighContrast) private var highContrast
+
     @State private var showingTerms = false
     @State private var showingPrivacy = false
     @State private var showingContactSupport = false
     @State private var showingBugReport = false
-    
+
     var body: some View {
         ZStack {
-            // Background - ensure it covers the entire screen
             Color.black
                 .ignoresSafeArea(.all, edges: .all)
-            
+
             VStack(spacing: 0) {
                 headerView
-                
-                                    ScrollView {
-                        VStack(spacing: 12) {
-                            whatIsHaloFiSection
-                            ourMissionSection
-                            meetTheTeamButtonSection
-                            dataSecuritySection
-                            legalAndSupportSection
-                            appVersionSection
-                        }
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        aboutSection
+                        accessibilitySection
+                        dataSecuritySection
+                        legalSection
+                        supportSection
+                        appVersionSection
+                    }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
-                
+
                 Spacer()
             }
-        }
-        .sheet(isPresented: $showingTeam) {
-            TeamView()
         }
         .sheet(isPresented: $showingTerms) {
             TermsView()
@@ -51,7 +46,7 @@ struct AboutView: View {
             BugReportView()
         }
     }
-    
+
     // MARK: - Header View
     private var headerView: some View {
         HStack {
@@ -68,334 +63,218 @@ struct AboutView: View {
             .accessibilityLabel("Go back")
 
             Spacer()
-            
+
             Text("About")
                 .font(.title2)
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
-            
+
             Spacer()
-            
-            // Invisible spacer to center the title
+
             Color.clear
                 .frame(width: 40, height: 40)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 20) // Reduced top padding to move header higher
+        .padding(.top, 20)
         .padding(.bottom, 20)
     }
-    
-    // MARK: - What is Halo Fi Section
-    private var whatIsHaloFiSection: some View {
+
+    // MARK: - About Section
+    private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What is Halo Fi?")
+            Text("About Halo Fi")
                 .font(.headline)
                 .foregroundColor(.gray)
-            
-            Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
+
+            Text("Halo Fi is a voice-first financial assistant built for people who are blind or have low vision. We believe everyone deserves clear, simple access to their finances — without needing to read a screen.")
                 .font(.body)
                 .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Our mission is to bring visibility to personal finances through accessible and intelligent technology.")
+                .font(.body)
+                .foregroundColor(.white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.gray.opacity(highContrast ? 0.25 : 0.1))
         .cornerRadius(16)
     }
-    
-    // MARK: - Our Mission Section
-    private var ourMissionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Our Mission")
+
+    // MARK: - Accessibility Section
+    private var accessibilitySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Accessibility")
                 .font(.headline)
                 .foregroundColor(.gray)
-            
-            Text("To bring visibility to personal finances through accessible and intelligent technology—empowering everyone, especially those with visual impairments.")
-                .font(.body)
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
+
+            VStack(alignment: .leading, spacing: 12) {
+                accessibilityRow(icon: "mic.fill", text: "Voice-first design — talk to Halo instead of tapping through menus")
+                accessibilityRow(icon: "eye.fill", text: "Full VoiceOver support across every screen")
+                accessibilityRow(icon: "textformat.size", text: "Dynamic Type — text scales with your system font size")
+                accessibilityRow(icon: "circle.lefthalf.filled", text: "High contrast mode for low-vision users")
+                accessibilityRow(icon: "hand.raised.fill", text: "Reduce motion support for motion-sensitive users")
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.1))
+        .background(
+            LinearGradient(
+                colors: [Color.indigo.opacity(0.15), Color.purple.opacity(0.15)],
+                startPoint: .leading, endPoint: .trailing
+            )
+        )
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.indigo.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func accessibilityRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.indigo)
+                .font(.body)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Data Security Section
+    private var dataSecuritySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Data Security")
+                .font(.headline)
+                .foregroundColor(.gray)
+
+            VStack(alignment: .leading, spacing: 12) {
+                securityRow(icon: "lock.shield.fill", text: "Bank-level encryption for all your data")
+                securityRow(icon: "building.columns.fill", text: "Bank connections powered by Plaid — we never see your login credentials")
+                securityRow(icon: "eye.slash.fill", text: "We don't sell your data. Ever.")
+                securityRow(icon: "server.rack", text: "Voice conversations are processed in real-time and not stored")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.gray.opacity(highContrast ? 0.25 : 0.1))
         .cornerRadius(16)
     }
-    
-    // MARK: - Meet the Team Button Section
-    private var meetTheTeamButtonSection: some View {
-        Button(action: {
-            showingTeam = true
-        }) {
-            HStack {
-                Text("Meet the Team")
+
+    private func securityRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.teal)
+                .font(.body)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Legal Section
+    private var legalSection: some View {
+        VStack(spacing: 8) {
+            aboutLinkButton(icon: "doc.text.fill", title: "Terms of Service") {
+                showingTerms = true
+            }
+            aboutLinkButton(icon: "hand.raised.fill", title: "Privacy Policy") {
+                showingPrivacy = true
+            }
+        }
+    }
+
+    // MARK: - Support Section
+    private var supportSection: some View {
+        VStack(spacing: 8) {
+            aboutLinkButton(icon: "envelope.fill", title: "Contact Support") {
+                showingContactSupport = true
+            }
+            aboutLinkButton(icon: "ladybug.fill", title: "Report a Bug") {
+                showingBugReport = true
+            }
+        }
+    }
+
+    // MARK: - Link Button Component
+    private func aboutLinkButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .foregroundColor(.teal)
+                    .font(.body)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+
+                Text(title)
                     .font(.body)
                     .foregroundColor(.white)
+
                 Spacer()
+
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.gray)
+                    .foregroundColor(highContrast ? .white : .gray)
                     .font(.caption)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .leading, endPoint: .trailing))
+            .padding(.vertical, 14)
+            .background(Color.gray.opacity(highContrast ? 0.25 : 0.1))
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(highContrast ? 0.3 : 0), lineWidth: 1)
+            )
         }
-        .accessibilityLabel("Meet the Team")
-        .accessibilityHint("Double-tap to learn about the Halo Fi founders")
+        .accessibilityLabel(title)
+        .accessibilityHint("Double-tap to open \(title)")
     }
-    
-    // MARK: - Data Security Section
-    private var dataSecuritySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Data Security")
-                .font(.headline)
+
+    // MARK: - App Version Section
+    private var appVersionSection: some View {
+        HStack {
+            Text("Halo Fi")
+                .font(.subheadline)
                 .foregroundColor(.gray)
-            
-            HStack(spacing: 12) {
-                Image(systemName: "lock.shield.fill")
-                    .foregroundColor(.teal)
-                    .font(.title3)
-                
-                Text("End-to-end encryption")
-                    .font(.body)
-                    .foregroundColor(.white)
-                
-                Spacer()
-            }
+
+            Spacer()
+
+            Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.gray)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.gray.opacity(highContrast ? 0.25 : 0.1))
         .cornerRadius(16)
-    }
-    
-    // MARK: - Legal and Support Section
-    private var legalAndSupportSection: some View {
-        VStack(spacing: 16) {
-            // Legal Links
-            VStack(spacing: 12) {
-                Button(action: {
-                    showingTerms = true
-                }) {
-                    HStack {
-                        Text("Terms of Service")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(16)
-                }
-                
-                Button(action: {
-                    showingPrivacy = true
-                }) {
-                    HStack {
-                        Text("Privacy Policy")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(16)
-                }
-            }
-            
-            // Support & Feedback
-            VStack(spacing: 12) {
-                Button(action: {
-                    showingContactSupport = true
-                }) {
-                    HStack {
-                        Text("Contact Support")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(16)
-                }
-                
-                Button(action: {
-                    showingBugReport = true
-                }) {
-                    HStack {
-                        Text("Report a Bug / Feedback")
-                        .font(.body)
-                        .foregroundColor(.white)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(16)
-                }
-            }
-        }
-    }
-    
-    // MARK: - App Version Section
-    private var appVersionSection: some View {
-        VStack(spacing: 16) {
-            // App Version
-            HStack {
-                Text("App Version: v1.0.0")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(16)
-        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Halo Fi version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
     }
 }
 
-// MARK: - Team View (Modal)
-struct TeamView: View {
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header with Done button
-                HStack {
-                    Spacer()
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                    .font(.body)
-                    .padding(.trailing, 20)
-                    .padding(.top, 10)
-                }
-                
-                // Title
-                Text("Meet the Team")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-                
-                // Content
-                ScrollView {
-                    VStack(spacing: 20) {
-                            // Andrew Babin
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Andrew Babin")
-                                    .font(.title2)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                
-                                Text("Co-Founder")
-                                    .font(.headline)
-                                    .foregroundColor(.teal)
-                                
-                                Text("Diagnosed with Stargardt's disease at a young age, Andrew has never let vision loss define him. He embraced technology as a way to adapt and thrive, building a career in finance over the past five years. Passionate about AI, he explores how it can support daily life and create meaningful impact.")
-                                    .font(.body)
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.leading)
-                                    .lineLimit(nil)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(16)
-                            
-                            // Liam Haley
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Liam Haley")
-                                    .font(.title2)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                
-                                Text("Co-Founder")
-                                    .font(.headline)
-                                    .foregroundColor(.teal)
-                                
-                                Text("Liam is an AI developer and previous fintech startup founder. His 15-year friendship with Andrew gave him deep perspective on the challenges of vision loss. While not visually impaired himself, he brings technical expertise and startup experience to the mission of Halo Fi.")
-                                    .font(.body)
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.leading)
-                                    .lineLimit(nil)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(16)
-                            
-                            // Together Section
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Together")
-                                    .font(.title2)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                
-                                Text("Andrew and Liam combined their professional skills and life experiences to create Halo Fi—a voice-first financial assistant designed to bring clarity and accessibility to personal finance. Their vision is simple: build a tool that has no downside, only benefits, and can help hundreds of thousands gain clearer access to their finances.")
-                                    .font(.body)
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.leading)
-                                    .lineLimit(nil)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(16)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-                    }
-                    
-                    Spacer()
-                }
-            }
-        }
-    }
-    
-    // MARK: - Terms View (Modal)
+// MARK: - Terms View (Modal)
 struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
-                // Header with Done button
                 HStack {
                     Spacer()
                     Button("Done") {
@@ -407,7 +286,7 @@ struct TermsView: View {
                     .padding(.vertical, 16)
                 }
                 .padding(.top, 8)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Terms of Service")
@@ -415,23 +294,20 @@ struct TermsView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .padding(.top, 8)
-                        
-                        Text("Last updated: December 2024")
+
+                        Text("Last updated: March 2026")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        
-                        Text("By using Halo Fi, you agree to these terms...")
+
+                        Text("By using Halo Fi, you agree to these terms of service. Halo Fi provides voice-based financial insights and account aggregation through third-party services. We are not a bank, financial advisor, or licensed financial institution.\n\nHalo Fi uses Plaid to connect to your financial accounts. By linking your accounts, you authorize Plaid to access your financial data on your behalf.\n\nAll financial information provided through Halo Fi is for informational purposes only and should not be considered financial advice. Always consult a qualified professional for financial decisions.\n\nWe reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the updated terms.")
                             .font(.body)
                             .foregroundColor(.white)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(nil)
-                        
-                        // Add more terms content here
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
-                
+
                 Spacer()
             }
         }
@@ -441,13 +317,12 @@ struct TermsView: View {
 // MARK: - Privacy View (Modal)
 struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
-                // Header with Done button
                 HStack {
                     Spacer()
                     Button("Done") {
@@ -459,7 +334,7 @@ struct PrivacyView: View {
                     .padding(.vertical, 16)
                 }
                 .padding(.top, 8)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Privacy Policy")
@@ -467,23 +342,50 @@ struct PrivacyView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .padding(.top, 8)
-                        
-                        Text("Last updated: December 2024")
+
+                        Text("Last updated: March 2026")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        
-                        Text("Your privacy is important to us. This policy describes how we collect, use, and protect your information...")
-                            .font(.body)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(nil)
-                        
-                        // Add more privacy content here
+
+                        Group {
+                            Text("What We Collect")
+                                .font(.headline)
+                                .foregroundColor(.teal)
+
+                            Text("When you create an account, we collect your name, email, and phone number. When you link bank accounts through Plaid, we receive account balances, transaction history, and account metadata. We use this data solely to provide you with personalized financial insights.")
+                                .font(.body)
+                                .foregroundColor(.white)
+
+                            Text("What We Don't Do")
+                                .font(.headline)
+                                .foregroundColor(.teal)
+
+                            Text("We never see your bank login credentials — Plaid handles that securely. We don't sell, share, or rent your personal or financial data to third parties. Voice conversations are processed in real-time for responses and are not recorded or stored.")
+                                .font(.body)
+                                .foregroundColor(.white)
+
+                            Text("How We Protect Your Data")
+                                .font(.headline)
+                                .foregroundColor(.teal)
+
+                            Text("All data is encrypted in transit and at rest. Access tokens for bank connections are encrypted with industry-standard encryption. We use secure cloud infrastructure with regular security audits.")
+                                .font(.body)
+                                .foregroundColor(.white)
+
+                            Text("Your Rights")
+                                .font(.headline)
+                                .foregroundColor(.teal)
+
+                            Text("You can disconnect your bank accounts at any time. You can request deletion of your account and all associated data by contacting support. We will process deletion requests within 30 days.")
+                                .font(.body)
+                                .foregroundColor(.white)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
-                
+
                 Spacer()
             }
         }
@@ -495,13 +397,12 @@ struct ContactSupportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var message = ""
     @State private var showingSent = false
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
-                // Header with Done button
                 HStack {
                     Spacer()
                     Button("Done") {
@@ -513,14 +414,14 @@ struct ContactSupportView: View {
                     .padding(.vertical, 16)
                 }
                 .padding(.top, 8)
-                
+
                 VStack(spacing: 20) {
                     Text("Contact Support")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                         .padding(.top, 8)
-                    
+
                     VStack(alignment: .leading, spacing: 12) {
                         Text("How can we help you?")
                             .font(.body)
@@ -548,12 +449,13 @@ struct ContactSupportView: View {
                     }
                     .padding(.horizontal, 20)
                     .disabled(message.isEmpty)
+                    .opacity(message.isEmpty ? 0.6 : 1.0)
                     .accessibilityLabel("Send message")
                     .accessibilityHint(message.isEmpty ? "Type a message first" : "Double-tap to send your message")
-                    
+
                     Spacer()
                 }
-                
+
                 Spacer()
             }
         }
@@ -570,13 +472,12 @@ struct BugReportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var bugDescription = ""
     @State private var showingSent = false
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
-                // Header with Done button
                 HStack {
                     Spacer()
                     Button("Done") {
@@ -588,19 +489,19 @@ struct BugReportView: View {
                     .padding(.vertical, 16)
                 }
                 .padding(.top, 8)
-                
+
                 VStack(spacing: 20) {
-                    Text("Report a Bug / Feedback")
+                    Text("Report a Bug")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
                         .padding(.top, 8)
-                    
+
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Help us improve Halo Fi")
                             .font(.body)
                             .foregroundColor(.white)
-                        
+
                         TextField("Describe the issue or share your feedback...", text: $bugDescription, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(4...8)
@@ -623,12 +524,13 @@ struct BugReportView: View {
                     }
                     .padding(.horizontal, 20)
                     .disabled(bugDescription.isEmpty)
+                    .opacity(bugDescription.isEmpty ? 0.6 : 1.0)
                     .accessibilityLabel("Submit report")
                     .accessibilityHint(bugDescription.isEmpty ? "Describe the issue first" : "Double-tap to submit your report")
-                    
+
                     Spacer()
                 }
-                
+
                 Spacer()
             }
         }
