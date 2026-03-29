@@ -288,7 +288,8 @@ final class ConversationCoordinator {
             let context: [String: AnyCodable] = [
                 "platform": AnyCodable("ios"),
                 "sessionId": AnyCodable(sessionId ?? ""),
-                "timestamp": AnyCodable(Date().timeIntervalSince1970)
+                "timestamp": AnyCodable(Date().timeIntervalSince1970),
+                "timezone": AnyCodable(TimeZone.current.identifier),
             ]
 
             try await agentWebSocket.sendMessage(message, context: context)
