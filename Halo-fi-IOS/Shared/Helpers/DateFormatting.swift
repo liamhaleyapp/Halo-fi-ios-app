@@ -98,6 +98,50 @@ enum DateFormatting {
         shortDisplayFormatter.string(from: date)
     }
 
+    /// Smart date formatter for transaction lists.
+    /// Shows "Today", "Yesterday" for recent, "Mar 27" for this year,
+    /// "Feb 15, 2025" for older years.
+    static func formatSmart(_ date: Date) -> String {
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(date) {
+            return "Today"
+        }
+        if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+
+        let now = Date()
+        let daysDiff = calendar.dateComponents([.day], from: date, to: now).day ?? 0
+
+        // Within last 6 days: "Monday", "Tuesday", etc.
+        if daysDiff <= 6 {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE"
+            return formatter.string(from: date)
+        }
+
+        // Same year: "Mar 27"
+        if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
+        }
+
+        // Different year: "Feb 15, 2025"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
+    /// Parses a date string and returns a smart-formatted string.
+    static func parseAndFormatSmart(_ dateString: String) -> String {
+        guard let date = parse(dateString) else {
+            return dateString
+        }
+        return formatSmart(date)
+    }
+
     // MARK: - Parsing
 
     /// Parses a date string from the API.

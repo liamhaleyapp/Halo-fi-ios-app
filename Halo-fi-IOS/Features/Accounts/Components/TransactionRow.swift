@@ -15,6 +15,12 @@ struct TransactionRow: View {
   }
 
   private var categoryName: String {
+    // Prefer Plaid's personal finance category (more accurate)
+    if let pfc = transaction.personalFinanceCategory,
+       let primary = pfc["primary"] as? String {
+      return primary.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+    // Fallback to legacy category
     if let categories = transaction.category, !categories.isEmpty {
       return categories.joined(separator: " • ")
     }
@@ -22,15 +28,7 @@ struct TransactionRow: View {
   }
 
   private var formattedDate: String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-
-    if let date = formatter.date(from: transaction.transactionDate) {
-      formatter.dateFormat = "MMM d"
-      return formatter.string(from: date)
-    }
-
-    return transaction.transactionDate
+    DateFormatting.parseAndFormatSmart(transaction.transactionDate)
   }
 
   private var accessibilityLabel: String {
@@ -57,15 +55,33 @@ struct TransactionRow: View {
   
   var body: some View {
     HStack(spacing: 16) {
-      // Transaction icon/indicator
-      Circle()
-        .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+      // Merchant logo or fallback icon
+      if let logoUrl = transaction.logoUrl, let url = URL(string: logoUrl) {
+        AsyncImage(url: url) { image in
+          image
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+        } placeholder: {
+          Circle()
+            .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+            .overlay(
+              Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
+                .font(.caption)
+                .foregroundColor(transaction.amount >= 0 ? .red : .green)
+            )
+        }
         .frame(width: 40, height: 40)
-        .overlay(
-          Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
-            .font(.caption)
-            .foregroundColor(transaction.amount >= 0 ? .red : .green)
-        )
+        .clipShape(Circle())
+      } else {
+        Circle()
+          .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+          .frame(width: 40, height: 40)
+          .overlay(
+            Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
+              .font(.caption)
+              .foregroundColor(transaction.amount >= 0 ? .red : .green)
+          )
+      }
       
       VStack(alignment: .leading, spacing: 4) {
         Text(displayName)
