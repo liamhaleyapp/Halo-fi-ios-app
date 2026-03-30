@@ -117,7 +117,7 @@ final class ElevenLabsSTTService {
         var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
         var queryItems = urlComponents?.queryItems ?? []
         queryItems.append(URLQueryItem(name: "token", value: token.token))
-        if let contextPrompt = token.config?.contextPrompt, !contextPrompt.isEmpty {
+        if let contextPrompt = token.config.contextPrompt, !contextPrompt.isEmpty {
             queryItems.append(URLQueryItem(name: "context_prompt", value: contextPrompt))
             Logger.info("ElevenLabsSTT: Using context prompt for improved accuracy")
         }

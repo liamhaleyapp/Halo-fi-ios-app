@@ -58,6 +58,27 @@ enum DateFormatting {
         return formatter
     }()
 
+    /// Weekday name formatter (e.g., "Monday").
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
+
+    /// Month and day formatter (e.g., "Mar 27").
+    private static let monthDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
+    /// Month, day, and year formatter (e.g., "Feb 15, 2025").
+    private static let monthDayYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter
+    }()
+
     // MARK: - Formatting for API Requests
 
     /// Formats a date for API requests (ISO8601 with fractional seconds).
@@ -116,22 +137,16 @@ enum DateFormatting {
 
         // Within last 6 days: "Monday", "Tuesday", etc.
         if daysDiff <= 6 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE"
-            return formatter.string(from: date)
+            return weekdayFormatter.string(from: date)
         }
 
         // Same year: "Mar 27"
         if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            return formatter.string(from: date)
+            return monthDayFormatter.string(from: date)
         }
 
         // Different year: "Feb 15, 2025"
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        return monthDayYearFormatter.string(from: date)
     }
 
     /// Parses a date string and returns a smart-formatted string.

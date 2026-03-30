@@ -21,6 +21,7 @@
 		9E16C4972F40C58F00B135F0 /* agent_typing.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48C2F40C58F00B135F0 /* agent_typing.aif */; };
 		9E16C4982F40C58F00B135F0 /* tab_switch.wav in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C4902F40C58F00B135F0 /* tab_switch.wav */; };
 		9E3B37CC2E9467F3002E54AD /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E3B37CB2E9467F3002E54AD /* LinkKit */; };
+		9EF6FCD72F7ACCBF002D4303 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,7 @@
 		9E16C48F2F40C58F00B135F0 /* pop_drip.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = pop_drip.aif; sourceTree = "<group>"; };
 		9E16C4902F40C58F00B135F0 /* tab_switch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = tab_switch.wav; sourceTree = "<group>"; };
 		9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Halo-fi-IOS-Info.plist"; sourceTree = "<group>"; };
+		9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -162,6 +164,7 @@
 		0C39AAA62E4EBF9A00CF16A0 = {
 			isa = PBXGroup;
 			children = (
+				9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */,
 				9E16C4922F40C58F00B135F0 /* Resources */,
 				9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */,
 				9EDDB70F2E9D8BD200295AB4 /* Shared */,
@@ -348,6 +351,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9EF6FCD72F7ACCBF002D4303 /* PrivacyInfo.xcprivacy in Resources */,
 				9E16C4932F40C58F00B135F0 /* listening_stop.aif in Resources */,
 				9E16C4942F40C58F00B135F0 /* pop_drip.aif in Resources */,
 				9E16C4952F40C58F00B135F0 /* listening_start.aif in Resources */,

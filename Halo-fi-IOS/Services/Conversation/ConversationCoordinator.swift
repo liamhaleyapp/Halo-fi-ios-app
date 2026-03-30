@@ -448,7 +448,6 @@ final class ConversationCoordinator {
                 Logger.info("ConversationCoordinator: Agent acknowledged, thinking...")
                 // Acknowledgment text is shown in transcript
                 if let text = ack.text, !text.isEmpty {
-                    let responseId = self.currentAgentResponseId ?? UUID()
                     self.emitEvent(.status(text))
                 }
             }

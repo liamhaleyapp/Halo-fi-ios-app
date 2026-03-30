@@ -17,7 +17,7 @@ struct TransactionRow: View {
   private var categoryName: String {
     // Prefer Plaid's personal finance category (more accurate)
     if let pfc = transaction.personalFinanceCategory,
-       let primary = pfc["primary"] as? String {
+       let primary = pfc.additionalProperties?["primary"]?.value as? String {
       return primary.replacingOccurrences(of: "_", with: " ").capitalized
     }
     // Fallback to legacy category

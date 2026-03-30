@@ -46,10 +46,7 @@ struct ConversationView: View {
         .onAppear {
             Task {
                 await viewModel.onAppear()
-                // Auto-send initial prompt if provided (from quick action buttons)
                 if let prompt = initialPrompt, !prompt.isEmpty {
-                    // Small delay to let greeting arrive first
-                    try? await Task.sleep(nanoseconds: 500_000_000)
                     await viewModel.sendText(prompt)
                 }
             }
