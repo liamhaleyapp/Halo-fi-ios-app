@@ -66,47 +66,43 @@ class SubscriptionService {
     do {
       customerInfo = try await Purchases.shared.customerInfo()
       
-      // Update entitlements
+      // Update entitlements — only track active ones
       if let entitlements = customerInfo?.entitlements.all {
-        activeEntitlements = Set(entitlements.keys)
+        activeEntitlements = Set(
+          entitlements.filter { $0.value.isActive }.map { $0.key }
+        )
       } else {
         activeEntitlements = []
       }
-      
+
       // Determine subscription status
-      if let entitlements = customerInfo?.entitlements.all,
-         !entitlements.isEmpty {
-        
-        // Check if any entitlement is active
-        let hasActiveEntitlement = entitlements.values.contains { $0.isActive }
-        
-        if hasActiveEntitlement {
-          // Determine which plan they have
-          // Check for various possible entitlement names
-          let hasPro = activeEntitlements.contains(where: { 
-            $0.lowercased().contains("pro") && !$0.lowercased().contains("max")
-          })
-          let hasMax = activeEntitlements.contains(where: { 
-            $0.lowercased().contains("max")
-          })
-          let hasBasic = activeEntitlements.contains(where: { 
-            $0.lowercased().contains("basic") && !$0.lowercased().contains("pro") && !$0.lowercased().contains("max")
-          })
-          
-          if hasMax {
-            currentSubscription = .max
-          } else if hasPro {
-            currentSubscription = .pro
-          } else if hasBasic {
-            currentSubscription = .basic
-          } else {
-            currentSubscription = .active
-          }
-        } else {
+      if activeEntitlements.isEmpty {
+        // Check if they had entitlements before (expired) vs never subscribed
+        if let entitlements = customerInfo?.entitlements.all, !entitlements.isEmpty {
           currentSubscription = .expired
+        } else {
+          currentSubscription = .none
         }
       } else {
-        currentSubscription = .none
+        let hasMax = activeEntitlements.contains(where: {
+          $0.lowercased().contains("max")
+        })
+        let hasPro = activeEntitlements.contains(where: {
+          $0.lowercased().contains("pro") && !$0.lowercased().contains("max")
+        })
+        let hasBasic = activeEntitlements.contains(where: {
+          $0.lowercased().contains("basic") && !$0.lowercased().contains("pro") && !$0.lowercased().contains("max")
+        })
+
+        if hasMax {
+          currentSubscription = .max
+        } else if hasPro {
+          currentSubscription = .pro
+        } else if hasBasic {
+          currentSubscription = .basic
+        } else {
+          currentSubscription = .active
+        }
       }
     } catch {
       currentSubscription = .none

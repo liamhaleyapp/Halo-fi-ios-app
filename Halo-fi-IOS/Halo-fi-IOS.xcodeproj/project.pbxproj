@@ -14,6 +14,7 @@
 		0CB170BC2E5251F500BF97C8 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 0CB170BB2E5251F500BF97C8 /* Storage */; };
 		9E08DB572EB2F2B800473197 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E08DB562EB2F2B700473197 /* StoreKit.framework */; };
 		9E08DB602EB3F4EC00473197 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 9E08DB5F2EB3F4EC00473197 /* RevenueCat */; };
+		9E08DB622EB3F4EC00473197 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 9E08DB612EB3F4EC00473197 /* RevenueCatUI */; };
 		9E16C4932F40C58F00B135F0 /* listening_stop.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48E2F40C58F00B135F0 /* listening_stop.aif */; };
 		9E16C4942F40C58F00B135F0 /* pop_drip.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48F2F40C58F00B135F0 /* pop_drip.aif */; };
 		9E16C4952F40C58F00B135F0 /* listening_start.aif in Resources */ = {isa = PBXBuildFile; fileRef = 9E16C48D2F40C58F00B135F0 /* listening_start.aif */; };
@@ -138,6 +139,7 @@
 				0CB170B62E5251F500BF97C8 /* Functions in Frameworks */,
 				0CB170B42E5251F500BF97C8 /* Auth in Frameworks */,
 				9E08DB602EB3F4EC00473197 /* RevenueCat in Frameworks */,
+				9E08DB622EB3F4EC00473197 /* RevenueCatUI in Frameworks */,
 				9E3B37CC2E9467F3002E54AD /* LinkKit in Frameworks */,
 				0CB170BC2E5251F500BF97C8 /* Storage in Frameworks */,
 				0CB170BA2E5251F500BF97C8 /* Realtime in Frameworks */,
@@ -252,6 +254,7 @@
 				0CB170BB2E5251F500BF97C8 /* Storage */,
 				9E3B37CB2E9467F3002E54AD /* LinkKit */,
 				9E08DB5F2EB3F4EC00473197 /* RevenueCat */,
+				9E08DB612EB3F4EC00473197 /* RevenueCatUI */,
 			);
 			productName = "Halo-fi-IOS";
 			productReference = 0C39AAAF2E4EBF9A00CF16A0 /* Halo-fi-IOS.app */;
@@ -1040,6 +1043,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9E08DB5E2EB3F4EC00473197 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
 			productName = RevenueCat;
+		};
+		9E08DB612EB3F4EC00473197 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E08DB5E2EB3F4EC00473197 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCatUI;
 		};
 		9E3B37CB2E9467F3002E54AD /* LinkKit */ = {
 			isa = XCSwiftPackageProductDependency;

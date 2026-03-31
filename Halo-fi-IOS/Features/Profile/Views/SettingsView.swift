@@ -108,8 +108,7 @@ struct SettingsView: View {
           PreferencesView()
 
         case .subscription:
-          let viewModel = SubscriptionViewModel(subscriptionService: subscriptionService)
-          SubscriptionView(viewModel: viewModel)
+          SubscriptionManagementView()
 
         case .inviteFriends:
           InviteFriendsView()

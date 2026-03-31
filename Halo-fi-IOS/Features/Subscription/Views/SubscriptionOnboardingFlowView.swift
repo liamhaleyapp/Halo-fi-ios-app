@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import RevenueCatUI
 
 struct SubscriptionOnboardingFlowView: View {
   @Environment(\.dismiss) private var dismiss
@@ -82,24 +83,48 @@ struct SubscriptionOnboardingFlowView: View {
             )
           }
         } else {
-          // Show subscription view on final step
-          // Wrap it to handle back navigation
-          SubscriptionViewWithBack(
-            onBack: hideBackButton ? nil : {
-              withAnimation {
-                showingSubscriptionView = false
+          // Show RevenueCat paywall
+          PaywallView(displayCloseButton: false)
+            .onPurchaseCompleted { _ in
+              Task {
+                await subscriptionService.checkSubscriptionStatus()
               }
-            },
-            onContinue: {
-              // User has subscription and wants to continue
               if let onComplete = onComplete {
                 onComplete()
               } else {
                 showingPlaidOnboarding = true
               }
-            },
-            viewModel: SubscriptionViewModel(subscriptionService: subscriptionService)
-          )
+            }
+            .onRestoreCompleted { _ in
+              Task {
+                await subscriptionService.checkSubscriptionStatus()
+              }
+              if subscriptionService.hasActiveSubscription {
+                if let onComplete = onComplete {
+                  onComplete()
+                } else {
+                  showingPlaidOnboarding = true
+                }
+              }
+            }
+            .overlay(alignment: .topLeading) {
+              if !hideBackButton {
+                Button(action: {
+                  withAnimation {
+                    showingSubscriptionView = false
+                  }
+                }) {
+                  Image(systemName: "chevron.left")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color.gray.opacity(0.2))
+                    .clipShape(Circle())
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 15)
+              }
+            }
         }
       }
       .navigationBarHidden(true)
@@ -130,57 +155,9 @@ struct SubscriptionOnboardingFlowView: View {
       )
       .navigationBarTitleDisplayMode(.inline)
     }
-    .onAppear {
-      // Initialize subscription service if not already initialized
-      Task {
-        if subscriptionService.availablePackages.isEmpty {
-          await subscriptionService.initialize()
-        }
-      }
-    }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Connect Bank")
     .accessibilityHint("Step 3 of 3 in the setup process")
-  }
-}
-
-// MARK: - Subscription View Wrapper for Onboarding
-struct SubscriptionViewWithBack: View {
-  let onBack: (() -> Void)?
-  let onContinue: (() -> Void)?
-  @State private var viewModel: SubscriptionViewModel
-  
-  init(
-    onBack: (() -> Void)? = nil,
-    onContinue: (() -> Void)? = nil,
-    viewModel: SubscriptionViewModel
-  ) {
-    self.onBack = onBack
-    self.onContinue = onContinue
-    _viewModel = State(initialValue: viewModel)
-  }
-  
-  var body: some View {
-    SubscriptionView(
-      isOnboarding: true,
-      onContinue: onContinue,
-      viewModel: viewModel
-    )
-    .overlay(alignment: .topLeading) {
-      // Back button overlay - only show if onBack is provided
-      if let onBack = onBack {
-        Button(action: onBack) {
-          Image(systemName: "chevron.left")
-            .font(.title2)
-            .foregroundColor(.white)
-            .frame(width: 40, height: 40)
-            .background(Color.gray.opacity(0.2))
-            .clipShape(Circle())
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 15)
-      }
-    }
   }
 }
 
