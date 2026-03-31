@@ -153,15 +153,20 @@ final class UserManager {
                 password: password
             )
 
+            guard let session = authResponse.session,
+                  let authUser = authResponse.authUser else {
+                throw AuthError.invalidResponse
+            }
+
             tokenStorage.saveTokensWithExpiration(
-                accessToken: authResponse.session.accessToken,
-                refreshToken: authResponse.session.refreshToken,
-                expiresAt: authResponse.session.expiresAt
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                expiresAt: session.expiresAt
             )
 
-            Logger.debug("Token expires at: \(authResponse.session.expirationDate), duration: \(formatTokenDuration(authResponse.session.expiresIn))")
+            Logger.debug("Token expires at: \(session.expirationDate), duration: \(formatTokenDuration(session.expiresIn))")
 
-            let user = createUser(from: authResponse.authUser)
+            let user = createUser(from: authUser)
             applySignInState(user: user)
 
             do {

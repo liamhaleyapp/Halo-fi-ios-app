@@ -28,12 +28,18 @@ final class AuthService: AuthServiceProtocol {
 
         let requestBody = try JSONEncoder().encode(loginRequest)
 
-        return try await networkService.publicRequest(
+        let response: LoginResponse = try await networkService.publicRequest(
             endpoint: "/auth/login",
             method: .POST,
             body: requestBody,
             responseType: LoginResponse.self
         )
+
+        guard response.success, response.authUser != nil, response.session != nil else {
+            throw AuthError.invalidCredentials
+        }
+
+        return response
     }
 
     // MARK: - Register

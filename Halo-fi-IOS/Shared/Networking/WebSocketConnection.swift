@@ -58,7 +58,7 @@ public final class WebSocketConnection<Incoming: Decodable & Sendable, Outgoing:
       return message
 
     case let .string(text):
-      Logger.debug("WebSocket RECV (text): \(text)")
+      Logger.debug("WebSocket RECV (text): \(text.prefix(200))\(text.count > 200 ? "... (\(text.count) chars)" : "")")
 
       guard
         let messageData = text.data(using: .utf8),

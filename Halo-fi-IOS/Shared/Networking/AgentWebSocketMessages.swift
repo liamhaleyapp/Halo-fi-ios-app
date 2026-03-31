@@ -66,7 +66,7 @@ struct StreamChunkPayload: Codable, Sendable {
 }
 
 struct ErrorPayload: Codable, Sendable {
-    let type: String
+    let type: String?
     let error: String
     let code: String
     let details: [String: AnyCodable]?
@@ -154,7 +154,13 @@ enum AgentIncomingMessage: Codable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(String.self, forKey: .type)
+
+        // Handle messages without a "type" field (e.g., CONCURRENT_SESSION error)
+        guard let type = try container.decodeIfPresent(String.self, forKey: .type) else {
+            let payload = try ErrorPayload(from: decoder)
+            self = .error(payload)
+            return
+        }
 
         switch type {
         case "agent_response":

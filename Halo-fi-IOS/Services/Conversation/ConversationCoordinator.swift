@@ -94,9 +94,7 @@ final class ConversationCoordinator {
 
         do {
             try await agentWebSocket.connect()
-            // Voice (ElevenLabs STT) connects on-demand when user taps mic
-            setState(.idle)
-            // Backend sends a personalized greeting with TTS on connect
+            // Stay in .connecting until greeting arrives (first audio/response)
         } catch {
             setState(.error(error.localizedDescription))
             emitEvent(.errorEvent("Failed to connect: \(error.localizedDescription)"))
@@ -136,9 +134,11 @@ final class ConversationCoordinator {
         guard state == .idle || state == .speaking else { return }
         guard interactionMode == .voice else { return }
 
-        // Stop TTS if speaking
-        if state == .speaking {
+        // Don't start mic if audio is buffering or playing — stop it and return
+        if streamingAudioPlayer?.isPlaying == true || streamingAudioPlayer?.isBuffering == true {
             streamingAudioPlayer?.stop()
+            setState(.idle)
+            return
         }
 
         // Check permission
@@ -167,15 +167,10 @@ final class ConversationCoordinator {
                             }
                         }
 
-                        // Trigger feedback BEFORE recording (audio session setup can block haptics)
+                        // Start recording first, then signal the user
+                        try await self.voiceService.startRecording()
                         self.setState(.listening)
                         self.audioFeedback.feedbackForStateChange(.listening)
-
-                        // Small delay to let haptic/sound complete before audio session changes
-                        try await Task.sleep(nanoseconds: 150_000_000) // 150ms
-
-                        // Now start recording
-                        try await self.voiceService.startRecording()
                         self.isVoiceSessionActive = true
                     } catch {
                         self.handleVoiceSetupError(error)
@@ -353,7 +348,7 @@ final class ConversationCoordinator {
     }
 
     private func handleSpeakingFinished() {
-        if state == .speaking {
+        if state == .speaking || state == .connecting {
             setState(.idle)
         }
     }
@@ -391,8 +386,8 @@ final class ConversationCoordinator {
                 // Emit final event
                 self.emitEvent(.agentFinal(response.message, id: responseId))
 
-                // If not already handling an audio stream, just go idle
-                if self.streamingAudioPlayer?.isPlaying != true {
+                // If not already handling an audio stream, transition to idle
+                if self.streamingAudioPlayer?.isPlaying != true && self.streamingAudioPlayer?.isBuffering != true {
                     self.setState(.idle)
                 }
 

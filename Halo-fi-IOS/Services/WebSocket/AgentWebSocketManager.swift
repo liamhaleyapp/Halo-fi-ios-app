@@ -25,6 +25,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private let baseURL = "wss://halofiapp-production.up.railway.app"
     private let tokenStorage: TokenStorageProtocol
     private var sessionId: String?
+    private var concurrentSessionRetries = 0
+    private let maxConcurrentSessionRetries = 3
 
     // Callbacks for handling different message types
     var onAgentResponse: ((AgentResponsePayload) -> Void)?
@@ -98,8 +100,15 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
                 let message = try await connection.receive()
                 await handleIncomingMessage(message)
             }
+        } catch is CancellationError {
+            Logger.info("Agent WebSocket listener cancelled")
         } catch {
-            Logger.error("Agent WebSocket listening error: \(error)")
+            // Ignore socket-closed errors during intentional disconnect
+            guard isConnected else {
+                Logger.info("Agent WebSocket listener ended (disconnected)")
+                return
+            }
+            Logger.error("Agent WebSocket listening error: \(error.localizedDescription)")
             await MainActor.run {
                 connectionStatus = .disconnected
                 isConnected = false
@@ -163,6 +172,16 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     }
 
     private func handleError(_ error: ErrorPayload) async {
+        // Auto-retry on concurrent session (previous session still closing)
+        if error.code == "CONCURRENT_SESSION" && concurrentSessionRetries < maxConcurrentSessionRetries {
+            concurrentSessionRetries += 1
+            Logger.info("AgentWebSocket: Concurrent session detected, retrying in 1s (attempt \(concurrentSessionRetries)/\(maxConcurrentSessionRetries))")
+            disconnect()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await connect()
+            return
+        }
+
         await MainActor.run {
             lastError = "\(error.error) (Code: \(error.code))"
             Logger.error("Agent Error: \(error.error) (Code: \(error.code))")
@@ -184,6 +203,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     }
 
     private func handleConnectionAck(_ ack: ConnectionAckPayload) async {
+        concurrentSessionRetries = 0
         await MainActor.run {
             // Use connectionId if available, fallback to sessionId
             currentSessionId = ack.connectionId ?? ack.sessionId

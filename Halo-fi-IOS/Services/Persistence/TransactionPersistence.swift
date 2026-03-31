@@ -56,7 +56,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
             let persisted = try context.fetch(descriptor)
             Logger.debug("TransactionPersistence: Loaded \(persisted.count) transactions for account \(accountId)")
-            return persisted.map { $0.toTransaction() }
+            return persisted.compactMap { $0.toTransaction() }
         } catch {
             Logger.error("TransactionPersistence: Failed to load transactions: \(error.localizedDescription)")
             return []
@@ -81,7 +81,7 @@ final class TransactionPersistence: TransactionPersistenceProtocol, @unchecked S
 
             let persisted = try context.fetch(descriptor)
             Logger.debug("TransactionPersistence: Loaded all \(persisted.count) transactions for item \(itemId)")
-            return persisted.map { $0.toTransaction() }
+            return persisted.compactMap { $0.toTransaction() }
         } catch {
             Logger.error("TransactionPersistence: Failed to load all transactions: \(error.localizedDescription)")
             return []

@@ -8,13 +8,15 @@ import Foundation
 
 struct LoginResponse: Codable {
   let success: Bool
-  let message: String
-  let authUser: AuthUser
-  let session: AuthSession
-  
+  let message: String?
+  let error: String?
+  let authUser: AuthUser?
+  let session: AuthSession?
+
   enum CodingKeys: String, CodingKey {
     case success
     case message
+    case error
     case authUser = "auth_user"
     case session
   }

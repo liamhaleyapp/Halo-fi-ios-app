@@ -10,7 +10,7 @@ import Foundation
 extension PersistedTransaction {
     /// Converts this persisted transaction back to a Transaction struct
     /// Note: Some fields may be nil as we only persist what's needed for display
-    func toTransaction() -> Transaction {
+    func toTransaction() -> Transaction? {
         // Decode category from JSON
         var category: [String]?
         if let json = categoryJson, let data = json.data(using: .utf8) {
@@ -75,7 +75,7 @@ struct PersistedTransactionData {
 extension Transaction {
     /// Creates a Transaction from persisted data using JSON encoding
     /// This avoids conflicts with the Codable synthesized init
-    static func fromPersisted(_ data: PersistedTransactionData) -> Transaction {
+    static func fromPersisted(_ data: PersistedTransactionData) -> Transaction? {
         // Build a JSON dictionary and decode it
         var dict: [String: Any] = [
             "amount": data.amount,
@@ -113,8 +113,8 @@ extension Transaction {
             let jsonData = try JSONSerialization.data(withJSONObject: dict)
             return try JSONDecoder().decode(Transaction.self, from: jsonData)
         } catch {
-            // Fallback: return a minimal transaction if decoding fails
-            fatalError("Failed to create Transaction from persisted data: \(error)")
+            print("Failed to create Transaction from persisted data: \(error)")
+            return nil
         }
     }
 }

@@ -16,6 +16,7 @@ final class StreamingAudioPlayer {
 
     private(set) var isPlaying: Bool = false
     private(set) var isMuted: Bool = false
+    var isBuffering: Bool { !mp3Data.isEmpty }
 
     // MARK: - Callbacks
 
