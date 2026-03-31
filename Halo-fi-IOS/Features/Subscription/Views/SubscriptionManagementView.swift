@@ -24,6 +24,12 @@ struct SubscriptionManagementView: View {
       VStack(spacing: 12) {
         // Current Plan
         HStack(spacing: 16) {
+          Image(systemName: "crown.fill")
+            .foregroundColor(.purple)
+            .font(.title3)
+            .frame(width: 32)
+            .accessibilityHidden(true)
+
           VStack(alignment: .leading, spacing: 4) {
             Text("Current Plan")
               .font(.subheadline)
@@ -36,9 +42,20 @@ struct SubscriptionManagementView: View {
           Spacer()
 
           if subscriptionService.hasActiveSubscription {
-            Text("Renews \(renewalText)")
-              .font(.caption)
-              .foregroundColor(.gray)
+            VStack(alignment: .trailing, spacing: 4) {
+              if let pending = subscriptionService.pendingPlanChange {
+                Text("Switching to \(pending)")
+                  .font(.caption)
+                  .foregroundColor(.orange)
+                Text("on \(renewalText)")
+                  .font(.caption)
+                  .foregroundColor(.gray)
+              } else {
+                Text("Renews \(renewalText)")
+                  .font(.caption)
+                  .foregroundColor(.gray)
+              }
+            }
           } else {
             Text("Inactive")
               .font(.caption)
@@ -50,76 +67,34 @@ struct SubscriptionManagementView: View {
         .cornerRadius(16)
         .accessibilityElement(children: .combine)
 
-        // Actions
-        VStack(spacing: 12) {
+        // Primary Action
+        ActionButton(
+          title: subscriptionService.hasActiveSubscription ? "Change Plan" : "Subscribe Now",
+          gradient: LinearGradient(
+            colors: [Color.blue, Color.purple],
+            startPoint: .leading,
+            endPoint: .trailing
+          )
+        ) {
+          showingPaywall = true
+        }
+        .padding(.top, 8)
+
+        // Cancel — de-emphasized text link
+        if subscriptionService.hasActiveSubscription {
           Button {
-            showingPaywall = true
+            openSubscriptionManagement()
           } label: {
-            HStack(spacing: 16) {
-              Image(systemName: "arrow.up.circle.fill")
-                .foregroundColor(.purple)
-                .font(.title3)
-                .frame(width: 32)
-                .accessibilityHidden(true)
-
-              VStack(alignment: .leading, spacing: 4) {
-                Text(subscriptionService.hasActiveSubscription ? "Change Plan" : "Subscribe")
-                  .font(.headline)
-                  .foregroundColor(.white)
-                Text(subscriptionService.hasActiveSubscription ? "Upgrade or downgrade your plan" : "Choose a subscription plan")
-                  .font(.subheadline)
-                  .foregroundColor(.gray)
-              }
-
-              Spacer()
-
-              Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.gray)
-            }
-            .padding(16)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(16)
+            Text("Cancel Subscription")
+              .font(.subheadline)
+              .foregroundColor(.gray)
           }
-          .accessibilityElement(children: .combine)
-          .accessibilityHint("Opens plan selection")
-
-          if subscriptionService.hasActiveSubscription {
-            Button {
-              openSubscriptionManagement()
-            } label: {
-              HStack(spacing: 16) {
-                Image(systemName: "xmark.circle.fill")
-                  .foregroundColor(.red)
-                  .font(.title3)
-                  .frame(width: 32)
-                  .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                  Text("Cancel Subscription")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                  Text("Manage via Apple Settings")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up.right")
-                  .font(.caption)
-                  .foregroundColor(.gray)
-              }
-              .padding(16)
-              .background(Color.gray.opacity(0.1))
-              .cornerRadius(16)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Opens Apple subscription management")
-          }
+          .padding(.top, 16)
+          .accessibilityHint("Opens Apple subscription management")
         }
       }
       .padding(.horizontal, 20)
+      .padding(.top, 10)
       .padding(.bottom, 100)
     }
     .background(Color.black.ignoresSafeArea())

@@ -82,49 +82,6 @@ struct SubscriptionOnboardingFlowView: View {
               onSignIn: nil // Not used in subscription flow
             )
           }
-        } else {
-          // Show RevenueCat paywall
-          PaywallView(displayCloseButton: false)
-            .onPurchaseCompleted { _ in
-              Task {
-                await subscriptionService.checkSubscriptionStatus()
-              }
-              if let onComplete = onComplete {
-                onComplete()
-              } else {
-                showingPlaidOnboarding = true
-              }
-            }
-            .onRestoreCompleted { _ in
-              Task {
-                await subscriptionService.checkSubscriptionStatus()
-              }
-              if subscriptionService.hasActiveSubscription {
-                if let onComplete = onComplete {
-                  onComplete()
-                } else {
-                  showingPlaidOnboarding = true
-                }
-              }
-            }
-            .overlay(alignment: .topLeading) {
-              if !hideBackButton {
-                Button(action: {
-                  withAnimation {
-                    showingSubscriptionView = false
-                  }
-                }) {
-                  Image(systemName: "chevron.left")
-                    .font(.title2)
-                    .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(Circle())
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 15)
-              }
-            }
         }
       }
       .navigationBarHidden(true)
@@ -154,6 +111,31 @@ struct SubscriptionOnboardingFlowView: View {
         isOnboarding: true
       )
       .navigationBarTitleDisplayMode(.inline)
+    }
+    .fullScreenCover(isPresented: $showingSubscriptionView) {
+      PaywallView(displayCloseButton: false)
+        .onPurchaseCompleted { _ in
+          Task {
+            await subscriptionService.checkSubscriptionStatus()
+          }
+          if let onComplete = onComplete {
+            onComplete()
+          } else {
+            showingPlaidOnboarding = true
+          }
+        }
+        .onRestoreCompleted { _ in
+          Task {
+            await subscriptionService.checkSubscriptionStatus()
+          }
+          if subscriptionService.hasActiveSubscription {
+            if let onComplete = onComplete {
+              onComplete()
+            } else {
+              showingPlaidOnboarding = true
+            }
+          }
+        }
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Connect Bank")

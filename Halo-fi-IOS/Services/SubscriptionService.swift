@@ -7,6 +7,7 @@
 
 import Foundation
 import RevenueCat
+import StoreKit
 import SwiftUI
 
 @Observable
@@ -17,6 +18,7 @@ class SubscriptionService {
   var activeEntitlements: Set<String> = []
   var customerInfo: CustomerInfo?
   var isLoading = false
+  var pendingPlanChange: String?
   
   // Available products
   var availablePackages: [Package] = []
@@ -107,8 +109,10 @@ class SubscriptionService {
     } catch {
       currentSubscription = .none
     }
+
+    await checkPendingPlanChange()
   }
-  
+
   // MARK: - Purchase Methods
   
   func purchase(package: Package) async throws -> (success: Bool, customerInfo: CustomerInfo?) {
@@ -206,20 +210,67 @@ class SubscriptionService {
     }
     return entitlements.expirationDate
   }
-  
+
   // Check if subscription is active
   var hasActiveSubscription: Bool {
     currentSubscription != .none && currentSubscription != .expired
   }
-  
+
+
+  // Check StoreKit 2 renewal info for a pending plan change
+  func checkPendingPlanChange() async {
+    guard let activeEntitlement = customerInfo?.entitlements.all.values.first(where: { $0.isActive }) else {
+      pendingPlanChange = nil
+      return
+    }
+
+    let currentProductId = activeEntitlement.productIdentifier
+
+    do {
+      let products = try await Product.products(for: [currentProductId])
+      guard let product = products.first else {
+        pendingPlanChange = nil
+        return
+      }
+
+      let statuses = try await product.subscription?.status ?? []
+      for status in statuses {
+        guard case .verified(let renewalInfo) = status.renewalInfo else { continue }
+
+        if let autoRenewProductId = renewalInfo.autoRenewPreference,
+           autoRenewProductId != currentProductId {
+          pendingPlanChange = planDisplayName(from: autoRenewProductId)
+          return
+        }
+      }
+    } catch {
+      Logger.error("Failed to check pending plan change: \(error)")
+    }
+
+    pendingPlanChange = nil
+  }
+
+  private func planDisplayName(from productId: String) -> String {
+    let id = productId.lowercased()
+    let tier: String
+    if id.contains("max") { tier = "Max" }
+    else if id.contains("pro") { tier = "Pro" }
+    else if id.contains("basic") { tier = "Basic" }
+    else { tier = "Unknown" }
+
+    let cycle = id.contains("yearly") ? "Yearly" : "Monthly"
+    return "\(tier) \(cycle)"
+  }
+
   // MARK: - Clear Cached State
-  
+
   /// Clears locally cached subscription state
   /// Call this when user signs out to ensure fresh state on next login
   func clearCachedState() {
     currentSubscription = .none
     activeEntitlements = []
     customerInfo = nil
+    pendingPlanChange = nil
     // Note: We don't clear availablePackages/availableProducts as they're not user-specific
   }
 }
