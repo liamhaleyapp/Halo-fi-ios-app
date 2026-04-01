@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import RevenueCat
+import GoogleSignIn
 
 @main
 // swiftlint:disable:next type_name
@@ -55,6 +56,11 @@ struct Halo_fi_IOSApp: App {
     // Configure RevenueCat
     Purchases.logLevel = .error
     Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
+
+    // Configure Google Sign In
+    GIDSignIn.sharedInstance.configuration = GIDConfiguration(
+      clientID: "1006405353603-hiot2h2g6c73eruekv8tfqa3t1oj1596.apps.googleusercontent.com"
+    )
   }
 
   var body: some Scene {
@@ -78,6 +84,8 @@ struct Halo_fi_IOSApp: App {
           }
         }
         .onOpenURL { url in
+          // Handle Google Sign In callback
+          if GIDSignIn.sharedInstance.handle(url) { return }
           // Handles halofi://plaid-oauth?... redirect URLs from Plaid OAuth flow
           _ = plaidManager.handleRedirectURL(url)
         }

@@ -8,7 +8,7 @@
 import SwiftUI
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, subscription, inviteFriends, about, accounts
+  case profile, preferences, subscription, inviteFriends, about, accounts, contactUs
 }
 
 struct SettingsView: View {
@@ -46,6 +46,10 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.accounts) {
               SettingsOptionLabel(icon: "building.2.fill", title: "Manage Linked Accounts")
+            }
+
+            NavigationLink(value: SettingsDestination.contactUs) {
+              SettingsOptionLabel(icon: "envelope.fill", title: "Contact Us")
             }
 
             NavigationLink(value: SettingsDestination.about) {
@@ -118,6 +122,9 @@ struct SettingsView: View {
 
         case .accounts:
           AccountsView()
+
+        case .contactUs:
+          ContactUsView()
         }
       }
     }

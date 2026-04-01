@@ -184,6 +184,45 @@ final class UserManager {
         }
     }
 
+    func socialSignIn(provider: String, idToken: String, nonce: String? = nil) async throws {
+        isLoading = true
+
+        do {
+            let authResponse = try await authService.socialLogin(
+                provider: provider,
+                idToken: idToken,
+                nonce: nonce
+            )
+
+            guard let session = authResponse.session,
+                  let authUser = authResponse.authUser else {
+                throw AuthError.invalidResponse
+            }
+
+            tokenStorage.saveTokensWithExpiration(
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                expiresAt: session.expiresAt
+            )
+
+            let user = createUser(from: authUser)
+            applySignInState(user: user)
+
+            do {
+                _ = try await Purchases.shared.logIn(user.id)
+            } catch {
+                Logger.warning("RevenueCat login failed: \(error.localizedDescription)")
+            }
+
+            Task {
+                try? await fetchUserProfile()
+            }
+        } catch {
+            isLoading = false
+            throw error
+        }
+    }
+
     func signOut() {
         // Clear bank data first (before clearing user)
         bankDataManager?.clearAllData()

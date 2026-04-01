@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import GoogleSignIn
 
 struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
@@ -17,6 +18,7 @@ struct SignInView: View {
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
   @State private var showingForgotPassword = false
+  @State private var socialAuthLoading = false
   
   var body: some View {
     NavigationStack {
@@ -84,6 +86,17 @@ struct SignInView: View {
             }
           )
           
+          // Social Auth
+          SocialAuthButtons(
+            isLoading: socialAuthLoading || viewModel.isLoading,
+            onAppleSignIn: { idToken, nonce in
+              handleSocialSignIn(provider: "apple", idToken: idToken, nonce: nonce)
+            },
+            onGoogleSignIn: {
+              handleGoogleSignIn()
+            }
+          )
+
           // Sign Up Link
           HStack {
             Text("Don't have an account?")
@@ -153,6 +166,79 @@ struct SignInView: View {
       .accessibilityAddTraits(.isStaticText)
   }
   
+  // MARK: - Social Auth
+
+  private func handleSocialSignIn(provider: String, idToken: String, nonce: String? = nil) {
+    Task {
+      socialAuthLoading = true
+      defer { socialAuthLoading = false }
+
+      do {
+        try await userManager.socialSignIn(provider: provider, idToken: idToken, nonce: nonce)
+
+        if userManager.isOnboarded {
+          dismiss()
+          return
+        }
+
+        await subscriptionService.initialize()
+
+        if subscriptionService.hasActiveSubscription {
+          showingPlaidOnboarding = true
+        } else {
+          showingSubscriptionOnboarding = true
+        }
+      } catch {
+        viewModel.errorMessage = error.localizedDescription.isEmpty
+          ? "Unable to sign in with \(provider). Please try again."
+          : error.localizedDescription
+        viewModel.showingError = true
+      }
+    }
+  }
+
+  private func handleGoogleSignIn() {
+    guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+          let rootViewController = windowScene.windows.first?.rootViewController else {
+      return
+    }
+
+    Task {
+      socialAuthLoading = true
+      defer { socialAuthLoading = false }
+
+      do {
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        guard let idToken = result.user.idToken?.tokenString else {
+          viewModel.errorMessage = "Could not get Google ID token."
+          viewModel.showingError = true
+          return
+        }
+        try await userManager.socialSignIn(provider: "google", idToken: idToken)
+
+        if userManager.isOnboarded {
+          dismiss()
+          return
+        }
+
+        await subscriptionService.initialize()
+
+        if subscriptionService.hasActiveSubscription {
+          showingPlaidOnboarding = true
+        } else {
+          showingSubscriptionOnboarding = true
+        }
+      } catch {
+        // GIDSignIn cancellation is code -5
+        if (error as NSError).code == -5 { return }
+        viewModel.errorMessage = error.localizedDescription.isEmpty
+          ? "Unable to sign in with Google. Please try again."
+          : error.localizedDescription
+        viewModel.showingError = true
+      }
+    }
+  }
+
   // MARK: - Debug Actions
   private func quickTestLogin() {
     Logger.info("Quick test login triggered")

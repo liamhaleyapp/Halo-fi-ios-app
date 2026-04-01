@@ -54,7 +54,7 @@ final class VoiceService: NSObject {
         // Ensure audio session is active before accessing input node
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
             try session.setActive(true)
         } catch {
             Logger.error("Failed to activate audio session: \(error)")

@@ -16,14 +16,19 @@ struct OnboardingPageView: View {
             Spacer()
             
             // Icon
-            Circle()
-                .fill(LinearGradient(colors: page.color, startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 120, height: 120)
-                .overlay(
-                    Image(systemName: page.icon)
-                        .font(.system(size: 60))
-                        .foregroundColor(.white)
-                )
+            if page.icon == "mic.circle.fill" {
+                // First page: use HaloFi logo
+                HaloFiLogo(size: 120)
+            } else {
+                Circle()
+                    .fill(LinearGradient(colors: page.color, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 120, height: 120)
+                    .overlay(
+                        Image(systemName: page.icon)
+                            .font(.system(size: 60))
+                            .foregroundColor(.white)
+                    )
+            }
             
             // Text Content
             VStack(spacing: 16) {

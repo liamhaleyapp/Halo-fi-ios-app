@@ -40,13 +40,15 @@ struct AboutView: View {
         .sheet(isPresented: $showingTerms) {
             LegalDocumentView(
                 title: "Terms of Service",
-                sections: Self.termsOfServiceSections
+                sections: Self.termsOfServiceSections,
+                endpoint: APIEndpoints.Legal.terms
             )
         }
         .sheet(isPresented: $showingPrivacy) {
             LegalDocumentView(
                 title: "Privacy Policy",
-                sections: Self.privacyPolicySections
+                sections: Self.privacyPolicySections,
+                endpoint: APIEndpoints.Legal.privacy
             )
         }
         .sheet(isPresented: $showingHelpFeedback) {
@@ -119,30 +121,62 @@ struct LegalSectionContent: Identifiable {
     let body: String
 }
 
+// MARK: - Remote Legal Response
+
+private struct LegalResponse: Codable {
+    let title: String
+    let last_updated: String
+    let sections: [LegalSectionResponse]
+}
+
+private struct LegalSectionResponse: Codable {
+    let heading: String
+    let body: String
+}
+
 // MARK: - Legal Document View
 
 struct LegalDocumentView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
-    let sections: [LegalSectionContent]
+    let fallbackSections: [LegalSectionContent]
+    let endpoint: String
+
+    @State private var sections: [LegalSectionContent] = []
+    @State private var lastUpdated: String = ""
+    @State private var isLoading = true
+
+    init(title: String, sections: [LegalSectionContent], endpoint: String = "") {
+        self.title = title
+        self.fallbackSections = sections
+        self.endpoint = endpoint
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Last updated: March 2026")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    if !lastUpdated.isEmpty {
+                        Text("Last updated: \(lastUpdated)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
 
-                    ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(section.heading)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text(section.body)
-                                .font(.body)
-                                .foregroundColor(.gray)
-                                .lineLimit(nil)
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 40)
+                    } else {
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(section.heading)
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(section.body)
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(nil)
+                            }
                         }
                     }
                 }
@@ -158,7 +192,31 @@ struct LegalDocumentView: View {
                         .accessibilityLabel("Close \(title)")
                 }
             }
+            .task {
+                await fetchLegalContent()
+            }
         }
+    }
+
+    private func fetchLegalContent() async {
+        guard !endpoint.isEmpty else {
+            sections = fallbackSections
+            isLoading = false
+            return
+        }
+
+        do {
+            let url = URL(string: APIEndpoints.baseURL + endpoint)!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(LegalResponse.self, from: data)
+            sections = response.sections.map {
+                LegalSectionContent(heading: $0.heading, body: $0.body)
+            }
+            lastUpdated = response.last_updated
+        } catch {
+            sections = fallbackSections
+        }
+        isLoading = false
     }
 }
 

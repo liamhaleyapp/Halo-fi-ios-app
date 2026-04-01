@@ -42,6 +42,32 @@ final class AuthService: AuthServiceProtocol {
         return response
     }
 
+    // MARK: - Social Login
+
+    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse {
+        struct SocialLoginBody: Encodable {
+            let provider: String
+            let id_token: String
+            let nonce: String?
+        }
+
+        let body = SocialLoginBody(provider: provider, id_token: idToken, nonce: nonce)
+        let requestBody = try JSONEncoder().encode(body)
+
+        let response: LoginResponse = try await networkService.publicRequest(
+            endpoint: APIEndpoints.Auth.socialLogin,
+            method: .POST,
+            body: requestBody,
+            responseType: LoginResponse.self
+        )
+
+        guard response.success, response.authUser != nil, response.session != nil else {
+            throw AuthError.invalidCredentials
+        }
+
+        return response
+    }
+
     // MARK: - Register
 
     func register(

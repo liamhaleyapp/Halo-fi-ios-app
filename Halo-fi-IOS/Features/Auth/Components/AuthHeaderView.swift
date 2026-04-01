@@ -31,22 +31,8 @@ struct AuthHeaderView: View {
       }
       .padding(.horizontal, 20)
       
-      // App Logo/Icon (decorative)
-      Circle()
-        .fill(
-          LinearGradient(
-            colors: [Color.purple, Color.indigo],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-        .frame(width: 80, height: 80)
-        .overlay(
-          Image(systemName: "mic.circle.fill")
-            .font(.system(size: 40))
-            .foregroundColor(.white)
-        )
-        .accessibilityHidden(true)
+      // App Logo
+      HaloFiLogo(size: 80)
       
       Text(title)
         .font(.largeTitle)

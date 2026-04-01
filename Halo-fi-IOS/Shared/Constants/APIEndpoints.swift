@@ -22,6 +22,9 @@ enum APIEndpoints {
         /// POST - Login with phone and password.
         static let login = "/auth/login"
 
+        /// POST - Social login (Apple, Google).
+        static let socialLogin = "/auth/social-login"
+
         /// GET/PUT - Current user profile.
         static let me = "/auth/me"
 
@@ -100,6 +103,12 @@ enum APIEndpoints {
     enum Agent {
         /// POST - Get ElevenLabs STT token for voice transcription.
         static let sttToken = "/agent/stt/token"
+    }
+
+    // MARK: - Legal
+    enum Legal {
+        static let terms = "/legal/terms"
+        static let privacy = "/legal/privacy"
     }
 
     // MARK: - WebSocket

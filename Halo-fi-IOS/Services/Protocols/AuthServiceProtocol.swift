@@ -17,6 +17,8 @@ protocol AuthServiceProtocol {
     /// - Returns: LoginResponse containing tokens and user info
     func login(phoneNumber: String, password: String) async throws -> LoginResponse
 
+    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse
+
     /// Registers a new user.
     /// - Parameters:
     ///   - firstName: User's first name
@@ -68,6 +70,13 @@ actor MockAuthService: AuthServiceProtocol {
     var mockLoginResponse: LoginResponse?
 
     func login(phoneNumber: String, password: String) async throws -> LoginResponse {
+        guard shouldSucceed, let response = mockLoginResponse else {
+            throw AuthError.invalidCredentials
+        }
+        return response
+    }
+
+    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse {
         guard shouldSucceed, let response = mockLoginResponse else {
             throw AuthError.invalidCredentials
         }
