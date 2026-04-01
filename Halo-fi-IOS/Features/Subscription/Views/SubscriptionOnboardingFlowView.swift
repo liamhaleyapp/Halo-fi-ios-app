@@ -18,13 +18,13 @@ struct SubscriptionOnboardingFlowView: View {
   @State private var showingSubscriptionView = false
   @State private var showingPlaidOnboarding = false
   
-  private let benefitPages = MockSubscriptionOnboardingData.benefitPages
+  private let benefitPages = SubscriptionOnboardingData.benefitPages
   private let totalBenefitPages: Int
   
   init(onComplete: (() -> Void)? = nil, hideBackButton: Bool = false) {
     self.onComplete = onComplete
     self.hideBackButton = hideBackButton
-    totalBenefitPages = MockSubscriptionOnboardingData.benefitPages.count
+    totalBenefitPages = SubscriptionOnboardingData.benefitPages.count
   }
   
   var body: some View {

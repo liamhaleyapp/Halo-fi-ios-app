@@ -206,7 +206,11 @@ struct LegalDocumentView: View {
         }
 
         do {
-            let url = URL(string: APIEndpoints.baseURL + endpoint)!
+            guard let url = URL(string: APIEndpoints.baseURL + endpoint) else {
+                sections = fallbackSections
+                isLoading = false
+                return
+            }
             let (data, _) = try await URLSession.shared.data(from: url)
             let response = try JSONDecoder().decode(LegalResponse.self, from: data)
             sections = response.sections.map {

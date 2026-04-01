@@ -15,7 +15,7 @@ struct OnboardingView: View {
   @State private var showingSignIn = false
   @State private var showingPermissionRequest = false
   
-  private let onboardingPages = MockOnboardingData.pages
+  private let onboardingPages = OnboardingData.pages
   
   var body: some View {
     ZStack {

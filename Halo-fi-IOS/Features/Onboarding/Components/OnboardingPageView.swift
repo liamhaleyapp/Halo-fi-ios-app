@@ -61,6 +61,6 @@ struct OnboardingPageView: View {
 #Preview {
     ZStack {
         Color.black.ignoresSafeArea()
-        OnboardingPageView(page: MockOnboardingData.pages[0])
+        OnboardingPageView(page: OnboardingData.pages[0])
     }
 }
