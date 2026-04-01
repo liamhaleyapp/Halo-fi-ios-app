@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0C75F5042F7CDDEB001D1171 /* halofi_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 0C75F5032F7CDDEB001D1171 /* halofi_logo.png */; };
 		0C75F5062F7CDE10001D1171 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0C75F5052F7CDE10001D1171 /* GoogleService-Info.plist */; };
 		0C75F5092F7CDE6F001D1171 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 0C75F5082F7CDE6F001D1171 /* GoogleSignIn */; };
 		0CB170B42E5251F500BF97C8 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 0CB170B32E5251F500BF97C8 /* Auth */; };
@@ -49,7 +48,6 @@
 		0C39AAAF2E4EBF9A00CF16A0 /* Halo-fi-IOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Halo-fi-IOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C39AABF2E4EBF9C00CF16A0 /* Halo-fi-IOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C39AAC92E4EBF9C00CF16A0 /* Halo-fi-IOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Halo-fi-IOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		0C75F5032F7CDDEB001D1171 /* halofi_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = halofi_logo.png; sourceTree = "<group>"; };
 		0C75F5052F7CDE10001D1171 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9E08DB562EB2F2B700473197 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		9E16C48B2F40C58F00B135F0 /* agent_complete.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = agent_complete.mp3; sourceTree = "<group>"; };
@@ -175,7 +173,6 @@
 				9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */,
 				9E16C4922F40C58F00B135F0 /* Resources */,
 				0C75F5052F7CDE10001D1171 /* GoogleService-Info.plist */,
-				0C75F5032F7CDDEB001D1171 /* halofi_logo.png */,
 				9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */,
 				9EDDB70F2E9D8BD200295AB4 /* Shared */,
 				9E95D7352E8DB15C003087CE /* Tests */,
@@ -371,7 +368,6 @@
 				9E16C4952F40C58F00B135F0 /* listening_start.aif in Resources */,
 				9E16C4962F40C58F00B135F0 /* agent_complete.mp3 in Resources */,
 				9E16C4972F40C58F00B135F0 /* agent_typing.aif in Resources */,
-				0C75F5042F7CDDEB001D1171 /* halofi_logo.png in Resources */,
 				9E16C4982F40C58F00B135F0 /* tab_switch.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
