@@ -12,13 +12,12 @@ struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
-  
+
   @State private var viewModel = SignInViewModel()
   @State private var showingSignUp = false
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
   @State private var showingForgotPassword = false
-  @State private var socialAuthLoading = false
   
   var body: some View {
     NavigationStack {
@@ -88,9 +87,17 @@ struct SignInView: View {
           
           // Social Auth
           SocialAuthButtons(
-            isLoading: socialAuthLoading || viewModel.isLoading,
+            isLoading: viewModel.isLoading,
             onAppleSignIn: { idToken, nonce in
-              handleSocialSignIn(provider: "apple", idToken: idToken, nonce: nonce)
+              Task {
+                await viewModel.socialSignIn(
+                  provider: "apple", idToken: idToken, nonce: nonce,
+                  using: userManager, subscriptionService: subscriptionService,
+                  onNeedsSubscription: { showingSubscriptionOnboarding = true },
+                  onNeedsPlaid: { showingPlaidOnboarding = true },
+                  onSignedInAndOnboarded: { dismiss() }
+                )
+              }
             },
             onGoogleSignIn: {
               handleGoogleSignIn()
@@ -168,35 +175,6 @@ struct SignInView: View {
   
   // MARK: - Social Auth
 
-  private func handleSocialSignIn(provider: String, idToken: String, nonce: String? = nil) {
-    Task {
-      socialAuthLoading = true
-      defer { socialAuthLoading = false }
-
-      do {
-        try await userManager.socialSignIn(provider: provider, idToken: idToken, nonce: nonce)
-
-        if userManager.isOnboarded {
-          dismiss()
-          return
-        }
-
-        await subscriptionService.initialize()
-
-        if subscriptionService.hasActiveSubscription {
-          showingPlaidOnboarding = true
-        } else {
-          showingSubscriptionOnboarding = true
-        }
-      } catch {
-        viewModel.errorMessage = error.localizedDescription.isEmpty
-          ? "Unable to sign in with \(provider). Please try again."
-          : error.localizedDescription
-        viewModel.showingError = true
-      }
-    }
-  }
-
   private func handleGoogleSignIn() {
     guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
           let rootViewController = windowScene.windows.first?.rootViewController else {
@@ -204,9 +182,6 @@ struct SignInView: View {
     }
 
     Task {
-      socialAuthLoading = true
-      defer { socialAuthLoading = false }
-
       do {
         let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
         guard let idToken = result.user.idToken?.tokenString else {
@@ -214,20 +189,13 @@ struct SignInView: View {
           viewModel.showingError = true
           return
         }
-        try await userManager.socialSignIn(provider: "google", idToken: idToken)
-
-        if userManager.isOnboarded {
-          dismiss()
-          return
-        }
-
-        await subscriptionService.initialize()
-
-        if subscriptionService.hasActiveSubscription {
-          showingPlaidOnboarding = true
-        } else {
-          showingSubscriptionOnboarding = true
-        }
+        await viewModel.socialSignIn(
+          provider: "google", idToken: idToken,
+          using: userManager, subscriptionService: subscriptionService,
+          onNeedsSubscription: { showingSubscriptionOnboarding = true },
+          onNeedsPlaid: { showingPlaidOnboarding = true },
+          onSignedInAndOnboarded: { dismiss() }
+        )
       } catch {
         // GIDSignIn cancellation is code -5
         if (error as NSError).code == -5 { return }

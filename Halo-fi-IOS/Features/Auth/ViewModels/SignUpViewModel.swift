@@ -160,7 +160,43 @@ class SignUpViewModel {
   }
   
   // MARK: - Actions
-  
+
+  func socialSignIn(
+    provider: String,
+    idToken: String,
+    nonce: String? = nil,
+    using userManager: UserManager,
+    subscriptionService: SubscriptionService,
+    onNeedsSubscription: @escaping () -> Void,
+    onNeedsPlaid: @escaping () -> Void,
+    onSignedInAndOnboarded: @escaping () -> Void
+  ) async {
+    isLoading = true
+    defer { isLoading = false }
+
+    do {
+      try await userManager.socialSignIn(provider: provider, idToken: idToken, nonce: nonce)
+
+      if userManager.isOnboarded {
+        onSignedInAndOnboarded()
+        return
+      }
+
+      await subscriptionService.initialize()
+
+      if subscriptionService.hasActiveSubscription {
+        onNeedsPlaid()
+      } else {
+        onNeedsSubscription()
+      }
+    } catch {
+      errorMessage = error.localizedDescription.isEmpty
+        ? "Unable to sign up with \(provider). Please try again."
+        : error.localizedDescription
+      showingError = true
+    }
+  }
+
   func createAccount(using userManager: UserManager, onComplete: (() -> Void)?) async {
     
     hasAttemptedSubmit = true

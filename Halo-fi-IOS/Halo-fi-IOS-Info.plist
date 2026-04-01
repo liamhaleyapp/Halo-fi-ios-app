@@ -16,6 +16,14 @@
 				<string>halofi</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1006405353603-hiot2h2g6c73eruekv8tfqa3t1oj1596</string>
+			</array>
+		</dict>
 	</array>
 	<key>INAlternativeAppNames</key>
 	<array>
