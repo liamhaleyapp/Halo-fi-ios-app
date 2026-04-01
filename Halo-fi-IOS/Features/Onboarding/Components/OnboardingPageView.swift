@@ -16,8 +16,7 @@ struct OnboardingPageView: View {
             Spacer()
             
             // Icon
-            if page.icon == "mic.circle.fill" {
-                // First page: use HaloFi logo
+            if page.showsLogo {
                 HaloFiLogo(size: 120)
             } else {
                 Circle()

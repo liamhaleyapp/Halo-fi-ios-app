@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct MockOnboardingData {
+struct OnboardingData {
   
   /// Sample onboarding pages
   static let pages: [OnboardingPage] = [
@@ -16,7 +16,8 @@ struct MockOnboardingData {
       subtitle: "Your voice-first financial assistant",
       description: "Get personalized financial guidance through natural conversations. No more complex menus or confusing interfaces.",
       icon: "mic.circle.fill",
-      color: [Color.purple, Color.indigo]
+      color: [Color.purple, Color.indigo],
+      showsLogo: true
     ),
     OnboardingPage(
       title: "Smart Financial Insights",

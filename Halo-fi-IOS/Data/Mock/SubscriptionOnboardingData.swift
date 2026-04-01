@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct MockSubscriptionOnboardingData {
+struct SubscriptionOnboardingData {
   
   /// Subscription benefit pages to show before subscription screen
   static let benefitPages: [OnboardingPage] = [
@@ -16,7 +16,8 @@ struct MockSubscriptionOnboardingData {
       subtitle: "Talk naturally with your financial assistant",
       description: "Ask questions, get insights, and manage your finances through natural voice conversations. No typing required.",
       icon: "mic.circle.fill",
-      color: [Color.purple, Color.indigo]
+      color: [Color.purple, Color.indigo],
+      showsLogo: true
     ),
     OnboardingPage(
       title: "Instant Account Updates",

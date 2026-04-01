@@ -15,4 +15,5 @@ struct OnboardingPage: Identifiable {
     let description: String
     let icon: String
     let color: [Color]
+    var showsLogo: Bool = false
 }
