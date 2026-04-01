@@ -198,7 +198,7 @@ struct AccountsOverviewView: View {
   private var emptyStateView: some View {
     VStack(spacing: 20) {
       Image(systemName: "building.2")
-        .font(.largeTitle)
+        .font(.system(size: 56))
         .foregroundColor(.gray.opacity(0.5))
         .accessibilityHidden(true)
 

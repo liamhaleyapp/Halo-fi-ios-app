@@ -24,7 +24,6 @@ struct OnboardingStepIndicator: View {
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
-    .accessibilityHidden(true)
   }
   
   private func isStepCompleted(_ step: OnboardingStep) -> Bool {
@@ -53,7 +52,7 @@ struct StepIndicatorDot: View {
         
         if isCompleted {
           Image(systemName: "checkmark")
-            .font(.caption2.bold())
+            .font(.system(size: 8, weight: .bold))
             .foregroundColor(.white)
         }
       }

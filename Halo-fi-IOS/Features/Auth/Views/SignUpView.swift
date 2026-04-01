@@ -6,21 +6,16 @@
 //
 
 import SwiftUI
-import GoogleSignIn
 
 struct SignUpView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
-  @Environment(SubscriptionService.self) private var subscriptionService
-
+  
   var onComplete: (() -> Void)?
-
+  
   @State private var viewModel = SignUpViewModel()
   @State private var showingSignIn = false
   @State private var showingDatePicker = false
-  @State private var socialAuthLoading = false
-  @State private var showingSubscriptionOnboarding = false
-  @State private var showingPlaidOnboarding = false
 
   var body: some View {
     ZStack {
@@ -117,22 +112,11 @@ struct SignUpView: View {
               }
             )
             
-            // Social Auth
-            SocialAuthButtons(
-              isLoading: socialAuthLoading || viewModel.isLoading,
-              onAppleSignIn: { idToken, nonce in
-                handleSocialSignIn(provider: "apple", idToken: idToken, nonce: nonce)
-              },
-              onGoogleSignIn: {
-                handleGoogleSignIn()
-              }
-            )
-
             // Sign In Link
             HStack {
               Text("Already have an account?")
                 .foregroundColor(.gray)
-
+              
               Button("Sign In") {
                 showingSignIn = true
               }
@@ -141,7 +125,7 @@ struct SignUpView: View {
             .font(.body)
           }
           .padding(.horizontal, 20)
-
+          
           Spacer()
         }
         .padding(.top, 40)
@@ -150,13 +134,6 @@ struct SignUpView: View {
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
-    }
-    .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
-      SubscriptionOnboardingFlowView()
-    }
-    .navigationDestination(isPresented: $showingPlaidOnboarding) {
-      PlaidOnboardingView(isOnboarding: true)
-        .navigationBarTitleDisplayMode(.inline)
     }
     .sheet(isPresented: $showingDatePicker) {
       NavigationStack {
@@ -169,7 +146,6 @@ struct SignUpView: View {
           )
           .datePickerStyle(.graphical)
           .labelsHidden()
-          .accessibilityLabel("Date of birth")
           .padding()
 
           Spacer()
@@ -198,80 +174,6 @@ struct SignUpView: View {
     .accessibilityHint("Step 1 of 3 in the setup process")
   }
   
-  // MARK: - Social Auth
-
-  private func handleSocialSignIn(provider: String, idToken: String, nonce: String? = nil) {
-    Task {
-      socialAuthLoading = true
-      defer { socialAuthLoading = false }
-
-      do {
-        try await userManager.socialSignIn(provider: provider, idToken: idToken, nonce: nonce)
-
-        if userManager.isOnboarded {
-          onComplete?()
-          dismiss()
-          return
-        }
-
-        await subscriptionService.initialize()
-
-        if subscriptionService.hasActiveSubscription {
-          showingPlaidOnboarding = true
-        } else {
-          showingSubscriptionOnboarding = true
-        }
-      } catch {
-        viewModel.errorMessage = error.localizedDescription.isEmpty
-          ? "Unable to sign up with \(provider). Please try again."
-          : error.localizedDescription
-        viewModel.showingError = true
-      }
-    }
-  }
-
-  private func handleGoogleSignIn() {
-    guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-          let rootViewController = windowScene.windows.first?.rootViewController else {
-      return
-    }
-
-    Task {
-      socialAuthLoading = true
-      defer { socialAuthLoading = false }
-
-      do {
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
-        guard let idToken = result.user.idToken?.tokenString else {
-          viewModel.errorMessage = "Could not get Google ID token."
-          viewModel.showingError = true
-          return
-        }
-        try await userManager.socialSignIn(provider: "google", idToken: idToken)
-
-        if userManager.isOnboarded {
-          onComplete?()
-          dismiss()
-          return
-        }
-
-        await subscriptionService.initialize()
-
-        if subscriptionService.hasActiveSubscription {
-          showingPlaidOnboarding = true
-        } else {
-          showingSubscriptionOnboarding = true
-        }
-      } catch {
-        if (error as NSError).code == -5 { return }
-        viewModel.errorMessage = error.localizedDescription.isEmpty
-          ? "Unable to sign up with Google. Please try again."
-          : error.localizedDescription
-        viewModel.showingError = true
-      }
-    }
-  }
-
   // Small helper so all error labels look consistent
   @ViewBuilder
   private func validationText(_ message: String) -> some View {

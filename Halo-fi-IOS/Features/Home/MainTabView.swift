@@ -12,7 +12,6 @@ struct MainTabView: View {
     @Environment(SubscriptionService.self) private var subscriptionService
     @State private var selectedTab = 0
     @State private var feedbackService = AudioFeedbackService()
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum AppRoute: Equatable {
         case loggedOut
@@ -38,7 +37,7 @@ struct MainTabView: View {
             routeView
                 .id(currentRoute)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: currentRoute)
+        .animation(.easeInOut(duration: 0.3), value: currentRoute)
         .onChange(of: currentRoute) { _, newRoute in
             if newRoute != .main {
                 selectedTab = 0

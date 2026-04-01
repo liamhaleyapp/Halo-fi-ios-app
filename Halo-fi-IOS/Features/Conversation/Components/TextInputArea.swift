@@ -71,7 +71,7 @@ struct TextInputArea: View {
             onSend()
         }) {
             Image(systemName: "arrow.up.circle.fill")
-                .font(.title)
+                .font(.system(size: 36))
                 .foregroundColor(canSend ? .blue : .gray)
         }
         .disabled(!canSend)

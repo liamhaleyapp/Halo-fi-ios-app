@@ -67,7 +67,7 @@ struct InviteFriendsView: View {
                 .foregroundColor(.gray)
 
             Text(referralCode)
-                .font(.title.monospaced().bold())
+                .font(.system(size: 36, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .tracking(6)
                 .accessibilityLabel("Referral code: \(referralCode.map { String($0) }.joined(separator: " "))")

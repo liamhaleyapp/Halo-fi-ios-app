@@ -12,7 +12,6 @@ import SwiftUI
 struct LoadingOverlayModifier: ViewModifier {
     let isLoading: Bool
     let message: String?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         ZStack {
@@ -43,7 +42,7 @@ struct LoadingOverlayModifier: ViewModifier {
                 .zIndex(2)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isLoading)
+        .animation(.easeInOut(duration: 0.25), value: isLoading)
     }
 }
 

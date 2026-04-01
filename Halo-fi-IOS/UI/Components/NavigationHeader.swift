@@ -37,7 +37,7 @@ struct NavigationHeader: View {
                 Image(systemName: "chevron.left")
                     .font(.title2)
                     .foregroundColor(style.textColor)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
                     .background(style.buttonBackground)
                     .clipShape(Circle())
             }
@@ -54,7 +54,7 @@ struct NavigationHeader: View {
 
             // Invisible spacer to center the title
             Color.clear
-                .frame(width: 44, height: 44)
+                .frame(width: 40, height: 40)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 20)

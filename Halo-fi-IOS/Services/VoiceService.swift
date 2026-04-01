@@ -9,7 +9,6 @@
 
 import Foundation
 import AVFoundation
-import UIKit
 
 @Observable
 @MainActor
@@ -36,7 +35,7 @@ final class VoiceService: NSObject {
     private func setupAudioSession() {
         do {
             recordingSession = AVAudioSession.sharedInstance()
-            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers, .duckOthers])
+            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try recordingSession?.setActive(true)
         } catch {
             Logger.error("Failed to setup audio session: \(error)")
@@ -55,10 +54,7 @@ final class VoiceService: NSObject {
         // Ensure audio session is active before accessing input node
         do {
             let session = AVAudioSession.sharedInstance()
-            // Use .measurement mode when VoiceOver is running to avoid echo cancellation
-            // filtering out VoiceOver's synthesized speech. Keep .voiceChat for non-VO users.
-            let mode: AVAudioSession.Mode = UIAccessibility.isVoiceOverRunning ? .measurement : .voiceChat
-            try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers, .duckOthers])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
         } catch {
             Logger.error("Failed to activate audio session: \(error)")

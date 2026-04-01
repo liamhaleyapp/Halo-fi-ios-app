@@ -167,13 +167,7 @@ final class ConversationCoordinator {
                             }
                         }
 
-                        // Announce state change BEFORE recording starts so VoiceOver
-                        // can speak "Listening" before the audio session reconfigures
-                        if UIAccessibility.isVoiceOverRunning {
-                            UIAccessibility.post(notification: .announcement, argument: "Listening")
-                            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms for VO to speak
-                        }
-
+                        // Start recording first, then signal the user
                         try await self.voiceService.startRecording()
                         self.setState(.listening)
                         self.audioFeedback.feedbackForStateChange(.listening)
@@ -539,17 +533,11 @@ final class ConversationCoordinator {
     // MARK: - Accessibility Announcements
 
     private var lastAnnouncementTime: Date = .distantPast
-
-    private func debounceInterval(for state: ConversationState) -> TimeInterval {
-        switch state {
-        case .listening: return 1.5  // Longer to let pre-announcement complete
-        default: return 0.8
-        }
-    }
+    private let announcementDebounceInterval: TimeInterval = 0.8
 
     private func announceStateChange(_ state: ConversationState) {
         let now = Date()
-        guard now.timeIntervalSince(lastAnnouncementTime) >= debounceInterval(for: state) else {
+        guard now.timeIntervalSince(lastAnnouncementTime) >= announcementDebounceInterval else {
             return // Throttle announcements
         }
 

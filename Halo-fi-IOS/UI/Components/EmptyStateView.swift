@@ -17,7 +17,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.largeTitle)
+                .font(.system(size: 48))
                 .foregroundColor(.gray.opacity(0.5))
                 .accessibilityHidden(true)
 
