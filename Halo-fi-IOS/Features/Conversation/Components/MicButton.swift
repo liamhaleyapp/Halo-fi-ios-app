@@ -17,6 +17,7 @@ struct MicButton: View {
     let onTap: () -> Void
 
     @State private var pulseAnimation = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Button size
     private let buttonSize: CGFloat = 120
@@ -70,7 +71,7 @@ struct MicButton: View {
             .scaleEffect(pulseAnimation ? 1.3 : 1.0)
             .opacity(pulseAnimation ? 0.0 : 1.0)
             .animation(
-                .easeInOut(duration: 1.0)
+                reduceMotion ? nil : .easeInOut(duration: 1.0)
                     .repeatForever(autoreverses: false),
                 value: pulseAnimation
             )
@@ -90,7 +91,7 @@ struct MicButton: View {
     @ViewBuilder
     private var buttonIcon: some View {
         Image(systemName: iconName)
-            .font(.system(size: 50, weight: .medium))
+            .font(.largeTitle)
             .foregroundColor(.white)
             .accessibilityHidden(true)
     }

@@ -25,7 +25,7 @@ struct PermissionRequestView: View {
       // Header
       VStack(spacing: 16) {
         Image(systemName: "mic.fill")
-          .font(.system(size: 60))
+          .font(.largeTitle)
           .foregroundColor(.blue)
           .accessibilityHidden(true)
         

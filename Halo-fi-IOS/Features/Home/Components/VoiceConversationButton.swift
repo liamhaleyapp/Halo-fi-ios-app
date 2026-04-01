@@ -38,7 +38,7 @@ struct VoiceConversationButton: View {
           
           // Mic icon for voice conversation
           Image(systemName: "mic.fill")
-            .font(.system(size: 50, weight: .medium))
+            .font(.largeTitle)
             .foregroundColor(.white)
             .accessibilityHidden(true)
         }

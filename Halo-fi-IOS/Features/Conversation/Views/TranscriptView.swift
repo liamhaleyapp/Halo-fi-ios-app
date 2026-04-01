@@ -17,6 +17,7 @@ struct TranscriptView: View {
     var isProcessing: Bool = false
 
     @State private var isAtBottom = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil, isProcessing: Bool = false) {
         self.entries = entries
@@ -65,24 +66,36 @@ struct TranscriptView: View {
                     .onChange(of: entries.count) { oldCount, newCount in
                         // Auto-scroll to bottom on new entries if already at bottom
                         if isAtBottom && newCount > oldCount {
-                            withAnimation(.easeOut(duration: 0.3)) {
+                            if reduceMotion {
                                 proxy.scrollTo("bottom", anchor: .bottom)
+                            } else {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
                             }
                         }
                     }
                     .onChange(of: entries.last?.text) { _, _ in
                         // Auto-scroll on streaming updates if at bottom
                         if isAtBottom {
-                            withAnimation(.easeOut(duration: 0.1)) {
+                            if reduceMotion {
                                 proxy.scrollTo("bottom", anchor: .bottom)
+                            } else {
+                                withAnimation(.easeOut(duration: 0.1)) {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
                             }
                         }
                     }
                     .onChange(of: isProcessing) { _, newValue in
                         // Scroll to typing indicator when it appears
                         if newValue && isAtBottom {
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            if reduceMotion {
                                 proxy.scrollTo("typing", anchor: .bottom)
+                            } else {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    proxy.scrollTo("typing", anchor: .bottom)
+                                }
                             }
                         }
                     }
@@ -104,8 +117,12 @@ struct TranscriptView: View {
                     .overlay(alignment: .bottom) {
                         if !isAtBottom && !entries.isEmpty {
                             jumpToLatestButton {
-                                withAnimation {
+                                if reduceMotion {
                                     proxy.scrollTo("bottom", anchor: .bottom)
+                                } else {
+                                    withAnimation {
+                                        proxy.scrollTo("bottom", anchor: .bottom)
+                                    }
                                 }
                             }
                             .padding(.bottom, 16)
@@ -151,7 +168,7 @@ struct TranscriptView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
+                .font(.largeTitle)
                 .foregroundColor(.secondary)
                 .accessibilityHidden(true)
 

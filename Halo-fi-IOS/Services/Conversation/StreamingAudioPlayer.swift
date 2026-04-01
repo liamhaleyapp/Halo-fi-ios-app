@@ -38,7 +38,7 @@ final class StreamingAudioPlayer {
             try session.setCategory(
                 .playback,
                 mode: .default,
-                options: [.duckOthers]
+                options: [.duckOthers, .mixWithOthers]
             )
             try session.setActive(true)
             Logger.info("StreamingAudioPlayer: Audio session configured")

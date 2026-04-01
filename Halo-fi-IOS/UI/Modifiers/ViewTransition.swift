@@ -17,12 +17,15 @@ enum TransitionStyle {
 
 struct ViewTransitionModifier: ViewModifier {
     let style: TransitionStyle
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content.transition(makeTransition())
     }
 
     private func makeTransition() -> AnyTransition {
+        guard !reduceMotion else { return .opacity }
+
         switch style {
         case .fade:
             return .opacity

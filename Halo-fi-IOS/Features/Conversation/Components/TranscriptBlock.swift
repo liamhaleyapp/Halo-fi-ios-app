@@ -17,6 +17,7 @@ struct TranscriptBlock: View {
     let entry: TranscriptEntry
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -75,7 +76,7 @@ struct TranscriptBlock: View {
                     .frame(width: 6, height: 6)
                     .opacity(0.6)
                     .animation(
-                        .easeInOut(duration: 0.5)
+                        reduceMotion ? nil : .easeInOut(duration: 0.5)
                             .repeatForever()
                             .delay(Double(index) * 0.15),
                         value: entry.isStreaming
@@ -94,7 +95,7 @@ struct TranscriptBlock: View {
                     .fill(Color.secondary.opacity(0.6))
                     .frame(width: 3, height: listeningBarHeight(for: index))
                     .animation(
-                        .easeInOut(duration: 0.4)
+                        reduceMotion ? nil : .easeInOut(duration: 0.4)
                             .repeatForever(autoreverses: true)
                             .delay(Double(index) * 0.1),
                         value: entry.isStreaming
