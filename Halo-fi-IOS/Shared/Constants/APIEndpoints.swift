@@ -105,6 +105,14 @@ enum APIEndpoints {
         static let sttToken = "/agent/stt/token"
     }
 
+    // MARK: - Preferences
+
+    enum Preferences {
+        static let get = "/users/preferences"
+        static let update = "/users/preferences"
+        static let voices = "/users/voices"
+    }
+
     // MARK: - Legal
     enum Legal {
         static let terms = "/legal/terms"

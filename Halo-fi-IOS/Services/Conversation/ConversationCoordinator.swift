@@ -417,6 +417,12 @@ final class ConversationCoordinator {
                 let responseId = self.currentAgentResponseId ?? UUID()
                 self.emitEvent(.agentFinal(complete.responseText, id: responseId))
 
+                // Extract voice speed from server data
+                if let data = complete.data,
+                   let speedValue = data["voice_speed"]?.value as? Double {
+                    self.streamingAudioPlayer?.playbackRate = Float(speedValue)
+                }
+
                 // Now decode and play the full accumulated MP3
                 self.playAccumulatedAudio()
 
