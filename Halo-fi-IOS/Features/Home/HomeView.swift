@@ -17,6 +17,8 @@ struct HomeView: View {
                 Color(.systemBackground).ignoresSafeArea()
 
                 VStack(spacing: 10) {
+                    HaloFiLogo(size: 60)
+
                     // Voice conversation button - opens unified ConversationView
                     VoiceConversationButton {
                         initialPrompt = nil
