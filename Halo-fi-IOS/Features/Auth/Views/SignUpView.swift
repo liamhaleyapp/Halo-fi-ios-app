@@ -20,6 +20,9 @@ struct SignUpView: View {
   @State private var showingDatePicker = false
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
+  @State private var agreedToTerms = false
+  @State private var showingTerms = false
+  @State private var showingPrivacy = false
 
   var body: some View {
     ZStack {
@@ -105,10 +108,46 @@ struct SignUpView: View {
               validationText(error)
             }
             
+            // Terms & Privacy consent
+            HStack(alignment: .top, spacing: 12) {
+              Button {
+                agreedToTerms.toggle()
+              } label: {
+                Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
+                  .font(.title3)
+                  .foregroundColor(agreedToTerms ? .indigo : .gray)
+              }
+              .accessibilityLabel(agreedToTerms ? "Terms accepted" : "Accept terms")
+              .accessibilityHint("Toggle to agree to Terms of Service and Privacy Policy")
+
+              Text("I agree to the ") .foregroundColor(.gray) .font(.caption) +
+              Text("Terms of Service") .foregroundColor(.blue) .font(.caption) .underline() +
+              Text(" and ") .foregroundColor(.gray) .font(.caption) +
+              Text("Privacy Policy") .foregroundColor(.blue) .font(.caption) .underline()
+            }
+            .onTapGesture { location in
+              // Rough hit detection for the links
+              // Full width tap toggles checkbox; we rely on the sheets below
+            }
+            .overlay(
+              HStack(spacing: 0) {
+                Color.clear.frame(width: 40) // checkbox area
+                Button { showingTerms = true } label: { Color.clear }
+                  .frame(width: 110)
+                Color.clear.frame(width: 30) // "and" text
+                Button { showingPrivacy = true } label: { Color.clear }
+                  .frame(width: 100)
+                Spacer()
+              }
+              .frame(height: 20)
+              , alignment: .leading
+            )
+            .padding(.top, 4)
+
             AuthButton(
               title: "Create Account",
               isLoading: viewModel.isLoading,
-              isEnabled: !viewModel.isLoading,
+              isEnabled: !viewModel.isLoading && agreedToTerms,
               action: {
                 Task {
                   await viewModel.createAccount(using: userManager, onComplete: onComplete)
@@ -157,6 +196,20 @@ struct SignUpView: View {
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
+    }
+    .sheet(isPresented: $showingTerms) {
+      LegalDocumentView(
+        title: "Terms of Service",
+        sections: AboutView.termsOfServiceSections,
+        endpoint: APIEndpoints.Legal.terms
+      )
+    }
+    .sheet(isPresented: $showingPrivacy) {
+      LegalDocumentView(
+        title: "Privacy Policy",
+        sections: AboutView.privacyPolicySections,
+        endpoint: APIEndpoints.Legal.privacy
+      )
     }
     .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
       SubscriptionOnboardingFlowView()
