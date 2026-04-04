@@ -77,9 +77,6 @@ struct Halo_fi_IOSApp: App {
         .preferredColorScheme(preferredColorScheme)
         .onAppear {
           Task {
-            if container.permissionManager.microphonePermission == .notDetermined {
-              _ = await container.permissionManager.requestMicrophonePermission()
-            }
             await subscriptionService.initialize()
           }
         }

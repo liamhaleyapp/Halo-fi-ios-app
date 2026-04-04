@@ -462,6 +462,11 @@ final class ConversationCoordinator {
                 if let serverSessionId = ack.sessionId ?? ack.connectionId {
                     self.sessionId = serverSessionId
                 }
+
+                // Transition from .connecting to .idle so the user can interact
+                if self.state == .connecting {
+                    self.setState(.idle)
+                }
             }
         }
     }
