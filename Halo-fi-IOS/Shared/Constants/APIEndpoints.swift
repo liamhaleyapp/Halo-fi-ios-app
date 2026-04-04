@@ -30,6 +30,9 @@ enum APIEndpoints {
 
         /// POST - Logout (if implemented).
         static let logout = "/auth/logout"
+
+        /// POST - Request password reset email.
+        static let resetPassword = "/auth/reset-password"
     }
 
     // MARK: - User
