@@ -26,6 +26,10 @@ final class StreamingAudioPlayer {
 
     private var audioEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    private var timePitchNode: AVAudioUnitTimePitch?
+
+    /// Playback rate (0.5 to 2.0). Set before calling playAccumulatedAudio().
+    var playbackRate: Float = 1.0
 
     /// Accumulated raw MP3 bytes from all chunks
     private var mp3Data = Data()
@@ -139,15 +143,20 @@ final class StreamingAudioPlayer {
 
             let engine = AVAudioEngine()
             let player = AVAudioPlayerNode()
+            let timePitch = AVAudioUnitTimePitch()
+            timePitch.rate = playbackRate
 
             engine.attach(player)
-            engine.connect(player, to: engine.mainMixerNode, format: processingFormat)
+            engine.attach(timePitch)
+            engine.connect(player, to: timePitch, format: processingFormat)
+            engine.connect(timePitch, to: engine.mainMixerNode, format: processingFormat)
 
             try engine.start()
             player.play()
 
             self.audioEngine = engine
             self.playerNode = player
+            self.timePitchNode = timePitch
             self.isPlaying = true
 
             Logger.info("StreamingAudioPlayer: Playing audio (\(frameCount) frames)")
@@ -171,6 +180,7 @@ final class StreamingAudioPlayer {
         audioEngine?.stop()
         audioEngine = nil
         playerNode = nil
+        timePitchNode = nil
         mp3Data = Data()
 
         if isPlaying {

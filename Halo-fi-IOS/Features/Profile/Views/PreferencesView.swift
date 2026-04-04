@@ -13,8 +13,13 @@ struct PreferencesView: View {
     // MARK: - User Preferences
     @AppStorage("voiceLanguage") private var voiceLanguage = "English"
     @AppStorage("themeMode") private var themeMode = "System"
-    @AppStorage("voiceAgent") private var voiceAgent = "Female"
+    @AppStorage("voiceAgent") private var voiceAgent = "21m00Tcm4TlvDq8ikWAM"
     @AppStorage("voiceSpeed") private var voiceSpeed = "Normal"
+
+    @State private var isSaving = false
+    @State private var showingResult = false
+    @State private var resultMessage = ""
+    @State private var resultSuccess = false
 
     // MARK: - Selection Options
     private let languageOptions: [SelectionOption] = [
@@ -30,8 +35,10 @@ struct PreferencesView: View {
     ]
 
     private let voiceAgentOptions: [SelectionOption] = [
-        .init(id: "Male", title: "Male"),
-        .init(id: "Female", title: "Female")
+        .init(id: "21m00Tcm4TlvDq8ikWAM", title: "Rachel (Female, Calm)"),
+        .init(id: "pNInz6obpgDQGcFmaJgB", title: "Adam (Male, Deep)"),
+        .init(id: "9BWtsMINqrJLrRacOk9x", title: "Aria (Female, Warm)"),
+        .init(id: "IKne3meq5aSn9XLyUdCD", title: "Charlie (Male, Natural)"),
     ]
 
     private let voiceSpeedOptions: [SelectionOption] = [
@@ -39,6 +46,14 @@ struct PreferencesView: View {
         .init(id: "Normal", title: "Normal"),
         .init(id: "Fast", title: "Fast")
     ]
+
+    private var speedValue: Float {
+        switch voiceSpeed {
+        case "Slow": return 0.8
+        case "Fast": return 1.3
+        default: return 1.0
+        }
+    }
 
     private var systemColorScheme: ColorScheme? {
         switch UIScreen.main.traitCollection.userInterfaceStyle {
@@ -89,8 +104,8 @@ struct PreferencesView: View {
 
                 // Voice Agent
                 PreferenceDropdownSection(
-                    title: "Voice Agent",
-                    subtitle: "Choose your preferred voice assistant",
+                    title: "Voice Assistant",
+                    subtitle: "Choose your preferred voice",
                     icon: "person.wave.2",
                     options: voiceAgentOptions,
                     selectedId: $voiceAgent
@@ -108,7 +123,10 @@ struct PreferencesView: View {
                 Spacer(minLength: 40)
 
                 // Save Button
-                SavePreferencesButton(onSave: savePreferences)
+                SavePreferencesButton(onSave: {
+                    Task { await savePreferences() }
+                })
+                .disabled(isSaving)
 
                 Spacer(minLength: 100)
             }
@@ -117,17 +135,57 @@ struct PreferencesView: View {
         .navigationTitle("Preferences")
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(selectedColorScheme)
+        .alert(resultSuccess ? "Saved" : "Error", isPresented: $showingResult) {
+            Button("OK") { }
+        } message: {
+            Text(resultMessage)
+        }
     }
 
-    private func savePreferences() {
-        // TODO: Implement actual save logic
-        // For now, just show success feedback
+    private func savePreferences() async {
+        isSaving = true
+        defer { isSaving = false }
 
-        // Haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
+        struct PrefsBody: Encodable {
+            let voice_agent: String
+            let voice_speed: Float
+            let language: String
+            let theme_mode: String
+        }
 
-        // TODO: Show success toast or alert
+        struct PrefsResponse: Codable {
+            let voice_agent: String?
+            let voice_speed: Float?
+            let language: String?
+            let theme_mode: String?
+        }
+
+        do {
+            let body = PrefsBody(
+                voice_agent: voiceAgent,
+                voice_speed: speedValue,
+                language: voiceLanguage == "English" ? "en" : "es",
+                theme_mode: themeMode.lowercased()
+            )
+            let requestBody = try JSONEncoder().encode(body)
+
+            let _: PrefsResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: APIEndpoints.Preferences.update,
+                method: .PUT,
+                body: requestBody,
+                responseType: PrefsResponse.self
+            )
+
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+
+            resultSuccess = true
+            resultMessage = "Your preferences have been saved."
+        } catch {
+            resultSuccess = false
+            resultMessage = "Unable to save preferences. Please try again."
+        }
+        showingResult = true
     }
 }
 

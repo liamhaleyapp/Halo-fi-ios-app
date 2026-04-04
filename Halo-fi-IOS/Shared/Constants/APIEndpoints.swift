@@ -30,6 +30,9 @@ enum APIEndpoints {
 
         /// POST - Logout (if implemented).
         static let logout = "/auth/logout"
+
+        /// POST - Request password reset email.
+        static let resetPassword = "/auth/reset-password"
     }
 
     // MARK: - User
@@ -103,6 +106,14 @@ enum APIEndpoints {
     enum Agent {
         /// POST - Get ElevenLabs STT token for voice transcription.
         static let sttToken = "/agent/stt/token"
+    }
+
+    // MARK: - Preferences
+
+    enum Preferences {
+        static let get = "/users/preferences"
+        static let update = "/users/preferences"
+        static let voices = "/users/voices"
     }
 
     // MARK: - Legal

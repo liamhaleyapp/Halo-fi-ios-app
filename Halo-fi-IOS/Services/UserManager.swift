@@ -245,7 +245,21 @@ final class UserManager {
     }
 
     func resetPassword(email: String) async throws {
-        throw AuthError.notImplemented
+        struct ResetBody: Encodable {
+            let email: String
+        }
+        struct ResetResponse: Codable {
+            let success: Bool
+            let message: String?
+        }
+
+        let body = try JSONEncoder().encode(ResetBody(email: email))
+        let _: ResetResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.resetPassword,
+            method: .POST,
+            body: body,
+            responseType: ResetResponse.self
+        )
     }
 
     // MARK: - User Onboarding
