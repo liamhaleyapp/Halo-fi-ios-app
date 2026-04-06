@@ -13,6 +13,8 @@ struct ForgotPasswordView: View {
   @State private var email = ""
   @State private var isLoading = false
   @State private var showingSuccess = false
+  @State private var showingError = false
+  @State private var errorMessage = ""
   
   var body: some View {
     NavigationStack {
@@ -87,15 +89,23 @@ struct ForgotPasswordView: View {
     } message: {
       Text("Check your email for password reset instructions.")
     }
+    .alert("Error", isPresented: $showingError) {
+      Button("OK") { }
+    } message: {
+      Text(errorMessage)
+    }
   }
   
   private func resetPassword() {
+    isLoading = true
     Task {
+      defer { isLoading = false }
       do {
         try await userManager.resetPassword(email: email)
         showingSuccess = true
       } catch {
-        // TODO: Show error message
+        errorMessage = "Unable to send reset link. Please check your email and try again."
+        showingError = true
         Logger.error("Error resetting password: \(error)")
       }
     }

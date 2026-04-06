@@ -20,6 +20,10 @@ struct SignUpView: View {
   @State private var showingDatePicker = false
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
+  @State private var agreedToTerms = false
+  @State private var showingTerms = false
+  @State private var showingPrivacy = false
+  @State private var termsHighlighted = false
 
   var body: some View {
     ZStack {
@@ -105,35 +109,84 @@ struct SignUpView: View {
               validationText(error)
             }
             
-            AuthButton(
-              title: "Create Account",
-              isLoading: viewModel.isLoading,
-              isEnabled: !viewModel.isLoading,
-              action: {
-                Task {
-                  await viewModel.createAccount(using: userManager, onComplete: onComplete)
-                }
+            // Terms & Privacy consent
+            HStack(alignment: .center, spacing: 12) {
+              Button {
+                agreedToTerms.toggle()
+                if agreedToTerms { termsHighlighted = false }
+              } label: {
+                Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
+                  .font(.title3)
+                  .foregroundColor(agreedToTerms ? .indigo : termsHighlighted ? .red : .gray)
               }
-            )
+              .scaleEffect(termsHighlighted ? 1.4 : 1.0)
+              .accessibilityLabel(agreedToTerms ? "Terms accepted" : "Accept terms")
+              .accessibilityHint("Toggle to agree to Terms of Service and Privacy Policy")
+
+              Text(termsConsentText)
+                .font(.caption)
+                .environment(\.openURL, OpenURLAction { url in
+                  if url.absoluteString == "halofi://terms" {
+                    showingTerms = true
+                    return .handled
+                  } else if url.absoluteString == "halofi://privacy" {
+                    showingPrivacy = true
+                    return .handled
+                  }
+                  return .systemAction
+                })
+            }
+            .padding(.top, 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: termsHighlighted)
+
+            ZStack {
+              AuthButton(
+                title: "Create Account",
+                isLoading: viewModel.isLoading,
+                isEnabled: !viewModel.isLoading && agreedToTerms,
+                action: {
+                  Task {
+                    await viewModel.createAccount(using: userManager, onComplete: onComplete)
+                  }
+                }
+              )
+
+              if !agreedToTerms && !viewModel.isLoading {
+                Color.clear
+                  .contentShape(Rectangle())
+                  .onTapGesture { highlightTerms() }
+              }
+            }
             
             // Social Auth
-            SocialAuthButtons(
-              isLoading: viewModel.isLoading,
-              onAppleSignIn: { idToken, nonce in
-                Task {
-                  await viewModel.socialSignIn(
-                    provider: "apple", idToken: idToken, nonce: nonce,
-                    using: userManager, subscriptionService: subscriptionService,
-                    onNeedsSubscription: { showingSubscriptionOnboarding = true },
-                    onNeedsPlaid: { showingPlaidOnboarding = true },
-                    onSignedInAndOnboarded: { onComplete?(); dismiss() }
-                  )
+            ZStack {
+              SocialAuthButtons(
+                isLoading: viewModel.isLoading,
+                onAppleSignIn: { idToken, nonce in
+                  Task {
+                    await viewModel.socialSignIn(
+                      provider: "apple", idToken: idToken, nonce: nonce,
+                      using: userManager, subscriptionService: subscriptionService,
+                      onNeedsSubscription: { showingSubscriptionOnboarding = true },
+                      onNeedsPlaid: { showingPlaidOnboarding = true },
+                      onSignedInAndOnboarded: { onComplete?(); dismiss() }
+                    )
+                  }
+                },
+                onGoogleSignIn: {
+                  handleGoogleSignIn()
                 }
-              },
-              onGoogleSignIn: {
-                handleGoogleSignIn()
+              )
+              .disabled(!agreedToTerms)
+              .opacity(!agreedToTerms ? 0.6 : 1.0)
+
+              // Catch taps on disabled buttons and highlight the checkbox
+              if !agreedToTerms {
+                Color.clear
+                  .contentShape(Rectangle())
+                  .onTapGesture { highlightTerms() }
               }
-            )
+            }
 
             // Sign In Link
             HStack {
@@ -157,6 +210,20 @@ struct SignUpView: View {
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {
       SignInView()
+    }
+    .sheet(isPresented: $showingTerms) {
+      LegalDocumentView(
+        title: "Terms of Service",
+        sections: AboutView.termsOfServiceSections,
+        endpoint: APIEndpoints.Legal.terms
+      )
+    }
+    .sheet(isPresented: $showingPrivacy) {
+      LegalDocumentView(
+        title: "Privacy Policy",
+        sections: AboutView.privacyPolicySections,
+        endpoint: APIEndpoints.Legal.privacy
+      )
     }
     .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
       SubscriptionOnboardingFlowView()
@@ -235,6 +302,39 @@ struct SignUpView: View {
         viewModel.showingError = true
       }
     }
+  }
+
+  private func highlightTerms() {
+    let generator = UIImpactFeedbackGenerator(style: .heavy)
+    generator.impactOccurred()
+    UIAccessibility.post(
+      notification: .announcement,
+      argument: "Please agree to the Terms of Service and Privacy Policy first"
+    )
+    termsHighlighted = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      termsHighlighted = false
+    }
+  }
+
+  private var termsConsentText: AttributedString {
+    var agree = AttributedString("I agree to the ")
+    agree.foregroundColor = .gray
+
+    var terms = AttributedString("Terms of Service")
+    terms.foregroundColor = .blue
+    terms.underlineStyle = .single
+    terms.link = URL(string: "halofi://terms")
+
+    var and = AttributedString(" and ")
+    and.foregroundColor = .gray
+
+    var privacy = AttributedString("Privacy Policy")
+    privacy.foregroundColor = .blue
+    privacy.underlineStyle = .single
+    privacy.link = URL(string: "halofi://privacy")
+
+    return agree + terms + and + privacy
   }
 
   // Small helper so all error labels look consistent
