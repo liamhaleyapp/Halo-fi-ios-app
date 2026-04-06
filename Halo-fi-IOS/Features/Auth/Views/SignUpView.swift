@@ -23,6 +23,7 @@ struct SignUpView: View {
   @State private var agreedToTerms = false
   @State private var showingTerms = false
   @State private var showingPrivacy = false
+  @State private var termsHighlighted = false
 
   var body: some View {
     ZStack {
@@ -112,11 +113,13 @@ struct SignUpView: View {
             HStack(alignment: .center, spacing: 12) {
               Button {
                 agreedToTerms.toggle()
+                if agreedToTerms { termsHighlighted = false }
               } label: {
                 Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
                   .font(.title3)
-                  .foregroundColor(agreedToTerms ? .indigo : .gray)
+                  .foregroundColor(agreedToTerms ? .indigo : termsHighlighted ? .red : .gray)
               }
+              .scaleEffect(termsHighlighted ? 1.4 : 1.0)
               .accessibilityLabel(agreedToTerms ? "Terms accepted" : "Accept terms")
               .accessibilityHint("Toggle to agree to Terms of Service and Privacy Policy")
 
@@ -134,36 +137,56 @@ struct SignUpView: View {
                 })
             }
             .padding(.top, 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: termsHighlighted)
 
-            AuthButton(
-              title: "Create Account",
-              isLoading: viewModel.isLoading,
-              isEnabled: !viewModel.isLoading && agreedToTerms,
-              action: {
-                Task {
-                  await viewModel.createAccount(using: userManager, onComplete: onComplete)
+            ZStack {
+              AuthButton(
+                title: "Create Account",
+                isLoading: viewModel.isLoading,
+                isEnabled: !viewModel.isLoading && agreedToTerms,
+                action: {
+                  Task {
+                    await viewModel.createAccount(using: userManager, onComplete: onComplete)
+                  }
                 }
+              )
+
+              if !agreedToTerms && !viewModel.isLoading {
+                Color.clear
+                  .contentShape(Rectangle())
+                  .onTapGesture { highlightTerms() }
               }
-            )
+            }
             
             // Social Auth
-            SocialAuthButtons(
-              isLoading: viewModel.isLoading,
-              onAppleSignIn: { idToken, nonce in
-                Task {
-                  await viewModel.socialSignIn(
-                    provider: "apple", idToken: idToken, nonce: nonce,
-                    using: userManager, subscriptionService: subscriptionService,
-                    onNeedsSubscription: { showingSubscriptionOnboarding = true },
-                    onNeedsPlaid: { showingPlaidOnboarding = true },
-                    onSignedInAndOnboarded: { onComplete?(); dismiss() }
-                  )
+            ZStack {
+              SocialAuthButtons(
+                isLoading: viewModel.isLoading,
+                onAppleSignIn: { idToken, nonce in
+                  Task {
+                    await viewModel.socialSignIn(
+                      provider: "apple", idToken: idToken, nonce: nonce,
+                      using: userManager, subscriptionService: subscriptionService,
+                      onNeedsSubscription: { showingSubscriptionOnboarding = true },
+                      onNeedsPlaid: { showingPlaidOnboarding = true },
+                      onSignedInAndOnboarded: { onComplete?(); dismiss() }
+                    )
+                  }
+                },
+                onGoogleSignIn: {
+                  handleGoogleSignIn()
                 }
-              },
-              onGoogleSignIn: {
-                handleGoogleSignIn()
+              )
+              .disabled(!agreedToTerms)
+              .opacity(!agreedToTerms ? 0.6 : 1.0)
+
+              // Catch taps on disabled buttons and highlight the checkbox
+              if !agreedToTerms {
+                Color.clear
+                  .contentShape(Rectangle())
+                  .onTapGesture { highlightTerms() }
               }
-            )
+            }
 
             // Sign In Link
             HStack {
@@ -278,6 +301,19 @@ struct SignUpView: View {
           : error.localizedDescription
         viewModel.showingError = true
       }
+    }
+  }
+
+  private func highlightTerms() {
+    let generator = UIImpactFeedbackGenerator(style: .heavy)
+    generator.impactOccurred()
+    UIAccessibility.post(
+      notification: .announcement,
+      argument: "Please agree to the Terms of Service and Privacy Policy first"
+    )
+    termsHighlighted = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      termsHighlighted = false
     }
   }
 
