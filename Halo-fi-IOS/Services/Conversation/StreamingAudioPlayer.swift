@@ -40,9 +40,9 @@ final class StreamingAudioPlayer {
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(
-                .playback,
+                .playAndRecord,
                 mode: .default,
-                options: [.duckOthers]
+                options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)
             Logger.info("StreamingAudioPlayer: Audio session configured")

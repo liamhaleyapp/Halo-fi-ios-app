@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 @Observable
 @MainActor
@@ -27,6 +28,15 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private var sessionId: String?
     private var concurrentSessionRetries = 0
     private let maxConcurrentSessionRetries = 3
+
+    // Reconnection
+    private var reconnectAttempt = 0
+    private let maxReconnectAttempts = 5
+    private(set) var isReconnecting = false
+    private var intentionalDisconnect = false
+
+    /// Called when reconnection fails permanently
+    var onPermanentDisconnect: (() -> Void)?
 
     // Callbacks for handling different message types
     var onAgentResponse: ((AgentResponsePayload) -> Void)?
@@ -70,18 +80,21 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
         connectionStatus = .pending
         isConnected = true
-        connectionStatus = .connected
+        intentionalDisconnect = false
 
-        Logger.info("AgentWebSocket: Connection established, starting listener")
+        Logger.info("AgentWebSocket: Connection initiated, starting listener")
 
         // Start listening for messages
         Task {
             await startListening()
         }
     }
-    
+
     func disconnect() {
         Logger.info("AgentWebSocket: Disconnecting")
+        intentionalDisconnect = true
+        reconnectAttempt = 0
+        isReconnecting = false
         webSocketConnection?.close()
         webSocketConnection = nil
         isConnected = false
@@ -103,17 +116,17 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         } catch is CancellationError {
             Logger.info("Agent WebSocket listener cancelled")
         } catch {
-            // Ignore socket-closed errors during intentional disconnect
-            guard isConnected else {
-                Logger.info("Agent WebSocket listener ended (disconnected)")
+            // Ignore errors during intentional disconnect
+            guard !intentionalDisconnect else {
+                Logger.info("Agent WebSocket listener ended (intentional disconnect)")
                 return
             }
             Logger.error("Agent WebSocket listening error: \(error.localizedDescription)")
             await MainActor.run {
-                connectionStatus = .disconnected
                 isConnected = false
-                lastError = "Connection error: \(error.localizedDescription)"
             }
+            // Attempt reconnection
+            await attemptReconnect()
         }
     }
     
@@ -204,7 +217,10 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     private func handleConnectionAck(_ ack: ConnectionAckPayload) async {
         concurrentSessionRetries = 0
+        reconnectAttempt = 0
+        isReconnecting = false
         await MainActor.run {
+            connectionStatus = .connected
             // Use connectionId if available, fallback to sessionId
             currentSessionId = ack.connectionId ?? ack.sessionId
             connectionAckMessage = "\(ack.message) - Session: \(currentSessionId ?? "none")"
@@ -219,6 +235,61 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         onConnectionAck?(ack)
     }
     
+    // MARK: - Reconnection
+
+    private func attemptReconnect() async {
+        guard !isReconnecting else { return }
+        guard !intentionalDisconnect else { return }
+        guard reconnectAttempt < maxReconnectAttempts else {
+            Logger.error("AgentWebSocket: Max reconnect attempts (\(maxReconnectAttempts)) reached")
+            await MainActor.run {
+                connectionStatus = .disconnected
+                lastError = "Connection lost. Please go back and try again."
+                isReconnecting = false
+            }
+            onPermanentDisconnect?()
+            return
+        }
+
+        isReconnecting = true
+        reconnectAttempt += 1
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        let delay = pow(2.0, Double(reconnectAttempt - 1))
+        Logger.info("AgentWebSocket: Reconnecting in \(delay)s (attempt \(reconnectAttempt)/\(maxReconnectAttempts))")
+
+        await MainActor.run {
+            connectionStatus = .reconnecting
+        }
+
+        // Announce for VoiceOver
+        UIAccessibility.post(notification: .announcement, argument: "Connection lost. Reconnecting...")
+
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+        // Check if user manually disconnected during the wait
+        guard !intentionalDisconnect else {
+            isReconnecting = false
+            return
+        }
+
+        // Clean up old connection
+        webSocketConnection?.close()
+        webSocketConnection = nil
+
+        do {
+            try await connect()
+            isReconnecting = false
+            Logger.info("AgentWebSocket: Reconnected successfully")
+            UIAccessibility.post(notification: .announcement, argument: "Reconnected. You can continue your conversation.")
+        } catch {
+            isReconnecting = false
+            Logger.error("AgentWebSocket: Reconnect failed: \(error.localizedDescription)")
+            // Try again with longer delay
+            await attemptReconnect()
+        }
+    }
+
     // MARK: - Sending Messages
     
     func sendMessage(_ message: String, context: [String: AnyCodable]? = nil) async throws {
