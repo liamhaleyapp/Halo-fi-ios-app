@@ -34,6 +34,8 @@ struct PreferencesView: View {
         .init(id: "High-Contrast", title: "High-Contrast")
     ]
 
+    private static let defaultVoiceId = "21m00Tcm4TlvDq8ikWAM"
+
     private let voiceAgentOptions: [SelectionOption] = [
         .init(id: "21m00Tcm4TlvDq8ikWAM", title: "Rachel (Female, Calm)"),
         .init(id: "pNInz6obpgDQGcFmaJgB", title: "Adam (Male, Deep)"),
@@ -139,6 +141,12 @@ struct PreferencesView: View {
             Button("OK") { }
         } message: {
             Text(resultMessage)
+        }
+        .onAppear {
+            let validIds = Set(voiceAgentOptions.map(\.id))
+            if !validIds.contains(voiceAgent) {
+                voiceAgent = Self.defaultVoiceId
+            }
         }
     }
 

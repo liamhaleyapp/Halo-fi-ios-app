@@ -417,9 +417,9 @@ final class ConversationCoordinator {
                 let responseId = self.currentAgentResponseId ?? UUID()
                 self.emitEvent(.agentFinal(complete.responseText, id: responseId))
 
-                // Extract voice speed from server data
+                // Extract voice speed from server data (may arrive as Double or Int)
                 if let data = complete.data,
-                   let speedValue = data["voice_speed"]?.value as? Double {
+                   let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
                     self.streamingAudioPlayer?.playbackRate = Float(speedValue)
                 }
 
