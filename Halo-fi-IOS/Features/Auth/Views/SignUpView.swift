@@ -109,7 +109,7 @@ struct SignUpView: View {
             }
             
             // Terms & Privacy consent
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
               Button {
                 agreedToTerms.toggle()
               } label: {
@@ -120,28 +120,19 @@ struct SignUpView: View {
               .accessibilityLabel(agreedToTerms ? "Terms accepted" : "Accept terms")
               .accessibilityHint("Toggle to agree to Terms of Service and Privacy Policy")
 
-              Text("I agree to the ") .foregroundColor(.gray) .font(.caption) +
-              Text("Terms of Service") .foregroundColor(.blue) .font(.caption) .underline() +
-              Text(" and ") .foregroundColor(.gray) .font(.caption) +
-              Text("Privacy Policy") .foregroundColor(.blue) .font(.caption) .underline()
+              Text(termsConsentText)
+                .font(.caption)
+                .environment(\.openURL, OpenURLAction { url in
+                  if url.absoluteString == "halofi://terms" {
+                    showingTerms = true
+                    return .handled
+                  } else if url.absoluteString == "halofi://privacy" {
+                    showingPrivacy = true
+                    return .handled
+                  }
+                  return .systemAction
+                })
             }
-            .onTapGesture { location in
-              // Rough hit detection for the links
-              // Full width tap toggles checkbox; we rely on the sheets below
-            }
-            .overlay(
-              HStack(spacing: 0) {
-                Color.clear.frame(width: 40) // checkbox area
-                Button { showingTerms = true } label: { Color.clear }
-                  .frame(width: 110)
-                Color.clear.frame(width: 30) // "and" text
-                Button { showingPrivacy = true } label: { Color.clear }
-                  .frame(width: 100)
-                Spacer()
-              }
-              .frame(height: 20)
-              , alignment: .leading
-            )
             .padding(.top, 4)
 
             AuthButton(
@@ -288,6 +279,26 @@ struct SignUpView: View {
         viewModel.showingError = true
       }
     }
+  }
+
+  private var termsConsentText: AttributedString {
+    var agree = AttributedString("I agree to the ")
+    agree.foregroundColor = .gray
+
+    var terms = AttributedString("Terms of Service")
+    terms.foregroundColor = .blue
+    terms.underlineStyle = .single
+    terms.link = URL(string: "halofi://terms")
+
+    var and = AttributedString(" and ")
+    and.foregroundColor = .gray
+
+    var privacy = AttributedString("Privacy Policy")
+    privacy.foregroundColor = .blue
+    privacy.underlineStyle = .single
+    privacy.link = URL(string: "halofi://privacy")
+
+    return agree + terms + and + privacy
   }
 
   // Small helper so all error labels look consistent
