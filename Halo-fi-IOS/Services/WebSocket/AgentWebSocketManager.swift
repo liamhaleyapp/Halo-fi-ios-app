@@ -237,6 +237,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     
     // MARK: - Reconnection
 
+    // TODO: Refactor to iterative while loop to eliminate recursive call and isReconnecting race condition
     private func attemptReconnect() async {
         guard !isReconnecting else { return }
         guard !intentionalDisconnect else { return }
