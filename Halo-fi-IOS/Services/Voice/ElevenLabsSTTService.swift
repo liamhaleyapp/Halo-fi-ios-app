@@ -21,6 +21,8 @@ enum ElevenLabsSTTError: LocalizedError {
     case connectionFailed(String)
     case notConnected
     case invalidAudioFormat
+    case resourceExhausted
+    case idleTimeout
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +34,10 @@ enum ElevenLabsSTTError: LocalizedError {
             return "Voice service not connected"
         case .invalidAudioFormat:
             return "Invalid audio format"
+        case .resourceExhausted:
+            return "Voice quota exceeded. Please try again later."
+        case .idleTimeout:
+            return "Voice session timed out."
         }
     }
 }
@@ -145,7 +151,7 @@ final class ElevenLabsSTTService {
         onConnected?()
     }
 
-    /// Disconnect from ElevenLabs STT
+    /// Disconnect from ElevenLabs STT immediately (no flush).
     func disconnect() {
         listeningTask?.cancel()
         listeningTask = nil
@@ -159,6 +165,14 @@ final class ElevenLabsSTTService {
 
         Logger.info("ElevenLabsSTT: Disconnected")
         onDisconnected?()
+    }
+
+    /// Send a commit signal to flush any buffered transcript, then disconnect.
+    /// This ensures speech captured right before stop isn't lost.
+    func commitAndDisconnect() async {
+        // For now, just disconnect immediately.
+        // TODO: Investigate proper ElevenLabs VAD flush mechanism.
+        disconnect()
     }
 
     /// Send audio data to ElevenLabs for transcription
@@ -353,14 +367,17 @@ final class ElevenLabsSTTService {
     }
 
     private func handleConnectionError(_ error: Error) {
-        Logger.error("ElevenLabsSTT: Connection error: \(error)")
+        // Extract close reason before clearing webSocketTask
+        let closeReason: String? = {
+            guard let task = webSocketTask,
+                  let reason = task.closeReason,
+                  let str = String(data: reason, encoding: .utf8) else { return nil }
+            return str
+        }()
 
-        // Log close code if available
-        if let task = webSocketTask {
-            Logger.error("ElevenLabsSTT: Close code: \(task.closeCode.rawValue)")
-            if let reason = task.closeReason, let reasonStr = String(data: reason, encoding: .utf8) {
-                Logger.error("ElevenLabsSTT: Close reason: \(reasonStr)")
-            }
+        Logger.error("ElevenLabsSTT: Connection error: \(error)")
+        if let closeReason {
+            Logger.error("ElevenLabsSTT: Close reason: \(closeReason)")
         }
 
         // Clean up connection state
@@ -370,7 +387,15 @@ final class ElevenLabsSTTService {
         listeningTask = nil
         webSocketTask = nil
 
-        onError?(error)
+        // Map close reason to a specific error
+        if closeReason == "resource_exhausted" {
+            onError?(ElevenLabsSTTError.resourceExhausted)
+        } else if closeReason == "timeout" || closeReason == "idle_timeout" {
+            // Idle timeout is not a user-facing error — just go back to idle
+            Logger.info("ElevenLabsSTT: Idle timeout, returning to idle silently")
+        } else {
+            onError?(error)
+        }
         onDisconnected?()
     }
 

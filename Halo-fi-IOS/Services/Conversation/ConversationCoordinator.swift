@@ -105,7 +105,6 @@ final class ConversationCoordinator {
             }
         } catch {
             setState(.error(error.localizedDescription))
-            emitEvent(.errorEvent("Failed to connect: \(error.localizedDescription)"))
         }
     }
 
@@ -205,7 +204,6 @@ final class ConversationCoordinator {
         isVoiceSessionActive = false
 
         setState(.error(error.localizedDescription))
-        emitEvent(.errorEvent("Voice unavailable: \(error.localizedDescription)"))
     }
 
     /// Stop listening (voice mode) - finalize and send transcript
@@ -307,7 +305,6 @@ final class ConversationCoordinator {
             audioFeedback.playAgentTypingFeedback()
         } catch {
             setState(.error(error.localizedDescription))
-            emitEvent(.errorEvent("Failed to send message: \(error.localizedDescription)"))
         }
     }
 
@@ -414,7 +411,6 @@ final class ConversationCoordinator {
         case .error(let error):
             audioFeedback.stopProcessingPulse()
             setState(.error(error.error))
-            emitEvent(.errorEvent(error.error))
             audioFeedback.feedbackForStateChange(.error(error.error))
 
         case .acknowledgment(let ack):
@@ -437,16 +433,18 @@ final class ConversationCoordinator {
             guard let self = self else { return }
             guard self.isVoiceSessionActive else { return }
 
+            // Always update the draft with the latest text so it's available
+            // for finalization, even if state has already moved to .processing
+            // (e.g., user tapped stop and we're waiting for the commit flush).
+            self.transcriptStore?.updateDraft(text)
+
             if isFinal {
                 // Committed transcript from VAD - auto-stop and process
                 self.stopListeningAndProcess()
-            } else {
-                // Partial transcript - update draft in UI
-                self.transcriptStore?.updateDraft(text)
             }
         }
 
-        // Handle STT errors
+        // Handle STT errors — recover gracefully to idle so the user can try again
         sttService.onError = { [weak self] error in
             guard let self = self else { return }
 
@@ -458,9 +456,17 @@ final class ConversationCoordinator {
             self.isVoiceSessionActive = false
             self.transcriptStore?.discardDraft()
 
-            // Show error to user
-            self.setState(.error(error.localizedDescription))
-            self.emitEvent(.errorEvent("Voice transcription failed: \(error.localizedDescription)"))
+            // Show a concise, user-friendly message on the mic button.
+            // The raw NSError descriptions are too technical.
+            let userMessage = Self.friendlySTTError(error)
+            self.setState(.error(userMessage))
+
+            // Auto-recover to idle after a short delay so the user can retry
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                guard let self, case .error = self.state else { return }
+                self.setState(.idle)
+            }
         }
 
         // Handle STT disconnection
@@ -573,5 +579,45 @@ extension ConversationCoordinator {
     /// Whether currently connected to the backend
     var isConnected: Bool {
         agentWebSocket.isConnected
+    }
+}
+
+// MARK: - Error Helpers
+
+extension ConversationCoordinator {
+    /// Maps raw STT/network errors to concise, user-friendly strings.
+    static func friendlySTTError(_ error: Error) -> String {
+        // ElevenLabs-specific errors — use their descriptions directly
+        if let sttError = error as? ElevenLabsSTTError {
+            switch sttError {
+            case .resourceExhausted:
+                return "Voice quota exceeded. Try again later."
+            case .idleTimeout:
+                return "Voice session timed out."
+            default:
+                return sttError.localizedDescription
+            }
+        }
+
+        let nsError = error as NSError
+
+        // Generic network / timeout
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut:
+                return "Voice connection timed out."
+            case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
+                return "No internet connection."
+            default:
+                return "Voice connection lost."
+            }
+        }
+
+        // POSIX socket errors (e.g., connection reset)
+        if nsError.domain == NSPOSIXErrorDomain {
+            return "Voice connection lost."
+        }
+
+        return "Voice error. Tap to try again."
     }
 }
