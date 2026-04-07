@@ -52,6 +52,7 @@ final class ConversationCoordinator {
     private var currentAgentResponseId: UUID?
     private var pendingRetryMessage: String?
     private var isVoiceSessionActive = false
+    private var agentEventTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -61,7 +62,6 @@ final class ConversationCoordinator {
         self.sttService = ElevenLabsSTTService()
 
         setupNotifications()
-        setupAgentCallbacks()
         setupSTTCallbacks()
     }
 
@@ -94,7 +94,15 @@ final class ConversationCoordinator {
 
         do {
             try await agentWebSocket.connect()
-            // Stay in .connecting until greeting arrives (first audio/response)
+
+            // Start consuming events from the new stream
+            agentEventTask?.cancel()
+            agentEventTask = Task { [weak self] in
+                guard let self else { return }
+                for await event in self.agentWebSocket.events {
+                    self.handleAgentEvent(event)
+                }
+            }
         } catch {
             setState(.error(error.localizedDescription))
             emitEvent(.errorEvent("Failed to connect: \(error.localizedDescription)"))
@@ -103,6 +111,9 @@ final class ConversationCoordinator {
 
     /// Disconnect from the backend
     func disconnect() {
+        agentEventTask?.cancel()
+        agentEventTask = nil
+
         voiceService.stopRecording()
         sttService.disconnect()
         agentWebSocket.disconnect()
@@ -353,121 +364,68 @@ final class ConversationCoordinator {
         }
     }
 
-    // MARK: - Agent WebSocket Callbacks
+    // MARK: - Agent Event Handling
 
-    private func setupAgentCallbacks() {
-        // Handle streaming chunks
-        agentWebSocket.onStreamChunk = { [weak self] chunk in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                let responseId = self.currentAgentResponseId ?? UUID()
-                self.currentAgentResponseId = responseId
-
-                self.emitEvent(.agentDelta(chunk.chunk, id: responseId))
-
-                // Check if complete
-                if chunk.complete == true {
-                    // Final will be sent separately or we finalize here
-                    self.handleAgentResponseComplete(id: responseId)
-                }
+    /// Handles all events from the AgentWebSocketManager event stream.
+    /// Replaces the previous 7 separate callback closures with a single sequential handler.
+    private func handleAgentEvent(_ event: AgentEvent) {
+        switch event {
+        case .connectionAck(let ack):
+            if let serverSessionId = ack.sessionId ?? ack.connectionId {
+                sessionId = serverSessionId
             }
-        }
+            // Stay in .connecting — the button remains disabled with "Connecting..."
+            // until the first agent message arrives and transitions to .speaking.
+            // This prevents the button appearing active while the intro message loads.
 
-        // Handle complete responses (text-only fallback when no audio stream)
-        agentWebSocket.onAgentResponse = { [weak self] response in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                self.audioFeedback.stopProcessingPulse()
-
-                let responseId = self.currentAgentResponseId ?? UUID()
-
-                // Emit final event
-                self.emitEvent(.agentFinal(response.message, id: responseId))
-
-                // If not already handling an audio stream, transition to idle
-                if self.streamingAudioPlayer?.isPlaying != true && self.streamingAudioPlayer?.isBuffering != true {
-                    self.setState(.idle)
-                }
-
-                self.currentAgentResponseId = nil
+        case .streamChunk(let chunk):
+            let responseId = currentAgentResponseId ?? UUID()
+            currentAgentResponseId = responseId
+            emitEvent(.agentDelta(chunk.chunk, id: responseId))
+            if chunk.complete == true {
+                handleAgentResponseComplete(id: responseId)
             }
-        }
 
-        // Handle audio chunks — accumulate for playback
-        agentWebSocket.onAudioChunk = { [weak self] chunk in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                // Stop processing pulse on first audio chunk
-                self.audioFeedback.stopProcessingPulse()
-
-                Logger.debug("ConversationCoordinator: Audio chunk received, player=\(self.streamingAudioPlayer != nil), isPlaying=\(self.streamingAudioPlayer?.isPlaying ?? false)")
-
-                self.streamingAudioPlayer?.appendAudioChunk(chunk.audio)
+        case .agentResponse(let response):
+            audioFeedback.stopProcessingPulse()
+            let responseId = currentAgentResponseId ?? UUID()
+            emitEvent(.agentFinal(response.message, id: responseId))
+            if streamingAudioPlayer?.isPlaying != true && streamingAudioPlayer?.isBuffering != true {
+                setState(.idle)
             }
-        }
+            currentAgentResponseId = nil
 
-        // Handle audio complete — decode accumulated MP3 and play, emit final text
-        agentWebSocket.onAudioComplete = { [weak self] complete in
-            Task { @MainActor in
-                guard let self = self else { return }
+        case .audioChunk(let chunk):
+            audioFeedback.stopProcessingPulse()
+            Logger.debug("ConversationCoordinator: Audio chunk received, player=\(streamingAudioPlayer != nil), isPlaying=\(streamingAudioPlayer?.isPlaying ?? false)")
+            streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
-                let responseId = self.currentAgentResponseId ?? UUID()
-                self.emitEvent(.agentFinal(complete.responseText, id: responseId))
-
-                // Extract voice speed from server data (may arrive as Double or Int)
-                if let data = complete.data,
-                   let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
-                    self.streamingAudioPlayer?.playbackRate = Float(speedValue)
-                }
-
-                // Now decode and play the full accumulated MP3
-                self.playAccumulatedAudio()
-
-                self.currentAgentResponseId = nil
+        case .audioComplete(let complete):
+            let responseId = currentAgentResponseId ?? UUID()
+            emitEvent(.agentFinal(complete.responseText, id: responseId))
+            // Extract voice speed from server data (may arrive as Double or Int)
+            if let data = complete.data,
+               let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
+                streamingAudioPlayer?.playbackRate = Float(speedValue)
             }
-        }
+            playAccumulatedAudio()
+            currentAgentResponseId = nil
 
-        // Handle errors
-        agentWebSocket.onError = { [weak self] error in
-            Task { @MainActor in
-                guard let self = self else { return }
+        case .error(let error):
+            audioFeedback.stopProcessingPulse()
+            setState(.error(error.error))
+            emitEvent(.errorEvent(error.error))
+            audioFeedback.feedbackForStateChange(.error(error.error))
 
-                self.audioFeedback.stopProcessingPulse()
-                self.setState(.error(error.error))
-                self.emitEvent(.errorEvent(error.error))
-                self.audioFeedback.feedbackForStateChange(.error(error.error))
+        case .acknowledgment(let ack):
+            Logger.info("ConversationCoordinator: Agent acknowledged, thinking...")
+            if let text = ack.text, !text.isEmpty {
+                emitEvent(.status(text))
             }
-        }
 
-        // Handle acknowledgment (agent is thinking)
-        agentWebSocket.onAcknowledgment = { [weak self] ack in
-            Task { @MainActor in
-                guard let self = self else { return }
-                Logger.info("ConversationCoordinator: Agent acknowledged, thinking...")
-                // Acknowledgment text is shown in transcript
-                if let text = ack.text, !text.isEmpty {
-                    self.emitEvent(.status(text))
-                }
-            }
-        }
-
-        // Handle connection ack
-        agentWebSocket.onConnectionAck = { [weak self] ack in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                if let serverSessionId = ack.sessionId ?? ack.connectionId {
-                    self.sessionId = serverSessionId
-                }
-
-                // Transition from .connecting to .idle so the user can interact
-                if self.state == .connecting {
-                    self.setState(.idle)
-                }
-            }
+        case .permanentDisconnect:
+            setState(.disconnected)
+            emitEvent(.errorEvent("Connection lost. Please go back and try again."))
         }
     }
 

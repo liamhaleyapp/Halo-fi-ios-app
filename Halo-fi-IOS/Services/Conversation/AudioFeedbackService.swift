@@ -6,7 +6,6 @@
 //  Provides earcons (short audio cues) and haptic feedback.
 //
 
-import AudioToolbox
 import AVFoundation
 import UIKit
 
@@ -20,20 +19,26 @@ final class AudioFeedbackService {
     private let notificationGenerator = UINotificationFeedbackGenerator()
     private let selectionGenerator = UISelectionFeedbackGenerator()
 
-    // MARK: - Audio Players
+    // MARK: - Sound File URLs
+    // We store URLs and create fresh AVAudioPlayer instances on each play,
+    // so they're always created under the current audio session configuration.
 
-    private var startListeningSound: AVAudioPlayer?
-    private var stopListeningSound: AVAudioPlayer?
-    private var agentTypingSound: AVAudioPlayer?
-    private var agentCompleteSound: AVAudioPlayer?
-    private var tabSwitchSound: AVAudioPlayer?
-    private var conversationStartSound: AVAudioPlayer?
+    private var startListeningSoundURL: URL?
+    private var stopListeningSoundURL: URL?
+    private var agentTypingSoundURL: URL?
+    private var agentCompleteSoundURL: URL?
+    private var tabSwitchSoundURL: URL?
+    private var conversationStartSoundURL: URL?
+
+    /// Strong reference to the currently-playing AVAudioPlayer.
+    /// Without this, ARC deallocates the player before it finishes.
+    private var activePlayer: AVAudioPlayer?
 
     // MARK: - Initialization
 
     init() {
         prepare()
-        loadSounds()
+        loadSoundURLs()
     }
 
     // MARK: - Preparation
@@ -46,42 +51,27 @@ final class AudioFeedbackService {
         selectionGenerator.prepare()
     }
 
-    private func loadSounds() {
-        // Load custom earcon sounds from Resources/Sounds/
-        if let url = Bundle.main.url(forResource: "listening_start", withExtension: "aif") {
-            startListeningSound = try? AVAudioPlayer(contentsOf: url)
-            startListeningSound?.prepareToPlay()
-            startListeningSound?.volume = 0.7
-        }
+    private func loadSoundURLs() {
+        startListeningSoundURL = Bundle.main.url(forResource: "listening_start", withExtension: "aif")
+        stopListeningSoundURL = Bundle.main.url(forResource: "listening_stop", withExtension: "aif")
+        agentTypingSoundURL = Bundle.main.url(forResource: "agent_typing", withExtension: "aif")
+        agentCompleteSoundURL = Bundle.main.url(forResource: "agent_complete", withExtension: "mp3")
+        tabSwitchSoundURL = Bundle.main.url(forResource: "tab_switch", withExtension: "wav")
+        conversationStartSoundURL = Bundle.main.url(forResource: "pop_drip", withExtension: "aif")
+    }
 
-        if let url = Bundle.main.url(forResource: "listening_stop", withExtension: "aif") {
-            stopListeningSound = try? AVAudioPlayer(contentsOf: url)
-            stopListeningSound?.prepareToPlay()
-            stopListeningSound?.volume = 0.7
-        }
-
-        if let url = Bundle.main.url(forResource: "agent_typing", withExtension: "aif") {
-            agentTypingSound = try? AVAudioPlayer(contentsOf: url)
-            agentTypingSound?.prepareToPlay()
-            agentTypingSound?.volume = 0.5
-        }
-
-        if let url = Bundle.main.url(forResource: "agent_complete", withExtension: "mp3") {
-            agentCompleteSound = try? AVAudioPlayer(contentsOf: url)
-            agentCompleteSound?.prepareToPlay()
-            agentCompleteSound?.volume = 0.6
-        }
-
-        if let url = Bundle.main.url(forResource: "tab_switch", withExtension: "wav") {
-            tabSwitchSound = try? AVAudioPlayer(contentsOf: url)
-            tabSwitchSound?.prepareToPlay()
-            tabSwitchSound?.volume = 0.5
-        }
-
-        if let url = Bundle.main.url(forResource: "pop_drip", withExtension: "aif") {
-            conversationStartSound = try? AVAudioPlayer(contentsOf: url)
-            conversationStartSound?.prepareToPlay()
-            conversationStartSound?.volume = 0.6
+    /// Creates a fresh AVAudioPlayer and plays it immediately.
+    /// A new player is created each time so it works regardless of
+    /// audio session changes from VoiceService or StreamingAudioPlayer.
+    private func playSound(_ url: URL?, volume: Float = 0.7) {
+        guard let url else { return }
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.volume = volume
+            activePlayer = player  // Keep strong reference until next sound
+            player.play()
+        } catch {
+            Logger.error("AudioFeedbackService: Failed to play sound: \(error.localizedDescription)")
         }
     }
 
@@ -125,8 +115,7 @@ final class AudioFeedbackService {
         mediumImpactGenerator.impactOccurred()
 
         // Custom earcon sound
-        startListeningSound?.currentTime = 0
-        startListeningSound?.play()
+        playSound(startListeningSoundURL, volume: 0.7)
     }
 
     private var processingPulseTask: Task<Void, Never>?
@@ -136,8 +125,7 @@ final class AudioFeedbackService {
         mediumImpactGenerator.prepare()
         mediumImpactGenerator.impactOccurred()
 
-        agentTypingSound?.currentTime = 0
-        agentTypingSound?.play()
+        playSound(agentTypingSoundURL, volume: 0.5)
 
         // Start repeating haptic pulse while thinking
         startProcessingPulse()
@@ -167,8 +155,7 @@ final class AudioFeedbackService {
         mediumImpactGenerator.impactOccurred()
 
         // Custom earcon sound
-        stopListeningSound?.currentTime = 0
-        stopListeningSound?.play()
+        playSound(stopListeningSoundURL, volume: 0.7)
     }
 
     private func playErrorFeedback() {
@@ -204,8 +191,7 @@ final class AudioFeedbackService {
         lightImpactGenerator.impactOccurred()
 
         // Custom earcon sound
-        agentTypingSound?.currentTime = 0
-        agentTypingSound?.play()
+        playSound(agentTypingSoundURL, volume: 0.5)
     }
 
     /// Play feedback when agent message is complete
@@ -215,8 +201,7 @@ final class AudioFeedbackService {
         notificationGenerator.notificationOccurred(.success)
 
         // Custom earcon sound
-        agentCompleteSound?.currentTime = 0
-        agentCompleteSound?.play()
+        playSound(agentCompleteSoundURL, volume: 0.6)
     }
 
     // MARK: - Navigation Feedback
@@ -228,8 +213,7 @@ final class AudioFeedbackService {
         mediumImpactGenerator.impactOccurred()
 
         // Custom earcon sound
-        tabSwitchSound?.currentTime = 0
-        tabSwitchSound?.play()
+        playSound(tabSwitchSoundURL, volume: 0.5)
     }
 
     // MARK: - Conversation Feedback
@@ -241,8 +225,7 @@ final class AudioFeedbackService {
         notificationGenerator.notificationOccurred(.success)
 
         // Custom earcon sound
-        conversationStartSound?.currentTime = 0
-        conversationStartSound?.play()
+        playSound(conversationStartSoundURL, volume: 0.6)
     }
 
     // MARK: - Button Feedback

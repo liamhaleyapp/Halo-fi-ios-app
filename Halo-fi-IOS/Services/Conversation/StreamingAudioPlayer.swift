@@ -51,15 +51,12 @@ final class StreamingAudioPlayer {
         }
     }
 
+    /// Deactivating the shared audio session after playback would invalidate
+    /// AVAudioPlayer instances in AudioFeedbackService (earcon sounds).
+    /// Instead, leave the session active — iOS manages this efficiently, and
+    /// VoiceService will reconfigure it when recording starts.
     private func deactivateAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setActive(
-                false,
-                options: .notifyOthersOnDeactivation
-            )
-        } catch {
-            Logger.error("StreamingAudioPlayer: Failed to deactivate audio session: \(error)")
-        }
+        // Intentionally left empty — see comment above.
     }
 
     // MARK: - Public API

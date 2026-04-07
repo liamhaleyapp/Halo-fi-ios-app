@@ -136,6 +136,21 @@ struct AudioCompletePayload: Codable, Sendable {
     }
 }
 
+// MARK: - Agent Events (emitted via AsyncStream)
+
+/// Events emitted by AgentWebSocketManager.
+/// ConversationCoordinator consumes these via `for await event in manager.events`.
+enum AgentEvent: Sendable {
+    case connectionAck(ConnectionAckPayload)
+    case streamChunk(StreamChunkPayload)
+    case agentResponse(AgentResponsePayload)
+    case audioChunk(AudioChunkPayload)
+    case audioComplete(AudioCompletePayload)
+    case acknowledgment(AcknowledgmentPayload)
+    case error(ErrorPayload)
+    case permanentDisconnect
+}
+
 // MARK: - Union Types for WebSocket
 
 enum AgentIncomingMessage: Codable, Sendable {

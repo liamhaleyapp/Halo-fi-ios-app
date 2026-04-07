@@ -60,6 +60,10 @@ protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
     /// Whether the agent is currently streaming a response
     var isStreaming: Bool { get }
 
+    /// Event stream — a new stream is created on each connect().
+    /// Consumers iterate with `for await event in manager.events`.
+    var events: AsyncStream<AgentEvent> { get }
+
     /// Connects to the agent WebSocket server
     func connect() async throws
 
