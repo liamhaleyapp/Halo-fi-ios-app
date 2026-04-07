@@ -56,6 +56,7 @@
 		9E16C48E2F40C58F00B135F0 /* listening_stop.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = listening_stop.aif; sourceTree = "<group>"; };
 		9E16C48F2F40C58F00B135F0 /* pop_drip.aif */ = {isa = PBXFileReference; lastKnownFileType = file; path = pop_drip.aif; sourceTree = "<group>"; };
 		9E16C4902F40C58F00B135F0 /* tab_switch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = tab_switch.wav; sourceTree = "<group>"; };
+		9E1746532F84876A00D62CC2 /* Halo-fi-IOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Halo-fi-IOS.entitlements"; sourceTree = "<group>"; };
 		9EA22DAE2EC2D35E000CD8F8 /* Halo-fi-IOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Halo-fi-IOS-Info.plist"; sourceTree = "<group>"; };
 		9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -170,6 +171,7 @@
 		0C39AAA62E4EBF9A00CF16A0 = {
 			isa = PBXGroup;
 			children = (
+				9E1746532F84876A00D62CC2 /* Halo-fi-IOS.entitlements */,
 				9EF6FCD62F7ACCBF002D4303 /* PrivacyInfo.xcprivacy */,
 				9E16C4922F40C58F00B135F0 /* Resources */,
 				0C75F5052F7CDE10001D1171 /* GoogleService-Info.plist */,
@@ -575,6 +577,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Halo-fi-IOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"App/Preview Content\"";
@@ -606,6 +609,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Halo-fi-IOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"App/Preview Content\"";
@@ -763,6 +767,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Halo-fi-IOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"App/Preview Content\"";
@@ -886,6 +891,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Halo-fi-IOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "\"App/Preview Content\"";
