@@ -64,23 +64,13 @@ final class BudgetService: BudgetServiceProtocol {
 
     func updateMonthlyIncome(_ update: MonthlyIncomeUpdate) async throws {
         let body = try JSONEncoder().encode(update)
-        // We accept any response shape (PATCH /users/me returns the full
-        // updated user); we don't consume it here — the caller refreshes
-        // the overview.
+        // PATCH /users/me returns the full updated user; we don't consume
+        // that shape here — the caller refreshes the overview after.
         let _: EmptyResponse = try await networkService.authenticatedRequest(
             endpoint: APIEndpoints.User.me,
             method: .PATCH,
             body: body,
             responseType: EmptyResponse.self
         )
-    }
-}
-
-// MARK: - Helpers
-
-/// Placeholder decoder for endpoints whose response body we don't use.
-private struct EmptyResponse: Decodable {
-    init(from decoder: Decoder) throws {
-        // Accept anything — a successful HTTP status is enough.
     }
 }

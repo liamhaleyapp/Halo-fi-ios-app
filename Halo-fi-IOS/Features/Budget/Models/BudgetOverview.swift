@@ -11,7 +11,7 @@ import Foundation
 
 // MARK: - Top-level overview
 
-struct BudgetOverview: Decodable, Equatable {
+struct BudgetOverview: Codable, Equatable {
     let month: String            // "April 2026"
     let period: BudgetPeriod
     let spending: BudgetSpending
@@ -31,7 +31,7 @@ struct BudgetOverview: Decodable, Equatable {
     }
 }
 
-struct BudgetPeriod: Decodable, Equatable {
+struct BudgetPeriod: Codable, Equatable {
     let startUtc: String
     let endUtc: String
     enum CodingKeys: String, CodingKey {
@@ -42,7 +42,7 @@ struct BudgetPeriod: Decodable, Equatable {
 
 // MARK: - Spending
 
-struct BudgetSpending: Decodable, Equatable {
+struct BudgetSpending: Codable, Equatable {
     let totalCents: Int
     let count: Int
     let currency: String
@@ -58,7 +58,7 @@ struct BudgetSpending: Decodable, Equatable {
     }
 }
 
-struct BudgetSpendingGroup: Decodable, Equatable, Identifiable {
+struct BudgetSpendingGroup: Codable, Equatable, Identifiable {
     var id: String { key }
     let key: String
     let totalCents: Int
@@ -77,7 +77,7 @@ struct BudgetSpendingGroup: Decodable, Equatable, Identifiable {
 
 // MARK: - Budget status
 
-struct BudgetStatus: Decodable, Equatable {
+struct BudgetStatus: Codable, Equatable {
     let hasBudget: Bool
     let month: String?
     let total: BudgetStatusTotal?
@@ -89,7 +89,7 @@ struct BudgetStatus: Decodable, Equatable {
     }
 }
 
-struct BudgetStatusTotal: Decodable, Equatable {
+struct BudgetStatusTotal: Codable, Equatable {
     let limitCents: Int
     let spentCents: Int
     let remainingCents: Int
@@ -108,7 +108,7 @@ struct BudgetStatusTotal: Decodable, Equatable {
     }
 }
 
-struct BudgetStatusCategory: Decodable, Equatable, Identifiable {
+struct BudgetStatusCategory: Codable, Equatable, Identifiable {
     var id: String { category }
     let category: String
     let limitCents: Int
@@ -130,7 +130,7 @@ struct BudgetStatusCategory: Decodable, Equatable, Identifiable {
 
 // MARK: - Monthly income
 
-struct MonthlyIncome: Decodable, Equatable {
+struct MonthlyIncome: Codable, Equatable {
     let totalCents: Int
     let totalFormatted: String
     let sources: MonthlyIncomeSources
@@ -143,13 +143,13 @@ struct MonthlyIncome: Decodable, Equatable {
     }
 }
 
-struct MonthlyIncomeSources: Decodable, Equatable {
+struct MonthlyIncomeSources: Codable, Equatable {
     let paycheck: PaycheckSource
     let ssi: BenefitSource
     let ssdi: BenefitSource
 }
 
-struct PaycheckSource: Decodable, Equatable {
+struct PaycheckSource: Codable, Equatable {
     let amountCents: Int?
     let monthlyCents: Int?
     let frequency: String?
@@ -162,7 +162,7 @@ struct PaycheckSource: Decodable, Equatable {
     }
 }
 
-struct BenefitSource: Decodable, Equatable {
+struct BenefitSource: Codable, Equatable {
     let enabled: Bool
     let amountCents: Int?
 
@@ -174,7 +174,7 @@ struct BenefitSource: Decodable, Equatable {
 
 // MARK: - SSI status
 
-struct SSIStatus: Decodable, Equatable {
+struct SSIStatus: Codable, Equatable {
     let hasSsi: Bool
     let householdSize: Int?
     let resources: SSIResources?
@@ -197,7 +197,7 @@ struct SSIStatus: Decodable, Equatable {
     }
 }
 
-struct SSIResources: Decodable, Equatable {
+struct SSIResources: Codable, Equatable {
     let currentCents: Int
     let limitCents: Int
     let remainingCents: Int
@@ -215,7 +215,7 @@ struct SSIResources: Decodable, Equatable {
     }
 }
 
-struct SSIIncome: Decodable, Equatable {
+struct SSIIncome: Codable, Equatable {
     let countableCents: Int
     let thresholdCents: Int
     let status: String
@@ -229,7 +229,7 @@ struct SSIIncome: Decodable, Equatable {
     }
 }
 
-struct SSANextDeposit: Decodable, Equatable {
+struct SSANextDeposit: Codable, Equatable {
     let expectedDateIso: String
     let expectedAmountCents: Int
     let confidence: String  // "high" | "medium" | "low"
@@ -241,7 +241,7 @@ struct SSANextDeposit: Decodable, Equatable {
     }
 }
 
-struct SSAPastDeposit: Decodable, Equatable, Identifiable {
+struct SSAPastDeposit: Codable, Equatable, Identifiable {
     var id: String { "\(date)-\(amountCents)" }
     let date: String
     let amountCents: Int
@@ -256,7 +256,7 @@ struct SSAPastDeposit: Decodable, Equatable, Identifiable {
 
 // MARK: - Alerts
 
-struct BudgetAlert: Decodable, Equatable, Identifiable {
+struct BudgetAlert: Codable, Equatable, Identifiable {
     let id: String
     let alertType: String        // e.g. "budget_category", "balance_low"
     let category: String?
