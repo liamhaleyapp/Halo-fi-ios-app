@@ -90,8 +90,13 @@ final class VoiceService: NSObject {
     func stopRecording() {
         guard isRecording else { return }
 
-        audioEngine?.stop()
+        // Remove the tap FIRST so any final buffer already in flight gets
+        // delivered to handleAudioBuffer before the engine halts input.
+        // audioEngine.stop() closes the input pipeline instantly; callers
+        // that stop first lose 50–200ms of trailing audio (the end of the
+        // user's last word).
         audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine?.stop()
         audioEngine = nil
         isRecording = false
 
