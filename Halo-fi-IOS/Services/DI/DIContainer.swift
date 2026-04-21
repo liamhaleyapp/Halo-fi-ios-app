@@ -45,6 +45,9 @@ final class DIContainer {
     /// Bank data state and caching
     let bankDataManager: BankDataManager
 
+    /// Budget view state (spending + income + SSI + alerts)
+    let budgetDataManager: BudgetDataManager
+
     /// Permission state management
     let permissionManager: PermissionManager
 
@@ -86,6 +89,7 @@ final class DIContainer {
         )
         self.userManager = userManager
         self.bankDataManager = bankDataManager
+        self.budgetDataManager = BudgetDataManager()
         self.permissionManager = PermissionManager.shared
 
         // Wire up cross-manager dependencies
@@ -123,6 +127,7 @@ final class DIContainer {
         )
         self.userManager = userManager
         self.bankDataManager = bankDataManager
+        self.budgetDataManager = BudgetDataManager()
         self.permissionManager = PermissionManager.shared
 
         // Wire up cross-manager dependencies

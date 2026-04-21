@@ -85,12 +85,19 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
+            BudgetView()
+                .tabItem {
+                    Label("Budget", systemImage: "chart.pie.fill")
+                        .accessibilityHint("Monthly spending, income, and SSI status")
+                }
+                .tag(2)
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                         .accessibilityHint("App settings and preferences")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(.blue)
     }

@@ -40,6 +40,16 @@ enum APIEndpoints {
     enum User {
         /// POST - Register new user.
         static let signup = "/users/signup"
+
+        /// PATCH - Update the authenticated user's profile (including income fields).
+        static let me = "/users/me"
+    }
+
+    // MARK: - Budget
+
+    enum Budget {
+        /// GET - Aggregated budget view (spending, income, SSI, alerts).
+        static let overview = "/budget/overview"
     }
 
     // MARK: - Banking

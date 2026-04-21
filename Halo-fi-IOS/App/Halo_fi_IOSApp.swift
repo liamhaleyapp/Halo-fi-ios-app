@@ -71,6 +71,7 @@ struct Halo_fi_IOSApp: App {
         .environment(container)
         .environment(container.userManager)
         .environment(container.bankDataManager)
+        .environment(container.budgetDataManager)
         .environment(container.permissionManager)
         .environment(subscriptionService)
         .environment(plaidManager)
