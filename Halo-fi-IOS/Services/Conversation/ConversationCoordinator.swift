@@ -60,6 +60,7 @@ final class ConversationCoordinator {
     private var pendingRetryMessage: String?
     private var isVoiceSessionActive = false
     private var agentEventTask: Task<Void, Never>?
+    private var prewarmTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -110,6 +111,20 @@ final class ConversationCoordinator {
                     self.handleAgentEvent(event)
                 }
             }
+
+            // Pre-warm capture pipeline so the user's first tap has no
+            // engine-spin-up / tap-install latency. Best-effort — we
+            // swallow errors because the view should still appear even
+            // if mic permission hasn't been granted yet.
+            prewarmTask?.cancel()
+            prewarmTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.voiceService.preWarmCapture()
+                } catch {
+                    Logger.debug("ConversationCoordinator: Pre-warm skipped: \(error)")
+                }
+            }
         } catch {
             setState(.error(error.localizedDescription))
         }
@@ -119,8 +134,11 @@ final class ConversationCoordinator {
     func disconnect() {
         agentEventTask?.cancel()
         agentEventTask = nil
+        prewarmTask?.cancel()
+        prewarmTask = nil
 
         voiceService.stopRecording()
+        voiceService.teardownCapture()
         sttService.disconnect()
         agentWebSocket.disconnect()
         streamingAudioPlayer?.stop()
@@ -401,6 +419,11 @@ final class ConversationCoordinator {
 
         case .audioChunk(let chunk):
             audioFeedback.stopProcessingPulse()
+            // PCM streaming: the player starts audible playback on this
+            // first chunk (previously it only buffered MP3 until complete).
+            // Silence voice_status here so bridge audio and agent TTS
+            // don't overlap.
+            stopVoiceStatusSpeech()
             Logger.debug("ConversationCoordinator: Audio chunk received, player=\(streamingAudioPlayer != nil), isPlaying=\(streamingAudioPlayer?.isPlaying ?? false)")
             streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
