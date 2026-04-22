@@ -136,6 +136,19 @@ struct AudioCompletePayload: Codable, Sendable {
     }
 }
 
+// MARK: - Voice status (pre-synthesis early feedback)
+
+/// Sent by the backend the moment the supervisor finishes (well before
+/// the full agent response is ready). The text is a short pre-planned
+/// utterance like "Let me check on that." iOS plays it via on-device
+/// AVSpeechSynthesizer so the user hears feedback within ~500ms instead
+/// of ~3s of silence while the agent graph runs.
+struct VoiceStatusPayload: Codable, Sendable {
+    let type: String
+    let text: String
+    let data: [String: AnyCodable]?
+}
+
 // MARK: - Agent Events (emitted via AsyncStream)
 
 /// Events emitted by AgentWebSocketManager.
@@ -147,6 +160,7 @@ enum AgentEvent: Sendable {
     case audioChunk(AudioChunkPayload)
     case audioComplete(AudioCompletePayload)
     case acknowledgment(AcknowledgmentPayload)
+    case voiceStatus(VoiceStatusPayload)
     case error(ErrorPayload)
     case permanentDisconnect
 }
@@ -161,6 +175,7 @@ enum AgentIncomingMessage: Codable, Sendable {
     case acknowledgment(AcknowledgmentPayload)
     case audioChunk(AudioChunkPayload)
     case audioComplete(AudioCompletePayload)
+    case voiceStatus(VoiceStatusPayload)
     case unknown(String)
 
     enum CodingKeys: String, CodingKey {
@@ -199,6 +214,9 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "audio_complete":
             let payload = try AudioCompletePayload(from: decoder)
             self = .audioComplete(payload)
+        case "voice_status":
+            let payload = try VoiceStatusPayload(from: decoder)
+            self = .voiceStatus(payload)
         default:
             self = .unknown(type)
         }
@@ -219,6 +237,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .audioChunk(let payload):
             try payload.encode(to: encoder)
         case .audioComplete(let payload):
+            try payload.encode(to: encoder)
+        case .voiceStatus(let payload):
             try payload.encode(to: encoder)
         case .unknown:
             break

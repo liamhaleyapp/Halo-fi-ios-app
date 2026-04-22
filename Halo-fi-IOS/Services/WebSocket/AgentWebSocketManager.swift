@@ -336,6 +336,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         case .audioComplete(let complete):
             Logger.info("Audio complete. Text: \(complete.responseText.prefix(80))...")
             eventContinuation?.yield(.audioComplete(complete))
+        case .voiceStatus(let payload):
+            Logger.info("Voice status: \(payload.text)")
+            eventContinuation?.yield(.voiceStatus(payload))
         case .unknown(let type):
             Logger.warning("AgentWebSocket: Unknown message type: \(type)")
         }
