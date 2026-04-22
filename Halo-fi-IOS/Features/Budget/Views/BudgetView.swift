@@ -43,7 +43,7 @@ struct BudgetView: View {
                             if let alertText = topCategoryAlert(overview) {
                                 categoryAlertRow(alertText)
                             }
-                            spendingByCategorySection(overview)
+                            breakdownByCategoryButton(overview)
                             monthlyIncomeSection(overview)
                             ssiSection(overview.ssiStatus)
                             alertsSection(overview.alerts)
@@ -129,49 +129,29 @@ struct BudgetView: View {
 
     // MARK: - Spending by category
 
+    /// Single row that pushes BudgetCategoryListView. Replaces the inline
+    /// category grid — keeps the main Budget tab short + scannable.
     @ViewBuilder
-    private func spendingByCategorySection(_ overview: BudgetOverview) -> some View {
-        if overview.budgetStatus.hasBudget, !overview.budgetStatus.categories.isEmpty {
-            budgetGroupedSections(overview.budgetStatus.categories)
-        } else if !overview.spending.groups.isEmpty {
-            // No budget set — show spending totals only, non-tappable.
-            Section {
-                ForEach(overview.spending.groups) { group in
-                    BudgetSpendingOnlyRow(group: group)
-                }
-            } header: {
-                sectionHeader("Spending by Category", count: overview.spending.groups.count)
+    private func breakdownByCategoryButton(_ overview: BudgetOverview) -> some View {
+        let count = breakdownCount(overview)
+        if count > 0 {
+            NavigationLink {
+                BudgetCategoryListView()
+            } label: {
+                BreakdownByCategoryRow(
+                    count: count,
+                    hasBudget: overview.budgetStatus.hasBudget
+                )
             }
+            .buttonStyle(HapticPlainButtonStyle())
         }
     }
 
-    /// Group budget categories into status-ordered sections (Over → Behind
-    /// → On Pace → Ahead). Mirrors AccountsOverviewView's "Connected" /
-    /// "Needs Attention" grouping so the Budget tab reads consistently.
-    @ViewBuilder
-    private func budgetGroupedSections(_ categories: [BudgetStatusCategory]) -> some View {
-        let grouped = Dictionary(grouping: categories, by: { $0.status })
-        let ordering: [(status: String, title: String)] = [
-            ("over",    "Over Budget"),
-            ("behind",  "Behind"),
-            ("on_pace", "On Pace"),
-            ("ahead",   "Ahead"),
-        ]
-
-        ForEach(ordering, id: \.status) { group in
-            if let rows = grouped[group.status], !rows.isEmpty {
-                Section {
-                    ForEach(rows) { cat in
-                        NavigationLink(value: cat) {
-                            BudgetCategoryRow(category: cat)
-                        }
-                        .buttonStyle(HapticPlainButtonStyle())
-                    }
-                } header: {
-                    sectionHeader(group.title, count: rows.count)
-                }
-            }
+    private func breakdownCount(_ overview: BudgetOverview) -> Int {
+        if overview.budgetStatus.hasBudget {
+            return overview.budgetStatus.categories.count
         }
+        return overview.spending.groups.count
     }
 
     // MARK: - Monthly income
@@ -551,115 +531,59 @@ private struct NoBudgetHeroCard: View {
     }
 }
 
-// MARK: - Category row (tappable)
+// MARK: - Breakdown-by-Category entry row
 
-private struct BudgetCategoryRow: View {
-    let category: BudgetStatusCategory
+/// Single card on the main Budget tab that pushes BudgetCategoryListView.
+/// Replaces the inline per-category list — keeps the tab scannable for
+/// VoiceOver users + sighted users alike.
+private struct BreakdownByCategoryRow: View {
+    let count: Int
+    let hasBudget: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             icon
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(BudgetFormatter.displayName(forCategory: category.category))
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(category.formatted["spent"] ?? "$0.00")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                        Text("of \(category.formatted["limit"] ?? "$0.00")")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                progressBar
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Breakdown by Category")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            pctLabel
+            Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
-        .padding(12)
+        .padding(14)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Double-tap to see category details.")
+        .accessibilityHint("Double-tap to open the full category breakdown.")
     }
 
     private var icon: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(BudgetFormatter.color(forCategory: category.category).opacity(0.22))
+                .fill(Color.blue.opacity(0.22))
                 .frame(width: 36, height: 36)
-            Image(systemName: BudgetFormatter.iconName(forCategory: category.category))
-                .foregroundStyle(BudgetFormatter.color(forCategory: category.category))
+            Image(systemName: "chart.pie.fill")
+                .foregroundStyle(Color.blue)
         }
     }
 
-    private var progressBar: some View {
-        GeometryReader { geo in
-            let pct = min(max(category.pctUsed / 100.0, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(.tertiarySystemBackground))
-                Capsule()
-                    .fill(BudgetFormatter.color(forCategory: category.category))
-                    .frame(width: geo.size.width * CGFloat(pct))
-            }
+    private var subtitle: String {
+        let word = count == 1 ? "category" : "categories"
+        if hasBudget {
+            return "\(count) \(word) with limits"
         }
-        .frame(height: 4)
-    }
-
-    private var pctLabel: some View {
-        Text("\(Int(category.pctUsed.rounded()))%")
-            .font(.caption2)
-            .fontWeight(.semibold)
-            .foregroundStyle(BudgetFormatter.color(forStatus: category.status))
-            .frame(minWidth: 36, alignment: .trailing)
+        return "\(count) \(word) this month"
     }
 
     private var accessibilityLabel: String {
-        let name = BudgetFormatter.displayName(forCategory: category.category)
-        let spent = category.formatted["spent"] ?? "zero dollars"
-        let limit = category.formatted["limit"] ?? "zero dollars"
-        let pct = Int(category.pctUsed.rounded())
-        let status = category.status.replacingOccurrences(of: "_", with: " ")
-        return "\(name): \(spent) of \(limit), \(pct) percent used. Status: \(status)."
-    }
-}
-
-// MARK: - Spending-only row (no budget set)
-
-private struct BudgetSpendingOnlyRow: View {
-    let group: BudgetSpendingGroup
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(BudgetFormatter.color(forCategory: group.key).opacity(0.22))
-                    .frame(width: 36, height: 36)
-                Image(systemName: BudgetFormatter.iconName(forCategory: group.key))
-                    .foregroundStyle(BudgetFormatter.color(forCategory: group.key))
-            }
-            Text(BudgetFormatter.displayName(forCategory: group.key))
-                .font(.subheadline)
-            Spacer()
-            Text(group.formatted)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            Text("\(Int(group.pctOfTotal.rounded()))%")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 36, alignment: .trailing)
-        }
-        .padding(12)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(BudgetFormatter.displayName(forCategory: group.key)): \(group.formatted), \(Int(group.pctOfTotal.rounded())) percent of spending.")
+        "Breakdown by Category. \(subtitle)."
     }
 }
 
