@@ -28,34 +28,44 @@ import SwiftUI
 struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingIncomeEditor = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let overview = dataManager.overview {
-                        monthSubtitle(overview)
-                        heroCard(overview)
-                        if let alertText = topCategoryAlert(overview) {
-                            categoryAlertRow(alertText)
+        NavigationStack(path: $navigationPath) {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if let overview = dataManager.overview {
+                            monthSubtitle(overview)
+                            heroCard(overview)
+                            if let alertText = topCategoryAlert(overview) {
+                                categoryAlertRow(alertText)
+                            }
+                            spendingByCategorySection(overview)
+                            monthlyIncomeSection(overview)
+                            ssiSection(overview.ssiStatus)
+                            alertsSection(overview.alerts)
+                        } else if dataManager.isLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 40)
+                        } else if let err = dataManager.error {
+                            errorView(err)
                         }
-                        spendingByCategorySection(overview)
-                        monthlyIncomeSection(overview)
-                        ssiSection(overview.ssiStatus)
-                        alertsSection(overview.alerts)
-                    } else if dataManager.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 40)
-                    } else if let err = dataManager.error {
-                        errorView(err)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 100)
                 }
-                .padding()
+                .refreshable { await dataManager.refresh() }
             }
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
-            .refreshable { await dataManager.refresh() }
+            .navigationDestination(for: BudgetStatusCategory.self) { category in
+                BudgetCategoryDetailView(category: category)
+            }
             .task {
                 if dataManager.overview == nil {
                     await dataManager.refresh()
@@ -122,25 +132,43 @@ struct BudgetView: View {
     @ViewBuilder
     private func spendingByCategorySection(_ overview: BudgetOverview) -> some View {
         if overview.budgetStatus.hasBudget, !overview.budgetStatus.categories.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionCaption("SPENDING BY CATEGORY")
-                VStack(spacing: 8) {
-                    ForEach(overview.budgetStatus.categories) { cat in
-                        NavigationLink(destination: BudgetCategoryDetailView(category: cat)) {
-                            BudgetCategoryRow(category: cat)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            budgetGroupedSections(overview.budgetStatus.categories)
         } else if !overview.spending.groups.isEmpty {
             // No budget set — show spending totals only, non-tappable.
-            VStack(alignment: .leading, spacing: 10) {
-                sectionCaption("SPENDING BY CATEGORY")
-                VStack(spacing: 8) {
-                    ForEach(overview.spending.groups) { group in
-                        BudgetSpendingOnlyRow(group: group)
+            Section {
+                ForEach(overview.spending.groups) { group in
+                    BudgetSpendingOnlyRow(group: group)
+                }
+            } header: {
+                sectionHeader("Spending by Category", count: overview.spending.groups.count)
+            }
+        }
+    }
+
+    /// Group budget categories into status-ordered sections (Over → Behind
+    /// → On Pace → Ahead). Mirrors AccountsOverviewView's "Connected" /
+    /// "Needs Attention" grouping so the Budget tab reads consistently.
+    @ViewBuilder
+    private func budgetGroupedSections(_ categories: [BudgetStatusCategory]) -> some View {
+        let grouped = Dictionary(grouping: categories, by: { $0.status })
+        let ordering: [(status: String, title: String)] = [
+            ("over",    "Over Budget"),
+            ("behind",  "Behind"),
+            ("on_pace", "On Pace"),
+            ("ahead",   "Ahead"),
+        ]
+
+        ForEach(ordering, id: \.status) { group in
+            if let rows = grouped[group.status], !rows.isEmpty {
+                Section {
+                    ForEach(rows) { cat in
+                        NavigationLink(value: cat) {
+                            BudgetCategoryRow(category: cat)
+                        }
+                        .buttonStyle(HapticPlainButtonStyle())
                     }
+                } header: {
+                    sectionHeader(group.title, count: rows.count)
                 }
             }
         }
@@ -148,9 +176,9 @@ struct BudgetView: View {
 
     // MARK: - Monthly income
 
+    @ViewBuilder
     private func monthlyIncomeSection(_ overview: BudgetOverview) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionCaption("MONTHLY INCOME")
+        Section {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(overview.monthlyIncome.totalFormatted)
@@ -165,7 +193,17 @@ struct BudgetView: View {
             }
             .padding()
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        } header: {
+            sectionHeader("Monthly Income", count: activeIncomeSourceCount(overview.monthlyIncome.sources))
         }
+    }
+
+    private func activeIncomeSourceCount(_ sources: MonthlyIncomeSources) -> Int {
+        var n = 0
+        if let c = sources.paycheck.monthlyCents, c > 0 { n += 1 }
+        if sources.ssi.enabled, let c = sources.ssi.amountCents, c > 0 { n += 1 }
+        if sources.ssdi.enabled, let c = sources.ssdi.amountCents, c > 0 { n += 1 }
+        return n
     }
 
     @ViewBuilder
@@ -203,8 +241,7 @@ struct BudgetView: View {
     @ViewBuilder
     private func ssiSection(_ ssi: SSIStatus) -> some View {
         if ssi.hasSsi {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionCaption("SSI MONITOR")
+            Section {
                 VStack(alignment: .leading, spacing: 16) {
                     if let resources = ssi.resources {
                         ssiResourcesBlock(resources)
@@ -227,8 +264,18 @@ struct BudgetView: View {
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            } header: {
+                sectionHeader("SSI Monitor", count: ssiSectionCount(ssi))
             }
         }
+    }
+
+    private func ssiSectionCount(_ ssi: SSIStatus) -> Int {
+        var n = 0
+        if ssi.resources != nil { n += 1 }
+        if ssi.income != nil { n += 1 }
+        if ssi.nextSsaDeposit != nil { n += 1 }
+        return n
     }
 
     private func ssiResourcesBlock(_ r: SSIResources) -> some View {
@@ -294,8 +341,7 @@ struct BudgetView: View {
     @ViewBuilder
     private func alertsSection(_ alerts: [BudgetAlert]) -> some View {
         if !alerts.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionCaption("ALERTS")
+            Section {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(alerts) { alert in
                         alertRow(alert)
@@ -303,6 +349,8 @@ struct BudgetView: View {
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            } header: {
+                sectionHeader("Alerts", count: alerts.count)
             }
         }
     }
@@ -325,11 +373,32 @@ struct BudgetView: View {
 
     // MARK: - Layout helpers
 
+    /// Same look as AccountsOverviewView.sectionHeader — headline + count
+    /// right-aligned in muted gray. Keeps the two tabs visually consistent.
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.gray)
+            Spacer()
+            Text("\(count)")
+                .font(.subheadline)
+                .foregroundColor(.gray.opacity(0.7))
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel("\(title), \(count) item\(count == 1 ? "" : "s")")
+    }
+
     private func sectionCaption(_ text: String) -> some View {
         Text(text)
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -630,24 +699,32 @@ enum BudgetFormatter {
     }
 
     // MARK: - Category visuals
+    //
+    // Display names match Plaid's Personal Finance Category (PFC) taxonomy
+    // exactly — "Food and Drink", not "Food & Drink"; "General Merchandise",
+    // not "Shopping"; "General Services", not "Subscriptions". Keeping the
+    // naming consistent with Plaid avoids divergence between what the voice
+    // agent says and what the UI displays.
 
     static func displayName(forCategory key: String) -> String {
         switch key {
-        case "food_and_drink":      return "Food & Drink"
-        case "rent_and_utilities":  return "Rent & Utilities"
-        case "transportation":      return "Transportation"
-        case "general_merchandise": return "Shopping"
-        case "general_services":    return "Subscriptions"
-        case "entertainment":       return "Entertainment"
-        case "loan_payments":       return "Loan Payments"
-        case "personal_care":       return "Personal Care"
-        case "medical":             return "Medical"
-        case "travel":              return "Travel"
-        case "income":              return "Income"
-        case "transfer_in":         return "Transfer In"
-        case "transfer_out":        return "Transfer Out"
-        case "bank_fees":           return "Bank Fees"
-        case "uncategorized":       return "Uncategorized"
+        case "income":                   return "Income"
+        case "transfer_in":              return "Transfer In"
+        case "transfer_out":             return "Transfer Out"
+        case "loan_payments":            return "Loan Payments"
+        case "bank_fees":                return "Bank Fees"
+        case "entertainment":            return "Entertainment"
+        case "food_and_drink":           return "Food and Drink"
+        case "general_merchandise":      return "General Merchandise"
+        case "home_improvement":         return "Home Improvement"
+        case "medical":                  return "Medical"
+        case "personal_care":            return "Personal Care"
+        case "general_services":         return "General Services"
+        case "government_and_non_profit":return "Government and Non-Profit"
+        case "transportation":           return "Transportation"
+        case "travel":                   return "Travel"
+        case "rent_and_utilities":       return "Rent and Utilities"
+        case "uncategorized":            return "Uncategorized"
         default:
             return key.replacingOccurrences(of: "_", with: " ").capitalized
         }
@@ -655,41 +732,45 @@ enum BudgetFormatter {
 
     static func iconName(forCategory key: String) -> String {
         switch key {
-        case "food_and_drink":      return "fork.knife"
-        case "rent_and_utilities":  return "house.fill"
-        case "transportation":      return "car.fill"
-        case "general_merchandise": return "bag.fill"
-        case "general_services":    return "square.grid.2x2.fill"
-        case "entertainment":       return "sparkles.tv.fill"
-        case "loan_payments":       return "building.columns.fill"
-        case "personal_care":       return "heart.fill"
-        case "medical":             return "cross.case.fill"
-        case "travel":              return "airplane"
-        case "income":              return "arrow.down.circle.fill"
+        case "income":                    return "arrow.down.circle.fill"
         case "transfer_in",
-             "transfer_out":        return "arrow.left.arrow.right"
-        case "bank_fees":           return "dollarsign.circle.fill"
-        default:                    return "circle.dotted"
+             "transfer_out":              return "arrow.left.arrow.right"
+        case "loan_payments":             return "building.columns.fill"
+        case "bank_fees":                 return "dollarsign.circle.fill"
+        case "entertainment":             return "sparkles.tv.fill"
+        case "food_and_drink":            return "fork.knife"
+        case "general_merchandise":       return "bag.fill"
+        case "home_improvement":          return "hammer.fill"
+        case "medical":                   return "cross.case.fill"
+        case "personal_care":             return "heart.fill"
+        case "general_services":          return "square.grid.2x2.fill"
+        case "government_and_non_profit": return "building.2.fill"
+        case "transportation":            return "car.fill"
+        case "travel":                    return "airplane"
+        case "rent_and_utilities":        return "house.fill"
+        default:                          return "circle.dotted"
         }
     }
 
     static func color(forCategory key: String) -> Color {
         switch key {
-        case "food_and_drink":      return .orange
-        case "rent_and_utilities":  return .blue
-        case "transportation":      return .yellow
-        case "general_merchandise": return .pink
-        case "general_services":    return .purple
-        case "entertainment":       return .indigo
-        case "loan_payments":       return .red
-        case "personal_care":       return .mint
-        case "medical":             return .teal
-        case "travel":              return .cyan
-        case "income":              return .green
+        case "income":                    return .green
         case "transfer_in",
-             "transfer_out":        return .gray
-        case "bank_fees":           return .red
-        default:                    return .secondary
+             "transfer_out":              return .gray
+        case "loan_payments":             return .red
+        case "bank_fees":                 return .red
+        case "entertainment":             return .indigo
+        case "food_and_drink":            return .orange
+        case "general_merchandise":       return .pink
+        case "home_improvement":          return .brown
+        case "medical":                   return .teal
+        case "personal_care":             return .mint
+        case "general_services":          return .purple
+        case "government_and_non_profit": return .blue
+        case "transportation":            return .yellow
+        case "travel":                    return .cyan
+        case "rent_and_utilities":        return .blue
+        default:                          return .secondary
         }
     }
 }

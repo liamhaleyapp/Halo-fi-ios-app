@@ -108,7 +108,7 @@ struct BudgetStatusTotal: Codable, Equatable {
     }
 }
 
-struct BudgetStatusCategory: Codable, Equatable, Identifiable {
+struct BudgetStatusCategory: Codable, Equatable, Identifiable, Hashable {
     var id: String { category }
     let category: String
     let limitCents: Int
@@ -125,6 +125,15 @@ struct BudgetStatusCategory: Codable, Equatable, Identifiable {
         case remainingCents = "remaining_cents"
         case pctUsed = "pct_used"
         case status, formatted
+    }
+
+    // Manual hash — the `formatted` dictionary on a struct blocks Swift's
+    // Hashable synthesis, but `category` is the unique key for navigation
+    // destinations, so hashing on it is sufficient + correct.
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(category)
+        hasher.combine(limitCents)
+        hasher.combine(spentCents)
     }
 }
 
