@@ -419,11 +419,6 @@ final class ConversationCoordinator {
 
         case .audioChunk(let chunk):
             audioFeedback.stopProcessingPulse()
-            // PCM streaming: the player starts audible playback on this
-            // first chunk (previously it only buffered MP3 until complete).
-            // Silence voice_status here so bridge audio and agent TTS
-            // don't overlap.
-            stopVoiceStatusSpeech()
             Logger.debug("ConversationCoordinator: Audio chunk received, player=\(streamingAudioPlayer != nil), isPlaying=\(streamingAudioPlayer?.isPlaying ?? false)")
             streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
