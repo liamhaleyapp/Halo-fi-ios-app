@@ -378,9 +378,6 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         case .audioComplete(let complete):
             Logger.info("Audio complete. Text: \(complete.responseText.prefix(80))...")
             eventContinuation?.yield(.audioComplete(complete))
-        case .ackAudio(let payload):
-            Logger.info("Ack audio received: \(payload.audio.count) base64 chars")
-            eventContinuation?.yield(.ackAudio(payload))
         case .voiceStatus(let payload):
             Logger.info("Voice status: \(payload.text)")
             eventContinuation?.yield(.voiceStatus(payload))

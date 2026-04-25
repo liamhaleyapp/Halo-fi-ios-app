@@ -136,20 +136,6 @@ struct AudioCompletePayload: Codable, Sendable {
     }
 }
 
-// MARK: - Ack audio (Halo speaks the System ack)
-
-/// Sent by the backend after the AccountsAgent's contextual ack text is
-/// generated. Contains the full base64-encoded MP3 of Halo speaking
-/// the ack ("Checking your bank account balance.") so iOS can play it
-/// via a dedicated AVAudioPlayer in parallel with the main response
-/// stream. Distinct from `audio_chunk` (response TTS) so the two
-/// audio paths can't collide on the StreamingAudioPlayer accumulator.
-struct AckAudioPayload: Codable, Sendable {
-    let type: String
-    let audio: String
-    let data: [String: AnyCodable]?
-}
-
 // MARK: - Voice status (pre-synthesis early feedback)
 
 /// Sent by the backend the moment the supervisor finishes (well before
@@ -173,7 +159,6 @@ enum AgentEvent: Sendable {
     case agentResponse(AgentResponsePayload)
     case audioChunk(AudioChunkPayload)
     case audioComplete(AudioCompletePayload)
-    case ackAudio(AckAudioPayload)
     case acknowledgment(AcknowledgmentPayload)
     case voiceStatus(VoiceStatusPayload)
     case error(ErrorPayload)
@@ -190,7 +175,6 @@ enum AgentIncomingMessage: Codable, Sendable {
     case acknowledgment(AcknowledgmentPayload)
     case audioChunk(AudioChunkPayload)
     case audioComplete(AudioCompletePayload)
-    case ackAudio(AckAudioPayload)
     case voiceStatus(VoiceStatusPayload)
     case unknown(String)
 
@@ -230,9 +214,6 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "audio_complete":
             let payload = try AudioCompletePayload(from: decoder)
             self = .audioComplete(payload)
-        case "ack_audio":
-            let payload = try AckAudioPayload(from: decoder)
-            self = .ackAudio(payload)
         case "voice_status":
             let payload = try VoiceStatusPayload(from: decoder)
             self = .voiceStatus(payload)
@@ -256,8 +237,6 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .audioChunk(let payload):
             try payload.encode(to: encoder)
         case .audioComplete(let payload):
-            try payload.encode(to: encoder)
-        case .ackAudio(let payload):
             try payload.encode(to: encoder)
         case .voiceStatus(let payload):
             try payload.encode(to: encoder)

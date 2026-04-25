@@ -12,7 +12,6 @@
 //  UI calls only public methods; internal services (VoiceService, AgentWebSocketManager) are private.
 //
 
-import AVFoundation
 import Foundation
 import UIKit
 
@@ -43,13 +42,6 @@ final class ConversationCoordinator {
     private var streamingAudioPlayer: StreamingAudioPlayer?
     private var audioFeedback: AudioFeedbackService = AudioFeedbackService()
     private let sttService: ElevenLabsSTTService
-
-    /// One-shot player for the System acknowledgment ("Checking your bank
-    /// account balance"). Backend synthesizes the ack TTS as a separate
-    /// `ack_audio` event so it plays via this dedicated AVAudioPlayer in
-    /// parallel with the main response stream — short enough (~500ms)
-    /// that it usually finishes before the response audio starts.
-    private var ackAudioPlayer: AVAudioPlayer?
 
     // MARK: - Transcript Store (for draft management)
 
@@ -143,7 +135,6 @@ final class ConversationCoordinator {
         sttService.disconnect()
         agentWebSocket.disconnect()
         streamingAudioPlayer?.stop()
-        stopAckAudio()
         transcriptStore?.discardDraft()
 
         isVoiceSessionActive = false
@@ -446,9 +437,6 @@ final class ConversationCoordinator {
                 emitEvent(.status(text))
             }
 
-        case .ackAudio(let payload):
-            playAckAudio(base64: payload.audio)
-
         case .voiceStatus:
             // Voice-status path was removed — the AccountsAgent's
             // contextual `acknowledgment` event covers the same purpose
@@ -459,36 +447,8 @@ final class ConversationCoordinator {
 
         case .permanentDisconnect:
             setState(.disconnected)
-            stopAckAudio()
             emitEvent(.errorEvent("Connection lost. Please go back and try again."))
         }
-    }
-
-    // MARK: - Ack audio (System message spoken via Halo's voice)
-
-    /// Decode and play the ack audio blob via a dedicated AVAudioPlayer.
-    /// Stops any earlier ack still playing (rare — only happens if two
-    /// turns fire within ~500ms, which the agent shouldn't do).
-    private func playAckAudio(base64: String) {
-        guard let data = Data(base64Encoded: base64) else {
-            Logger.error("ConversationCoordinator: ack_audio invalid base64")
-            return
-        }
-        do {
-            ackAudioPlayer?.stop()
-            let player = try AVAudioPlayer(data: data)
-            player.prepareToPlay()
-            player.play()
-            ackAudioPlayer = player
-            Logger.info("ConversationCoordinator: ack_audio playing (\(player.duration)s)")
-        } catch {
-            Logger.error("ConversationCoordinator: ack_audio playback failed: \(error)")
-        }
-    }
-
-    private func stopAckAudio() {
-        ackAudioPlayer?.stop()
-        ackAudioPlayer = nil
     }
 
     // MARK: - STT Callbacks (ElevenLabs)
