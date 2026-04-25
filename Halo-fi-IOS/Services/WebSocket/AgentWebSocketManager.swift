@@ -88,6 +88,17 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private let maxConcurrentSessionRetries = 3
     private let maxReconnectAttempts = 5
 
+    /// Cumulative reconnect attempts across the current connect() session.
+    /// Reset only by an explicit user-initiated connect() OR by a connection
+    /// that survives `stableConnectionThreshold` without error. The previous
+    /// implementation reset on every "Reconnected successfully" — but a
+    /// successful TCP connect that immediately drops at the application
+    /// layer would loop forever because each transient reconnect re-entered
+    /// the for-loop at attempt 1.
+    private var cumulativeReconnectAttempts = 0
+    private var listenPhaseStartTime: Date?
+    private let stableConnectionThreshold: TimeInterval = 10
+
     /// The single listener task. Cancelled on disconnect, replaced on connect.
     private var listenerTask: Task<Void, Never>?
 
@@ -116,6 +127,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         generation += 1
         let currentGen = generation
         concurrentSessionRetries = 0
+        cumulativeReconnectAttempts = 0
 
         // Create session ID for this connection
         sessionId = UUID().uuidString
@@ -194,6 +206,11 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private func listenPhase(generation gen: UInt64) async {
         guard let connection = webSocketConnection else { return }
 
+        // Track when the listen phase actually started so reconnectPhase
+        // can decide whether the previous "successful reconnect" was
+        // stable enough to reset the cumulative counter.
+        listenPhaseStartTime = Date()
+
         do {
             while !Task.isCancelled {
                 guard isCurrentGeneration(gen) else {
@@ -225,12 +242,35 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     }
 
     /// Iterative reconnection with exponential backoff.
-    /// Replaces the previous recursive attemptReconnect().
+    ///
+    /// Cumulative attempt count: persists across reconnect→listen→drop
+    /// cycles, so if the connection accepts then immediately closes
+    /// (auth reject, server error mid-handshake), we still hit the cap
+    /// and stop. The previous version reset the counter every time
+    /// performReconnect succeeded, which meant a connection that died
+    /// within milliseconds spun the attempt counter back to 1 and
+    /// looped forever.
+    ///
+    /// Recovery: a connection that survives stableConnectionThreshold
+    /// (10s) is considered healthy and the cumulative count is reset.
     private func reconnectPhase(generation gen: UInt64) async {
-        for attempt in 1...maxReconnectAttempts {
+        // If the previous listen phase ran long enough to be considered
+        // a stable connection, treat the upcoming reconnect cycle as a
+        // fresh start. Otherwise the failure is part of the same
+        // unhealthy session and counts toward the cap.
+        if let started = listenPhaseStartTime,
+           Date().timeIntervalSince(started) >= stableConnectionThreshold {
+            Logger.info("AgentWebSocket: Previous connection was stable — resetting reconnect counter")
+            cumulativeReconnectAttempts = 0
+        }
+        listenPhaseStartTime = nil
+
+        while cumulativeReconnectAttempts < maxReconnectAttempts {
             guard !Task.isCancelled, isCurrentGeneration(gen) else { return }
             guard !isIntentionallyDisconnected() else { return }
 
+            cumulativeReconnectAttempts += 1
+            let attempt = cumulativeReconnectAttempts
             internalState = .reconnecting(generation: gen, attempt: attempt)
 
             // Announce for VoiceOver
@@ -259,7 +299,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
                     notification: .announcement,
                     argument: "Reconnected. You can continue your conversation."
                 )
-                // Re-enter listen phase with the same generation
+                // Re-enter listen phase with the same generation. If it
+                // survives stableConnectionThreshold, the next call to
+                // reconnectPhase will reset cumulativeReconnectAttempts.
                 await listenLoop(generation: gen)
                 return
             } catch {
