@@ -137,6 +137,24 @@ enum APIEndpoints {
         static let privacy = "/legal/privacy"
     }
 
+    // MARK: - SSI
+
+    enum SSI {
+        /// GET — BWE/IRWE candidates the classifier spotted this month.
+        static let candidates = "/ssi/exclusions/candidates"
+
+        /// GET — confirmed SSI deductions for the current month.
+        static let exclusions = "/ssi/exclusions"
+
+        /// POST — confirm a transaction as a BWE/IRWE/burial deduction.
+        static let createExclusion = "/ssi/exclusions"
+
+        /// DELETE — undo a previously confirmed deduction.
+        static func deleteExclusion(_ exclusionId: String) -> String {
+            "/ssi/exclusions/\(exclusionId)"
+        }
+    }
+
     // MARK: - WebSocket
 
     enum WebSocket {

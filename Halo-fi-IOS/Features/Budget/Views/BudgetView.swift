@@ -283,6 +283,20 @@ struct BudgetView: View {
                     if ssi.overpaymentFlag == true, let reason = ssi.overpaymentReason {
                         SSIOverpaymentBanner(reason: reason)
                     }
+                    if !data.ssiCandidates.isEmpty {
+                        SSIDeductionCandidatesCard(
+                            candidates: data.ssiCandidates,
+                            onConfirm: { candidate, type in
+                                do {
+                                    try await data.confirmSSIDeduction(
+                                        candidate: candidate, as: type
+                                    )
+                                } catch {
+                                    // Soft-fail; data manager already logged.
+                                }
+                            }
+                        )
+                    }
                 }
             } header: {
                 sectionHeader("SSI Monitor", count: ssiSectionCount(ssi))
@@ -752,6 +766,96 @@ private struct SSIOverpaymentBanner: View {
         .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Possible overpayment: \(reason)")
+    }
+}
+
+// MARK: - SSI deduction candidates (Phase 3)
+
+/// Surfaced when the backend classifier flagged one or more
+/// transactions as possible Blind Work Expenses or Impairment-
+/// Related Work Expenses. Each row opens a confirmation sheet that
+/// lets the user accept, switch buckets, or dismiss without writing.
+private struct SSIDeductionCandidatesCard: View {
+    let candidates: [SSIDeductionCandidate]
+    let onConfirm: (SSIDeductionCandidate, SSIExclusionType) async -> Void
+
+    @State private var presented: SSIDeductionCandidate?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.yellow)
+                Text("Possible deductions spotted")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
+            Text("Confirm any that were really work-related and we'll subtract them from your countable income this month.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 8) {
+                ForEach(candidates) { candidate in
+                    candidateRow(candidate)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .sheet(item: $presented) { candidate in
+            SSIDeductionConfirmView(
+                candidate: candidate,
+                onConfirm: { type in
+                    await onConfirm(candidate, type)
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func candidateRow(_ candidate: SSIDeductionCandidate) -> some View {
+        Button {
+            presented = candidate
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(candidate.description.isEmpty ? "Transaction" : candidate.description)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text("\(typeLabel(candidate.suggestedType)) • \(BudgetFormatter.cents(candidate.amountCents))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.systemBackground))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Possible \(typeLabel(candidate.suggestedType)). \(candidate.description). Amount \(BudgetFormatter.cents(candidate.amountCents)). Tap to review."
+        )
+        .accessibilityHint("Opens the confirmation sheet.")
+    }
+
+    private func typeLabel(_ type: SSIExclusionType) -> String {
+        switch type {
+        case .bwe: return "Blind Work Expense"
+        case .irwe: return "Impairment-Related Work Expense"
+        case .burial: return "Burial-fund deposit"
+        }
     }
 }
 

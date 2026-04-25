@@ -22,15 +22,25 @@ final class BudgetDataManager {
     /// Last successful fetch — powers "Updated X ago" labels.
     private(set) var lastFetched: Date?
 
+    /// SSI deduction candidates the backend classifier flagged this
+    /// month. Empty when the user isn't on SSI or has no plausibly-
+    /// deductible transactions. Refreshed alongside `overview`.
+    var ssiCandidates: [SSIDeductionCandidate] = []
+
     // MARK: - Dependencies
 
     private let service: BudgetServiceProtocol
+    private let ssiService: SSIServiceProtocol
     private var refreshTask: Task<Void, Never>?
 
     // MARK: - Init
 
-    init(service: BudgetServiceProtocol = BudgetService.shared) {
+    init(
+        service: BudgetServiceProtocol = BudgetService.shared,
+        ssiService: SSIServiceProtocol = SSIService.shared
+    ) {
         self.service = service
+        self.ssiService = ssiService
     }
 
     // MARK: - API
@@ -94,6 +104,41 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: fetch overview failed: \(error)")
             self.error = BudgetError(underlying: error)
         }
+
+        // SSI deduction candidates — separate endpoint so a candidates
+        // failure doesn't tank the whole Budget view. Non-SSI users
+        // get an empty list back from the server, no error.
+        do {
+            let response = try await ssiService.fetchCandidates(userTz: userTz)
+            ssiCandidates = response.candidates
+        } catch {
+            Logger.error("BudgetDataManager: fetch SSI candidates failed: \(error)")
+            ssiCandidates = []
+        }
+    }
+
+    // MARK: - SSI deductions (Phase 3)
+
+    /// Confirm a candidate as a BWE / IRWE / burial deduction and
+    /// refresh both the overview (so projected SSI updates) and the
+    /// candidates list (so the confirmed row drops off).
+    func confirmSSIDeduction(
+        candidate: SSIDeductionCandidate,
+        as type: SSIExclusionType,
+        notes: String? = nil
+    ) async throws {
+        let request = SSICreateExclusionRequest(
+            transactionId: candidate.transactionId,
+            exclusionType: type,
+            notes: notes
+        )
+        do {
+            _ = try await ssiService.confirm(request)
+        } catch {
+            Logger.error("BudgetDataManager: confirm SSI deduction failed: \(error)")
+            throw error
+        }
+        await refresh()
     }
 }
 
