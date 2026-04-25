@@ -2,16 +2,32 @@
 //  StreamingAudioPlayer.swift
 //  Halo-fi-IOS
 //
-//  Streaming audio playback for ElevenLabs TTS responses.
-//  Accumulates base64-encoded MP3 chunks from the WebSocket,
-//  then decodes and plays via AVAudioEngine + AVAudioPlayerNode.
+//  Plays accumulated MP3 audio from ElevenLabs TTS responses. Chunks
+//  arrive over the agent WebSocket as base64 strings; we accumulate them
+//  in `mp3Data` and play the whole buffer at audio_complete via
+//  AVAudioPlayer.
+//
+//  Why AVAudioPlayer (not AVAudioEngine):
+//  ─────────────────────────────────────
+//  The previous implementation used AVAudioEngine + AVAudioPlayerNode +
+//  AVAudioUnitTimePitch. AVAudioEngine has a long-running issue in the
+//  iOS Simulator where playback fails silently when the audio session
+//  is .playAndRecord (which we need for the mic). The user heard
+//  haptics + system sounds (AVAudioPlayer) but never agent TTS
+//  (AVAudioEngine) — a clean diagnostic.
+//
+//  We have the full MP3 data in memory by the time audio_complete fires,
+//  so streaming via the engine wasn't buying anything. AVAudioPlayer
+//  works in both sim and device, supports playbackRate via enableRate +
+//  rate, and is simpler to reason about. The interface stayed
+//  unchanged so the call sites in ConversationCoordinator are
+//  untouched.
 //
 
 import AVFoundation
-import UIKit
 
 @MainActor
-final class StreamingAudioPlayer {
+final class StreamingAudioPlayer: NSObject {
     // MARK: - Public State
 
     private(set) var isPlaying: Bool = false
@@ -22,19 +38,17 @@ final class StreamingAudioPlayer {
 
     var onPlaybackFinished: (() -> Void)?
 
-    // MARK: - Private
-
-    private var audioEngine: AVAudioEngine?
-    private var playerNode: AVAudioPlayerNode?
-    private var timePitchNode: AVAudioUnitTimePitch?
-
-    /// Playback rate (0.5 to 2.0). Set before calling playAccumulatedAudio().
+    /// Playback rate (0.5–2.0). Applied via AVAudioPlayer.rate when
+    /// playback starts; changing it mid-playback is honored on the
+    /// next play() but not retroactively.
     var playbackRate: Float = 1.0
 
-    /// Accumulated raw MP3 bytes from all chunks
+    // MARK: - Private
+
+    private var audioPlayer: AVAudioPlayer?
     private var mp3Data = Data()
 
-    // MARK: - Audio Session
+    // MARK: - Audio session
 
     private func configureAudioSession() {
         do {
@@ -51,28 +65,20 @@ final class StreamingAudioPlayer {
         }
     }
 
-    /// Deactivating the shared audio session after playback would invalidate
-    /// AVAudioPlayer instances in AudioFeedbackService (earcon sounds).
-    /// Instead, leave the session active — iOS manages this efficiently, and
-    /// VoiceService will reconfigure it when recording starts.
-    private func deactivateAudioSession() {
-        // Intentionally left empty — see comment above.
-    }
-
     // MARK: - Public API
 
-    /// Append a base64-encoded audio chunk to the accumulator.
+    /// Append a base64-encoded MP3 chunk to the accumulator.
     func appendAudioChunk(_ base64Audio: String) {
         guard let rawData = Data(base64Encoded: base64Audio) else {
             Logger.error("StreamingAudioPlayer: Invalid base64 audio data")
             return
         }
-
         mp3Data.append(rawData)
         Logger.debug("StreamingAudioPlayer: Accumulated \(mp3Data.count) bytes total")
     }
 
-    /// Decode the accumulated MP3 data and play it.
+    /// Play the accumulated MP3 data via AVAudioPlayer. Called when
+    /// audio_complete arrives from the WebSocket.
     func playAccumulatedAudio() {
         guard !isMuted else {
             Logger.info("StreamingAudioPlayer: Skipping playback (muted)")
@@ -87,103 +93,47 @@ final class StreamingAudioPlayer {
             return
         }
 
-        Logger.info("StreamingAudioPlayer: Decoding \(mp3Data.count) bytes of MP3 data")
-
-        // Write accumulated MP3 to temp file for AVAudioFile to decode
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("mp3")
+        Logger.info("StreamingAudioPlayer: Playing \(mp3Data.count) bytes of MP3 data")
+        configureAudioSession()
 
         do {
-            try mp3Data.write(to: tempURL)
-        } catch {
-            Logger.error("StreamingAudioPlayer: Failed to write temp MP3: \(error)")
-            mp3Data = Data()
-            onPlaybackFinished?()
-            return
-        }
-
-        // Clear accumulator now that we've written it
-        mp3Data = Data()
-
-        do {
-            let audioFile = try AVAudioFile(forReading: tempURL)
-            let processingFormat = audioFile.processingFormat
-            let frameCount = AVAudioFrameCount(audioFile.length)
-
-            Logger.info("StreamingAudioPlayer: Decoded MP3 — \(frameCount) frames, \(processingFormat.sampleRate)Hz, \(processingFormat.channelCount)ch")
-
-            guard frameCount > 0 else {
-                Logger.warning("StreamingAudioPlayer: Empty audio file")
-                try? FileManager.default.removeItem(at: tempURL)
+            let player = try AVAudioPlayer(data: mp3Data)
+            player.delegate = self
+            player.enableRate = true
+            player.rate = playbackRate
+            guard player.prepareToPlay() else {
+                Logger.error("StreamingAudioPlayer: prepareToPlay returned false")
+                mp3Data = Data()
                 onPlaybackFinished?()
                 return
             }
-
-            guard let pcmBuffer = AVAudioPCMBuffer(
-                pcmFormat: processingFormat,
-                frameCapacity: frameCount
-            ) else {
-                Logger.error("StreamingAudioPlayer: Failed to create PCM buffer")
-                try? FileManager.default.removeItem(at: tempURL)
+            guard player.play() else {
+                Logger.error("StreamingAudioPlayer: play() returned false")
+                mp3Data = Data()
                 onPlaybackFinished?()
                 return
             }
-
-            try audioFile.read(into: pcmBuffer)
-
-            // Clean up temp file
-            try? FileManager.default.removeItem(at: tempURL)
-
-            // Set up engine and play
-            configureAudioSession()
-
-            let engine = AVAudioEngine()
-            let player = AVAudioPlayerNode()
-            let timePitch = AVAudioUnitTimePitch()
-            timePitch.rate = playbackRate
-
-            engine.attach(player)
-            engine.attach(timePitch)
-            engine.connect(player, to: timePitch, format: processingFormat)
-            engine.connect(timePitch, to: engine.mainMixerNode, format: processingFormat)
-
-            try engine.start()
-            player.play()
-
-            self.audioEngine = engine
-            self.playerNode = player
-            self.timePitchNode = timePitch
+            self.audioPlayer = player
             self.isPlaying = true
-
-            Logger.info("StreamingAudioPlayer: Playing audio (\(frameCount) frames)")
-
-            player.scheduleBuffer(pcmBuffer) { [weak self] in
-                Task { @MainActor in
-                    self?.finishPlayback()
-                }
-            }
-
+            // Clear the accumulator now that we've handed it to the player —
+            // AVAudioPlayer copies the bytes internally on init.
+            mp3Data = Data()
+            Logger.info("StreamingAudioPlayer: Playback started (\(player.duration)s, rate=\(playbackRate))")
         } catch {
-            Logger.error("StreamingAudioPlayer: Failed to decode/play MP3: \(error)")
-            try? FileManager.default.removeItem(at: tempURL)
+            Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")
+            mp3Data = Data()
             onPlaybackFinished?()
         }
     }
 
-    /// Immediately stop playback and tear down the engine.
+    /// Immediately stop playback and clear state.
     func stop() {
-        playerNode?.stop()
-        audioEngine?.stop()
-        audioEngine = nil
-        playerNode = nil
-        timePitchNode = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
         mp3Data = Data()
 
         if isPlaying {
             isPlaying = false
-            // Don't deactivate audio session here — VoiceService will
-            // reconfigure it for recording if the user starts listening next.
             onPlaybackFinished?()
         }
     }
@@ -192,20 +142,26 @@ final class StreamingAudioPlayer {
         isMuted = muted
         if muted { stop() }
     }
+}
 
-    // MARK: - Private Helpers
+// MARK: - AVAudioPlayerDelegate
 
-    private func finishPlayback() {
-        guard isPlaying else { return }
+extension StreamingAudioPlayer: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            Logger.info("StreamingAudioPlayer: Playback finished (success=\(flag))")
+            self.audioPlayer = nil
+            self.isPlaying = false
+            self.onPlaybackFinished?()
+        }
+    }
 
-        playerNode?.stop()
-        audioEngine?.stop()
-        audioEngine = nil
-        playerNode = nil
-        isPlaying = false
-        deactivateAudioSession()
-
-        Logger.info("StreamingAudioPlayer: Playback finished")
-        onPlaybackFinished?()
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor in
+            Logger.error("StreamingAudioPlayer: Decode error: \(error?.localizedDescription ?? "unknown")")
+            self.audioPlayer = nil
+            self.isPlaying = false
+            self.onPlaybackFinished?()
+        }
     }
 }
