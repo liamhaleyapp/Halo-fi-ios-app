@@ -160,17 +160,37 @@ struct BudgetView: View {
     @ViewBuilder
     private func monthlyIncomeSection(_ overview: BudgetOverview) -> some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
+            VStack(alignment: .leading, spacing: 0) {
+                // Total + edit affordance — pencil icon instead of the
+                // bordered button, which felt inconsistent with the flat
+                // dark-card aesthetic of the surrounding sections.
+                HStack(alignment: .firstTextBaseline) {
                     Text(overview.monthlyIncome.totalFormatted)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Button("Edit") { showingIncomeEditor = true }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Edit monthly income")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .accessibilityLabel("Total monthly income: \(overview.monthlyIncome.totalFormatted)")
+                    Spacer(minLength: 0)
+                    Button {
+                        showingIncomeEditor = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background(Color(.tertiarySystemBackground), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit monthly income")
+                    .accessibilityHint("Opens the income editor")
                 }
-                incomeSourceRows(overview.monthlyIncome.sources)
+                .padding(.bottom, 12)
+
+                if activeIncomeSourceCount(overview.monthlyIncome.sources) > 0 {
+                    Divider()
+                        .padding(.bottom, 12)
+                    incomeSourceRows(overview.monthlyIncome.sources)
+                }
             }
             .padding()
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -189,32 +209,59 @@ struct BudgetView: View {
 
     @ViewBuilder
     private func incomeSourceRows(_ sources: MonthlyIncomeSources) -> some View {
-        if let monthly = sources.paycheck.monthlyCents, monthly > 0 {
-            incomeRow(
-                label: sources.paycheck.name ?? "Paycheck",
-                amount: BudgetFormatter.cents(monthly),
-                detail: sources.paycheck.frequency
-            )
-        }
-        if sources.ssi.enabled, let cents = sources.ssi.amountCents, cents > 0 {
-            incomeRow(label: "SSI", amount: BudgetFormatter.cents(cents), detail: "monthly")
-        }
-        if sources.ssdi.enabled, let cents = sources.ssdi.amountCents, cents > 0 {
-            incomeRow(label: "SSDI", amount: BudgetFormatter.cents(cents), detail: "monthly")
+        VStack(spacing: 14) {
+            if let monthly = sources.paycheck.monthlyCents, monthly > 0 {
+                incomeRow(
+                    label: sources.paycheck.name ?? "Paycheck",
+                    amount: BudgetFormatter.cents(monthly),
+                    detail: friendlyFrequency(sources.paycheck.frequency)
+                )
+            }
+            if sources.ssi.enabled, let cents = sources.ssi.amountCents, cents > 0 {
+                incomeRow(label: "SSI", amount: BudgetFormatter.cents(cents), detail: "Monthly")
+            }
+            if sources.ssdi.enabled, let cents = sources.ssdi.amountCents, cents > 0 {
+                incomeRow(label: "SSDI", amount: BudgetFormatter.cents(cents), detail: "Monthly")
+            }
         }
     }
 
     private func incomeRow(label: String, amount: String, detail: String?) -> some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.subheadline)
-                if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                Text(label)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            Spacer()
-            Text(amount).font(.subheadline).fontWeight(.medium)
+            Spacer(minLength: 0)
+            Text(amount)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(amount)\(detail.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("\(label): \(amount)\(detail.map { ", \($0.lowercased())" } ?? "")")
+    }
+
+    /// Map the raw API frequency value into a human-friendly label that
+    /// matches the picker copy in IncomeEditorView ("biweekly" →
+    /// "Every two weeks"). Falls back to the raw value if unknown.
+    private func friendlyFrequency(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        switch raw.lowercased() {
+        case "weekly":        return "Weekly"
+        case "biweekly":      return "Every two weeks"
+        case "twice_monthly": return "Twice a month"
+        case "monthly":       return "Monthly"
+        case "irregular":     return "Irregular"
+        default:              return raw.capitalized
+        }
     }
 
     // MARK: - SSI
