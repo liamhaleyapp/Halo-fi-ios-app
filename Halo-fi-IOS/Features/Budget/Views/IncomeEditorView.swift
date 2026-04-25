@@ -26,6 +26,13 @@ struct IncomeEditorView: View {
     @State private var receivesSSDI: Bool = false
     @State private var ssdiAmount: String = ""
 
+    // SSI rules-engine profile (Phase 4) — drives BWE branch and
+    // resource exclusions in the SSI engine.
+    @State private var isBlind: Bool = false
+    @State private var hasABLEAccount: Bool = false
+    @State private var ableBalanceDollars: String = ""
+    @State private var burialFundDollars: String = ""
+
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -83,6 +90,26 @@ struct IncomeEditorView: View {
                     Text("SSDI")
                 }
 
+                Section {
+                    Toggle("I am statutorily blind", isOn: $isBlind)
+                        .accessibilityHint("Unlocks Blind Work Expense deductions, which preserve $1 of SSI for every $1 spent on work-related expenses.")
+                    Toggle("I have an ABLE account", isOn: $hasABLEAccount)
+                        .accessibilityHint("ABLE accounts are excluded from SSI countable resources up to $100,000.")
+                    if hasABLEAccount {
+                        TextField("ABLE account balance", text: $ableBalanceDollars)
+                            .keyboardType(.decimalPad)
+                            .accessibilityLabel("ABLE account balance in dollars")
+                    }
+                    TextField("Designated burial fund (max $1,500)", text: $burialFundDollars)
+                        .keyboardType(.decimalPad)
+                        .accessibilityLabel("Designated burial fund balance in dollars, up to $1,500")
+                } header: {
+                    Text("SSI profile")
+                } footer: {
+                    Text("These settings drive your projected SSI math. ABLE balances above $100,000 and burial funds above $1,500 still count toward the resource limit.")
+                        .font(.caption)
+                }
+
                 if let err = saveError {
                     Section { Text(err).foregroundStyle(.red) }
                 }
@@ -105,7 +132,8 @@ struct IncomeEditorView: View {
     // MARK: - Actions
 
     private func seedFromOverview() {
-        guard let sources = dataManager.overview?.monthlyIncome.sources else { return }
+        guard let overview = dataManager.overview else { return }
+        let sources = overview.monthlyIncome.sources
 
         if let cents = sources.paycheck.amountCents, cents > 0 {
             paycheckAmount = String(format: "%.2f", Double(cents) / 100.0)
@@ -120,6 +148,17 @@ struct IncomeEditorView: View {
         receivesSSDI = sources.ssdi.enabled
         if let cents = sources.ssdi.amountCents, cents > 0 {
             ssdiAmount = String(format: "%.2f", Double(cents) / 100.0)
+        }
+
+        if let profile = overview.ssiProfile {
+            isBlind = profile.isBlind
+            hasABLEAccount = profile.hasAbleAccount
+            if let cents = profile.ableBalanceCents, cents > 0 {
+                ableBalanceDollars = String(format: "%.2f", Double(cents) / 100.0)
+            }
+            if let cents = profile.burialFundCents, cents > 0 {
+                burialFundDollars = String(format: "%.2f", Double(cents) / 100.0)
+            }
         }
     }
 
@@ -148,6 +187,22 @@ struct IncomeEditorView: View {
         update.receivesSsdi = receivesSSDI
         update.ssiAmount = receivesSSI ? (Double(ssiAmount) ?? 0.0) : nil
         update.ssdiAmount = receivesSSDI ? (Double(ssdiAmount) ?? 0.0) : nil
+        update.isBlind = isBlind
+        update.hasAbleAccount = hasABLEAccount
+        update.ableBalanceCents = hasABLEAccount
+            ? IncomeEditorView.dollarsToCents(ableBalanceDollars)
+            : 0
+        update.burialFundCents = IncomeEditorView.dollarsToCents(burialFundDollars)
         return update
+    }
+
+    /// Convert a free-text dollar string ("12.50") to integer cents.
+    /// Returns 0 for blank / unparseable input so we never send nil
+    /// to the backend (the engine treats nil as "unset"; we want
+    /// blank to mean "$0 designated").
+    private static func dollarsToCents(_ raw: String) -> Int {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard let dollars = Double(trimmed) else { return 0 }
+        return Int((dollars * 100).rounded())
     }
 }

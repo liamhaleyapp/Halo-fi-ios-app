@@ -31,6 +31,12 @@ struct MonthlyIncomeUpdate: Encodable, Equatable {
     var receivesSsdi: Bool?
     var ssiAmount: Double?
     var ssdiAmount: Double?
+    // SSI rules-engine profile (Phase 4). Backend validates ranges
+    // (cents >= 0; burial <= $1,500 cap).
+    var isBlind: Bool?
+    var hasAbleAccount: Bool?
+    var ableBalanceCents: Int?
+    var burialFundCents: Int?
 
     enum CodingKeys: String, CodingKey {
         case paycheckAmount = "paycheck_amount"
@@ -40,6 +46,10 @@ struct MonthlyIncomeUpdate: Encodable, Equatable {
         case receivesSsdi = "receives_ssdi"
         case ssiAmount = "ssi_amount"
         case ssdiAmount = "ssdi_amount"
+        case isBlind = "is_blind"
+        case hasAbleAccount = "has_able_account"
+        case ableBalanceCents = "able_balance_cents"
+        case burialFundCents = "burial_fund_cents"
     }
 }
 

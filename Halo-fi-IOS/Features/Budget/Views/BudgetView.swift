@@ -552,21 +552,26 @@ private struct SSIResourceHeroCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Resources remaining")
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(DesignTokens.SSI.subtextBright)
                     Text(resources.formatted["remaining"] ?? "$0.00")
                         .font(.system(size: 36, weight: .bold))
                         .foregroundStyle(.white)
                     Text("out of \(resources.formatted["limit"] ?? "$0.00") limit")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(DesignTokens.SSI.subtextBright)
                 }
                 Spacer(minLength: 0)
-                SSIStatusChip(status: resources.status)
+                SSIStatusChip(status: chipStatus)
             }
             SSIProgressBar(pctUsed: resources.pctUsed, status: resources.status)
+            if let exclusionLine = exclusionBreakdownLine {
+                Text(exclusionLine)
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.SSI.subtextBright)
+            }
             Text(resources.note)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(DesignTokens.SSI.subtextSecondary)
         }
         .padding(18)
         .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
@@ -574,12 +579,39 @@ private struct SSIResourceHeroCard: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
+    /// Prefer the engine-derived v2 status when present (over | critical
+    /// | warning | ok). Falls back to the legacy v1 (safe | warning |
+    /// over) when v2 fields haven't been populated.
+    private var chipStatus: String {
+        resources.v2Status ?? resources.status
+    }
+
+    /// "Excluded $99,500 (ABLE $99,000, Burial $500)" — only shown
+    /// when v2 produced a non-zero exclusion. Skipped in v1 mode.
+    private var exclusionBreakdownLine: String? {
+        guard let excluded = resources.excludedCents, excluded > 0 else { return nil }
+        var parts: [String] = []
+        if let cents = resources.ableBalanceCents, cents > 0 {
+            parts.append("ABLE \(BudgetFormatter.cents(min(cents, 10_000_000)))")
+        }
+        if let cents = resources.burialFundCents, cents > 0 {
+            parts.append("Burial \(BudgetFormatter.cents(cents))")
+        }
+        let suffix = parts.isEmpty ? "" : " (\(parts.joined(separator: ", ")))"
+        return "Excluded \(BudgetFormatter.cents(excluded))\(suffix)"
+    }
+
     private var accessibilityLabel: String {
         let remaining = resources.formatted["remaining"] ?? "zero dollars"
         let limit = resources.formatted["limit"] ?? "zero dollars"
         let pct = Int(resources.pctUsed.rounded())
-        let status = resources.status.replacingOccurrences(of: "_", with: " ")
-        return "SSI resources. \(remaining) remaining out of \(limit) limit. \(pct) percent used. Status: \(status). \(resources.note)"
+        let status = chipStatus.replacingOccurrences(of: "_", with: " ")
+        var parts = [
+            "SSI resources. \(remaining) remaining out of \(limit) limit. \(pct) percent used. Status: \(status)."
+        ]
+        if let line = exclusionBreakdownLine { parts.append(line + ".") }
+        parts.append(resources.note)
+        return parts.joined(separator: " ")
     }
 }
 

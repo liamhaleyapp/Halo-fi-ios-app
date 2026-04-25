@@ -18,6 +18,7 @@ struct BudgetOverview: Codable, Equatable {
     let budgetStatus: BudgetStatus
     let monthlyIncome: MonthlyIncome
     let ssiStatus: SSIStatus
+    let ssiProfile: SSIProfile?
     let alerts: [BudgetAlert]
     let asOfUtc: String
 
@@ -26,8 +27,28 @@ struct BudgetOverview: Codable, Equatable {
         case budgetStatus = "budget_status"
         case monthlyIncome = "monthly_income"
         case ssiStatus = "ssi_status"
+        case ssiProfile = "ssi_profile"
         case alerts
         case asOfUtc = "as_of_utc"
+    }
+}
+
+/// SSI rules-engine inputs the user controls directly. Toggling
+/// `isBlind` flips the BWE branch of the income waterfall;
+/// `hasAbleAccount` + `ableBalanceCents` unlock the $100k ABLE
+/// resource exclusion; `burialFundCents` excludes a designated
+/// burial fund up to the $1,500 cap.
+struct SSIProfile: Codable, Equatable {
+    let isBlind: Bool
+    let hasAbleAccount: Bool
+    let ableBalanceCents: Int?
+    let burialFundCents: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case isBlind = "is_blind"
+        case hasAbleAccount = "has_able_account"
+        case ableBalanceCents = "able_balance_cents"
+        case burialFundCents = "burial_fund_cents"
     }
 }
 
