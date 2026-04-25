@@ -198,6 +198,9 @@ struct SSIStatus: Codable, Equatable {
     let overpaymentFlag: Bool?
     let overpaymentReason: String?
     let month: String?
+    /// Set to "v2" when the backend SSI rules engine is enabled; nil
+    /// when the legacy SGA-threshold response is in use.
+    let engineVersion: String?
 
     enum CodingKeys: String, CodingKey {
         case hasSsi = "has_ssi"
@@ -208,6 +211,7 @@ struct SSIStatus: Codable, Equatable {
         case overpaymentFlag = "overpayment_flag"
         case overpaymentReason = "overpayment_reason"
         case month
+        case engineVersion = "engine_version"
     }
 }
 
@@ -219,6 +223,12 @@ struct SSIResources: Codable, Equatable {
     let status: String     // "safe" | "warning" | "over"
     let formatted: [String: String]
     let note: String
+    // Engine v2 additions — nil when the legacy SGA-threshold path is
+    // serving this response.
+    let excludedCents: Int?       // ABLE + burial-fund exclusions
+    let ableBalanceCents: Int?
+    let burialFundCents: Int?
+    let v2Status: String?         // "over" | "critical" | "warning" | "ok"
 
     enum CodingKeys: String, CodingKey {
         case currentCents = "current_cents"
@@ -226,6 +236,10 @@ struct SSIResources: Codable, Equatable {
         case remainingCents = "remaining_cents"
         case pctUsed = "pct_used"
         case status, formatted, note
+        case excludedCents = "excluded_cents"
+        case ableBalanceCents = "able_balance_cents"
+        case burialFundCents = "burial_fund_cents"
+        case v2Status = "v2_status"
     }
 }
 
@@ -235,11 +249,54 @@ struct SSIIncome: Codable, Equatable {
     let status: String
     let formatted: [String: String]
     let note: String
+    // Engine v2 additions — `projectedPaymentCents` is THE number to
+    // headline on the income card (the user's actual check this
+    // month). All v2 fields are nil when the legacy SGA-threshold
+    // path is serving this response, so the existing UI keeps working.
+    let fbrCents: Int?
+    let projectedPaymentCents: Int?
+    let eligibleForCash: Bool?
+    let earnRoomGrossCents: Int?
+    let countableEarnedCents: Int?
+    let countableUnearnedCents: Int?
+    let waterfall: SSIIncomeWaterfall?
+    let v2Note: String?
 
     enum CodingKeys: String, CodingKey {
         case countableCents = "countable_cents"
         case thresholdCents = "threshold_cents"
         case status, formatted, note
+        case fbrCents = "fbr_cents"
+        case projectedPaymentCents = "projected_payment_cents"
+        case eligibleForCash = "eligible_for_cash"
+        case earnRoomGrossCents = "earn_room_gross_cents"
+        case countableEarnedCents = "countable_earned_cents"
+        case countableUnearnedCents = "countable_unearned_cents"
+        case waterfall
+        case v2Note = "v2_note"
+    }
+}
+
+/// Engine v2 step-by-step intermediates — surfaced so the agent and
+/// the UI can "show their work" for users who want the full
+/// breakdown of how a check amount was derived.
+struct SSIIncomeWaterfall: Codable, Equatable {
+    let earnedCents: Int
+    let unearnedCents: Int
+    let gieToUnearnedCents: Int
+    let remainingGieCents: Int
+    let afterEieCents: Int
+    let afterIrweCents: Int
+    let after50Cents: Int
+
+    enum CodingKeys: String, CodingKey {
+        case earnedCents = "earned_cents"
+        case unearnedCents = "unearned_cents"
+        case gieToUnearnedCents = "gie_to_unearned_cents"
+        case remainingGieCents = "remaining_gie_cents"
+        case afterEieCents = "after_eie_cents"
+        case afterIrweCents = "after_irwe_cents"
+        case after50Cents = "after_50_cents"
     }
 }
 

@@ -573,6 +573,90 @@ private struct SSIIncomeHeroCard: View {
     let income: SSIIncome
 
     var body: some View {
+        if let projectedCents = income.projectedPaymentCents {
+            v2Body(projectedCents: projectedCents)
+        } else {
+            legacyBody
+        }
+    }
+
+    // MARK: - Engine v2 — projected SSI is the headline
+    @ViewBuilder
+    private func v2Body(projectedCents: Int) -> some View {
+        let projected = BudgetFormatter.cents(projectedCents)
+        let fbr = BudgetFormatter.cents(income.fbrCents ?? 0)
+        let countableTotal = (income.countableEarnedCents ?? 0)
+            + (income.countableUnearnedCents ?? 0)
+        let countableStr = BudgetFormatter.cents(countableTotal)
+        let v2Status = SSIIncomeHeroCard.deriveV2Status(income: income)
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Projected SSI this month")
+                        .font(.subheadline)
+                        .foregroundStyle(DesignTokens.SSI.subtextBright)
+                    Text(projected)
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("FBR \(fbr) minus \(countableStr) countable")
+                        .font(.caption)
+                        .foregroundStyle(DesignTokens.SSI.subtextBright)
+                }
+                Spacer(minLength: 0)
+                SSIStatusChip(status: v2Status)
+            }
+            if let earnRoomCents = income.earnRoomGrossCents {
+                Text(earnRoomNarrative(earnRoomCents: earnRoomCents))
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.SSI.subtextBright)
+            }
+            if let v2Note = income.v2Note {
+                Text(v2Note)
+                    .font(.caption2)
+                    .foregroundStyle(DesignTokens.SSI.subtextSecondary)
+            }
+        }
+        .padding(18)
+        .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(v2AccessibilityLabel(
+            projected: projected,
+            v2Status: v2Status
+        ))
+    }
+
+    private func earnRoomNarrative(earnRoomCents: Int) -> String {
+        let amount = BudgetFormatter.cents(abs(earnRoomCents))
+        if earnRoomCents <= 0 {
+            return "You're past the earn-room cliff this month."
+        }
+        return "You can earn about \(amount) more before your check would drop to zero."
+    }
+
+    private func v2AccessibilityLabel(projected: String, v2Status: String) -> String {
+        var parts = ["Projected SSI this month: \(projected). Status: \(v2Status)."]
+        if let earnRoomCents = income.earnRoomGrossCents {
+            parts.append(earnRoomNarrative(earnRoomCents: earnRoomCents))
+        }
+        if let v2Note = income.v2Note { parts.append(v2Note) }
+        return parts.joined(separator: " ")
+    }
+
+    /// Derive a chip status from the v2 fields. The legacy
+    /// `income.status` compares countable income to the SGA threshold,
+    /// which is meaningless once we're FBR-based — so we synthesize a
+    /// v2-aware status from earn-room and eligibility.
+    private static func deriveV2Status(income: SSIIncome) -> String {
+        if income.eligibleForCash == false { return "over" }
+        if let earnRoom = income.earnRoomGrossCents, earnRoom < 20_000 {
+            return "warning"  // less than $200 of room — near the cliff
+        }
+        return "safe"
+    }
+
+    // MARK: - Legacy — countable income vs SGA threshold (engine off)
+    private var legacyBody: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -603,10 +687,10 @@ private struct SSIIncomeHeroCard: View {
         .padding(18)
         .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(legacyAccessibilityLabel)
     }
 
-    private var accessibilityLabel: String {
+    private var legacyAccessibilityLabel: String {
         let countable = income.formatted["countable"] ?? "zero dollars"
         let threshold = income.formatted["threshold"] ?? "zero dollars"
         let status = income.status.replacingOccurrences(of: "_", with: " ")
