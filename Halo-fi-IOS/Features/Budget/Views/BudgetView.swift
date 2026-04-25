@@ -223,28 +223,20 @@ struct BudgetView: View {
     private func ssiSection(_ ssi: SSIStatus) -> some View {
         if ssi.hasSsi {
             Section {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(spacing: 12) {
                     if let resources = ssi.resources {
-                        ssiResourcesBlock(resources)
+                        SSIResourceHeroCard(resources: resources)
                     }
                     if let income = ssi.income {
-                        ssiIncomeBlock(income)
+                        SSIIncomeHeroCard(income: income)
                     }
                     if let next = ssi.nextSsaDeposit {
-                        ssiNextDepositBlock(next)
+                        SSINextDepositCard(next: next)
                     }
                     if ssi.overpaymentFlag == true, let reason = ssi.overpaymentReason {
-                        Label {
-                            Text(reason).font(.footnote)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                        .accessibilityLabel("Possible overpayment: \(reason)")
+                        SSIOverpaymentBanner(reason: reason)
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
             } header: {
                 sectionHeader("SSI Monitor", count: ssiSectionCount(ssi))
             }
@@ -257,64 +249,6 @@ struct BudgetView: View {
         if ssi.income != nil { n += 1 }
         if ssi.nextSsaDeposit != nil { n += 1 }
         return n
-    }
-
-    private func ssiResourcesBlock(_ r: SSIResources) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Resources")
-                .font(.subheadline).fontWeight(.semibold)
-            HStack {
-                Text(r.formatted["remaining"] ?? "$0.00")
-                    .font(.title3).fontWeight(.semibold)
-                Spacer()
-                statusBadge(r.status)
-            }
-            Text("out of \(r.formatted["limit"] ?? "$0.00") limit")
-                .font(.caption).foregroundStyle(.secondary)
-            Text(r.note)
-                .font(.caption2).foregroundStyle(.secondary)
-                .padding(.top, 4)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("""
-            SSI resources: \(r.formatted["remaining"] ?? "zero") remaining \
-            of \(r.formatted["limit"] ?? "zero") limit. \
-            Status: \(r.status). \(r.note)
-            """)
-    }
-
-    private func ssiIncomeBlock(_ income: SSIIncome) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Countable income this month")
-                .font(.subheadline).fontWeight(.semibold)
-            HStack {
-                Text(income.formatted["countable"] ?? "$0.00")
-                    .font(.title3).fontWeight(.semibold)
-                Spacer()
-                statusBadge(income.status)
-            }
-            Text("threshold \(income.formatted["threshold"] ?? "$20.00")")
-                .font(.caption).foregroundStyle(.secondary)
-            Text(income.note)
-                .font(.caption2).foregroundStyle(.secondary)
-                .padding(.top, 4)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func ssiNextDepositBlock(_ next: SSANextDeposit) -> some View {
-        let amount = BudgetFormatter.cents(next.expectedAmountCents)
-        let dateText = BudgetFormatter.friendlyDate(next.expectedDateIso) ?? next.expectedDateIso
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("Next SSA check").font(.subheadline).fontWeight(.semibold)
-            Text("\(amount) expected \(dateText)").font(.subheadline)
-            if next.confidence != "high" {
-                Text("Confidence: \(next.confidence)")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Next social security check: \(amount) expected \(dateText). Confidence \(next.confidence).")
     }
 
     // MARK: - Alerts
@@ -529,6 +463,243 @@ private struct NoBudgetHeroCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Spent \(spending.formatted["total"] ?? "zero dollars") this month. No budget set yet.")
+    }
+}
+
+// MARK: - SSI hero cards
+//
+// All four use a navy gradient that matches BudgetHeroCard so the SSI
+// section reads as the b-side of the same visual system. Status pills
+// + progress bars carry the safe/warning/over signal so VoiceOver users
+// hear the same band the visual conveys.
+
+private let ssiHeroGradient = LinearGradient(
+    colors: [
+        Color(red: 0.16, green: 0.22, blue: 0.48),
+        Color(red: 0.10, green: 0.14, blue: 0.32),
+    ],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
+
+private struct SSIResourceHeroCard: View {
+    let resources: SSIResources
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Resources remaining")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(resources.formatted["remaining"] ?? "$0.00")
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("out of \(resources.formatted["limit"] ?? "$0.00") limit")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                Spacer(minLength: 0)
+                SSIStatusChip(status: resources.status)
+            }
+            SSIProgressBar(pctUsed: resources.pctUsed, status: resources.status)
+            Text(resources.note)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(18)
+        .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        let remaining = resources.formatted["remaining"] ?? "zero dollars"
+        let limit = resources.formatted["limit"] ?? "zero dollars"
+        let pct = Int(resources.pctUsed.rounded())
+        let status = resources.status.replacingOccurrences(of: "_", with: " ")
+        return "SSI resources. \(remaining) remaining out of \(limit) limit. \(pct) percent used. Status: \(status). \(resources.note)"
+    }
+}
+
+private struct SSIIncomeHeroCard: View {
+    let income: SSIIncome
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Countable income this month")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(income.formatted["countable"] ?? "$0.00")
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("threshold \(income.formatted["threshold"] ?? "$0.00")")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                Spacer(minLength: 0)
+                SSIStatusChip(status: income.status)
+            }
+            SSIProgressBar(
+                pctUsed: SSIProgressBar.pctUsed(
+                    valueCents: income.countableCents,
+                    capCents: income.thresholdCents
+                ),
+                status: income.status
+            )
+            Text(income.note)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(18)
+        .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        let countable = income.formatted["countable"] ?? "zero dollars"
+        let threshold = income.formatted["threshold"] ?? "zero dollars"
+        let status = income.status.replacingOccurrences(of: "_", with: " ")
+        return "Countable income this month: \(countable). Threshold: \(threshold). Status: \(status). \(income.note)"
+    }
+}
+
+private struct SSINextDepositCard: View {
+    let next: SSANextDeposit
+
+    var body: some View {
+        let amount = BudgetFormatter.cents(next.expectedAmountCents)
+        let dateText = BudgetFormatter.friendlyDate(next.expectedDateIso) ?? next.expectedDateIso
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Next SSA check")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
+                if next.confidence != "high" {
+                    Text(next.confidence.capitalized)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.18), in: Capsule())
+                        .foregroundStyle(.white)
+                }
+            }
+            Text("\(amount) expected \(dateText)")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Next social security check: \(amount) expected \(dateText). Confidence \(next.confidence)."
+        )
+    }
+}
+
+private struct SSIOverpaymentBanner: View {
+    let reason: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(reason)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Possible overpayment: \(reason)")
+    }
+}
+
+// MARK: - Shared SSI pieces
+
+private struct SSIStatusChip: View {
+    let status: String
+
+    var body: some View {
+        Text(prettyLabel)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(chipBackground, in: Capsule())
+            .foregroundStyle(chipForeground)
+    }
+
+    private var prettyLabel: String {
+        switch status {
+        case "over":     return "Over"
+        case "warning":  return "Warning"
+        case "safe":     return "Safe"
+        default:         return status.capitalized
+        }
+    }
+
+    private var chipBackground: Color {
+        switch status {
+        case "over":     return Color(red: 1.00, green: 0.45, blue: 0.35).opacity(0.30)
+        case "warning":  return Color(red: 1.00, green: 0.65, blue: 0.25).opacity(0.30)
+        case "safe":     return Color(red: 0.40, green: 0.85, blue: 0.55).opacity(0.30)
+        default:         return Color.white.opacity(0.20)
+        }
+    }
+
+    private var chipForeground: Color {
+        switch status {
+        case "over":     return Color(red: 1.00, green: 0.78, blue: 0.72)
+        case "warning":  return Color(red: 1.00, green: 0.86, blue: 0.62)
+        case "safe":     return Color(red: 0.74, green: 0.96, blue: 0.81)
+        default:         return .white
+        }
+    }
+}
+
+private struct SSIProgressBar: View {
+    let pctUsed: Double
+    let status: String
+
+    var body: some View {
+        GeometryReader { geo in
+            let pct = min(max(pctUsed / 100.0, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.22))
+                Capsule()
+                    .fill(progressColor)
+                    .frame(width: geo.size.width * CGFloat(pct))
+            }
+        }
+        .frame(height: 8)
+        .accessibilityHidden(true) // announced via parent label
+    }
+
+    private var progressColor: Color {
+        switch status {
+        case "over":     return Color(red: 1.00, green: 0.45, blue: 0.35)
+        case "warning":  return Color(red: 1.00, green: 0.65, blue: 0.25)
+        case "safe":     return Color(red: 0.40, green: 0.85, blue: 0.55)
+        default:         return Color(red: 0.95, green: 0.80, blue: 0.35)
+        }
+    }
+
+    /// Compute pctUsed for income (which the API doesn't return directly —
+    /// resources comes with pct_used pre-baked, income has only the cents
+    /// values). Defensive against zero-cap so we don't divide by zero.
+    static func pctUsed(valueCents: Int, capCents: Int) -> Double {
+        guard capCents > 0 else { return valueCents > 0 ? 100 : 0 }
+        return min(Double(valueCents) / Double(capCents) * 100, 9999)
     }
 }
 
