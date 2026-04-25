@@ -64,6 +64,22 @@ final class BudgetDataManager {
         await refresh()
     }
 
+    /// Update a single category's monthly limit, then refresh the overview
+    /// so the new value flows through the budget-status pipeline (totals,
+    /// pace classification, etc.) on the next view read.
+    func saveCategoryLimit(categoryId: String, limitAmount: Double) async throws {
+        do {
+            try await service.updateCategoryLimit(
+                categoryId: categoryId,
+                limitAmount: limitAmount
+            )
+        } catch {
+            Logger.error("BudgetDataManager: save category limit failed: \(error)")
+            throw error
+        }
+        await refresh()
+    }
+
     // MARK: - Internal
 
     private func performRefresh(userTz: String?) async {

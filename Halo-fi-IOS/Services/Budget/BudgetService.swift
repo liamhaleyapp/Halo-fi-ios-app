@@ -15,6 +15,10 @@ protocol BudgetServiceProtocol {
     /// Update the authenticated user's income profile fields.
     /// Returns nothing — view should refresh from /budget/overview after.
     func updateMonthlyIncome(_ update: MonthlyIncomeUpdate) async throws
+
+    /// Update a single budget category's monthly limit (in dollars).
+    /// View should refresh from /budget/overview after.
+    func updateCategoryLimit(categoryId: String, limitAmount: Double) async throws
 }
 
 /// Mirrors the subset of the backend UserUpdateRequest that the Budget
@@ -68,6 +72,19 @@ final class BudgetService: BudgetServiceProtocol {
         // that shape here — the caller refreshes the overview after.
         let _: EmptyResponse = try await networkService.authenticatedRequest(
             endpoint: APIEndpoints.User.me,
+            method: .PATCH,
+            body: body,
+            responseType: EmptyResponse.self
+        )
+    }
+
+    func updateCategoryLimit(categoryId: String, limitAmount: Double) async throws {
+        struct LimitUpdate: Encodable {
+            let limit_amount: Double
+        }
+        let body = try JSONEncoder().encode(LimitUpdate(limit_amount: limitAmount))
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.category(categoryId),
             method: .PATCH,
             body: body,
             responseType: EmptyResponse.self

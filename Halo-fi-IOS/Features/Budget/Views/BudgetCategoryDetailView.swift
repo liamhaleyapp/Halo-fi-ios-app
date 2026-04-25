@@ -3,26 +3,49 @@
 //  Halo-fi-IOS
 //
 //  Drill-down view shown when the user taps a row in the SPENDING BY
-//  CATEGORY list on BudgetView. Scope is intentionally narrow for this
-//  pass — hero, progress, pace/status. No transaction list yet.
+//  CATEGORY list on BudgetView. Hero, progress, status, and an editable
+//  monthly limit (PATCH /budget/categories/{id}).
+//
+//  The view holds an `initial` snapshot of the category passed in by the
+//  navigation push, then prefers the latest value from BudgetDataManager
+//  on every render so saving a new limit (which triggers a refresh)
+//  immediately reflects in the visible numbers.
 //
 
 import SwiftUI
 
 struct BudgetCategoryDetailView: View {
-    let category: BudgetStatusCategory
+    let initial: BudgetStatusCategory
+    @Environment(BudgetDataManager.self) private var dataManager
+    @State private var showingLimitEditor = false
+
+    /// Latest version of this category from the data manager, or the
+    /// initial snapshot if the manager hasn't refreshed yet (or the
+    /// category was removed mid-refresh).
+    private var category: BudgetStatusCategory {
+        dataManager.overview?.budgetStatus.categories
+            .first(where: { $0.category == initial.category })
+            ?? initial
+    }
+
+    init(category: BudgetStatusCategory) {
+        self.initial = category
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 heroCard
                 statusCard
-                paceCard
+                limitCard
             }
             .padding()
         }
         .navigationTitle(BudgetFormatter.displayName(forCategory: category.category))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingLimitEditor) {
+            CategoryLimitEditorView(category: category)
+        }
     }
 
     // MARK: - Cards
@@ -90,25 +113,42 @@ struct BudgetCategoryDetailView: View {
         .accessibilityLabel("Status: \(BudgetFormatter.prettyStatus(category.status)). \(statusExplanation)")
     }
 
+    /// Limit card — tappable when we have a category id from the backend.
+    /// Older API responses without category_id render the same card as
+    /// read-only, no edit affordance, no crash.
     @ViewBuilder
-    private var paceCard: some View {
-        if category.limitCents > 0 {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Limit")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text("Spend under this to stay on pace")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(category.formatted["limit"] ?? "$0.00")
+    private var limitCard: some View {
+        let canEdit = category.categoryId != nil
+        let card = HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Limit")
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
+                Text(canEdit ? "Tap to change this limit" : "Spend under this to stay on pace")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding()
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            Spacer()
+            Text(category.formatted["limit"] ?? "$0.00")
+                .font(.subheadline)
+                .fontWeight(.medium)
+            if canEdit {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(limitAccessibilityLabel(canEdit: canEdit))
+        .accessibilityHint(canEdit ? "Double-tap to change the limit." : "")
+
+        if canEdit {
+            Button { showingLimitEditor = true } label: { card }
+                .buttonStyle(.plain)
+        } else {
+            card
         }
     }
 
@@ -148,6 +188,14 @@ struct BudgetCategoryDetailView: View {
         return "\(name) this month. Spent \(spent) of \(limit) limit. \(pct) percent used. \(remaining) remaining."
     }
 
+    private func limitAccessibilityLabel(canEdit: Bool) -> String {
+        let limit = category.formatted["limit"] ?? "zero dollars"
+        if canEdit {
+            return "Limit: \(limit). Tap to change."
+        }
+        return "Limit: \(limit). Spend under this to stay on pace."
+    }
+
     // MARK: - Status helpers
 
     private var statusColor: Color {
@@ -166,6 +214,94 @@ struct BudgetCategoryDetailView: View {
             return "Tracking with the month."
         default:
             return ""
+        }
+    }
+}
+
+// MARK: - Limit editor sheet
+
+private struct CategoryLimitEditorView: View {
+    let category: BudgetStatusCategory
+
+    @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var amountText: String = ""
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text("$")
+                            .foregroundStyle(.secondary)
+                        TextField("0.00", text: $amountText)
+                            .keyboardType(.decimalPad)
+                            .accessibilityLabel("New monthly limit in dollars")
+                    }
+                } header: {
+                    Text("Monthly limit")
+                } footer: {
+                    Text("Sets the spending target for \(BudgetFormatter.displayName(forCategory: category.category)) each month.")
+                        .font(.caption)
+                }
+
+                if let err = saveError {
+                    Section { Text(err).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Edit limit")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") { save() }
+                        .disabled(isSaving || parsedAmount == nil)
+                }
+            }
+            .onAppear { seed() }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func seed() {
+        // Pre-fill the field with the current limit so the user can edit
+        // rather than re-type from scratch.
+        amountText = String(format: "%.2f", Double(category.limitCents) / 100.0)
+    }
+
+    private var parsedAmount: Double? {
+        let trimmed = amountText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Double(trimmed), value >= 0 else { return nil }
+        return value
+    }
+
+    private func save() {
+        guard let amount = parsedAmount else { return }
+        guard let categoryId = category.categoryId else {
+            saveError = "Can't update — missing category id. Try again after refreshing."
+            return
+        }
+
+        isSaving = true
+        saveError = nil
+        Task {
+            do {
+                try await dataManager.saveCategoryLimit(
+                    categoryId: categoryId,
+                    limitAmount: amount
+                )
+                isSaving = false
+                dismiss()
+            } catch {
+                isSaving = false
+                saveError = "Couldn't save: \(error.localizedDescription)"
+            }
         }
     }
 }

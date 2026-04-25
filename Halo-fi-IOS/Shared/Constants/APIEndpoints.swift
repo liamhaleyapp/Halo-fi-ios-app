@@ -50,6 +50,11 @@ enum APIEndpoints {
     enum Budget {
         /// GET - Aggregated budget view (spending, income, SSI, alerts).
         static let overview = "/budget/overview"
+
+        /// PATCH - Update a single category's monthly limit.
+        static func category(_ categoryId: String) -> String {
+            "/budget/categories/\(categoryId)"
+        }
     }
 
     // MARK: - Banking

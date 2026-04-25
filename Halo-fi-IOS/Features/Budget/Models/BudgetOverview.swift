@@ -109,7 +109,11 @@ struct BudgetStatusTotal: Codable, Equatable {
 }
 
 struct BudgetStatusCategory: Codable, Equatable, Identifiable, Hashable {
-    var id: String { category }
+    var id: String { categoryId ?? category }
+    /// BudgetCategory.id_budget_cat — needed to PATCH limit edits.
+    /// Optional for forward-compat with older backend builds that didn't
+    /// surface it; UI gates the edit affordance when missing.
+    let categoryId: String?
     let category: String
     let limitCents: Int
     let spentCents: Int
@@ -119,6 +123,7 @@ struct BudgetStatusCategory: Codable, Equatable, Identifiable, Hashable {
     let formatted: [String: String]
 
     enum CodingKeys: String, CodingKey {
+        case categoryId = "category_id"
         case category
         case limitCents = "limit_cents"
         case spentCents = "spent_cents"
@@ -128,7 +133,7 @@ struct BudgetStatusCategory: Codable, Equatable, Identifiable, Hashable {
     }
 
     // Manual hash — the `formatted` dictionary on a struct blocks Swift's
-    // Hashable synthesis, but `category` is the unique key for navigation
+    // Hashable synthesis. `category` is the unique key for navigation
     // destinations, so hashing on it is sufficient + correct.
     func hash(into hasher: inout Hasher) {
         hasher.combine(category)
