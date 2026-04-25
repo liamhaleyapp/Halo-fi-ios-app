@@ -12,7 +12,6 @@
 //  UI calls only public methods; internal services (VoiceService, AgentWebSocketManager) are private.
 //
 
-import AVFoundation
 import Foundation
 import UIKit
 
@@ -43,12 +42,6 @@ final class ConversationCoordinator {
     private var streamingAudioPlayer: StreamingAudioPlayer?
     private var audioFeedback: AudioFeedbackService = AudioFeedbackService()
     private let sttService: ElevenLabsSTTService
-
-    /// Speaks supervisor voice_status via on-device TTS so the user hears
-    /// feedback within ~500ms of sending a message, instead of ~3s of
-    /// silence while the agent graph runs. Stopped as soon as the first
-    /// audio_chunk arrives so it can't overlap with agent TTS.
-    private let voiceStatusSynthesizer = AVSpeechSynthesizer()
 
     // MARK: - Transcript Store (for draft management)
 
@@ -430,9 +423,6 @@ final class ConversationCoordinator {
                let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
                 streamingAudioPlayer?.playbackRate = Float(speedValue)
             }
-            // Silence the voice_status bridge right before agent TTS starts so
-            // they don't overlap. Safe no-op if it already finished naturally.
-            stopVoiceStatusSpeech()
             playAccumulatedAudio()
             currentAgentResponseId = nil
 
@@ -447,37 +437,17 @@ final class ConversationCoordinator {
                 emitEvent(.status(text))
             }
 
-        case .voiceStatus(let payload):
-            speakVoiceStatus(payload.text)
-            emitEvent(.status(payload.text))
+        case .voiceStatus:
+            // Voice-status path was removed — the AccountsAgent's
+            // contextual `acknowledgment` event covers the same purpose
+            // with better wording. We still decode the payload at the
+            // network layer (so a pre-rollback backend doesn't crash
+            // the app) but we deliberately drop it here.
+            break
 
         case .permanentDisconnect:
             setState(.disconnected)
-            stopVoiceStatusSpeech()
             emitEvent(.errorEvent("Connection lost. Please go back and try again."))
-        }
-    }
-
-    // MARK: - Voice Status Bridge Audio
-
-    /// Speak a short pre-response status message via on-device TTS. The
-    /// utterance is kept brief on the server side (one short sentence);
-    /// we play it immediately so the user hears feedback during the 2–3s
-    /// window while the agent graph is still running. The first audio
-    /// chunk from the agent response interrupts this.
-    private func speakVoiceStatus(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        stopVoiceStatusSpeech()  // cancel any earlier status still playing
-        let utterance = AVSpeechUtterance(string: trimmed)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        voiceStatusSynthesizer.speak(utterance)
-    }
-
-    private func stopVoiceStatusSpeech() {
-        if voiceStatusSynthesizer.isSpeaking {
-            voiceStatusSynthesizer.stopSpeaking(at: .immediate)
         }
     }
 
