@@ -283,12 +283,12 @@ struct BudgetView: View {
                     if ssi.overpaymentFlag == true, let reason = ssi.overpaymentReason {
                         SSIOverpaymentBanner(reason: reason)
                     }
-                    if !data.ssiCandidates.isEmpty {
+                    if !dataManager.ssiCandidates.isEmpty {
                         SSIDeductionCandidatesCard(
-                            candidates: data.ssiCandidates,
+                            candidates: dataManager.ssiCandidates,
                             onConfirm: { candidate, type in
                                 do {
-                                    try await data.confirmSSIDeduction(
+                                    try await dataManager.confirmSSIDeduction(
                                         candidate: candidate, as: type
                                     )
                                 } catch {
@@ -652,8 +652,8 @@ private struct SSIIncomeHeroCard: View {
                 Spacer(minLength: 0)
                 SSIStatusChip(status: v2Status)
             }
-            if let earnRoomCents = income.earnRoomGrossCents {
-                Text(earnRoomNarrative(earnRoomCents: earnRoomCents))
+            if let line = footerNarrative() {
+                Text(line)
                     .font(.caption)
                     .foregroundStyle(DesignTokens.SSI.subtextBright)
             }
@@ -672,19 +672,25 @@ private struct SSIIncomeHeroCard: View {
         ))
     }
 
-    private func earnRoomNarrative(earnRoomCents: Int) -> String {
-        let amount = BudgetFormatter.cents(abs(earnRoomCents))
+    /// One-line narrative below the projected number. Branches on
+    /// whether the user is already past the FBR cliff — surfacing
+    /// "you can earn $X more" when projected SSI is already $0 is
+    /// misleading, so we swap in different copy in that case.
+    private func footerNarrative() -> String? {
+        if income.eligibleForCash == false {
+            return "Your check is at zero this month from high income. Confirming any Blind Work Expenses you've had could restore part of it."
+        }
+        guard let earnRoomCents = income.earnRoomGrossCents else { return nil }
         if earnRoomCents <= 0 {
             return "You're past the earn-room cliff this month."
         }
+        let amount = BudgetFormatter.cents(earnRoomCents)
         return "You can earn about \(amount) more before your check would drop to zero."
     }
 
     private func v2AccessibilityLabel(projected: String, v2Status: String) -> String {
         var parts = ["Projected SSI this month: \(projected). Status: \(v2Status)."]
-        if let earnRoomCents = income.earnRoomGrossCents {
-            parts.append(earnRoomNarrative(earnRoomCents: earnRoomCents))
-        }
+        if let line = footerNarrative() { parts.append(line) }
         if let v2Note = income.v2Note { parts.append(v2Note) }
         return parts.joined(separator: " ")
     }
