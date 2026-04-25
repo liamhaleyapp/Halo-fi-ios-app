@@ -87,7 +87,14 @@ struct BudgetCategoryListView: View {
             if let rows = grouped[group.status], !rows.isEmpty {
                 Section {
                     ForEach(rows) { cat in
-                        NavigationLink(value: cat) {
+                        // Closure-based to match the rest of the Budget
+                        // navigation stack — value-based here while the
+                        // list itself was pushed via closure caused
+                        // SwiftUI to flash the destination then bounce
+                        // back to this list view.
+                        NavigationLink {
+                            BudgetCategoryDetailView(category: cat)
+                        } label: {
                             BudgetCategoryRow(category: cat)
                         }
                         .buttonStyle(HapticPlainButtonStyle())

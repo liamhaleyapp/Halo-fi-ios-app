@@ -28,10 +28,14 @@ import SwiftUI
 struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingIncomeEditor = false
-    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        // All-closure-based NavigationLinks (no path binding, no
+        // navigationDestination registration). Mixing value-based
+        // NavigationLink(value:) with closure-based pushes confuses
+        // SwiftUI's stack reconciliation — the user saw category drill-
+        // downs flash and immediately bounce back to the list.
+        NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
 
@@ -63,9 +67,6 @@ struct BudgetView: View {
             }
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: BudgetStatusCategory.self) { category in
-                BudgetCategoryDetailView(category: category)
-            }
             .task {
                 if dataManager.overview == nil {
                     await dataManager.refresh()
