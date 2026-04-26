@@ -146,7 +146,13 @@ struct SSILoggedDeductionsCard: View {
             }
             Spacer(minLength: 0)
             Button(role: .destructive) {
-                Task { await onDelete(entry) }
+                Task {
+                    await onDelete(entry)
+                    // Track C — haptic confirm after the network
+                    // round-trip. Blind users feel "done" without
+                    // waiting for the row to disappear visually.
+                    Haptics.success()
+                }
             } label: {
                 Image(systemName: "trash")
                     .font(.callout)

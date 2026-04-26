@@ -160,9 +160,14 @@ struct SSILogManualDeductionView: View {
         errorMessage = nil
         do {
             try await onSave(selectedType, cents, trimmedDesc, occurredOn, notesOrNil)
+            // Track C — success haptic; sheet auto-dismisses next.
+            Haptics.success()
             isSubmitting = false
             dismiss()
         } catch {
+            // Track C — error haptic so the user feels the failure
+            // even if VoiceOver hasn't announced the inline message.
+            Haptics.error()
             isSubmitting = false
             errorMessage = "Couldn't save: \(error.localizedDescription)"
         }

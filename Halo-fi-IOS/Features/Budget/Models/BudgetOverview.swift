@@ -241,6 +241,12 @@ struct SSIStatus: Codable, Equatable {
     /// Set to "v2" when the backend SSI rules engine is enabled; nil
     /// when the legacy SGA-threshold response is in use.
     let engineVersion: String?
+    /// Phase 6 — TTS-ready §10 narration ("SSI status update.
+    /// Countable resources… Projected SSI…"). Populated by the
+    /// backend when v2 is on; reused by Track A's Budget-view
+    /// VoiceOver summary announcement so blind users hear the
+    /// status the second the tab loads.
+    let voiceSummary: String?
 
     enum CodingKeys: String, CodingKey {
         case hasSsi = "has_ssi"
@@ -252,6 +258,7 @@ struct SSIStatus: Codable, Equatable {
         case overpaymentReason = "overpayment_reason"
         case month
         case engineVersion = "engine_version"
+        case voiceSummary = "voice_summary"
     }
 }
 

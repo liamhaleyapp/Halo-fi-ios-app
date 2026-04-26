@@ -29,6 +29,9 @@ struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingIncomeEditor = false
     @State private var showingManualDeductionSheet = false
+    /// Phase 11 Track A — last announcement we already spoke, used
+    /// to avoid re-announcing the same digest on every redraw.
+    @State private var lastAnnouncedSummary: String?
 
     var body: some View {
         // All-closure-based NavigationLinks (no path binding, no
@@ -43,6 +46,23 @@ struct BudgetView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         if let overview = dataManager.overview {
+                            // Phase 11 Track B — first in tab order
+                            // so blind users hit the action drawer
+                            // before any data card.
+                            BudgetQuickActionDrawer(
+                                onAskHalo: {
+                                    NotificationCenter.default.post(
+                                        name: .askHaloRequested, object: nil
+                                    )
+                                },
+                                onLogExpense: {
+                                    showingManualDeductionSheet = true
+                                },
+                                onSpeakStatus: {
+                                    lastAnnouncedSummary = nil
+                                    announceBudgetSummaryIfNeeded()
+                                }
+                            )
                             monthSubtitle(overview)
                             heroCard(overview)
                             if let alertText = topCategoryAlert(overview) {
@@ -72,6 +92,14 @@ struct BudgetView: View {
                 if dataManager.overview == nil {
                     await dataManager.refresh()
                 }
+                // Phase 11 Track A — announce the screen summary
+                // once data is in. Guarded by lastAnnouncedSummary
+                // so re-entering the tab without new data is silent.
+                announceBudgetSummaryIfNeeded()
+            }
+            .onChange(of: dataManager.lastFetched) { _, _ in
+                // Re-announce when a refresh produces fresh data.
+                announceBudgetSummaryIfNeeded()
             }
             .sheet(isPresented: $showingIncomeEditor) {
                 IncomeEditorView()
@@ -92,6 +120,37 @@ struct BudgetView: View {
                     }
                 )
             }
+        }
+    }
+
+    // MARK: - Accessibility (Phase 11 Track A)
+
+    /// Build and post the screen summary via VoiceOver. Skips when
+    /// the data isn't loaded yet OR the announcement is identical
+    /// to the prior one — re-entering the tab without new data
+    /// stays silent so the user isn't barraged.
+    private func announceBudgetSummaryIfNeeded() {
+        let unmatched = dataManager.ssiManualDeductions
+            .filter { $0.source == "user_voice" && $0.linkedTransactionId == nil }
+            .count
+        guard let summary = BudgetAccessibilitySummary.make(
+            overview: dataManager.overview,
+            candidatesCount: dataManager.ssiCandidates.count,
+            manualDeductionsCount: dataManager.ssiManualDeductions.count,
+            unmatchedManualCount: unmatched
+        ) else { return }
+        guard summary != lastAnnouncedSummary else { return }
+        lastAnnouncedSummary = summary
+
+        // Post on the main queue with a small delay so the
+        // navigation push animation finishes before VoiceOver
+        // starts speaking — otherwise the system "screen
+        // changed" announcement clobbers ours.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            UIAccessibility.post(
+                notification: .screenChanged,
+                argument: summary
+            )
         }
     }
 
@@ -726,7 +785,7 @@ private struct SSIIncomeHeroCard: View {
         .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(v2AccessibilityLabel(
-            projected: projected,
+            projectedCents: projectedCents,
             v2Status: v2Status
         ))
     }
@@ -735,7 +794,9 @@ private struct SSIIncomeHeroCard: View {
     /// whether the user is already past the FBR cliff — surfacing
     /// "you can earn $X more" when projected SSI is already $0 is
     /// misleading, so we swap in different copy in that case.
-    private func footerNarrative() -> String? {
+    /// `forSpeech=true` uses VoiceOver-friendly money strings so
+    /// the accessibility label doesn't speak ".00" out loud.
+    private func footerNarrative(forSpeech: Bool = false) -> String? {
         if income.eligibleForCash == false {
             return "Your check is at zero this month from high income. Confirming any Blind Work Expenses you've had could restore part of it."
         }
@@ -743,13 +804,18 @@ private struct SSIIncomeHeroCard: View {
         if earnRoomCents <= 0 {
             return "You're past the earn-room cliff this month."
         }
-        let amount = BudgetFormatter.cents(earnRoomCents)
+        let amount = forSpeech
+            ? VoiceOverFormatter.dollars(earnRoomCents)
+            : BudgetFormatter.cents(earnRoomCents)
         return "You can earn about \(amount) more before your check would drop to zero."
     }
 
-    private func v2AccessibilityLabel(projected: String, v2Status: String) -> String {
-        var parts = ["Projected SSI this month: \(projected). Status: \(v2Status)."]
-        if let line = footerNarrative() { parts.append(line) }
+    private func v2AccessibilityLabel(projectedCents: Int, v2Status: String) -> String {
+        // Speak the headline cents as whole dollars — VoiceOver
+        // saying "994 point zero zero dollars" is grating.
+        let projectedSpeech = VoiceOverFormatter.dollars(projectedCents)
+        var parts = ["Projected SSI this month: \(projectedSpeech). Status: \(v2Status)."]
+        if let line = footerNarrative(forSpeech: true) { parts.append(line) }
         if let v2Note = income.v2Note { parts.append(v2Note) }
         return parts.joined(separator: " ")
     }
@@ -900,7 +966,7 @@ private struct SSIEarnRoomHeroCard: View {
         .padding(18)
         .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel(amount: amount))
+        .accessibilityLabel(accessibilityLabel())
     }
 
     private func headline(amount: String) -> String {
@@ -935,12 +1001,14 @@ private struct SSIEarnRoomHeroCard: View {
         return .gray
     }
 
-    private func accessibilityLabel(amount: String) -> String {
+    private func accessibilityLabel() -> String {
+        // Speak whole dollars — VoiceOver pronouncing ".00" is noise.
+        let speech = VoiceOverFormatter.dollars(abs(earnRoomCents))
         switch band {
         case .green:
-            return "Earn room this month: \(amount) more before your check would drop to zero. \(subtitle)"
+            return "Earn room this month: \(speech) more before your check would drop to zero. \(subtitle)"
         case .yellow:
-            return "Earn room this month: \(amount) more, near the cliff. \(subtitle)"
+            return "Earn room this month: \(speech) more, near the cliff. \(subtitle)"
         case .gray:
             return "Earn room this month is exhausted. \(subtitle)"
         }

@@ -148,6 +148,9 @@ struct SSIDeductionConfirmView: View {
         isSubmitting = true
         errorMessage = nil
         await onConfirm(selectedType)
+        // Track C — haptic confirm so VoiceOver users feel the
+        // save before the sheet's dismiss animation completes.
+        Haptics.success()
         isSubmitting = false
         dismiss()
     }

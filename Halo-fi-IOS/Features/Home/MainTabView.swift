@@ -7,6 +7,13 @@
 
 import SwiftUI
 
+extension Notification.Name {
+    /// Phase 11 Track B — posted by quick-action buttons that want
+    /// to deep-link to the Agent (voice) tab without injecting an
+    /// environment binding all the way down the view tree.
+    static let askHaloRequested = Notification.Name("askHaloRequested")
+}
+
 struct MainTabView: View {
     @Environment(UserManager.self) private var userManager
     @Environment(SubscriptionService.self) private var subscriptionService
@@ -46,6 +53,12 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()
+            }
+        }
+        // Phase 11 Track B — quick-action "Ask Halo" deep-link.
+        .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { _ in
+            if currentRoute == .main {
+                selectedTab = 0
             }
         }
     }
