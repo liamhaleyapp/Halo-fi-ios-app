@@ -153,6 +153,17 @@ enum APIEndpoints {
         static func deleteExclusion(_ exclusionId: String) -> String {
             "/ssi/exclusions/\(exclusionId)"
         }
+
+        /// GET — voice/UI-entered manual deductions for the current month.
+        static let manualDeductions = "/ssi/manual-deductions"
+
+        /// POST — log a manual deduction.
+        static let createManualDeduction = "/ssi/manual-deductions"
+
+        /// DELETE — remove a manual deduction.
+        static func deleteManualDeduction(_ deductionId: String) -> String {
+            "/ssi/manual-deductions/\(deductionId)"
+        }
     }
 
     // MARK: - WebSocket

@@ -28,6 +28,18 @@ protocol SSIServiceProtocol {
 
     /// Undo a previously confirmed deduction by row ID.
     func deleteExclusion(_ exclusionId: String) async throws
+
+    // MARK: - Manual deductions (Phase 8)
+
+    /// Voice/UI-entered manual deductions for the current month.
+    func fetchManualDeductions(userTz: String?) async throws -> SSIManualDeductionsResponse
+
+    /// Log a manual deduction (cash purchase, missed-sync row, etc.).
+    @discardableResult
+    func createManualDeduction(_ request: SSICreateManualDeductionRequest) async throws -> SSIManualDeduction
+
+    /// Delete a manual deduction.
+    func deleteManualDeduction(_ deductionId: String) async throws
 }
 
 // MARK: - Request / response models
@@ -114,6 +126,58 @@ struct SSIExclusionsResponse: Codable, Equatable {
     }
 }
 
+// MARK: - Manual deductions (Phase 8)
+
+struct SSIManualDeduction: Codable, Equatable, Identifiable {
+    let id: String
+    let exclusionType: SSIExclusionType
+    let amountCents: Int
+    let description: String
+    let occurredOn: String
+    let source: String          // "user_voice" | "user_manual"
+    let notes: String?
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case exclusionType = "exclusion_type"
+        case amountCents = "amount_cents"
+        case description
+        case occurredOn = "occurred_on"
+        case source, notes
+        case createdAt = "created_at"
+    }
+}
+
+struct SSIManualDeductionsResponse: Codable, Equatable {
+    let month: String
+    let deductions: [SSIManualDeduction]
+    let totalsCents: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case month, deductions
+        case totalsCents = "totals_cents"
+    }
+}
+
+struct SSICreateManualDeductionRequest: Encodable, Equatable {
+    let exclusionType: SSIExclusionType
+    let amountCents: Int
+    let description: String
+    /// YYYY-MM-DD; nil means "today" on the backend. Cannot be more
+    /// than 90 days ago — server returns 400 otherwise.
+    let occurredOn: String?
+    let notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case exclusionType = "exclusion_type"
+        case amountCents = "amount_cents"
+        case description
+        case occurredOn = "occurred_on"
+        case notes
+    }
+}
+
 // MARK: - Implementation
 
 final class SSIService: SSIServiceProtocol {
@@ -163,6 +227,40 @@ final class SSIService: SSIServiceProtocol {
     func deleteExclusion(_ exclusionId: String) async throws {
         let _: EmptyResponse = try await networkService.authenticatedRequest(
             endpoint: APIEndpoints.SSI.deleteExclusion(exclusionId),
+            method: .DELETE,
+            body: nil,
+            responseType: EmptyResponse.self
+        )
+    }
+
+    // MARK: - Manual deductions (Phase 8)
+
+    func fetchManualDeductions(userTz: String? = nil) async throws -> SSIManualDeductionsResponse {
+        let endpoint = SSIService.appendingTz(
+            APIEndpoints.SSI.manualDeductions, userTz: userTz
+        )
+        return try await networkService.authenticatedRequest(
+            endpoint: endpoint,
+            method: .GET,
+            body: nil,
+            responseType: SSIManualDeductionsResponse.self
+        )
+    }
+
+    @discardableResult
+    func createManualDeduction(_ request: SSICreateManualDeductionRequest) async throws -> SSIManualDeduction {
+        let body = try JSONEncoder().encode(request)
+        return try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.createManualDeduction,
+            method: .POST,
+            body: body,
+            responseType: SSIManualDeduction.self
+        )
+    }
+
+    func deleteManualDeduction(_ deductionId: String) async throws {
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.deleteManualDeduction(deductionId),
             method: .DELETE,
             body: nil,
             responseType: EmptyResponse.self

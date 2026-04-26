@@ -28,6 +28,7 @@ import SwiftUI
 struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingIncomeEditor = false
+    @State private var showingManualDeductionSheet = false
 
     var body: some View {
         // All-closure-based NavigationLinks (no path binding, no
@@ -74,6 +75,22 @@ struct BudgetView: View {
             }
             .sheet(isPresented: $showingIncomeEditor) {
                 IncomeEditorView()
+            }
+            .sheet(isPresented: $showingManualDeductionSheet) {
+                SSILogManualDeductionView(
+                    isBlind: dataManager.overview?.ssiProfile?.isBlind ?? false,
+                    onSave: { type, cents, description, occurredOn, notes in
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd"
+                        try await dataManager.logManualDeduction(
+                            type: type,
+                            amountCents: cents,
+                            description: description,
+                            occurredOn: formatter.string(from: occurredOn),
+                            notes: notes
+                        )
+                    }
+                )
             }
         }
     }
@@ -318,6 +335,19 @@ struct BudgetView: View {
                             }
                         )
                     }
+                    SSILoggedDeductionsCard(
+                        deductions: dataManager.ssiManualDeductions,
+                        totalsCents: dataManager.ssiManualTotalsCents,
+                        isBlind: dataManager.overview?.ssiProfile?.isBlind ?? false,
+                        onAdd: { showingManualDeductionSheet = true },
+                        onDelete: { entry in
+                            do {
+                                try await dataManager.deleteManualDeduction(entry.id)
+                            } catch {
+                                // Soft-fail; data manager already logged.
+                            }
+                        }
+                    )
                 }
             } header: {
                 sectionHeader("SSI Monitor", count: ssiSectionCount(ssi))

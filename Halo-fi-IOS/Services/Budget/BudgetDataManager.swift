@@ -27,6 +27,12 @@ final class BudgetDataManager {
     /// deductible transactions. Refreshed alongside `overview`.
     var ssiCandidates: [SSIDeductionCandidate] = []
 
+    /// Manual SSI deductions (voice- or UI-entered) for the current
+    /// month. Phase 8 — distinct from candidates because these are
+    /// already saved.
+    var ssiManualDeductions: [SSIManualDeduction] = []
+    var ssiManualTotalsCents: [String: Int] = [:]
+
     // MARK: - Dependencies
 
     private let service: BudgetServiceProtocol
@@ -115,6 +121,17 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: fetch SSI candidates failed: \(error)")
             ssiCandidates = []
         }
+
+        // Manual deductions — Phase 8.
+        do {
+            let response = try await ssiService.fetchManualDeductions(userTz: userTz)
+            ssiManualDeductions = response.deductions
+            ssiManualTotalsCents = response.totalsCents
+        } catch {
+            Logger.error("BudgetDataManager: fetch manual deductions failed: \(error)")
+            ssiManualDeductions = []
+            ssiManualTotalsCents = [:]
+        }
     }
 
     // MARK: - SSI deductions (Phase 3)
@@ -136,6 +153,44 @@ final class BudgetDataManager {
             _ = try await ssiService.confirm(request)
         } catch {
             Logger.error("BudgetDataManager: confirm SSI deduction failed: \(error)")
+            throw error
+        }
+        await refresh()
+    }
+
+    /// Log a manual deduction (Phase 8 — voice or UI entry). After
+    /// success, refreshes the whole overview so projected SSI math
+    /// reflects the new deduction.
+    func logManualDeduction(
+        type: SSIExclusionType,
+        amountCents: Int,
+        description: String,
+        occurredOn: String? = nil,
+        notes: String? = nil
+    ) async throws {
+        let request = SSICreateManualDeductionRequest(
+            exclusionType: type,
+            amountCents: amountCents,
+            description: description,
+            occurredOn: occurredOn,
+            notes: notes
+        )
+        do {
+            _ = try await ssiService.createManualDeduction(request)
+        } catch {
+            Logger.error("BudgetDataManager: log manual deduction failed: \(error)")
+            throw error
+        }
+        await refresh()
+    }
+
+    /// Delete a manual deduction by row id, then refresh the
+    /// overview so projected SSI updates.
+    func deleteManualDeduction(_ deductionId: String) async throws {
+        do {
+            try await ssiService.deleteManualDeduction(deductionId)
+        } catch {
+            Logger.error("BudgetDataManager: delete manual deduction failed: \(error)")
             throw error
         }
         await refresh()
