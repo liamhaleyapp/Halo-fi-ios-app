@@ -491,13 +491,17 @@ final class ConversationCoordinator {
             // the player so handleSpeakingFinished can recover the
             // .processing state instead of falling to .idle.
             let isAck = complete.isAck
-            Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), state=\(state)")
-            if !isAck {
-                let responseId = currentAgentResponseId ?? UUID()
-                emitEvent(.agentFinal(complete.responseText, id: responseId))
-                currentAgentResponseId = nil
-            } else {
+            let body = complete.responseText
+            Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), bodyLen=\(body.count), state=\(state)")
+            if isAck || body.isEmpty {
+                // Either the typed flag fired OR the body is empty
+                // (backend deliberately drops `message` on ack
+                // audio_complete) — don't add a transcript line.
                 isPlayingAcknowledgment = true
+            } else {
+                let responseId = currentAgentResponseId ?? UUID()
+                emitEvent(.agentFinal(body, id: responseId))
+                currentAgentResponseId = nil
             }
             // Extract voice speed from server data (may arrive as Double or Int)
             if let data = complete.data,
