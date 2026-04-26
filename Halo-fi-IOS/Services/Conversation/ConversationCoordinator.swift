@@ -341,6 +341,10 @@ final class ConversationCoordinator {
 
         // Send to agent
         setState(.processing)
+        // Kick off the thinking-pulse feedback (haptic + soft tone
+        // every 3s) so the user knows the agent is working. Stops
+        // when the first audio chunk lands.
+        audioFeedback.feedbackForStateChange(.processing)
         await sendTextInternal(message)
     }
 
@@ -423,6 +427,11 @@ final class ConversationCoordinator {
             isPlayingAcknowledgment = false
             if state == .speaking {
                 setState(.processing)
+                // Resume the thinking-pulse — the audio_chunk
+                // handler stopped it when the ack chunks landed,
+                // and now we're back to genuine waiting until
+                // the response chunks start arriving.
+                audioFeedback.feedbackForStateChange(.processing)
             }
             return
         }

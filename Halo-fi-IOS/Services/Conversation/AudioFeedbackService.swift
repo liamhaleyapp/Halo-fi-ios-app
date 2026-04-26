@@ -135,10 +135,18 @@ final class AudioFeedbackService {
         stopProcessingPulse()
         processingPulseTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                // 3s cadence — long enough not to feel busy, short
+                // enough to reassure blind users the agent is still
+                // working. Sound + haptic together so users with
+                // headphones in OR out of silent mode get the cue.
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 guard !Task.isCancelled else { break }
                 lightImpactGenerator.prepare()
                 lightImpactGenerator.impactOccurred(intensity: 0.4)
+                // Soft repeating "thinking" tone. Quieter than the
+                // initial pulse so it sits in the background instead
+                // of demanding attention each tick.
+                playSound(agentTypingSoundURL, volume: 0.18)
             }
         }
     }
