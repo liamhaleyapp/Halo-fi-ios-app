@@ -479,15 +479,23 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         // Terminal — stop the reconnect loop. Mark the state as
         // disconnectedIntentionally (same flag used when the user
         // closes the conversation) so listenPhase + reconnectPhase
-        // bail out. Also yield permanentDisconnect so the
-        // coordinator can update UI (input disable, banner, etc).
+        // bail out.
+        //
+        // We deliberately do NOT yield permanentDisconnect here:
+        // the coordinator's permanentDisconnect handler emits the
+        // generic "Connection lost" message, which would overwrite
+        // the specific error text we just yielded above (e.g. the
+        // rate-limit copy). The .error event yielded earlier carries
+        // the right message and the coordinator already maps that
+        // to setState(.error). The .disconnected* states get set
+        // via isConnected=false, which is reflected in the UI's
+        // "Disconnected" header.
         if Self.terminalErrorCodes.contains(error.code) {
             Logger.info("AgentWebSocket: Terminal error \(error.code) — stopping reconnect loop")
             internalState = .disconnectedIntentionally
             isConnected = false
             webSocketConnection?.close()
             webSocketConnection = nil
-            eventContinuation?.yield(.permanentDisconnect)
             eventContinuation?.finish()
         }
     }
