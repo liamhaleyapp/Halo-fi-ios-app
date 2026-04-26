@@ -61,6 +61,13 @@ final class ConversationCoordinator {
     /// .connecting. Flushed once connection_ack lands and we're
     /// ready to send. Saves callers from racing the WS handshake.
     private var pendingInitialMessage: String?
+    /// Set while the streaming player is playing a contextual
+    /// acknowledgment ("Providing your full SSI status update.").
+    /// When playback finishes, we transition state back to
+    /// .processing instead of .idle so the input button doesn't
+    /// flicker back to "Tap to talk" before the actual response
+    /// audio arrives.
+    private var isPlayingAcknowledgment = false
 
     // MARK: - Initialization
 
@@ -152,6 +159,7 @@ final class ConversationCoordinator {
         // doesn't replay a stale prompt.
         skipGreetingForCurrentConnection = false
         pendingInitialMessage = nil
+        isPlayingAcknowledgment = false
 
         voiceService.stopRecording()
         voiceService.teardownCapture()
@@ -408,6 +416,16 @@ final class ConversationCoordinator {
     }
 
     private func handleSpeakingFinished() {
+        // The ack audio just finished — but the real agent response
+        // is still on the way. Hold state in .processing so the
+        // input button doesn't flicker to "Tap to talk".
+        if isPlayingAcknowledgment {
+            isPlayingAcknowledgment = false
+            if state == .speaking {
+                setState(.processing)
+            }
+            return
+        }
         if state == .speaking || state == .connecting {
             setState(.idle)
         }
@@ -468,15 +486,24 @@ final class ConversationCoordinator {
             streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
         case .audioComplete(let complete):
-            let responseId = currentAgentResponseId ?? UUID()
-            emitEvent(.agentFinal(complete.responseText, id: responseId))
+            // The acknowledgment audio_complete arrives BEFORE the
+            // real agent response. Skip the transcript line + flag
+            // the player so handleSpeakingFinished can recover the
+            // .processing state instead of falling to .idle.
+            let isAck = (complete.data?["is_acknowledgment"]?.value as? Bool) == true
+            if !isAck {
+                let responseId = currentAgentResponseId ?? UUID()
+                emitEvent(.agentFinal(complete.responseText, id: responseId))
+                currentAgentResponseId = nil
+            } else {
+                isPlayingAcknowledgment = true
+            }
             // Extract voice speed from server data (may arrive as Double or Int)
             if let data = complete.data,
                let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
                 streamingAudioPlayer?.playbackRate = Float(speedValue)
             }
             playAccumulatedAudio()
-            currentAgentResponseId = nil
 
         case .error(let error):
             audioFeedback.stopProcessingPulse()
