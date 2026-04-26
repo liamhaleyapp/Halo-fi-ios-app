@@ -54,6 +54,13 @@ final class ConversationCoordinator {
     private var isVoiceSessionActive = false
     private var agentEventTask: Task<Void, Never>?
     private var prewarmTask: Task<Void, Never>?
+    /// Phase 12 — when true, connection_ack transitions us straight
+    /// to .idle since no greeting will arrive. Reset on disconnect.
+    private var skipGreetingForCurrentConnection = false
+    /// Phase 12 — message queued by the caller while state was
+    /// .connecting. Flushed once connection_ack lands and we're
+    /// ready to send. Saves callers from racing the WS handshake.
+    private var pendingInitialMessage: String?
 
     // MARK: - Initialization
 
@@ -95,6 +102,12 @@ final class ConversationCoordinator {
     func connect(skipGreeting: Bool = false) async {
         guard state == .idle || state == .disconnected else { return }
 
+        // Phase 12 — store the flag so connection_ack handling can
+        // transition straight to .idle (otherwise state stays in
+        // .connecting forever waiting for an intro message that
+        // will never arrive, and queued prompts silently drop).
+        self.skipGreetingForCurrentConnection = skipGreeting
+
         setState(.connecting)
         sessionId = UUID().uuidString
 
@@ -134,6 +147,11 @@ final class ConversationCoordinator {
         agentEventTask = nil
         prewarmTask?.cancel()
         prewarmTask = nil
+
+        // Phase 12 — clear quick-action state so a fresh connect
+        // doesn't replay a stale prompt.
+        skipGreetingForCurrentConnection = false
+        pendingInitialMessage = nil
 
         voiceService.stopRecording()
         voiceService.teardownCapture()
@@ -287,7 +305,18 @@ final class ConversationCoordinator {
 
     /// Send a text message (from text input)
     func sendText(_ message: String) async {
-        guard !message.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let trimmed = message.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        // Phase 12 — quick-action buttons hand us a prompt before
+        // connection_ack lands. Queue it so it sends the moment
+        // we're ready instead of silently dropping. Flushed by the
+        // connection_ack handler.
+        if state == .connecting {
+            pendingInitialMessage = message
+            return
+        }
+
         guard state == .idle || state == .listening else { return }
 
         // Stop listening if active (without discarding - stopListening handles that)
@@ -394,9 +423,27 @@ final class ConversationCoordinator {
             if let serverSessionId = ack.sessionId ?? ack.connectionId {
                 sessionId = serverSessionId
             }
-            // Stay in .connecting — the button remains disabled with "Connecting..."
-            // until the first agent message arrives and transitions to .speaking.
-            // This prevents the button appearing active while the intro message loads.
+            // Default behavior: stay in .connecting until the first
+            // agent message arrives (the welcome/intro). The button
+            // shows "Connecting..." while the intro loads.
+            //
+            // Phase 12 — when the caller asked us to skip the
+            // greeting, no intro will ever arrive. Transition to
+            // .idle now so queued prompts can send and the input
+            // surface unlocks.
+            if skipGreetingForCurrentConnection {
+                setState(.idle)
+            }
+
+            // Flush any prompt queued by sendText while we were
+            // still in .connecting. This is the path quick-action
+            // buttons take.
+            if let pending = pendingInitialMessage {
+                pendingInitialMessage = nil
+                Task { [weak self] in
+                    await self?.sendText(pending)
+                }
+            }
 
         case .streamChunk(let chunk):
             let responseId = currentAgentResponseId ?? UUID()
