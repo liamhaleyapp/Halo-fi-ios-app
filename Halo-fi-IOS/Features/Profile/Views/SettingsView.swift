@@ -20,6 +20,10 @@ struct SettingsView: View {
   @State private var showDeleteAccountConfirmation = false
   @State private var showDeleteAccountFinalConfirmation = false
   @State private var isDeletingAccount = false
+  // Temporary debug — voice-minute reset button. Drop the state +
+  // the SettingsOption when minute-quota UX is finalized.
+  @State private var isResettingMinutes = false
+  @State private var resetMinutesAlert: ResetMinutesAlert?
 
   var body: some View {
     NavigationStack {
@@ -85,6 +89,17 @@ struct SettingsView: View {
               }
             )
             #endif
+
+            // Temporary admin-only "Reset Voice Minutes" — calls the
+            // backend's /agent/admin/reset-minutes endpoint, which
+            // clears the Redis counter that was rate-limiting voice
+            // sessions during dev. Drop this once minute-quota UX
+            // is finalized.
+            SettingsOption(
+              icon: "mic.slash.fill",
+              title: isResettingMinutes ? "Resetting…" : "Reset Voice Minutes",
+              action: { Task { await performResetMinutes() } }
+            )
 #endif
 
             SettingsOption(
@@ -156,6 +171,13 @@ struct SettingsView: View {
     }
     .loadingOverlay(isLoading: isLoggingOut, message: "Logging out...")
     .loadingOverlay(isLoading: isDeletingAccount, message: "Deleting account...")
+    .alert(item: $resetMinutesAlert) { alert in
+      Alert(
+        title: Text(alert.title),
+        message: Text(alert.message),
+        dismissButton: .default(Text("OK"))
+      )
+    }
   }
 
   private func performLogout() {
@@ -165,6 +187,34 @@ struct SettingsView: View {
       subscriptionService.clearCachedState()
       userManager.signOut()
       isLoggingOut = false
+    }
+  }
+
+  /// Hits the admin-only /agent/admin/reset-minutes endpoint to
+  /// clear the Redis voice-minute counter so we can keep testing
+  /// without hitting the per-period cap. Backend rejects with 403
+  /// if the user's email isn't in ADMIN_EMAILS.
+  private func performResetMinutes() async {
+    isResettingMinutes = true
+    defer { isResettingMinutes = false }
+    do {
+      let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
+        endpoint: APIEndpoints.Agent.resetMinutes,
+        method: .POST,
+        body: nil,
+        responseType: EmptyResponse.self
+      )
+      Haptics.success()
+      resetMinutesAlert = ResetMinutesAlert(
+        title: "Voice Minutes Reset",
+        message: "Your voice-minute counter is back to zero. You can use the agent again."
+      )
+    } catch {
+      Haptics.error()
+      resetMinutesAlert = ResetMinutesAlert(
+        title: "Couldn't Reset",
+        message: "\(error.localizedDescription)\n\nMake sure your email is in the ADMIN_EMAILS env var on Railway."
+      )
     }
   }
 
@@ -185,6 +235,15 @@ struct SettingsView: View {
       Logger.error("Failed to delete account: \(error)")
     }
   }
+}
+
+/// Drives the success/failure alert for the debug "Reset Voice
+/// Minutes" button. Identifiable so SwiftUI can present via
+/// `.alert(item:)`.
+private struct ResetMinutesAlert: Identifiable {
+  let id = UUID()
+  let title: String
+  let message: String
 }
 
 /// Label-only view for NavigationLink styling
