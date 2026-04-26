@@ -21,35 +21,24 @@
 import SwiftUI
 
 struct BudgetQuickActionDrawer: View {
-    let onAskHalo: () -> Void
     let onLogExpense: () -> Void
-    let onSpeakStatus: () -> Void
+    let onAskStatus: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                actionButton(
-                    title: "Ask Halo",
-                    systemImage: "mic.circle.fill",
-                    tint: .blue,
-                    accessibilityHint: "Switches to the voice tab so you can talk to Halo about your finances.",
-                    action: onAskHalo
-                )
-                actionButton(
-                    title: "Log expense",
-                    systemImage: "plus.circle.fill",
-                    tint: .green,
-                    accessibilityHint: "Opens a form to log a Blind Work Expense, IRWE, or burial-fund deposit.",
-                    action: onLogExpense
-                )
-            }
+        HStack(spacing: 8) {
+            actionButton(
+                title: "Log expense",
+                systemImage: "plus.circle.fill",
+                tint: .green,
+                accessibilityHint: "Opens a form to log a Blind Work Expense, IRWE, or burial-fund deposit.",
+                action: onLogExpense
+            )
             actionButton(
                 title: "What's my status?",
-                systemImage: "speaker.wave.3.fill",
+                systemImage: "mic.circle.fill",
                 tint: .indigo,
-                accessibilityHint: "Re-speaks the budget summary you heard when this screen opened.",
-                action: onSpeakStatus,
-                fullWidth: true
+                accessibilityHint: "Switches to the voice tab and asks Halo for a full SSI status update.",
+                action: onAskStatus
             )
         }
         .padding(.bottom, 4)
@@ -63,8 +52,7 @@ struct BudgetQuickActionDrawer: View {
         systemImage: String,
         tint: Color,
         accessibilityHint: String,
-        action: @escaping () -> Void,
-        fullWidth: Bool = false
+        action: @escaping () -> Void
     ) -> some View {
         Button {
             // Light haptic so the user feels confirmation that
@@ -82,7 +70,6 @@ struct BudgetQuickActionDrawer: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 56)
             .padding(.horizontal, 12)

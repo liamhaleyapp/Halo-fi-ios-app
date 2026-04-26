@@ -55,7 +55,7 @@ final class ConversationViewModel {
 
     // MARK: - Lifecycle
 
-    func onAppear() async {
+    func onAppear(skipGreeting: Bool = false) async {
         // Play audio feedback when conversation opens
         audioFeedback.playConversationStartFeedback()
 
@@ -72,8 +72,9 @@ final class ConversationViewModel {
             self?.audioFeedback.playAgentMessageCompleteFeedback()
         }
 
-        // Connect to backend
-        await coordinator.connect()
+        // Connect to backend (Phase 12 — skip backend greeting when
+        // a quick-action button is about to send a pre-prompt).
+        await coordinator.connect(skipGreeting: skipGreeting)
     }
 
     func onDisappear() {

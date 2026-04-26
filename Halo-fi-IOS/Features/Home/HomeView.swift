@@ -35,6 +35,15 @@ struct HomeView: View {
                 ConversationView(initialPrompt: initialPrompt)
                     .navigationBarHidden(true)
             }
+            // Phase 12 — accept cross-tab quick-action requests. The
+            // Budget tab posts .askHaloRequested with a userInfo
+            // prompt; MainTabView switches to tab 0 in parallel, so by
+            // the time this fires HomeView is already on screen.
+            .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { notification in
+                let prompt = notification.userInfo?["prompt"] as? String
+                initialPrompt = (prompt?.isEmpty == false) ? prompt : nil
+                showingConversation = true
+            }
         }
     }
 }

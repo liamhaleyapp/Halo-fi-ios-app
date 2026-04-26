@@ -86,15 +86,20 @@ final class ConversationCoordinator {
 
     // MARK: - Public API
 
-    /// Connect to the backend
-    func connect() async {
+    /// Connect to the backend.
+    ///
+    /// Phase 12 — pass ``skipGreeting: true`` when a quick-action
+    /// flow is about to send a pre-prompt; the backend will skip
+    /// its initial greeting so the user hears the answer to their
+    /// tap, not a "Good evening" speech first.
+    func connect(skipGreeting: Bool = false) async {
         guard state == .idle || state == .disconnected else { return }
 
         setState(.connecting)
         sessionId = UUID().uuidString
 
         do {
-            try await agentWebSocket.connect()
+            try await agentWebSocket.connect(skipGreeting: skipGreeting)
 
             // Start consuming events from the new stream
             agentEventTask?.cancel()

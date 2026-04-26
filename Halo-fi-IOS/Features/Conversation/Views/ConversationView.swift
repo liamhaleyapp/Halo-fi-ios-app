@@ -45,7 +45,11 @@ struct ConversationView: View {
         .background(Color(.systemBackground))
         .onAppear {
             Task {
-                await viewModel.onAppear()
+                // Phase 12 — auto-skip the backend greeting whenever a
+                // quick-action button gave us a prompt. Free-form mic
+                // taps (no prompt) still get the welcome.
+                let hasPrompt = (initialPrompt?.isEmpty == false)
+                await viewModel.onAppear(skipGreeting: hasPrompt)
                 if let prompt = initialPrompt, !prompt.isEmpty {
                     await viewModel.sendText(prompt)
                 }

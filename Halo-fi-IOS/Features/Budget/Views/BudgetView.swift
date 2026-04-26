@@ -50,17 +50,21 @@ struct BudgetView: View {
                             // so blind users hit the action drawer
                             // before any data card.
                             BudgetQuickActionDrawer(
-                                onAskHalo: {
-                                    NotificationCenter.default.post(
-                                        name: .askHaloRequested, object: nil
-                                    )
-                                },
                                 onLogExpense: {
                                     showingManualDeductionSheet = true
                                 },
-                                onSpeakStatus: {
-                                    lastAnnouncedSummary = nil
-                                    announceBudgetSummaryIfNeeded()
+                                onAskStatus: {
+                                    // Phase 12 — open ConversationView
+                                    // with a real pre-prompt that
+                                    // makes Halo speak the SSI status
+                                    // out loud (skipping the welcome).
+                                    NotificationCenter.default.post(
+                                        name: .askHaloRequested,
+                                        object: nil,
+                                        userInfo: [
+                                            "prompt": "Give me a full SSI status update — projected SSI, earn-room, resources versus the limit, and anything urgent I should act on."
+                                        ]
+                                    )
                                 }
                             )
                             monthSubtitle(overview)

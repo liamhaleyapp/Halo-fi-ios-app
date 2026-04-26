@@ -102,6 +102,12 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     /// The single listener task. Cancelled on disconnect, replaced on connect.
     private var listenerTask: Task<Void, Never>?
 
+    /// Phase 12 — set by quick-action button flows that send a
+    /// pre-prompt the moment the WS opens. Persisted so auto-
+    /// reconnects after a dropped connection keep the same
+    /// behavior (no surprise greeting mid-conversation).
+    private var skipInitialGreeting: Bool = false
+
     // MARK: - Init
 
     private init(tokenStorage: TokenStorageProtocol = TokenStorage()) {
@@ -110,7 +116,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     // MARK: - Connection Management
 
-    func connect() async throws {
+    func connect(skipGreeting: Bool = false) async throws {
         guard let accessToken = tokenStorage.getAccessToken() else {
             Logger.error("AgentWebSocket: Missing access token")
             throw AgentWebSocketError.missingToken
@@ -129,12 +135,19 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         concurrentSessionRetries = 0
         cumulativeReconnectAttempts = 0
 
+        // Persist skip-greeting for auto-reconnect parity (Phase 12).
+        skipInitialGreeting = skipGreeting
+
         // Create session ID for this connection
         sessionId = UUID().uuidString
 
         // Build WebSocket URL with token as query parameter
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        urlComponents?.queryItems = [URLQueryItem(name: "token", value: accessToken)]
+        var items = [URLQueryItem(name: "token", value: accessToken)]
+        if skipGreeting {
+            items.append(URLQueryItem(name: "skip_greeting", value: "true"))
+        }
+        urlComponents?.queryItems = items
 
         guard let url = urlComponents?.url else {
             Logger.error("AgentWebSocket: Invalid URL")
@@ -326,7 +339,14 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         }
 
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        urlComponents?.queryItems = [URLQueryItem(name: "token", value: accessToken)]
+        var items = [URLQueryItem(name: "token", value: accessToken)]
+        if skipInitialGreeting {
+            // Reconnects honor the original skip flag so a dropped
+            // mid-conversation socket doesn't suddenly play "Good
+            // evening!" when it comes back.
+            items.append(URLQueryItem(name: "skip_greeting", value: "true"))
+        }
+        urlComponents?.queryItems = items
 
         guard let url = urlComponents?.url else {
             throw AgentWebSocketError.invalidURL
