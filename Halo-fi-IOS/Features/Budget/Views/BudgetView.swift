@@ -282,6 +282,22 @@ struct BudgetView: View {
                     if let income = ssi.income {
                         SSIIncomeHeroCard(income: income)
                     }
+                    // Phase 7 — dedicated earn-room card. Only renders
+                    // when v2 fields are populated AND the user has a
+                    // positive projected SSI check (otherwise the
+                    // §1619(b) banner takes over).
+                    if let income = ssi.income,
+                       income.projectedPaymentCents != nil,
+                       income.eligibleForCash == true,
+                       let earnRoom = income.earnRoomGrossCents {
+                        SSIEarnRoomHeroCard(earnRoomCents: earnRoom)
+                    }
+                    // Phase 7 — §1619(b) Medicaid continuation banner.
+                    // Surfaces ONLY when projected SSI = $0 (engine v2).
+                    if let income = ssi.income,
+                       income.eligibleForCash == false {
+                        SSIMedicaidContinuationBanner()
+                    }
                     if let next = ssi.nextSsaDeposit {
                         SSINextDepositCard(next: next)
                     }
@@ -809,6 +825,120 @@ private struct SSIOverpaymentBanner: View {
         .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Possible overpayment: \(reason)")
+    }
+}
+
+// MARK: - Phase 7 — earn-room hero card
+
+/// Dedicated earn-room card. Color bands per §5 of the rules engine:
+///   green:  > $200 of room — calm "you have room"
+///   yellow: 0–$200 — near the cliff
+///   gray:   <= 0 but check still > $0 — exhausted; future earnings
+///           cost $0.50 of SSI per dollar earned
+/// Hidden entirely when the projected check is $0 — the §1619(b)
+/// banner takes over in that case.
+private struct SSIEarnRoomHeroCard: View {
+    let earnRoomCents: Int
+
+    var body: some View {
+        let amount = BudgetFormatter.cents(abs(earnRoomCents))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Earn room this month")
+                        .font(.subheadline)
+                        .foregroundStyle(DesignTokens.SSI.subtextBright)
+                    Text(headline(amount: amount))
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                Spacer(minLength: 0)
+                SSIStatusChip(status: chipStatus)
+            }
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(DesignTokens.SSI.subtextBright)
+        }
+        .padding(18)
+        .background(ssiHeroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel(amount: amount))
+    }
+
+    private func headline(amount: String) -> String {
+        if earnRoomCents <= 0 { return "At the cliff" }
+        return "\(amount) more"
+    }
+
+    private var subtitle: String {
+        switch band {
+        case .green:
+            return "Comfortable room before your check would drop to zero. Logging Blind Work Expenses buys even more."
+        case .yellow:
+            return "You're close to the earn-room cliff. Confirm any Blind Work Expenses you haven't logged."
+        case .gray:
+            return "Exhausted — additional earnings reduce your check at $0.50 per dollar."
+        }
+    }
+
+    private var chipStatus: String {
+        switch band {
+        case .green:  return "safe"
+        case .yellow: return "warning"
+        case .gray:   return "over"
+        }
+    }
+
+    private enum Band { case green, yellow, gray }
+
+    private var band: Band {
+        if earnRoomCents > 20_000 { return .green }   // > $200
+        if earnRoomCents > 0      { return .yellow }
+        return .gray
+    }
+
+    private func accessibilityLabel(amount: String) -> String {
+        switch band {
+        case .green:
+            return "Earn room this month: \(amount) more before your check would drop to zero. \(subtitle)"
+        case .yellow:
+            return "Earn room this month: \(amount) more, near the cliff. \(subtitle)"
+        case .gray:
+            return "Earn room this month is exhausted. \(subtitle)"
+        }
+    }
+}
+
+// MARK: - Phase 7 — Section 1619(b) Medicaid continuation banner
+
+/// Surfaces when the SSI engine zeroed out the user's check
+/// (eligibleForCash == false). Many users assume losing the cash
+/// means losing Medicaid too — §8.2 of the rules engine notes this
+/// is the highest-impact thing to communicate when projected = $0.
+private struct SSIMedicaidContinuationBanner: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "cross.case.fill")
+                .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Your Medicaid may continue")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("Even with your SSI check at zero this month, you may still keep Medicaid through Section 1619(b) if your earnings stay below your state's threshold. Don't drop coverage without checking with SSA first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.blue.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Your Medicaid may continue. Even with your SSI check at zero this month, you may still keep Medicaid through Section 1619(b) if your earnings stay below your state's threshold. Don't drop coverage without checking with SSA first.")
     }
 }
 
