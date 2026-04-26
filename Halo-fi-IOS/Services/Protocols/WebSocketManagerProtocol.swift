@@ -64,12 +64,26 @@ protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
     /// Consumers iterate with `for await event in manager.events`.
     var events: AsyncStream<AgentEvent> { get }
 
-    /// Connects to the agent WebSocket server
-    func connect() async throws
+    /// Connects to the agent WebSocket server.
+    ///
+    /// - Parameter skipGreeting: When true, the backend bypasses
+    ///   ``_send_initial_greeting`` so the user hears the answer
+    ///   to their pre-prompt instead of "Good evening" first
+    ///   (Phase 12).
+    func connect(skipGreeting: Bool) async throws
 
     /// Sends a message to the agent
     /// - Parameters:
     ///   - message: The message text
     ///   - context: Optional context data
     func sendMessage(_ message: String, context: [String: AnyCodable]?) async throws
+}
+
+extension AgentWebSocketManagerProtocol {
+    /// Convenience overload — keeps existing zero-arg call sites
+    /// working without forcing every caller to pass `skipGreeting:
+    /// false`.
+    func connect() async throws {
+        try await connect(skipGreeting: false)
+    }
 }

@@ -26,7 +26,7 @@ struct SSILoggedDeductionsCard: View {
     let onExport: (() async throws -> URL)?
 
     @State private var isExporting = false
-    @State private var exportedFileURL: URL?
+    @State private var exportedFile: ExportedCSVFile?
     @State private var exportError: String?
 
     var body: some View {
@@ -91,8 +91,8 @@ struct SSILoggedDeductionsCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.secondarySystemBackground))
         )
-        .sheet(item: $exportedFileURL) { url in
-            CSVShareSheet(url: url) { exportedFileURL = nil }
+        .sheet(item: $exportedFile) { file in
+            CSVShareSheet(url: file.url) { exportedFile = nil }
         }
     }
 
@@ -101,7 +101,7 @@ struct SSILoggedDeductionsCard: View {
         exportError = nil
         defer { isExporting = false }
         do {
-            exportedFileURL = try await provider()
+            exportedFile = ExportedCSVFile(url: try await provider())
         } catch {
             exportError = "Couldn't generate the file. Try again in a moment."
         }
@@ -275,11 +275,11 @@ struct SSILoggedDeductionsCard: View {
 
 // MARK: - URL share sheet bridge
 
-/// `URL` doesn't conform to `Identifiable` by default. Treating its
-/// absolute string as the identity is fine here since each export
-/// writes a uniquely-named temp file.
-extension URL: Identifiable {
-    public var id: String { absoluteString }
+/// Wrapping URL in a private Identifiable struct avoids colliding
+/// with Foundation's URL: Identifiable conformance on iOS 16+.
+struct ExportedCSVFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 /// Wraps `UIActivityViewController` so the SwiftUI `.sheet` can
