@@ -125,14 +125,29 @@ struct AudioCompletePayload: Codable, Sendable {
     let text: String?
     let data: [String: AnyCodable]?
     let timestamp: String?
+    /// Top-level convenience field for acknowledgment audio
+    /// (Phase 12+). The same flag exists in `data` for
+    /// backwards compatibility, but a typed top-level field
+    /// avoids the JSON-bool→Int coercion edge cases that can
+    /// break `(data["is_acknowledgment"]?.value as? Bool)`.
+    let isAcknowledgment: Bool?
 
     enum CodingKeys: String, CodingKey {
         case type, message, text, data, timestamp
+        case isAcknowledgment = "is_acknowledgment"
     }
 
     /// The response text — server may use either "message" or "text"
     var responseText: String {
         message ?? text ?? ""
+    }
+
+    /// True when this audio_complete is the contextual ack played
+    /// before the real agent response. Reads from the top-level
+    /// field first, falls back to the legacy `data` dict.
+    var isAck: Bool {
+        if let flag = isAcknowledgment { return flag }
+        return (data?["is_acknowledgment"]?.value as? Bool) == true
     }
 }
 

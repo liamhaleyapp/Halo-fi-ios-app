@@ -490,7 +490,8 @@ final class ConversationCoordinator {
             // real agent response. Skip the transcript line + flag
             // the player so handleSpeakingFinished can recover the
             // .processing state instead of falling to .idle.
-            let isAck = (complete.data?["is_acknowledgment"]?.value as? Bool) == true
+            let isAck = complete.isAck
+            Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), state=\(state)")
             if !isAck {
                 let responseId = currentAgentResponseId ?? UUID()
                 emitEvent(.agentFinal(complete.responseText, id: responseId))
