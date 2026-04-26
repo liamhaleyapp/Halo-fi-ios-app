@@ -20,6 +20,14 @@ struct SSILoggedDeductionsCard: View {
     let isBlind: Bool
     let onAdd: () -> Void
     let onDelete: (SSIManualDeduction) async -> Void
+    /// Phase 9 — closure that fetches the CSV bytes and returns a
+    /// temp-file URL for sharing. nil disables the Export button
+    /// (used in previews/tests).
+    let onExport: (() async throws -> URL)?
+
+    @State private var isExporting = false
+    @State private var exportedFileURL: URL?
+    @State private var exportError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -35,12 +43,34 @@ struct SSILoggedDeductionsCard: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if let onExport, !deductions.isEmpty {
+                    Button {
+                        Task { await runExport(onExport) }
+                    } label: {
+                        if isExporting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Export", systemImage: "square.and.arrow.up")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(isExporting)
+                    .accessibilityLabel("Export this month's SSI deductions as a CSV file")
+                    .accessibilityHint("Opens the share sheet so you can email or save the file.")
+                }
                 Button(action: onAdd) {
                     Label("Add", systemImage: "plus.circle.fill")
                         .font(.subheadline.weight(.semibold))
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Add a manual SSI deduction")
+            }
+            if let exportError {
+                Text(exportError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityLabel("Export failed: \(exportError)")
             }
 
             if deductions.isEmpty {
@@ -61,6 +91,20 @@ struct SSILoggedDeductionsCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.secondarySystemBackground))
         )
+        .sheet(item: $exportedFileURL) { url in
+            CSVShareSheet(url: url) { exportedFileURL = nil }
+        }
+    }
+
+    private func runExport(_ provider: () async throws -> URL) async {
+        isExporting = true
+        exportError = nil
+        defer { isExporting = false }
+        do {
+            exportedFileURL = try await provider()
+        } catch {
+            exportError = "Couldn't generate the file. Try again in a moment."
+        }
     }
 
     @ViewBuilder
@@ -80,6 +124,12 @@ struct SSILoggedDeductionsCard: View {
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Logged by voice")
                     }
+                    if entry.linkedTransactionId != nil {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                            .accessibilityLabel("Matched to bank transaction")
+                    }
                 }
                 Text(entry.description)
                     .font(.subheadline)
@@ -88,6 +138,11 @@ struct SSILoggedDeductionsCard: View {
                 Text("\(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                if let line = matchStatusLine(entry) {
+                    Text(line)
+                        .font(.caption2)
+                        .foregroundStyle(matchStatusColor(entry))
+                }
             }
             Spacer(minLength: 0)
             Button(role: .destructive) {
@@ -108,6 +163,39 @@ struct SSILoggedDeductionsCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(rowAccessibilityLabel(entry))
+    }
+
+    /// Phase 8b — render the bank-matching status. Three states:
+    /// matched, waiting (recent), waiting (stale → keep receipt).
+    private func matchStatusLine(_ entry: SSIManualDeduction) -> String? {
+        // Only voice-logged entries auto-reconcile; manual UI
+        // entries don't promise a match because the user already
+        // typed the data deliberately.
+        guard entry.source == "user_voice" else { return nil }
+        if entry.linkedAt != nil {
+            return "Matched to bank transaction"
+        }
+        if isOlderThanGracePeriod(entry) {
+            return "No matching bank charge yet — keep your receipt"
+        }
+        return "Waiting for bank to confirm"
+    }
+
+    private func matchStatusColor(_ entry: SSIManualDeduction) -> Color {
+        if entry.linkedTransactionId != nil { return .green }
+        if isOlderThanGracePeriod(entry) { return .orange }
+        return .secondary
+    }
+
+    /// 7 days is the unofficial Plaid settle SLA. After that, a
+    /// missing match probably means cash / out-of-band purchase
+    /// and the user should rely on their receipt for SSA proof.
+    private func isOlderThanGracePeriod(_ entry: SSIManualDeduction) -> Bool {
+        let prefix = String(entry.occurredOn.prefix(10))
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: prefix) else { return false }
+        return Date().timeIntervalSince(date) > 7 * 24 * 60 * 60
     }
 
     private var totalsLine: String? {
@@ -166,6 +254,40 @@ struct SSILoggedDeductionsCard: View {
         case .burial: typeLabel = "Burial-fund deposit"
         }
         let sourceLabel = entry.source == "user_voice" ? "Logged by voice" : "Logged manually"
-        return "\(typeLabel). \(entry.description). \(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn)). \(sourceLabel)."
+        var parts = [
+            "\(typeLabel).",
+            "\(entry.description).",
+            "\(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn)).",
+            "\(sourceLabel).",
+        ]
+        if let status = matchStatusLine(entry) {
+            parts.append("\(status).")
+        }
+        return parts.joined(separator: " ")
     }
+}
+
+// MARK: - URL share sheet bridge
+
+/// `URL` doesn't conform to `Identifiable` by default. Treating its
+/// absolute string as the identity is fine here since each export
+/// writes a uniquely-named temp file.
+extension URL: Identifiable {
+    public var id: String { absoluteString }
+}
+
+/// Wraps `UIActivityViewController` so the SwiftUI `.sheet` can
+/// present it for sharing the CSV. `onDismiss` clears the parent's
+/// state binding and the temp file is left for the OS to clean up.
+private struct CSVShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    let onDismiss: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        vc.completionWithItemsHandler = { _, _, _, _ in onDismiss() }
+        return vc
+    }
+
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }

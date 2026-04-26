@@ -40,6 +40,11 @@ protocol SSIServiceProtocol {
 
     /// Delete a manual deduction.
     func deleteManualDeduction(_ deductionId: String) async throws
+
+    /// Phase 9 — fetch the CSV export of SSI deductions for a
+    /// period. ``month`` nil exports the full year. Returns raw
+    /// CSV bytes the caller writes to disk for the share sheet.
+    func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data
 }
 
 // MARK: - Request / response models
@@ -137,6 +142,11 @@ struct SSIManualDeduction: Codable, Equatable, Identifiable {
     let source: String          // "user_voice" | "user_manual"
     let notes: String?
     let createdAt: String
+    /// Phase 8b — set when the backend reconciler matches this
+    /// entry to a Plaid bank charge. Both nil = "Waiting for bank
+    /// to confirm". Both non-nil = "Matched on <linkedAt>".
+    let linkedTransactionId: String?
+    let linkedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -146,6 +156,8 @@ struct SSIManualDeduction: Codable, Equatable, Identifiable {
         case occurredOn = "occurred_on"
         case source, notes
         case createdAt = "created_at"
+        case linkedTransactionId = "linked_transaction_id"
+        case linkedAt = "linked_at"
     }
 }
 
@@ -265,6 +277,11 @@ final class SSIService: SSIServiceProtocol {
             body: nil,
             responseType: EmptyResponse.self
         )
+    }
+
+    func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data {
+        let endpoint = APIEndpoints.SSI.exportDeductions(year: year, month: month)
+        return try await networkService.authenticatedRawDataRequest(endpoint: endpoint)
     }
 
     private static func appendingTz(_ endpoint: String, userTz: String?) -> String {

@@ -164,6 +164,16 @@ enum APIEndpoints {
         static func deleteManualDeduction(_ deductionId: String) -> String {
             "/ssi/manual-deductions/\(deductionId)"
         }
+
+        /// GET — CSV export of SSI deductions for a period.
+        /// Query: ?year=YYYY[&month=MM]. Omitting month exports the
+        /// full year. Response is text/csv.
+        static func exportDeductions(year: Int, month: Int?) -> String {
+            if let m = month {
+                return "/ssi/deductions/export?year=\(year)&month=\(m)"
+            }
+            return "/ssi/deductions/export?year=\(year)"
+        }
     }
 
     // MARK: - WebSocket

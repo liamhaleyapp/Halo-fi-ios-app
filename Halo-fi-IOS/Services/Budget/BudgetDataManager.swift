@@ -195,6 +195,30 @@ final class BudgetDataManager {
         }
         await refresh()
     }
+
+    /// Phase 9 — fetch CSV export bytes and write to a temp file so
+    /// the iOS share sheet (UIActivityViewController) can present
+    /// it. Caller is responsible for cleaning up the temp file
+    /// after the share sheet dismisses.
+    func exportDeductionsCSVToTempFile(year: Int, month: Int?) async throws -> URL {
+        let data: Data
+        do {
+            data = try await ssiService.exportDeductionsCSV(year: year, month: month)
+        } catch {
+            Logger.error("BudgetDataManager: export CSV failed: \(error)")
+            throw error
+        }
+        let filename: String = {
+            if let m = month {
+                return String(format: "halofi-ssi-deductions-%04d-%02d.csv", year, m)
+            }
+            return String(format: "halofi-ssi-deductions-%04d.csv", year)
+        }()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(filename)
+        try data.write(to: tempURL, options: .atomic)
+        return tempURL
+    }
 }
 
 // MARK: - Errors

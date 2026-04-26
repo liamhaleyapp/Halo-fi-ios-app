@@ -39,6 +39,15 @@ protocol NetworkServiceProtocol {
         body: Data?,
         responseType: T.Type
     ) async throws -> T
+
+    /// Performs an authenticated GET that returns raw bytes — for
+    /// non-JSON downloads like CSV / PDF exports. The bytes are
+    /// untouched; caller writes them to a file or processes in
+    /// memory. Honors the same token-refresh path as the JSON
+    /// authenticatedRequest.
+    func authenticatedRawDataRequest(
+        endpoint: String
+    ) async throws -> Data
 }
 
 // MARK: - Default Parameter Extensions
@@ -114,6 +123,16 @@ final class MockNetworkService: NetworkServiceProtocol {
             throw error
         }
         guard let response = mockResponses[endpoint] as? T else {
+            throw AuthError.networkError
+        }
+        return response
+    }
+
+    func authenticatedRawDataRequest(endpoint: String) async throws -> Data {
+        if let error = mockError {
+            throw error
+        }
+        guard let response = mockResponses[endpoint] as? Data else {
             throw AuthError.networkError
         }
         return response

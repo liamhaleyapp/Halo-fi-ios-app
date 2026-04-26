@@ -346,6 +346,14 @@ struct BudgetView: View {
                             } catch {
                                 // Soft-fail; data manager already logged.
                             }
+                        },
+                        onExport: {
+                            let now = Date()
+                            let cal = Calendar.current
+                            return try await dataManager.exportDeductionsCSVToTempFile(
+                                year: cal.component(.year, from: now),
+                                month: cal.component(.month, from: now)
+                            )
                         }
                     )
                 }

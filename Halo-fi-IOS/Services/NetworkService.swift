@@ -145,6 +145,56 @@ final class NetworkService: NetworkServiceProtocol {
         return try handleResponse(data: data, httpResponse: httpResponse, responseType: T.self)
     }
 
+    // MARK: - Authenticated raw-data requests (Phase 9 — CSV exports)
+
+    func authenticatedRawDataRequest(endpoint: String) async throws -> Data {
+        do {
+            return try await performAuthenticatedRawDataRequest(endpoint: endpoint)
+        } catch AuthError.tokenExpired {
+            guard let refreshToken = tokenStorage.getRefreshToken() else {
+                Logger.error("No refresh token available for raw-data retry")
+                throw AuthError.tokenExpired
+            }
+            do {
+                let refreshResponse = try await refreshCoordinator.refreshIfNeeded(
+                    using: refreshToken,
+                    refreshCall: performTokenRefresh
+                )
+                tokenStorage.saveTokensWithExpiration(
+                    accessToken: refreshResponse.accessToken,
+                    refreshToken: refreshResponse.refreshToken,
+                    expiresAt: refreshResponse.expiresAt
+                )
+                return try await performAuthenticatedRawDataRequest(endpoint: endpoint)
+            } catch {
+                Logger.error("Token refresh failed during raw-data fetch: \(error.localizedDescription)")
+                await notifySessionExpired()
+                throw AuthError.tokenExpired
+            }
+        }
+    }
+
+    private func performAuthenticatedRawDataRequest(endpoint: String) async throws -> Data {
+        let request = try createAuthenticatedRequest(
+            endpoint: endpoint,
+            method: .GET,
+            body: nil
+        )
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            Logger.error("Invalid HTTP response on raw-data fetch")
+            throw AuthError.networkError
+        }
+        Logger.networkResponse(statusCode: httpResponse.statusCode, dataSize: data.count)
+        if httpResponse.statusCode == 401 {
+            throw AuthError.tokenExpired
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw parseErrorResponse(data: data, statusCode: httpResponse.statusCode)
+        }
+        return data
+    }
+
     /// Performs token refresh via the refresh endpoint.
     private func performTokenRefresh(_ refreshToken: String) async throws -> RefreshTokenResponse {
         let request = RefreshTokenRequest(refreshToken: refreshToken)
