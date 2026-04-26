@@ -446,6 +446,15 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         eventContinuation?.yield(.agentResponse(response))
     }
 
+    /// Error codes the server uses to mean "this session is over,
+    /// don't try to reconnect". Without this set, the listener
+    /// loop reconnects after the WS closes, the server re-checks
+    /// the limit, fails again, and we loop forever — which the
+    /// production trace from 2026-04-25 hit on MINUTE_LIMIT_REACHED.
+    private static let terminalErrorCodes: Set<String> = [
+        "MINUTE_LIMIT_REACHED",
+    ]
+
     private func handleError(_ error: ErrorPayload) {
         // Auto-retry on concurrent session (previous session still closing)
         if error.code == "CONCURRENT_SESSION" && concurrentSessionRetries < maxConcurrentSessionRetries {
@@ -466,6 +475,21 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             Logger.error("Error details: \(details)")
         }
         eventContinuation?.yield(.error(error))
+
+        // Terminal — stop the reconnect loop. Mark the state as
+        // disconnectedIntentionally (same flag used when the user
+        // closes the conversation) so listenPhase + reconnectPhase
+        // bail out. Also yield permanentDisconnect so the
+        // coordinator can update UI (input disable, banner, etc).
+        if Self.terminalErrorCodes.contains(error.code) {
+            Logger.info("AgentWebSocket: Terminal error \(error.code) — stopping reconnect loop")
+            internalState = .disconnectedIntentionally
+            isConnected = false
+            webSocketConnection?.close()
+            webSocketConnection = nil
+            eventContinuation?.yield(.permanentDisconnect)
+            eventContinuation?.finish()
+        }
     }
 
     // MARK: - Sending Messages
