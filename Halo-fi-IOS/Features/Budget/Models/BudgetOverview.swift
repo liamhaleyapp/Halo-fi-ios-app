@@ -19,6 +19,9 @@ struct BudgetOverview: Codable, Equatable {
     let monthlyIncome: MonthlyIncome
     let ssiStatus: SSIStatus
     let ssiProfile: SSIProfile?
+    /// Phase 5 — proactive SSI alerts (§9 of the rules engine).
+    /// Empty list when no triggers fire or user isn't on SSI.
+    let ssiAlerts: [SSIAlert]?
     let alerts: [BudgetAlert]
     let asOfUtc: String
 
@@ -28,8 +31,24 @@ struct BudgetOverview: Codable, Equatable {
         case monthlyIncome = "monthly_income"
         case ssiStatus = "ssi_status"
         case ssiProfile = "ssi_profile"
+        case ssiAlerts = "ssi_alerts"
         case alerts
         case asOfUtc = "as_of_utc"
+    }
+}
+
+/// One row of the SSI alerts engine output. Severity drives banner
+/// chrome; action_label determines whether a CTA button shows.
+struct SSIAlert: Codable, Equatable, Identifiable {
+    let id: String              // "resources-over", "lump-sum-detected", etc.
+    let severity: String        // "critical" | "warn" | "info" | "good"
+    let title: String
+    let body: String
+    let actionLabel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, severity, title, body
+        case actionLabel = "action_label"
     }
 }
 

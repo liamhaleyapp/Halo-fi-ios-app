@@ -271,6 +271,11 @@ struct BudgetView: View {
         if ssi.hasSsi {
             Section {
                 VStack(spacing: 12) {
+                    if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
+                        ForEach(alerts) { entry in
+                            SSIAlertBanner(entry: entry)
+                        }
+                    }
                     if let resources = ssi.resources {
                         SSIResourceHeroCard(resources: resources)
                     }
