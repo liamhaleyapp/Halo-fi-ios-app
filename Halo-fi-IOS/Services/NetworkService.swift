@@ -107,7 +107,7 @@ final class NetworkService: NetworkServiceProtocol {
                     responseType: responseType
                 )
             } catch {
-                Logger.error("Token refresh failed: \(error.localizedDescription)")
+                Logger.error("Token refresh failed for endpoint=\(endpoint): \(error.localizedDescription) — signing out")
                 // Notify observers that session is invalid
                 await notifySessionExpired()
                 throw AuthError.tokenExpired
@@ -167,7 +167,7 @@ final class NetworkService: NetworkServiceProtocol {
                 )
                 return try await performAuthenticatedRawDataRequest(endpoint: endpoint)
             } catch {
-                Logger.error("Token refresh failed during raw-data fetch: \(error.localizedDescription)")
+                Logger.error("Token refresh failed during raw-data fetch for endpoint=\(endpoint): \(error.localizedDescription) — signing out")
                 await notifySessionExpired()
                 throw AuthError.tokenExpired
             }

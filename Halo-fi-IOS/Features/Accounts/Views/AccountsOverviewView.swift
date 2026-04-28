@@ -50,9 +50,8 @@ struct AccountsOverviewView: View {
           }
         }
       }
-      .navigationDestination(isPresented: $showingPlaidOnboarding) {
-        PlaidOnboardingView()
-          .navigationBarTitleDisplayMode(.inline)
+      .sheet(isPresented: $showingPlaidOnboarding) {
+        LinkAccountChooserView()
       }
       .navigationDestination(for: ConnectedItem.self) { item in
         InstitutionAccountsView(item: item)
@@ -97,6 +96,17 @@ struct AccountsOverviewView: View {
             }
           } header: {
             sectionHeader("Needs Attention", count: needsAttentionInstitutions.count)
+          }
+        }
+
+        // Manual accounts section (non-Plaid)
+        if !bankDataManager.manualAccounts.isEmpty {
+          Section {
+            ForEach(bankDataManager.manualAccounts) { manual in
+              ManualAccountRow(account: manual)
+            }
+          } header: {
+            sectionHeader("Manual", count: bankDataManager.manualAccounts.count)
           }
         }
       }
@@ -252,10 +262,9 @@ struct AccountsOverviewView: View {
   // MARK: - Computed Properties
 
   private var hasData: Bool {
-    guard let linkedItems = bankDataManager.linkedItems, !linkedItems.isEmpty else {
-      return false
-    }
-    return true
+    let hasLinked = (bankDataManager.linkedItems?.isEmpty == false)
+    let hasManual = !bankDataManager.manualAccounts.isEmpty
+    return hasLinked || hasManual
   }
 
   // MARK: - Data Loading

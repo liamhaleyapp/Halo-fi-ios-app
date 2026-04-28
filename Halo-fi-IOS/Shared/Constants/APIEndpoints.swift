@@ -106,6 +106,16 @@ enum APIEndpoints {
         /// POST - Register link session ID for webhook processing.
         /// Maps link_session_id to user in Redis for multi-item link webhooks.
         static let linkSessionRegister = "/bank/link-session/register"
+
+        // MARK: Manual accounts (non-Plaid)
+
+        /// GET (list) / POST (create) for the caller's manual accounts.
+        static let manualAccounts = "/bank/manual-accounts"
+
+        /// PATCH / DELETE on a specific manual account by id.
+        static func manualAccount(_ id: String) -> String {
+            "/bank/manual-accounts/\(id)"
+        }
     }
 
     // MARK: - Sandbox (Debug Only)

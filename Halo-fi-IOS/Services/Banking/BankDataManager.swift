@@ -27,6 +27,11 @@ final class BankDataManager {
     /// Transactions grouped by item ID - fetched on demand
     var transactionsByItemId: [String: [Transaction]] = [:]
 
+    /// User-entered accounts (not from Plaid). Sourced from
+    /// /bank/manual-accounts and refreshed via refreshManualAccounts().
+    /// Surfaces alongside the Plaid lists in AccountsView.
+    private(set) var manualAccounts: [ManualAccount] = []
+
     var isLoadingAccounts = false
     var isLoadingTransactions = false
     var isSyncing = false
@@ -331,6 +336,7 @@ final class BankDataManager {
             // Fetch linked items first so refreshAllAccounts has items to iterate
             await fetchLinkedItemsFromServer()
             await refreshAllAccounts(for: userId)
+            await refreshManualAccounts()
         }
 
         await refreshTask?.value
@@ -389,6 +395,7 @@ final class BankDataManager {
         refreshTask = Task {
             defer { refreshTask = nil }
             await refreshAllAccounts(for: userId)
+            await refreshManualAccounts()
         }
 
         await refreshTask?.value
@@ -645,6 +652,19 @@ final class BankDataManager {
     /// Fetches the full accounts response including summary data
     func fetchAccountsSummary(forceRefresh: Bool = false) async throws {
         try await fetchAccounts(forceRefresh: forceRefresh)
+    }
+
+    /// Reloads the user's manual (non-Plaid) accounts from the backend.
+    /// Called by the form view after create/update/delete and from the
+    /// regular refresh paths so the lists stay current. Failures log
+    /// but don't surface — manual accounts are non-critical.
+    func refreshManualAccounts() async {
+        do {
+            manualAccounts = try await ManualAccountService.shared.list()
+            Logger.success("BankDataManager: loaded \(manualAccounts.count) manual account(s)")
+        } catch {
+            Logger.warning("BankDataManager: refreshManualAccounts failed — \(error)")
+        }
     }
 
     /// Fetches bank accounts for a specific item

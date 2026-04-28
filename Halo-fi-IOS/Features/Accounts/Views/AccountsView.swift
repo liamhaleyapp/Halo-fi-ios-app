@@ -47,13 +47,26 @@ struct AccountsView: View {
               }
             }
           }
-        } else {
-          // Empty state
+        } else if bankDataManager.manualAccounts.isEmpty {
+          // Empty state — only when there are no Plaid AND no manual accounts.
           EmptyStateView(
             icon: "building.2",
             title: "No linked accounts",
             message: "Tap \"Link New Account\" to connect your bank"
           )
+        }
+
+        // Manual Accounts Section
+        if !bankDataManager.manualAccounts.isEmpty {
+          VStack(alignment: .leading, spacing: 12) {
+            Text("Manual Accounts")
+              .font(.headline)
+              .foregroundColor(.gray)
+
+            ForEach(bankDataManager.manualAccounts) { manual in
+              ManualAccountRow(account: manual)
+            }
+          }
         }
 
         // Error message
@@ -70,12 +83,13 @@ struct AccountsView: View {
     }
     .navigationTitle("Manage Linked Accounts")
     .navigationBarTitleDisplayMode(.inline)
-    .navigationDestination(isPresented: $showingLinkNewAccount) {
-      PlaidOnboardingView(
-        onComplete: { showingLinkNewAccount = false },
-        onBack: { showingLinkNewAccount = false }
-      )
-      .navigationBarTitleDisplayMode(.inline)
+    .task {
+      // Manual accounts aren't loaded by the main tab if the user
+      // jumps straight here from Settings — refresh on first appear.
+      await bankDataManager.refreshManualAccounts()
+    }
+    .sheet(isPresented: $showingLinkNewAccount) {
+      LinkAccountChooserView()
     }
     .sheet(item: $selectedInstitution) { institution in
       InstitutionDetailSheet(
@@ -244,6 +258,99 @@ struct LinkedItemCard: View {
     }
     .background(Color.gray.opacity(0.05))
     .cornerRadius(16)
+  }
+
+  private func formatCurrency(_ amount: Double, currency: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.currencyCode = currency
+    return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
+  }
+}
+
+// MARK: - Manual Account Row
+
+/// Row used in AccountsView's "Manual Accounts" section. Tapping
+/// pushes ManualAccountFormView preloaded with the existing record so
+/// the user can edit balance / details. Long-press → delete.
+struct ManualAccountRow: View {
+  let account: ManualAccount
+  @Environment(BankDataManager.self) private var bankDataManager
+  @State private var navigateToEdit = false
+  @State private var showDeleteConfirm = false
+  @State private var isDeleting = false
+
+  var body: some View {
+    NavigationLink(destination: ManualAccountFormView(existing: account)) {
+      HStack(spacing: 16) {
+        Image(systemName: account.accountType.systemIcon)
+          .font(.title2)
+          .foregroundColor(.teal)
+          .frame(width: 32, height: 32)
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text(account.name)
+            .font(.body)
+            .fontWeight(.medium)
+            .foregroundColor(.white)
+
+          HStack(spacing: 6) {
+            if let inst = account.institutionName, !inst.isEmpty {
+              Text(inst)
+            } else {
+              Text("Manual")
+            }
+            Text("·")
+            Text(account.accountType.displayName)
+          }
+          .font(.caption)
+          .foregroundColor(.gray)
+        }
+
+        Spacer()
+
+        Text(formatCurrency(account.balance, currency: account.currency))
+          .font(.subheadline)
+          .fontWeight(.medium)
+          .foregroundColor(.white)
+
+        Image(systemName: "chevron.right")
+          .foregroundColor(.gray)
+          .font(.caption)
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 16)
+      .background(Color.gray.opacity(0.1))
+      .cornerRadius(16)
+    }
+    .buttonStyle(.plain)
+    .contextMenu {
+      Button(role: .destructive) {
+        showDeleteConfirm = true
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
+    .alert("Delete this account?", isPresented: $showDeleteConfirm) {
+      Button("Cancel", role: .cancel) { }
+      Button("Delete", role: .destructive) {
+        Task { await delete() }
+      }
+    } message: {
+      Text("\(account.name) will be removed. This can't be undone.")
+    }
+  }
+
+  @MainActor
+  private func delete() async {
+    isDeleting = true
+    defer { isDeleting = false }
+    do {
+      try await ManualAccountService.shared.delete(id: account.id)
+      await bankDataManager.refreshManualAccounts()
+    } catch {
+      Logger.warning("ManualAccountRow: delete failed — \(error)")
+    }
   }
 
   private func formatCurrency(_ amount: Double, currency: String) -> String {
