@@ -26,9 +26,20 @@ final class ConversationCoordinator {
 
     private(set) var state: ConversationState = .idle
     private(set) var sessionId: String?
+    /// Mutes Halo's spoken responses (TTS playback). Distinct from
+    /// `isMicMuted` which only affects the user's mic input.
     private(set) var isMuted: Bool = false
+    /// Hands-free only — pauses forwarding of mic audio to STT
+    /// without disconnecting the WebSocket. Tapping the big button
+    /// in hands-free mode toggles this. No-op in push-to-talk.
+    private(set) var isMicMuted: Bool = false
     private(set) var isPrivacyMode: Bool = false
     private(set) var interactionMode: InteractionMode = .voice
+    /// Selected by the user in Settings → Preferences. Set externally
+    /// via `setConversationMode(_:)` so the view model can keep the
+    /// coordinator in sync with @AppStorage. Defaults to push-to-talk
+    /// to match historical behavior for users who never opted in.
+    private(set) var conversationMode: ConversationMode = .pushToTalk
 
     // MARK: - Event Stream
 
@@ -160,6 +171,9 @@ final class ConversationCoordinator {
         skipGreetingForCurrentConnection = false
         pendingInitialMessage = nil
         isPlayingAcknowledgment = false
+        // Reset hands-free mute so re-opening the conversation always
+        // starts with the mic live.
+        isMicMuted = false
 
         // Stop the thinking-pulse haptic explicitly here too —
         // setState below will catch it via the leave-processing
@@ -225,9 +239,13 @@ final class ConversationCoordinator {
                 guard let self = self else { return }
                 Task { @MainActor in
                     do {
-                        // Wire audio buffers from VoiceService to STT service
+                        // Wire audio buffers from VoiceService to STT service.
+                        // In hands-free, the user can pause input by toggling
+                        // the mic mute — we skip forwarding here without
+                        // tearing the STT session down so unmute is instant.
                         self.voiceService.onAudioBuffer = { [weak self] buffer in
                             guard let self = self else { return }
+                            if self.isMicMuted { return }
                             Task {
                                 await self.sttService.sendAudioBuffer(buffer)
                             }
@@ -393,6 +411,29 @@ final class ConversationCoordinator {
         }
     }
 
+    /// Hands-free mic mute. Doesn't tear down STT — the WebSocket
+    /// stays open and audio continues to flow from VoiceService;
+    /// `setupSTTCallbacks` checks `isMicMuted` before forwarding any
+    /// frames. Cheap toggle so users can pause for side conversations
+    /// without re-fetching an STT token on every unmute.
+    func setMicMuted(_ muted: Bool) {
+        isMicMuted = muted
+    }
+
+    /// Update the active conversation mode. Called by the view model
+    /// after reading @AppStorage; idempotent.
+    func setConversationMode(_ mode: ConversationMode) {
+        conversationMode = mode
+    }
+
+    /// Hands-free explicit end. Equivalent to `disconnect()` but
+    /// expresses intent — used by the End Conversation button so the
+    /// call site reads cleanly. Push-to-talk users can still call
+    /// `disconnect()` directly.
+    func endConversation() {
+        disconnect()
+    }
+
     /// Stop current TTS without affecting mute state (skip this message)
     func stopSpeaking() {
         guard state == .speaking else { return }
@@ -453,6 +494,17 @@ final class ConversationCoordinator {
             return
         }
         if state == .speaking || state == .connecting {
+            // Hands-free: Halo finished speaking, mic should
+            // auto-resume so the user can keep talking without
+            // tapping anything. We skip if mic is muted; the user
+            // explicitly silenced themselves and unmute will
+            // restart listening on its own. The STT session is
+            // freshly reconnected here (stopListeningAndProcess
+            // disconnected it when the previous turn submitted).
+            if conversationMode == .handsFree && !isMicMuted {
+                Task { [weak self] in await self?.startListening() }
+                return
+            }
             setState(.idle)
         }
     }

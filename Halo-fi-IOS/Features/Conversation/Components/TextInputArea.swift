@@ -117,21 +117,50 @@ struct VoiceModeInputArea: View {
     let isEnabled: Bool
     let onMicTap: () -> Void
     let onSwitchToText: () -> Void
+    /// Hands-free only. When non-nil, the layout shows a dedicated
+    /// red "End Conversation" pill below the mic, and the mic button
+    /// becomes a mute toggle (icon driven by `isMicMuted`).
+    var handsFree: HandsFreeOptions? = nil
+
+    struct HandsFreeOptions {
+        let isMicMuted: Bool
+        let onEnd: () -> Void
+    }
 
     var body: some View {
         VStack(spacing: 16) {
-            // Large mic button
             MicButton(
                 state: state,
                 isEnabled: isEnabled,
                 onTap: onMicTap
             )
 
-            // Type instead toggle
-            ModeToggleButton(
-                mode: .voice,
-                onToggle: onSwitchToText
-            )
+            if let handsFree {
+                Text(handsFree.isMicMuted ? "Mic muted" : "Listening")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
+
+                // Explicit End button — kills the conversation.
+                // Prominent + red so it can't be confused with the
+                // ambient mute toggle above.
+                Button(action: handsFree.onEnd) {
+                    Text("End Conversation")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
+                        .background(Color.red)
+                        .cornerRadius(20)
+                }
+                .accessibilityLabel("End conversation")
+                .accessibilityHint("Double tap to disconnect from Halo and close this screen")
+            } else {
+                ModeToggleButton(
+                    mode: .voice,
+                    onToggle: onSwitchToText
+                )
+            }
         }
         .padding(.vertical, 20)
     }

@@ -9,6 +9,7 @@
 
 import Foundation
 import UIKit
+import SwiftUI
 
 @Observable
 @MainActor
@@ -31,7 +32,11 @@ final class ConversationViewModel {
     var interactionMode: InteractionMode { coordinator.interactionMode }
     var isConnected: Bool { coordinator.isConnected }
     var isMuted: Bool { coordinator.isMuted }
+    var isMicMuted: Bool { coordinator.isMicMuted }
     var isPrivacyMode: Bool { coordinator.isPrivacyMode }
+    var conversationMode: ConversationMode { coordinator.conversationMode }
+
+    var isHandsFree: Bool { conversationMode == .handsFree }
 
     // MARK: - Computed Properties (from Store)
 
@@ -59,6 +64,14 @@ final class ConversationViewModel {
         // Play audio feedback when conversation opens
         audioFeedback.playConversationStartFeedback()
 
+        // Pull the user's conversation-style preference (set in
+        // Settings → Preferences) and pin it on the coordinator. We
+        // read from @AppStorage directly via UserDefaults rather than
+        // instantiating a property here so the value picks up changes
+        // made between conversations without view-lifecycle plumbing.
+        let raw = UserDefaults.standard.string(forKey: "conversationMode")
+        coordinator.setConversationMode(ConversationMode.from(raw))
+
         // Configure services
         let streamingAudioPlayer = StreamingAudioPlayer()
         coordinator.configure(
@@ -85,6 +98,32 @@ final class ConversationViewModel {
     // MARK: - Actions
 
     func toggleMicButton() {
+        // Hands-free reuses the same big button as a mic-mute toggle:
+        // the conversation auto-flows turn-to-turn, so the user only
+        // ever needs to silence themselves (side conversation, baby
+        // crying, etc.) — they don't manually start / stop turns.
+        // Still respect "stop speaking" while Halo is talking so a
+        // user can skip a long response.
+        if isHandsFree {
+            Task {
+                switch state {
+                case .speaking:
+                    coordinator.stopSpeaking()
+                case .listening, .idle:
+                    coordinator.setMicMuted(!coordinator.isMicMuted)
+                    if !coordinator.isMicMuted && state == .idle {
+                        // Manual unmute from idle resumes listening
+                        // explicitly — the auto-resume path only fires
+                        // after Halo finishes speaking.
+                        await coordinator.startListening()
+                    }
+                default:
+                    break
+                }
+            }
+            return
+        }
+
         Task {
             switch state {
             case .listening:
@@ -98,6 +137,13 @@ final class ConversationViewModel {
                 break
             }
         }
+    }
+
+    /// Hands-free explicit end. The X close button in the header
+    /// already does this on dismiss; the dedicated "End Conversation"
+    /// button gives users a more discoverable affordance.
+    func endConversation() {
+        coordinator.endConversation()
     }
 
     func switchToTextMode() {
