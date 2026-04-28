@@ -147,14 +147,21 @@ final class PersistedTransaction {
 
     // MARK: - Date Parsing
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter
-    }()
-
+    /// Parses transaction_date strings from the backend.
+    ///
+    /// The backend serializes the SQLAlchemy DateTime column as full
+    /// ISO 8601 (e.g. ``"2026-04-15T00:00:00"`` or with fractional
+    /// seconds), not just ``YYYY-MM-DD``. The previous formatter only
+    /// matched the bare-date form, so every parse failed and the
+    /// caller's ``?? Date()`` fallback stamped every transaction with
+    /// the current sync time. Result: every row read back as today /
+    /// yesterday after persistence — regardless of when it actually
+    /// happened.
+    ///
+    /// Delegating to ``DateFormatting.parse`` covers all the
+    /// representations the API produces (date-only, naive datetime,
+    /// datetime with fractional seconds, ISO 8601 with timezone).
     private static func parseDate(_ dateString: String) -> Date? {
-        dateFormatter.date(from: dateString)
+        DateFormatting.parse(dateString)
     }
 }
