@@ -3,7 +3,9 @@
 //  Halo-fi-IOS
 //
 //  Created by Christopher Koski on 10/1/25.
-//  Redesigned with native share sheet and improved referral display.
+//  Phase 1 (attribution-only): real per-user code from backend, no
+//  premature reward promise. Discount delivery lands in Phase 2 once
+//  Apple Offer Codes are wired in.
 //
 
 import SwiftUI
@@ -16,8 +18,20 @@ struct InviteFriendsView: View {
     @State private var showingCopied = false
     @State private var showingShareSheet = false
 
-    private let referralCode = "HALO123"
-    private let referralLink = "https://halofi.app/ref/user123"
+    @State private var referralCode: String?
+    @State private var invitedCount: Int = 0
+    @State private var loading = true
+    @State private var loadError: String?
+
+    private let networkService = NetworkService.shared
+
+    /// Web landing page that intercepts the link and routes the visitor
+    /// to the App Store. We use a server-rendered page (not a universal
+    /// link / deep link into the app yet) per Phase 1 plan — universal
+    /// link setup can land post-launch without breaking shared codes.
+    private func referralLink(for code: String) -> String {
+        "https://halofi.app/ref/\(code)"
+    }
 
     var body: some View {
         ScrollView {
@@ -32,28 +46,71 @@ struct InviteFriendsView: View {
         }
         .navigationTitle("Invite Friends")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingShareSheet) {
-            ShareSheet(items: [
-                "Join me on HaloFi \u{2014} your voice-first financial assistant! Use my code \(referralCode) to get started: \(referralLink)"
-            ])
+        .task {
+            await loadStats()
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let code = referralCode {
+                ShareSheet(items: [
+                    "Join me on HaloFi \u{2014} your voice-first financial assistant! Use my code \(code) to get started: \(referralLink(for: code))"
+                ])
+            }
+        }
+    }
+
+    // MARK: - Networking
+
+    private struct StatsResponse: Decodable {
+        let referral_code: String?
+        let invited_count: Int
+        let pending_rewards: Int
+    }
+
+    private func loadStats() async {
+        loading = true
+        loadError = nil
+        do {
+            let response: StatsResponse = try await networkService.authenticatedRequest(
+                endpoint: "/referrals/stats",
+                method: .GET,
+                body: nil,
+                responseType: StatsResponse.self
+            )
+            referralCode = response.referral_code
+            invitedCount = response.invited_count
+        } catch {
+            loadError = "Couldn't load your code. Pull down to retry."
+            Logger.error("InviteFriendsView: failed to load stats — \(error)")
+        }
+        loading = false
     }
 
     // MARK: - Incentive Section
 
     private var incentiveSection: some View {
         VStack(spacing: 8) {
-            Text("Get five dollars for every friend who joins!")
+            Text("Invite friends to HaloFi")
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
-            Text("Share Halo Fi with your friends and earn rewards together")
+            // Phase 1 copy: no specific reward promise. Phase 2 will swap
+            // this in for "Get $X for every friend who joins" once the
+            // Apple Offer Code pipeline is live.
+            Text("Share Halo Fi with people who'd benefit. Discounts launching soon.")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
+
+            if invitedCount > 0 {
+                Text("\(invitedCount) friend\(invitedCount == 1 ? "" : "s") joined so far")
+                    .font(.footnote)
+                    .foregroundColor(.green)
+                    .padding(.top, 4)
+                    .accessibilityLabel("\(invitedCount) friends have joined using your code")
+            }
         }
         .padding(.top, 8)
     }
@@ -66,38 +123,57 @@ struct InviteFriendsView: View {
                 .font(.headline)
                 .foregroundColor(.gray)
 
-            Text(referralCode)
-                .font(.system(size: 36, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .tracking(6)
-                .accessibilityLabel("Referral code: \(referralCode.map { String($0) }.joined(separator: " "))")
+            if let code = referralCode {
+                Text(code)
+                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .tracking(2)
+                    .accessibilityLabel("Referral code: \(code.map { String($0) }.joined(separator: " "))")
 
-            Button(action: {
-                UIPasteboard.general.string = referralCode
-                showingCopied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showingCopied = false
+                Button(action: {
+                    UIPasteboard.general.string = code
+                    showingCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showingCopied = false
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: showingCopied ? "checkmark" : "doc.on.doc")
+                            .font(.subheadline)
+                        Text(showingCopied ? "Copied!" : "Copy Code")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(
+                        showingCopied
+                            ? Color.green.opacity(0.3)
+                            : Color.gray.opacity(0.2)
+                    )
+                    .cornerRadius(12)
                 }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: showingCopied ? "checkmark" : "doc.on.doc")
-                        .font(.subheadline)
-                    Text(showingCopied ? "Copied!" : "Copy Code")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                .accessibilityLabel(showingCopied ? "Code copied" : "Copy referral code")
+                .accessibilityHint("Double-tap to copy your referral code to clipboard")
+            } else if loading {
+                ProgressView()
+                    .tint(.white)
+                    .accessibilityLabel("Loading your referral code")
+            } else if let loadError {
+                Text(loadError)
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+                    .multilineTextAlignment(.center)
+                Button("Retry") {
+                    Task { await loadStats() }
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
-                .background(
-                    showingCopied
-                        ? Color.green.opacity(0.3)
-                        : Color.gray.opacity(0.2)
-                )
-                .cornerRadius(12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
             }
-            .accessibilityLabel(showingCopied ? "Code copied" : "Copy referral code")
-            .accessibilityHint("Double-tap to copy your referral code to clipboard")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
@@ -134,6 +210,8 @@ struct InviteFriendsView: View {
             )
             .cornerRadius(16)
         }
+        .disabled(referralCode == nil)
+        .opacity(referralCode == nil ? 0.5 : 1.0)
         .accessibilityLabel("Share Halo Fi with friends")
         .accessibilityHint("Double-tap to open the share menu")
     }
@@ -148,8 +226,10 @@ struct InviteFriendsView: View {
                 .accessibilityAddTraits(.isHeader)
 
             howItWorksStep(number: "1", text: "Share your code or link with a friend")
-            howItWorksStep(number: "2", text: "They sign up using your referral code")
-            howItWorksStep(number: "3", text: "You both get five dollars credited to your account")
+            howItWorksStep(number: "2", text: "They sign up and enter your code")
+            // Phase 1: no specific reward. Phase 2 swaps step 3 in
+            // for "You both get $X off your subscription".
+            howItWorksStep(number: "3", text: "We track every successful signup. Rewards launching soon.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)

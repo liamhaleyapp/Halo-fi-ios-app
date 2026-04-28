@@ -108,7 +108,17 @@ struct SignUpView: View {
             if let error = viewModel.confirmPasswordError {
               validationText(error)
             }
-            
+
+            // Optional referral code — Phase 1 attribution only.
+            // Empty input no-ops; bad input is silently ignored
+            // post-signup (logged, doesn't block onboarding).
+            AuthFormField(
+              title: "Referral Code (Optional)",
+              placeholder: "HALO-XXXXXX",
+              text: $viewModel.referralCode
+            )
+            .accessibilityHint("Enter a friend's referral code if you have one. This is optional.")
+
             // Terms & Privacy consent
             HStack(alignment: .center, spacing: 12) {
               Button {

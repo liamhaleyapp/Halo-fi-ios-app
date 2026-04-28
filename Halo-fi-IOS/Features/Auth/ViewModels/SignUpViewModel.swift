@@ -21,6 +21,10 @@ class SignUpViewModel {
   var password = ""
   var confirmPassword = ""
   var dateOfBirth = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
+  /// Optional referral code entered by the invitee. Sent to
+  /// /referrals/redeem after the user is signed in. Phase 1 ships
+  /// attribution only — discount delivery comes in Phase 2.
+  var referralCode = ""
   
   // MARK: - UI state
   
@@ -197,6 +201,31 @@ class SignUpViewModel {
     }
   }
 
+  private struct RedeemBody: Encodable {
+    let code: String
+  }
+
+  private struct RedeemResponse: Decodable {
+    let success: Bool
+    let message: String
+  }
+
+  private func redeemReferralIfNeeded() async {
+    let trimmed = referralCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    do {
+      let body = try JSONEncoder().encode(RedeemBody(code: trimmed.uppercased()))
+      let _: RedeemResponse = try await NetworkService.shared.authenticatedRequest(
+        endpoint: "/referrals/redeem",
+        method: .POST,
+        body: body,
+        responseType: RedeemResponse.self
+      )
+    } catch {
+      Logger.warning("SignUpViewModel: referral redeem failed (non-blocking) — \(error)")
+    }
+  }
+
   func createAccount(using userManager: UserManager, onComplete: (() -> Void)?) async {
     
     hasAttemptedSubmit = true
@@ -228,7 +257,13 @@ class SignUpViewModel {
         phoneNumber: fullPhone,
         password: password
       )
-      
+
+      // Best-effort referral redeem. We swallow failures here on
+      // purpose — a malformed/unknown code shouldn't block onboarding.
+      // Worst case: invitee just isn't attributed; they can ask the
+      // inviter for a working code later.
+      await redeemReferralIfNeeded()
+
       onComplete?()
     } catch {
       if let authError = error as? AuthError {
