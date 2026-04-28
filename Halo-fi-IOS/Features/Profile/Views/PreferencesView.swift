@@ -15,6 +15,9 @@ struct PreferencesView: View {
     @AppStorage("themeMode") private var themeMode = "System"
     @AppStorage("voiceAgent") private var voiceAgent = "21m00Tcm4TlvDq8ikWAM"
     @AppStorage("voiceSpeed") private var voiceSpeed = "Normal"
+    /// "push_to_talk" or "hands_free". Phase 1 just persists the
+    /// choice; ConversationCoordinator branches on it in Phase 2.
+    @AppStorage("conversationMode") private var conversationMode = "push_to_talk"
 
     @State private var isSaving = false
     @State private var showingResult = false
@@ -47,6 +50,11 @@ struct PreferencesView: View {
         .init(id: "Slow", title: "Slow"),
         .init(id: "Normal", title: "Normal"),
         .init(id: "Fast", title: "Fast")
+    ]
+
+    private let conversationModeOptions: [SelectionOption] = [
+        .init(id: "push_to_talk", title: "Push to Talk"),
+        .init(id: "hands_free", title: "Hands-Free"),
     ]
 
     private var speedValue: Float {
@@ -122,6 +130,20 @@ struct PreferencesView: View {
                     selectedId: $voiceSpeed
                 )
 
+                // Conversation Style — Phase 1 surfaces the toggle.
+                // Phase 2 wires it into ConversationCoordinator so
+                // Hands-Free auto-resumes listening after Halo speaks
+                // and the mic button becomes a mute toggle. Default
+                // remains Push to Talk for users who prefer explicit
+                // turns.
+                PreferenceDropdownSection(
+                    title: "Conversation Style",
+                    subtitle: "Push to Talk: tap to speak, tap to send. Hands-Free (coming soon): natural back-and-forth.",
+                    icon: "waveform",
+                    options: conversationModeOptions,
+                    selectedId: $conversationMode
+                )
+
                 Spacer(minLength: 40)
 
                 // Save Button
@@ -159,6 +181,7 @@ struct PreferencesView: View {
             let voice_speed: Float
             let language: String
             let theme_mode: String
+            let conversation_mode: String
         }
 
         struct PrefsResponse: Codable {
@@ -166,6 +189,7 @@ struct PreferencesView: View {
             let voice_speed: Float?
             let language: String?
             let theme_mode: String?
+            let conversation_mode: String?
         }
 
         do {
@@ -173,7 +197,8 @@ struct PreferencesView: View {
                 voice_agent: voiceAgent,
                 voice_speed: speedValue,
                 language: voiceLanguage == "English" ? "en" : "es",
-                theme_mode: themeMode.lowercased()
+                theme_mode: themeMode.lowercased(),
+                conversation_mode: conversationMode
             )
             let requestBody = try JSONEncoder().encode(body)
 
