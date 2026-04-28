@@ -36,6 +36,13 @@ final class RecordingUploader: @unchecked Sendable {
     private let tokenStorage: TokenStorageProtocol
     private let session: URLSession
 
+    /// Per-turn tracking so `setAgentResponse(turnNumber:)` can find
+    /// the recording id once the upload has finished. Each entry is a
+    /// task that resolves to the recording id (or nil if the upload
+    /// failed). Access is serialized through `pendingLock`.
+    private let pendingLock = NSLock()
+    private var pendingUploads: [Int: Task<String?, Never>] = [:]
+
     init(
         tokenStorage: TokenStorageProtocol = TokenStorage(),
         session: URLSession = .shared
@@ -46,7 +53,8 @@ final class RecordingUploader: @unchecked Sendable {
 
     /// Snapshot the buffers, encode WAV in the background, and POST.
     /// Failures are logged but never thrown — the conversation path
-    /// must not depend on this succeeding.
+    /// must not depend on this succeeding. The recording id (if any)
+    /// is held internally for a later `setAgentResponse` call.
     func upload(
         buffers: [AVAudioPCMBuffer],
         sessionId: String,
@@ -58,11 +66,11 @@ final class RecordingUploader: @unchecked Sendable {
         // Off-main detached so WAV encoding (Float→Int16 over tens of
         // thousands of frames) doesn't compete with the audio buffers
         // still arriving on the main actor.
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
+        let task = Task.detached(priority: .utility) { [weak self] () -> String? in
+            guard let self else { return nil }
             guard let wavData = encodeBuffersToWAV(buffers) else {
                 Logger.warning("RecordingUploader: WAV encoding produced no data — skipping upload")
-                return
+                return nil
             }
 
             let durationMs = Int(
@@ -71,16 +79,61 @@ final class RecordingUploader: @unchecked Sendable {
             )
 
             do {
-                try await self.postMultipart(
+                let recordingId = try await self.postMultipart(
                     audioData: wavData,
                     sessionId: sessionId,
                     turnNumber: turnNumber,
                     userTranscript: userTranscript ?? "",
                     audioDurationMs: durationMs
                 )
-                Logger.info("RecordingUploader: turn \(turnNumber) uploaded (\(wavData.count) bytes, ~\(durationMs)ms)")
+                Logger.info("RecordingUploader: turn \(turnNumber) uploaded (\(wavData.count) bytes, ~\(durationMs)ms, id=\(recordingId ?? "nil"))")
+                return recordingId
             } catch {
                 Logger.warning("RecordingUploader: upload failed — \(error)")
+                return nil
+            }
+        }
+
+        pendingLock.lock()
+        pendingUploads[turnNumber] = task
+        pendingLock.unlock()
+    }
+
+    /// Backfill the agent-side fields once the reply has landed. Waits
+    /// for the matching upload to complete so we know the recording
+    /// id, then PATCHes it. Fire-and-forget — failures are logged but
+    /// never surface to the conversation path.
+    func setAgentResponse(
+        turnNumber: Int,
+        agentResponse: String,
+        responseTimeMs: Int?,
+        agentName: String? = nil
+    ) {
+        pendingLock.lock()
+        let uploadTask = pendingUploads.removeValue(forKey: turnNumber)
+        pendingLock.unlock()
+
+        guard let uploadTask else {
+            Logger.warning("RecordingUploader: no pending upload for turn \(turnNumber) — skipping agent_response patch")
+            return
+        }
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            guard let recordingId = await uploadTask.value, !recordingId.isEmpty else {
+                Logger.warning("RecordingUploader: upload for turn \(turnNumber) had no id — skipping agent_response patch")
+                return
+            }
+            do {
+                try await self.patchAgentResponse(
+                    recordingId: recordingId,
+                    agentResponse: agentResponse,
+                    responseTimeMs: responseTimeMs,
+                    agentName: agentName
+                )
+                Logger.info("RecordingUploader: turn \(turnNumber) agent_response patched (id=\(recordingId))")
+            } catch {
+                Logger.warning("RecordingUploader: patch failed for turn \(turnNumber) — \(error)")
             }
         }
     }
@@ -93,7 +146,7 @@ final class RecordingUploader: @unchecked Sendable {
         turnNumber: Int,
         userTranscript: String,
         audioDurationMs: Int
-    ) async throws {
+    ) async throws -> String? {
         guard let token = tokenStorage.getAccessToken(), !token.isEmpty else {
             throw URLError(.userAuthenticationRequired)
         }
@@ -135,6 +188,50 @@ final class RecordingUploader: @unchecked Sendable {
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
         request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw URLError(.init(rawValue: http.statusCode))
+        }
+
+        // Backend returns { success, id, audio_url }. Extract id so the
+        // later PATCH can target this row.
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let id = json["id"] as? String {
+            return id
+        }
+        return nil
+    }
+
+    // MARK: - Agent-response PATCH
+
+    private func patchAgentResponse(
+        recordingId: String,
+        agentResponse: String,
+        responseTimeMs: Int?,
+        agentName: String?
+    ) async throws {
+        guard let token = tokenStorage.getAccessToken(), !token.isEmpty else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        guard let url = URL(string: "\(kBackendBaseURL)/agent/recordings/\(recordingId)") else {
+            throw URLError(.badURL)
+        }
+
+        var payload: [String: Any] = ["agent_response": agentResponse]
+        if let responseTimeMs { payload["response_time_ms"] = responseTimeMs }
+        if let agentName { payload["agent_name"] = agentName }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 15
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (_, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {

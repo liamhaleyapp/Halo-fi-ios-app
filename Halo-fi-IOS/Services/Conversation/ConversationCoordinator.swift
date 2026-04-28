@@ -161,6 +161,13 @@ final class ConversationCoordinator {
     /// Monotonic per-session counter so each turn lands at a stable
     /// path in storage ({user}/{session}/turn_N.wav).
     private var recordingTurnNumber: Int = 0
+    /// Turn number we last handed to RecordingUploader.upload — used
+    /// by the agentResponse handler to PATCH the matching row.
+    private var lastUploadedTurnNumber: Int?
+    /// Wall-clock timestamp of when the user transcript was sent to
+    /// the agent. Diffed against the agent's reply to compute
+    /// response_time_ms for the recording.
+    private var lastUserSendAt: Date?
 
     /// Hard cap on a single listening turn. Even if silence detection
     /// never fires (always-on background noise above threshold) we
@@ -306,6 +313,8 @@ final class ConversationCoordinator {
         // the storage path stays unique either way.
         capturedBuffers = []
         recordingTurnNumber = 0
+        lastUploadedTurnNumber = nil
+        lastUserSendAt = nil
 
         // Stop the thinking-pulse haptic explicitly here too —
         // setState below will catch it via the leave-processing
@@ -643,6 +652,8 @@ final class ConversationCoordinator {
             recordingTurnNumber += 1
             let turnNumber = recordingTurnNumber
             let sessionForUpload = sessionId ?? "unknown"
+            lastUploadedTurnNumber = turnNumber
+            lastUserSendAt = Date()
             recordingUploader.upload(
                 buffers: buffersForUpload,
                 sessionId: sessionForUpload,
@@ -656,6 +667,25 @@ final class ConversationCoordinator {
             // Empty or invalid transcript - just go idle
             setState(.idle)
         }
+    }
+
+    /// Backfill the agent_response field on the recording for the
+    /// most recent uploaded turn. Both `.agentResponse` and
+    /// `.audioComplete` (with body) call this — whichever arrives
+    /// first wins, the second is a no-op because we clear the
+    /// turn-number reference after firing.
+    private func backfillRecordingAgentResponse(_ text: String) {
+        guard let turn = lastUploadedTurnNumber, !text.isEmpty else { return }
+        let elapsedMs: Int? = lastUserSendAt.map {
+            Int(Date().timeIntervalSince($0) * 1000)
+        }
+        recordingUploader.setAgentResponse(
+            turnNumber: turn,
+            agentResponse: text,
+            responseTimeMs: elapsedMs
+        )
+        lastUploadedTurnNumber = nil
+        lastUserSendAt = nil
     }
 
     /// Send a text message (from text input)
@@ -889,6 +919,7 @@ final class ConversationCoordinator {
                 setState(.idle)
             }
             currentAgentResponseId = nil
+            backfillRecordingAgentResponse(response.message)
 
         case .audioChunk(let chunk):
             audioFeedback.stopProcessingPulse()
@@ -912,6 +943,7 @@ final class ConversationCoordinator {
                 let responseId = currentAgentResponseId ?? UUID()
                 emitEvent(.agentFinal(body, id: responseId))
                 currentAgentResponseId = nil
+                backfillRecordingAgentResponse(body)
             }
             // Extract voice speed from server data (may arrive as Double or Int)
             if let data = complete.data,
