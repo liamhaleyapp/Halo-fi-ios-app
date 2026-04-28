@@ -110,9 +110,41 @@ final class ConversationCoordinator {
     private let voiceActivityRMSThreshold: Float = 0.04
 
     /// How long after the user's last detected voice activity we wait
-    /// before auto-committing the turn. Mirrors the
-    /// silence_threshold_ms we configure on the backend (1.5s).
-    private let silenceCommitInterval: TimeInterval = 1.5
+    /// before auto-committing the turn. Tighter than the previous
+    /// 1.5s — users were finishing their question and waiting too
+    /// long for Halo to respond. 1.0s still avoids cutting off a
+    /// natural mid-sentence pause.
+    private let silenceCommitInterval: TimeInterval = 1.0
+
+    // MARK: - Hands-free barge-in
+    //
+    // When the user starts talking while Halo is mid-response, we
+    // immediately stop the TTS playback and switch to listening —
+    // VoIP-style interruption. Implementation: keep voiceService
+    // recording across all hands-free states (not just .listening),
+    // route buffers to a barge-in detector during .speaking, and
+    // call streamingAudioPlayer.stop() the moment we see sustained
+    // voice activity above bargeInThreshold.
+
+    /// Linear RMS that must be exceeded to count as a barge-in
+    /// candidate buffer. Set higher than voiceActivityRMSThreshold
+    /// because the speaker is actively playing Halo's TTS during
+    /// .speaking — even with .voiceChat AEC, residual bleed can land
+    /// around 0.02–0.04. 0.10 forces a clear user voice.
+    private let bargeInRMSThreshold: Float = 0.10
+
+    /// Number of consecutive above-threshold buffers required before
+    /// we trust the signal and interrupt. Buffers arrive at roughly
+    /// 50fps, so 6 frames ≈ 120ms — enough to filter cough/door-slam
+    /// transients without making the user feel like they have to
+    /// shout to be heard.
+    private let bargeInRequiredFrames: Int = 6
+    private var bargeInConsecutiveFrames: Int = 0
+
+    /// Set by `bargeIn()` immediately before stopping the player so
+    /// `handleSpeakingFinished` can skip its 400ms settling delay —
+    /// a barge-in needs to flip to listening instantly.
+    private var bargeInRequested: Bool = false
 
     /// Hard cap on a single listening turn. Even if silence detection
     /// never fires (always-on background noise above threshold) we
@@ -224,11 +256,13 @@ final class ConversationCoordinator {
         // Reset hands-free mute so re-opening the conversation always
         // starts with the mic live.
         isMicMuted = false
-        // Clear silence-detection state so the next conversation
-        // starts with a fresh slate.
+        // Clear silence-detection + barge-in state so the next
+        // conversation starts with a fresh slate.
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
+        bargeInConsecutiveFrames = 0
+        bargeInRequested = false
 
         // Stop the thinking-pulse haptic explicitly here too —
         // setState below will catch it via the leave-processing
@@ -294,20 +328,16 @@ final class ConversationCoordinator {
                 guard let self = self else { return }
                 Task { @MainActor in
                     do {
-                        // Wire audio buffers from VoiceService to STT service.
-                        // In hands-free, the user can pause input by toggling
-                        // the mic mute — we skip forwarding here without
-                        // tearing the STT session down so unmute is instant.
-                        // Hands-free also taps each buffer for client-side
-                        // silence detection (see processAudioBufferForSilenceDetection).
+                        // Wire audio buffers — single closure that routes
+                        // every frame based on the current conversation
+                        // state. Hands-free keeps voiceService recording
+                        // across listen / process / speak so we can detect
+                        // barge-in (user interrupting Halo mid-response).
                         self.voiceService.onAudioBuffer = { [weak self] buffer in
                             guard let self = self else { return }
                             if self.isMicMuted { return }
-                            Task {
-                                await self.sttService.sendAudioBuffer(buffer)
-                            }
                             Task { @MainActor [weak self] in
-                                self?.processAudioBufferForSilenceDetection(buffer)
+                                self?.routeAudioBuffer(buffer)
                             }
                         }
 
@@ -378,6 +408,61 @@ final class ConversationCoordinator {
             // Empty or no transcript - just go idle
             setState(.idle)
         }
+    }
+
+    /// State-aware router for every mic buffer. Always invoked on
+    /// MainActor (see `voiceService.onAudioBuffer` wiring).
+    private func routeAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        switch state {
+        case .listening:
+            // Send to STT and tap silence detection.
+            Task { await sttService.sendAudioBuffer(buffer) }
+            processAudioBufferForSilenceDetection(buffer)
+
+        case .speaking:
+            // Hands-free only: watch for the user starting to talk
+            // while Halo is mid-response, and interrupt if so.
+            if conversationMode == .handsFree {
+                processAudioBufferForBargeIn(buffer)
+            }
+
+        default:
+            // .idle / .processing / .connecting / .error: ignore the
+            // frame. We keep voiceService recording in hands-free so
+            // the engine doesn't go through a teardown cycle between
+            // turns, but there's nothing to do with the buffer here.
+            break
+        }
+    }
+
+    /// Look for sustained user voice during .speaking — signals the
+    /// user wants to interrupt Halo's response. Requires several
+    /// consecutive above-threshold frames so a single mic spike or
+    /// cough doesn't silence Halo prematurely.
+    private func processAudioBufferForBargeIn(_ buffer: AVAudioPCMBuffer) {
+        let rms = Self.computeRMS(buffer)
+
+        if rms < bargeInRMSThreshold {
+            bargeInConsecutiveFrames = 0
+            return
+        }
+
+        bargeInConsecutiveFrames += 1
+        if bargeInConsecutiveFrames >= bargeInRequiredFrames {
+            bargeInConsecutiveFrames = 0
+            Logger.info("Hands-free: barge-in detected (RMS=\(String(format: "%.3f", rms))) — interrupting Halo")
+            bargeIn()
+        }
+    }
+
+    /// Stop Halo's playback and route to listening. Triggered by
+    /// barge-in detection. The actual transition to .listening flows
+    /// through `handleSpeakingFinished` so we don't need to duplicate
+    /// startListening's setup here.
+    private func bargeIn() {
+        guard state == .speaking else { return }
+        bargeInRequested = true
+        streamingAudioPlayer?.stop()
     }
 
     /// Per-buffer silence-detection tap for hands-free auto-commit.
@@ -464,11 +549,20 @@ final class ConversationCoordinator {
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
+        bargeInConsecutiveFrames = 0
 
-        // Stop recording and STT
-        voiceService.stopRecording()
-        voiceService.onAudioBuffer = nil
+        // STT always disconnects between turns; we'll reconnect when
+        // the next listen starts. In hands-free we keep voiceService
+        // recording so the audio engine doesn't churn through a
+        // teardown / re-init cycle on every turn — and so the buffer
+        // router can detect barge-in during .speaking without
+        // re-installing a tap. Push-to-talk keeps the original
+        // teardown so the existing test surface is untouched.
         sttService.disconnect()
+        if conversationMode == .pushToTalk {
+            voiceService.stopRecording()
+            voiceService.onAudioBuffer = nil
+        }
 
         // Finalize draft and send to agent
         if let finalText = transcriptStore?.finalizeDraft() {
@@ -645,18 +739,19 @@ final class ConversationCoordinator {
             // auto-resume so the user can keep talking without
             // tapping anything. We skip if mic is muted; the user
             // explicitly silenced themselves and unmute will
-            // restart listening on its own. The STT session is
-            // freshly reconnected here (stopListeningAndProcess
-            // disconnected it when the previous turn submitted).
+            // restart listening on its own.
             if conversationMode == .handsFree && !isMicMuted {
+                let wasBargeIn = bargeInRequested
+                bargeInRequested = false
                 Task { [weak self] in
-                    // Settling time so the speaker tail and any AEC
-                    // engine state from the just-finished playback
-                    // don't bleed into the first listening buffers.
-                    // 400ms felt right in testing — long enough to
-                    // dodge audio-driver tail latency, short enough
-                    // that conversation still feels live.
-                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    // Skip the settling delay on barge-in — the user
+                    // is already talking and waiting for the mic to
+                    // pick up; any pause feels like a dropped word.
+                    // For natural turn ends, 400ms gives the speaker
+                    // tail and AEC engine time to settle.
+                    if !wasBargeIn {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                    }
                     await self?.startListening()
                 }
                 return

@@ -15,6 +15,11 @@ struct MicButton: View {
     let state: ConversationState
     let isEnabled: Bool
     let onTap: () -> Void
+    /// Hands-free only — when true the button renders as an obvious
+    /// mute toggle (mic.slash icon, gray gradient, no pulse) instead
+    /// of the state-driven appearance. Lets the user tell at a glance
+    /// that tapping will affect their mic, not Halo's flow.
+    var appearMuted: Bool = false
 
     @State private var pulseAnimation = false
 
@@ -27,8 +32,10 @@ struct MicButton: View {
             // Mic button with pulse
             Button(action: onTap) {
                 ZStack {
-                    // Pulse ring when listening
-                    if state == .listening {
+                    // Pulse ring while actively listening — suppressed
+                    // when shown as a mute toggle so the visual signal
+                    // matches the action (no recording = no pulse).
+                    if state == .listening && !appearMuted {
                         pulseRing
                     }
 
@@ -55,7 +62,10 @@ struct MicButton: View {
         .onAppear {
             updatePulseAnimation()
         }
-        .onChange(of: state) { _, newState in
+        .onChange(of: state) { _, _ in
+            updatePulseAnimation()
+        }
+        .onChange(of: appearMuted) { _, _ in
             updatePulseAnimation()
         }
     }
@@ -98,6 +108,13 @@ struct MicButton: View {
     // MARK: - Computed Properties
 
     private var buttonGradient: LinearGradient {
+        if appearMuted {
+            return LinearGradient(
+                colors: [Color(white: 0.45), Color(white: 0.30)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
         switch state {
         case .listening, .speaking:
             return LinearGradient(
@@ -121,6 +138,7 @@ struct MicButton: View {
     }
 
     private var shadowColor: Color {
+        if appearMuted { return .gray }
         switch state {
         case .listening, .speaking:
             return .red
@@ -132,6 +150,7 @@ struct MicButton: View {
     }
 
     private var iconName: String {
+        if appearMuted { return "mic.slash.fill" }
         switch state {
         case .listening:
             return "waveform"
@@ -156,6 +175,7 @@ struct MicButton: View {
     }
 
     private var accessibilityLabel: String {
+        if appearMuted { return "Mic muted" }
         switch state {
         case .listening:
             return "Stop listening"
@@ -169,6 +189,7 @@ struct MicButton: View {
     }
 
     private var accessibilityHint: String {
+        if appearMuted { return "Double tap to unmute your microphone" }
         switch state {
         case .listening:
             return "Double tap to stop recording"
@@ -184,7 +205,7 @@ struct MicButton: View {
     // MARK: - Animation
 
     private func updatePulseAnimation() {
-        pulseAnimation = (state == .listening)
+        pulseAnimation = (state == .listening) && !appearMuted
     }
 }
 

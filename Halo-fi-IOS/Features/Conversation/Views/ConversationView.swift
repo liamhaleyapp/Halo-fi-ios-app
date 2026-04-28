@@ -76,19 +76,13 @@ struct ConversationView: View {
     private var inputArea: some View {
         switch viewModel.interactionMode {
         case .voice:
-            // Hands-free swaps the bottom row from "Type instead"
-            // to a dedicated End Conversation button + a mute label.
-            // The mic button itself becomes a mute toggle (handled
-            // inside the view model's toggleMicButton).
+            // Hands-free turns the bottom row into a mute label and
+            // recolors the mic button as a mute toggle. Conversation
+            // teardown happens via the header's X close button — no
+            // dedicated End button needed.
             let handsFree: VoiceModeInputArea.HandsFreeOptions? =
                 viewModel.isHandsFree
-                    ? .init(
-                        isMicMuted: viewModel.isMicMuted,
-                        onEnd: {
-                            viewModel.endConversation()
-                            dismiss()
-                        }
-                    )
+                    ? .init(isMicMuted: viewModel.isMicMuted)
                     : nil
             VoiceModeInputArea(
                 state: viewModel.state,
