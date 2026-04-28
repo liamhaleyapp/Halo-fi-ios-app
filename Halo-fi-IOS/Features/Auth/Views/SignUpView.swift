@@ -92,7 +92,8 @@ struct SignUpView: View {
                 onGoogleSignIn: {
                   handleGoogleSignIn()
                 },
-                showsLeadingDivider: false
+                showsLeadingDivider: false,
+                mode: .signUp
               )
               .disabled(!agreedToTerms)
               .opacity(!agreedToTerms ? 0.6 : 1.0)
@@ -105,13 +106,15 @@ struct SignUpView: View {
               }
             }
 
-            // "or sign up with email" divider — separates the social
-            // path above from the manual form below.
+            // Divider — separates the social path above from the
+            // manual phone+password form below. Phone is the actual
+            // login credential (email is collected but not the
+            // username), so the label reflects that.
             HStack {
               Rectangle()
                 .fill(Color.gray.opacity(0.3))
                 .frame(height: 1)
-              Text("or sign up with email")
+              Text("or use your phone number")
                 .foregroundColor(.gray)
                 .font(.subheadline)
                 .fixedSize()
@@ -121,7 +124,7 @@ struct SignUpView: View {
             }
             .padding(.vertical, 4)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Or sign up with email")
+            .accessibilityLabel("Or use your phone number")
 
             AuthFormField(
               title: "First Name",

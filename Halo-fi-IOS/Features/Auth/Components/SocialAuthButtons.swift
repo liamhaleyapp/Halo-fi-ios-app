@@ -9,6 +9,15 @@ import SwiftUI
 import AuthenticationServices
 import CryptoKit
 
+/// Whether this set of social buttons is sitting on a sign-in or
+/// sign-up screen. Drives the Apple button style (Apple's HIG ships
+/// distinct .signIn / .signUp / .continue label styles) and the
+/// Google button label text.
+enum SocialAuthMode {
+    case signIn
+    case signUp
+}
+
 struct SocialAuthButtons: View {
     let isLoading: Bool
     let onAppleSignIn: (String, String) -> Void  // (idToken, nonce)
@@ -18,8 +27,28 @@ struct SocialAuthButtons: View {
     /// at the top of the form, the divider is meaningless — pass false
     /// and place a divider after this view instead.
     var showsLeadingDivider: Bool = true
+    /// Defaults to .signIn so existing SignInView call sites keep their
+    /// current copy without a code change.
+    var mode: SocialAuthMode = .signIn
 
     @State private var currentNonce: String?
+
+    private var appleButtonLabel: SignInWithAppleButton.Label {
+        // Apple's HIG: .signIn for returning users, .signUp for new
+        // account flows. Both buttons hit the same backend path; this
+        // is purely the button title Apple draws for us.
+        switch mode {
+        case .signIn: return .signIn
+        case .signUp: return .signUp
+        }
+    }
+
+    private var googleButtonText: String {
+        switch mode {
+        case .signIn: return "Sign in with Google"
+        case .signUp: return "Sign up with Google"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -38,8 +67,9 @@ struct SocialAuthButtons: View {
                 .padding(.vertical, 4)
             }
 
-            // Apple Sign In
-            SignInWithAppleButton(.signIn) { request in
+            // Apple Sign In / Sign Up — Apple draws the label based on
+            // the .signIn / .signUp style we hand it.
+            SignInWithAppleButton(appleButtonLabel) { request in
                 let nonce = randomNonceString()
                 currentNonce = nonce
                 request.requestedScopes = [.fullName, .email]
@@ -51,14 +81,14 @@ struct SocialAuthButtons: View {
             .frame(height: 56)
             .cornerRadius(16)
             .disabled(isLoading)
-            .accessibilityLabel("Sign in with Apple")
+            .accessibilityLabel(mode == .signUp ? "Sign up with Apple" : "Sign in with Apple")
 
-            // Google Sign In
+            // Google Sign In / Sign Up
             Button(action: onGoogleSignIn) {
                 HStack(spacing: 6) {
                     googleLogo
                         .frame(width: 18, height: 18)
-                    Text("Sign in with Google")
+                    Text(googleButtonText)
                         .font(.system(size: 19, weight: .medium))
                 }
                 .foregroundColor(.black)
@@ -69,7 +99,7 @@ struct SocialAuthButtons: View {
             }
             .disabled(isLoading)
             .opacity(isLoading ? 0.6 : 1.0)
-            .accessibilityLabel("Sign in with Google")
+            .accessibilityLabel(googleButtonText)
         }
     }
 
