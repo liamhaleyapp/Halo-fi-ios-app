@@ -103,53 +103,17 @@ struct SocialAuthButtons: View {
         }
     }
 
-    // MARK: - Google Logo (official colors)
+    // MARK: - Google Logo
+    // Uses the official g-logo.png from Google's identity branding
+    // assets (https://developers.google.com/identity/branding-guidelines).
+    // Recreating the mark in code is explicitly disallowed by their
+    // brand guidelines — the asset is shipped in Assets.xcassets.
 
     private var googleLogo: some View {
-        Canvas { context, size in
-            let w = size.width
-            let h = size.height
-            let cx = w / 2
-            let cy = h / 2
-            let r = min(w, h) / 2
-
-            // Blue (top-right arc)
-            var blue = Path()
-            blue.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: .degrees(-45), endAngle: .degrees(45), clockwise: false)
-            blue.addLine(to: CGPoint(x: cx, y: cy))
-            blue.closeSubpath()
-            context.fill(blue, with: .color(Color(red: 0.255, green: 0.522, blue: 0.957)))
-
-            // Green (bottom-right arc)
-            var green = Path()
-            green.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: .degrees(45), endAngle: .degrees(135), clockwise: false)
-            green.addLine(to: CGPoint(x: cx, y: cy))
-            green.closeSubpath()
-            context.fill(green, with: .color(Color(red: 0.204, green: 0.659, blue: 0.325)))
-
-            // Yellow (bottom-left arc)
-            var yellow = Path()
-            yellow.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: .degrees(135), endAngle: .degrees(225), clockwise: false)
-            yellow.addLine(to: CGPoint(x: cx, y: cy))
-            yellow.closeSubpath()
-            context.fill(yellow, with: .color(Color(red: 0.984, green: 0.737, blue: 0.22)))
-
-            // Red (top-left arc)
-            var red = Path()
-            red.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: .degrees(225), endAngle: .degrees(315), clockwise: false)
-            red.addLine(to: CGPoint(x: cx, y: cy))
-            red.closeSubpath()
-            context.fill(red, with: .color(Color(red: 0.918, green: 0.263, blue: 0.208)))
-
-            // White center
-            var center = Path()
-            center.addEllipse(in: CGRect(x: cx - r * 0.55, y: cy - r * 0.55, width: r * 1.1, height: r * 1.1))
-            context.fill(center, with: .color(.white))
-
-            // Blue bar (the "G" opening)
-            let barRect = CGRect(x: cx - r * 0.05, y: cy - r * 0.15, width: r * 0.65, height: r * 0.3)
-            context.fill(Path(barRect), with: .color(Color(red: 0.255, green: 0.522, blue: 0.957)))
-        }
+        Image("GoogleLogo")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Apple Sign In Handler
