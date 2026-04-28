@@ -135,18 +135,24 @@ struct InstitutionAccountsView: View {
   // MARK: - Data Loading
 
   private func loadAccounts() async {
-    // Check if we already have accounts cached
+    // If we have cached accounts, render immediately for snappy UX,
+    // then re-fetch in the background so the user sees fresh balances
+    // without flicker. The previous version returned early after the
+    // cached render, which is why detail views surfaced stale balances
+    // until the user pulled to refresh.
+    let hadCache: Bool
     if let cachedAccounts = bankDataManager.accountsByItemId[item.itemId] {
+      hadCache = true
       await MainActor.run {
         self.accounts = cachedAccounts
         self.isLoadingAccounts = false
       }
-      return
-    }
-
-    await MainActor.run {
-      isLoadingAccounts = true
-      loadError = nil
+    } else {
+      hadCache = false
+      await MainActor.run {
+        isLoadingAccounts = true
+        loadError = nil
+      }
     }
 
     do {
@@ -161,8 +167,12 @@ struct InstitutionAccountsView: View {
       }
     } catch {
       await MainActor.run {
-        isLoadingAccounts = false
-        loadError = "Failed to load accounts. Please try again."
+        // If we already rendered cached data, keep it visible — a
+        // background-refresh failure shouldn't blow away a working view.
+        if !hadCache {
+          isLoadingAccounts = false
+          loadError = "Failed to load accounts. Please try again."
+        }
         Logger.error("InstitutionAccountsView: Error fetching accounts: \(error)")
       }
     }

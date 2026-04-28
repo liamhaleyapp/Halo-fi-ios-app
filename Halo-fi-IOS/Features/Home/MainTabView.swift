@@ -17,6 +17,8 @@ extension Notification.Name {
 struct MainTabView: View {
     @Environment(UserManager.self) private var userManager
     @Environment(SubscriptionService.self) private var subscriptionService
+    @Environment(BankDataManager.self) private var bankDataManager
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     @State private var feedbackService = AudioFeedbackService()
 
@@ -60,6 +62,15 @@ struct MainTabView: View {
             if currentRoute == .main {
                 selectedTab = 0
             }
+        }
+        // Refresh bank data on foreground. Plaid webhooks update the
+        // backend, but the iOS in-memory cache only reloads when a view
+        // is rebuilt — so a user who left the app for an hour was seeing
+        // stale balances on return. refreshIfStale's own threshold guard
+        // prevents thrash if they background/foreground rapidly.
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, currentRoute == .main else { return }
+            Task { await bankDataManager.refreshIfStale() }
         }
     }
 

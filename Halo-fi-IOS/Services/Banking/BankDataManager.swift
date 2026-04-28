@@ -358,23 +358,32 @@ final class BankDataManager {
             return
         }
 
-        // Skip refresh if we already have accounts for all linked items
-        // This prevents race condition where view calls refreshIfStale before configureForUser finishes
-        if let items = linkedItems, !items.isEmpty {
+        // Two reasons we'd skip a refresh: (1) the last refresh was recent
+        // enough that data is still warm, or (2) we hit a startup race where
+        // configureForUser already populated accounts. The previous version
+        // collapsed both into "accounts populated → skip", which suppressed
+        // legitimate stale-data refreshes for the entire app session.
+        let lastRefresh = persistence.getLastRefreshAt(for: userId)
+        let isRecent = lastRefresh.map { Date().timeIntervalSince($0) < refreshThreshold } ?? false
+
+        if isRecent {
+            Logger.debug("BankDataManager: Skipping refresh - last refresh was recent")
+            return
+        }
+
+        // If accounts are populated AND we have a recent-ish lastRefresh,
+        // we can still skip (covers the configureForUser race). But with
+        // no lastRefresh recorded, we MUST refresh — otherwise restored
+        // accounts from local persistence stay forever stale.
+        if lastRefresh != nil, let items = linkedItems, !items.isEmpty {
             let hasAllAccounts = items.allSatisfy { item in
                 guard let accounts = accountsByItemId[item.itemId] else { return false }
                 return !accounts.isEmpty
             }
-            if hasAllAccounts {
-                Logger.debug("BankDataManager: Skipping refresh - accounts already populated for all \(items.count) items")
+            if hasAllAccounts && Date().timeIntervalSince(lastRefresh!) < refreshThreshold * 2 {
+                Logger.debug("BankDataManager: Skipping refresh - accounts populated and refresh within 2x threshold")
                 return
             }
-        }
-
-        let lastRefresh = persistence.getLastRefreshAt(for: userId)
-        if let lastRefresh, Date().timeIntervalSince(lastRefresh) < refreshThreshold {
-            Logger.debug("BankDataManager: Skipping refresh - last refresh was recent")
-            return
         }
 
         refreshTask = Task {
