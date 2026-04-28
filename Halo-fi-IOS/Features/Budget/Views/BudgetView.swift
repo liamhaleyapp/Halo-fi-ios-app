@@ -460,7 +460,8 @@ struct BudgetView: View {
                 .font(.subheadline).fontWeight(.medium)
             if !threshold.isEmpty {
                 Text("When \(alert.comparison) \(threshold)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(Color.white.opacity(0.80))
             }
         }
         .accessibilityElement(children: .combine)
@@ -468,17 +469,18 @@ struct BudgetView: View {
 
     // MARK: - Layout helpers
 
-    /// Same look as AccountsOverviewView.sectionHeader — headline + count
-    /// right-aligned in muted gray. Keeps the two tabs visually consistent.
+    /// Section header — headline + count right-aligned. Bumped from
+    /// .gray (~3.5:1 on black) to ~85% white (~7:1) so headers clear
+    /// WCAG AA for normal text on the dark background.
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
             Spacer()
             Text("\(count)")
                 .font(.subheadline)
-                .foregroundColor(.gray.opacity(0.7))
+                .foregroundColor(.white.opacity(0.70))
         }
         .padding(.top, 16)
         .padding(.bottom, 4)
@@ -491,7 +493,7 @@ struct BudgetView: View {
         Text(text)
             .font(.caption)
             .fontWeight(.semibold)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.white.opacity(0.80))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 8)
             .accessibilityAddTraits(.isHeader)

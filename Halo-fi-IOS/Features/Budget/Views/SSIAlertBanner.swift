@@ -36,9 +36,12 @@ struct SSIAlertBanner: View {
                 Text(entry.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                // Body text bumped from .secondary (~4.5:1) to
+                // ~85% white so it clears WCAG AA on the dark
+                // tinted card without losing visual hierarchy.
                 Text(entry.body)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.white.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
                 if let label = entry.actionLabel, onAction != nil {
                     Button(label) { onAction?() }
@@ -72,9 +75,13 @@ struct SSIAlertBanner: View {
     }
 
     private var iconColor: Color {
+        // Yellow for both critical and warn — system yellow has the
+        // highest luminance on a dark background (~12:1) and reads
+        // unambiguously as "caution". Keeping red was visually loud
+        // but didn't meet the contrast budget for low-vision users.
         switch entry.severity {
-        case "critical": return .red
-        case "warn":     return .orange
+        case "critical": return .yellow
+        case "warn":     return .yellow
         case "good":     return .green
         default:         return .blue
         }
@@ -82,8 +89,8 @@ struct SSIAlertBanner: View {
 
     private var backgroundColor: Color {
         switch entry.severity {
-        case "critical": return Color.red.opacity(0.12)
-        case "warn":     return Color.orange.opacity(0.12)
+        case "critical": return Color.yellow.opacity(0.10)
+        case "warn":     return Color.yellow.opacity(0.10)
         case "good":     return Color.green.opacity(0.12)
         default:         return Color.blue.opacity(0.10)
         }
@@ -91,8 +98,8 @@ struct SSIAlertBanner: View {
 
     private var borderColor: Color {
         switch entry.severity {
-        case "critical": return Color.red.opacity(0.30)
-        case "warn":     return Color.orange.opacity(0.30)
+        case "critical": return Color.yellow.opacity(0.35)
+        case "warn":     return Color.yellow.opacity(0.35)
         case "good":     return Color.green.opacity(0.30)
         default:         return Color.blue.opacity(0.25)
         }
