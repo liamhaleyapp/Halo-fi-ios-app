@@ -205,7 +205,10 @@ class SignUpViewModel {
     let code: String
   }
 
-  private struct RedeemResponse: Decodable {
+  // NetworkService.authenticatedRequest constrains T to Codable, not
+  // just Decodable, so we need both directions even though we never
+  // re-encode the response.
+  private struct RedeemResponse: Codable {
     let success: Bool
     let message: String
   }

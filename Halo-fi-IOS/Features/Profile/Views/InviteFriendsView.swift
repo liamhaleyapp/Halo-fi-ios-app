@@ -60,7 +60,8 @@ struct InviteFriendsView: View {
 
     // MARK: - Networking
 
-    private struct StatsResponse: Decodable {
+    // NetworkService.authenticatedRequest constrains T to Codable.
+    private struct StatsResponse: Codable {
         let referral_code: String?
         let invited_count: Int
         let pending_rewards: Int
