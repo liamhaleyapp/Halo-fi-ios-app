@@ -148,6 +148,20 @@ final class ConversationCoordinator {
     /// a barge-in needs to flip to listening instantly.
     private var bargeInRequested: Bool = false
 
+    // MARK: - Recording capture (training data)
+    //
+    // Every listening turn's mic buffers are also accumulated here.
+    // After the transcript is sent to the agent, we fire-and-forget
+    // a background upload to /agent/recordings/upload — encoding +
+    // network never block the conversation path. Failures log but
+    // don't surface to the user.
+
+    private let recordingUploader = RecordingUploader()
+    private var capturedBuffers: [AVAudioPCMBuffer] = []
+    /// Monotonic per-session counter so each turn lands at a stable
+    /// path in storage ({user}/{session}/turn_N.wav).
+    private var recordingTurnNumber: Int = 0
+
     /// Hard cap on a single listening turn. Even if silence detection
     /// never fires (always-on background noise above threshold) we
     /// commit after this so the conversation always progresses.
@@ -286,6 +300,12 @@ final class ConversationCoordinator {
         listenStartedAt = nil
         bargeInConsecutiveFrames = 0
         bargeInRequested = false
+        // Drop any captured audio for the next conversation. Note we
+        // do not reset recordingTurnNumber here — it's bound to the
+        // session and we get a new sessionId on the next connect, so
+        // the storage path stays unique either way.
+        capturedBuffers = []
+        recordingTurnNumber = 0
 
         // Stop the thinking-pulse haptic explicitly here too —
         // setState below will catch it via the leave-processing
@@ -449,9 +469,13 @@ final class ConversationCoordinator {
 
         switch state {
         case .listening:
-            // Send to STT and tap silence detection.
+            // Send to STT, tap silence detection, AND accumulate the
+            // raw buffer for post-turn training-data upload. The
+            // upload itself runs background-detached after the turn
+            // is committed — appending here is the cheap part.
             Task { await sttService.sendAudioBuffer(buffer) }
             processAudioBufferForSilenceDetection(buffer)
+            capturedBuffers.append(buffer)
 
         case .speaking:
             // Hands-free only: watch for the user starting to talk
@@ -609,7 +633,26 @@ final class ConversationCoordinator {
             Task {
                 await sendTextInternal(finalText)
             }
+
+            // Snapshot + handoff for the training-data upload. We
+            // copy the array so the background task owns its own
+            // buffer list while we clear ours for the next turn —
+            // the upload is fire-and-forget and never awaits.
+            let buffersForUpload = capturedBuffers
+            capturedBuffers = []
+            recordingTurnNumber += 1
+            let turnNumber = recordingTurnNumber
+            let sessionForUpload = sessionId ?? "unknown"
+            recordingUploader.upload(
+                buffers: buffersForUpload,
+                sessionId: sessionForUpload,
+                turnNumber: turnNumber,
+                userTranscript: finalText
+            )
         } else {
+            // Empty turn — drop any accumulated buffers so they
+            // don't leak into the next listen.
+            capturedBuffers = []
             // Empty or invalid transcript - just go idle
             setState(.idle)
         }
