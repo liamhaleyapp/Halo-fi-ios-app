@@ -14,21 +14,21 @@ struct AboutView: View {
 
     @State private var showingTerms = false
     @State private var showingPrivacy = false
-    @State private var showingHelpFeedback = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
+                // Accessibility features and data-security marketing
+                // copy were dropped — that content sells the app to
+                // someone evaluating it on the App Store, but the
+                // user is already inside the app. Help & Feedback
+                // also moved out: Settings → Contact Us is the
+                // canonical place for that flow.
                 WhatIsHaloFiSection()
                 OurMissionSection()
-                AccessibilityFeaturesSection()
-                DataSecuritySection()
                 LegalSection(
                     onTermsTap: { showingTerms = true },
                     onPrivacyTap: { showingPrivacy = true }
-                )
-                SupportSection(
-                    onHelpTap: { showingHelpFeedback = true }
                 )
                 AppVersionSection()
             }
@@ -50,9 +50,6 @@ struct AboutView: View {
                 sections: Self.privacyPolicySections,
                 endpoint: APIEndpoints.Legal.privacy
             )
-        }
-        .sheet(isPresented: $showingHelpFeedback) {
-            HelpFeedbackView()
         }
     }
 

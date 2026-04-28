@@ -21,6 +21,10 @@ extension Notification.Name {
     /// NavigationPath so the next visit lands on the institutions
     /// list instead of whichever nested view they were on.
     static let resetAccountsNavigation = Notification.Name("resetAccountsNavigation")
+    /// Same idea for the Settings tab — leaving Settings while
+    /// nested in Profile / Preferences / About / etc. should land
+    /// the user back on the Settings root next time they re-enter.
+    static let resetSettingsNavigation = Notification.Name("resetSettingsNavigation")
 }
 
 struct MainTabView: View {
@@ -76,6 +80,15 @@ struct MainTabView: View {
             if oldTab == 1 && newTab != 1 {
                 NotificationCenter.default.post(
                     name: .resetAccountsNavigation,
+                    object: nil
+                )
+            }
+            // Same treatment for the Settings tab — re-entering
+            // should always land on the root list, not a nested
+            // Profile / About / Preferences view.
+            if oldTab == 3 && newTab != 3 {
+                NotificationCenter.default.post(
+                    name: .resetSettingsNavigation,
                     object: nil
                 )
             }

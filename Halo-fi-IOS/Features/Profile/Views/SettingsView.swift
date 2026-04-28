@@ -24,9 +24,13 @@ struct SettingsView: View {
   // the SettingsOption when minute-quota UX is finalized.
   @State private var isResettingMinutes = false
   @State private var resetMinutesAlert: ResetMinutesAlert?
+  /// Bound to the NavigationStack so we can clear it when MainTabView
+  /// posts .resetSettingsNavigation — keeps re-entry at the root list
+  /// rather than wherever the user was nested when they left.
+  @State private var navigationPath = NavigationPath()
 
   var body: some View {
-    NavigationStack {
+    NavigationStack(path: $navigationPath) {
       ZStack {
         Color(.systemBackground).ignoresSafeArea()
 
@@ -140,6 +144,14 @@ struct SettingsView: View {
 
         case .contactUs:
           ContactUsView()
+        }
+      }
+      // MainTabView posts this when the user leaves the Settings
+      // tab. Clearing the path here means re-entering always lands
+      // on the root list — no leftover nested view from last time.
+      .onReceive(NotificationCenter.default.publisher(for: .resetSettingsNavigation)) { _ in
+        if !navigationPath.isEmpty {
+          navigationPath.removeLast(navigationPath.count)
         }
       }
     }
