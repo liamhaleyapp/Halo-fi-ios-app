@@ -80,6 +80,45 @@ final class ConversationCoordinator {
     /// audio arrives.
     private var isPlayingAcknowledgment = false
 
+    // MARK: - Hands-free silence detection
+    //
+    // ElevenLabs Scribe v2's server-side VAD doesn't reliably fire
+    // committed transcripts in our setup, so hands-free needs a
+    // client-side fallback: track the RMS of incoming mic buffers,
+    // mark when the user has spoken at least once during the current
+    // listen, and auto-commit when we see silenceCommitInterval of
+    // sub-threshold audio after that first speech.
+
+    /// True the moment we've seen audio above the voice-activity
+    /// threshold during the current listening turn. Prevents an
+    /// initial silence (user takes a beat to start) from triggering
+    /// an empty commit.
+    private var hasDetectedSpeechInCurrentListen = false
+
+    /// Timestamp of the most recent above-threshold buffer in this
+    /// listening turn. Used to measure trailing silence.
+    private var lastVoiceActivityAt: Date?
+
+    /// RMS magnitude (linear, 0...1) above which we consider a
+    /// buffer to contain voice. 0.012 was chosen empirically against
+    /// hands-free TestFlight audio: louder than ambient hush, quieter
+    /// than typical conversational speech.
+    private let voiceActivityRMSThreshold: Float = 0.012
+
+    /// How long after the user's last detected voice activity we wait
+    /// before auto-committing the turn. Mirrors the
+    /// silence_threshold_ms we configure on the backend (1.5s).
+    private let silenceCommitInterval: TimeInterval = 1.5
+
+    /// Hands-free safety net — if the user opens the conversation,
+    /// hears the greeting, but never speaks, auto-commit anyway after
+    /// this long so we don't burn the STT session forever.
+    private let maxListenWithoutSpeech: TimeInterval = 30.0
+
+    /// When the current listening turn started — used by the safety
+    /// timeout above. Cleared by stopListeningAndProcess.
+    private var listenStartedAt: Date?
+
     // MARK: - Initialization
 
     private init() {
@@ -174,6 +213,11 @@ final class ConversationCoordinator {
         // Reset hands-free mute so re-opening the conversation always
         // starts with the mic live.
         isMicMuted = false
+        // Clear silence-detection state so the next conversation
+        // starts with a fresh slate.
+        hasDetectedSpeechInCurrentListen = false
+        lastVoiceActivityAt = nil
+        listenStartedAt = nil
 
         // Stop the thinking-pulse haptic explicitly here too —
         // setState below will catch it via the leave-processing
@@ -243,13 +287,25 @@ final class ConversationCoordinator {
                         // In hands-free, the user can pause input by toggling
                         // the mic mute — we skip forwarding here without
                         // tearing the STT session down so unmute is instant.
+                        // Hands-free also taps each buffer for client-side
+                        // silence detection (see processAudioBufferForSilenceDetection).
                         self.voiceService.onAudioBuffer = { [weak self] buffer in
                             guard let self = self else { return }
                             if self.isMicMuted { return }
                             Task {
                                 await self.sttService.sendAudioBuffer(buffer)
                             }
+                            Task { @MainActor [weak self] in
+                                self?.processAudioBufferForSilenceDetection(buffer)
+                            }
                         }
+
+                        // Reset silence-detection state for this turn so
+                        // residual values from a prior listen can't trigger
+                        // a phantom commit on the new one.
+                        self.hasDetectedSpeechInCurrentListen = false
+                        self.lastVoiceActivityAt = nil
+                        self.listenStartedAt = Date()
 
                         // Start recording first, then signal the user
                         try await self.voiceService.startRecording()
@@ -290,6 +346,11 @@ final class ConversationCoordinator {
         // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
         isVoiceSessionActive = false
 
+        // Reset silence detection so the next listen starts clean.
+        hasDetectedSpeechInCurrentListen = false
+        lastVoiceActivityAt = nil
+        listenStartedAt = nil
+
         // Stop recording and STT
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
@@ -308,6 +369,59 @@ final class ConversationCoordinator {
         }
     }
 
+    /// Per-buffer silence-detection tap for hands-free auto-commit.
+    /// Computes the buffer's RMS and tracks whether we've seen any
+    /// voice activity in this listen turn. Once we have, a trailing
+    /// silenceCommitInterval of sub-threshold audio triggers an
+    /// auto-commit. Also enforces the absolute max-listen safety net.
+    private func processAudioBufferForSilenceDetection(_ buffer: AVAudioPCMBuffer) {
+        guard conversationMode == .handsFree, state == .listening else { return }
+
+        let now = Date()
+
+        // Safety net: user opened conversation, never spoke. Commit
+        // the empty turn (which routes back to .idle and avoids burning
+        // the STT session indefinitely).
+        if !hasDetectedSpeechInCurrentListen,
+           let started = listenStartedAt,
+           now.timeIntervalSince(started) > maxListenWithoutSpeech {
+            stopListeningAndProcess()
+            return
+        }
+
+        let rms = Self.computeRMS(buffer)
+
+        if rms >= voiceActivityRMSThreshold {
+            // Real voice activity (or loud ambient noise). Mark the
+            // turn as "heard" so silence after this point is meaningful.
+            hasDetectedSpeechInCurrentListen = true
+            lastVoiceActivityAt = now
+            return
+        }
+
+        // Below threshold — only matters if user already spoke.
+        guard hasDetectedSpeechInCurrentListen,
+              let lastActivity = lastVoiceActivityAt else { return }
+
+        if now.timeIntervalSince(lastActivity) >= silenceCommitInterval {
+            stopListeningAndProcess()
+        }
+    }
+
+    /// Linear RMS for a single AVAudioPCMBuffer's first channel.
+    /// Returns 0 when the buffer has no float channel data.
+    private static func computeRMS(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let channelData = buffer.floatChannelData?[0] else { return 0 }
+        let frameCount = Int(buffer.frameLength)
+        guard frameCount > 0 else { return 0 }
+        var sum: Float = 0
+        for i in 0..<frameCount {
+            let s = channelData[i]
+            sum += s * s
+        }
+        return (sum / Float(frameCount)).squareRoot()
+    }
+
     /// Internal: Stop listening after committed transcript (VAD auto-stop)
     private func stopListeningAndProcess() {
         guard state == .listening else { return }
@@ -317,6 +431,11 @@ final class ConversationCoordinator {
 
         // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
         isVoiceSessionActive = false
+
+        // Reset silence detection so the next listen starts clean.
+        hasDetectedSpeechInCurrentListen = false
+        lastVoiceActivityAt = nil
+        listenStartedAt = nil
 
         // Stop recording and STT
         voiceService.stopRecording()

@@ -53,9 +53,12 @@ final class StreamingAudioPlayer: NSObject {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
+            // .voiceChat enables hardware acoustic echo cancellation
+            // so Halo's TTS output played here doesn't get picked up
+            // by the mic during hands-free mode. .default has no AEC.
             try session.setCategory(
                 .playAndRecord,
-                mode: .default,
+                mode: .voiceChat,
                 options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)

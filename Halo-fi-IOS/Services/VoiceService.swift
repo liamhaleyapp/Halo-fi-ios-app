@@ -76,7 +76,11 @@ final class VoiceService: NSObject {
     private func setupAudioSession() {
         do {
             recordingSession = AVAudioSession.sharedInstance()
-            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+            // .voiceChat enables hardware acoustic echo cancellation
+            // (AEC). Without it, the speaker output bleeds into the
+            // mic during full-duplex conversations — Halo's own voice
+            // gets transcribed as user input. .default has no AEC.
+            try recordingSession?.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
             try recordingSession?.setActive(true)
         } catch {
             Logger.error("Failed to setup audio session: \(error)")
@@ -87,7 +91,7 @@ final class VoiceService: NSObject {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
-            mode: .default,
+            mode: .voiceChat,
             options: [.defaultToSpeaker, .allowBluetooth]
         )
         try session.setActive(true)
