@@ -16,6 +16,11 @@ extension Notification.Name {
     /// MainTabView to restore the user to whichever tab they came from
     /// when the conversation was launched cross-tab via askHaloRequested.
     static let conversationDismissed = Notification.Name("conversationDismissed")
+    /// Posted by MainTabView when the user navigates away from the
+    /// Accounts tab. AccountsOverviewView listens and clears its
+    /// NavigationPath so the next visit lands on the institutions
+    /// list instead of whichever nested view they were on.
+    static let resetAccountsNavigation = Notification.Name("resetAccountsNavigation")
 }
 
 struct MainTabView: View {
@@ -63,6 +68,16 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()
+            }
+            // Leaving the Accounts tab resets its nested navigation
+            // so the user always re-enters at the institutions list,
+            // not whichever account/transaction detail they were
+            // viewing previously.
+            if oldTab == 1 && newTab != 1 {
+                NotificationCenter.default.post(
+                    name: .resetAccountsNavigation,
+                    object: nil
+                )
             }
         }
         // Phase 11 Track B — quick-action "Ask Halo" deep-link.

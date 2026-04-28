@@ -173,7 +173,7 @@ struct AccountDetailView: View {
       // Use mock transactions for mock accounts
       if account.id.hasPrefix("mock-") {
         try await Task.sleep(nanoseconds: 500_000_000)
-        transactions = MockTransactions.mockTransactions(for: account)
+        transactions = Self.sortedNewestFirst(MockTransactions.mockTransactions(for: account))
       } else if let plaidItemId = account.plaidItemId,
                 let itemId = bankDataManager.getItemId(for: plaidItemId) {
         // Fetch recent transactions using cache-then-network pattern
@@ -182,7 +182,7 @@ struct AccountDetailView: View {
           itemId: itemId,
           limit: 50
         )
-        transactions = fetched
+        transactions = Self.sortedNewestFirst(fetched)
       } else {
         // No plaidItemId or itemId available
         transactions = []
@@ -195,6 +195,21 @@ struct AccountDetailView: View {
     }
 
     isLoadingInitial = false
+  }
+
+  /// Newest-first by date. Plaid sometimes returns rows out of order
+  /// (intra-day batches arrive grouped by category), and the older
+  /// list relied on whatever order the cache returned. Authorized
+  /// date is the truer transaction time when present; transactionDate
+  /// (posting date) is the consistent fallback. Both come back as
+  /// ISO YYYY-MM-DD or ISO 8601 datetime strings, which sort
+  /// correctly as strings.
+  private static func sortedNewestFirst(_ items: [Transaction]) -> [Transaction] {
+    items.sorted { lhs, rhs in
+      let lhsKey = lhs.authorizedDatetime ?? lhs.authorizedDate ?? lhs.transactionDatetime ?? lhs.transactionDate
+      let rhsKey = rhs.authorizedDatetime ?? rhs.authorizedDate ?? rhs.transactionDatetime ?? rhs.transactionDate
+      return lhsKey > rhsKey
+    }
   }
 }
 

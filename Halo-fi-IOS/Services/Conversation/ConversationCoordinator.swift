@@ -161,6 +161,13 @@ final class ConversationCoordinator {
         pendingInitialMessage = nil
         isPlayingAcknowledgment = false
 
+        // Stop the thinking-pulse haptic explicitly here too —
+        // setState below will catch it via the leave-processing
+        // guard, but if state was already .idle when disconnect was
+        // called the haptic could otherwise be left running by an
+        // earlier failure path.
+        audioFeedback.stopProcessingPulse()
+
         voiceService.stopRecording()
         voiceService.teardownCapture()
         sttService.disconnect()
@@ -408,6 +415,16 @@ final class ConversationCoordinator {
     private func setState(_ newState: ConversationState) {
         let oldState = state
         state = newState
+
+        // Belt-and-suspenders: the per-event stops at the .agentResponse,
+        // .audioChunk, and .error sites missed several transitions
+        // (manual disconnect, error fallthroughs, etc.) and the
+        // thinking-pulse haptic kept ticking forever — even after the
+        // conversation closed. Stopping it on every leave-from-processing
+        // catches all of those paths in one place.
+        if oldState == .processing && newState != .processing {
+            audioFeedback.stopProcessingPulse()
+        }
 
         // Announce state change for accessibility (throttled)
         if oldState != newState {

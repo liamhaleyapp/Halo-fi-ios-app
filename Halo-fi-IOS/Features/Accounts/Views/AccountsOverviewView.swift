@@ -57,6 +57,15 @@ struct AccountsOverviewView: View {
       .navigationDestination(for: ConnectedItem.self) { item in
         InstitutionAccountsView(item: item)
       }
+      // MainTabView posts this when the user leaves the Accounts tab.
+      // Clearing the path here means re-entering the tab always lands
+      // back on the institutions list — no nested institution or
+      // account-detail view persisting across tab switches.
+      .onReceive(NotificationCenter.default.publisher(for: .resetAccountsNavigation)) { _ in
+        if !navigationPath.isEmpty {
+          navigationPath.removeLast(navigationPath.count)
+        }
+      }
     }
   }
 
