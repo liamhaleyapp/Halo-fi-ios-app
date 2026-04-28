@@ -26,6 +26,14 @@ struct InstitutionAccountsView: View {
       } else if let accounts = accounts {
         if accounts.isEmpty {
           emptyAccountsView
+        } else if accounts.count == 1 {
+          // Single-account institution — skip the picker entirely and
+          // render the detail view directly. Saves a tap when the
+          // intermediary list would only have one row anyway.
+          AccountDetailView(
+            account: FinancialAccount(from: accounts[0], plaidItemId: item.plaidItemId)
+          )
+          .environment(bankDataManager)
         } else {
           accountsListView(accounts)
         }

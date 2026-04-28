@@ -34,7 +34,6 @@ struct PreferencesView: View {
         .init(id: "System", title: "System"),
         .init(id: "Light", title: "Light"),
         .init(id: "Dark", title: "Dark"),
-        .init(id: "High-Contrast", title: "High-Contrast")
     ]
 
     private static let defaultVoiceId = "21m00Tcm4TlvDq8ikWAM"
@@ -82,12 +81,12 @@ struct PreferencesView: View {
             return .light
         case "Dark":
             return .dark
-        case "High-Contrast":
-            return .dark
         case "System":
             return systemColorScheme
         default:
-            return nil
+            // Migrates older "High-Contrast" saves to System without
+            // forcing the user to re-pick.
+            return systemColorScheme
         }
     }
 
