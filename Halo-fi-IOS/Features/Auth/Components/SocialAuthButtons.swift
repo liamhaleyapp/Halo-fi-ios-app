@@ -13,24 +13,30 @@ struct SocialAuthButtons: View {
     let isLoading: Bool
     let onAppleSignIn: (String, String) -> Void  // (idToken, nonce)
     let onGoogleSignIn: () -> Void
+    /// When the social buttons sit at the bottom of a form, the leading
+    /// "or" divider separates them from the form above. When they're
+    /// at the top of the form, the divider is meaningless — pass false
+    /// and place a divider after this view instead.
+    var showsLeadingDivider: Bool = true
 
     @State private var currentNonce: String?
 
     var body: some View {
         VStack(spacing: 12) {
-            // Divider
-            HStack {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 1)
-                Text("or")
-                    .foregroundColor(.gray)
-                    .font(.subheadline)
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 1)
+            if showsLeadingDivider {
+                HStack {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 1)
+                    Text("or")
+                        .foregroundColor(.gray)
+                        .font(.subheadline)
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 1)
+                }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
 
             // Apple Sign In
             SignInWithAppleButton(.signIn) { request in

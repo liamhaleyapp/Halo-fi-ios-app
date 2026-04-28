@@ -41,85 +41,10 @@ struct SignUpView: View {
           
           // Form
           VStack(spacing: 20) {
-            AuthFormField(
-              title: "First Name",
-              placeholder: "Enter your first name",
-              text: $viewModel.firstName,
-              textContentType: .givenName
-            )
-            if let error = viewModel.firstNameError {
-              validationText(error)
-            }
-            
-            AuthFormField(
-              title: "Last Name",
-              placeholder: "Enter your last name",
-              text: $viewModel.lastName,
-              textContentType: .familyName
-            )
-            
-            DateOfBirthField(selectedDate: viewModel.dateOfBirth) {
-              showingDatePicker = true
-            }
-            if let error = viewModel.dateOfBirthError {
-              validationText(error)
-            }
-            
-            AuthFormField(
-              title: "Phone Number",
-              placeholder: "Enter your phone number",
-              text: $viewModel.phoneNumber,
-              keyboardType: .phonePad,
-              textContentType: .username
-            )
-            if let error = viewModel.phoneError {
-              validationText(error)
-            }
-            
-            AuthFormField(
-              title: "Email",
-              placeholder: "Enter your email",
-              text: $viewModel.email,
-              keyboardType: .emailAddress,
-              textContentType: .emailAddress
-            )
-            if let error = viewModel.emailError {
-              validationText(error)
-            }
-            
-            AuthFormField(
-              title: "Password",
-              placeholder: "Create a password",
-              text: $viewModel.password,
-              isSecure: true,
-              textContentType: .newPassword
-            )
-            if let error = viewModel.passwordError {
-              validationText(error)
-            }
-            
-            AuthFormField(
-              title: "Confirm Password",
-              placeholder: "Confirm your password",
-              text: $viewModel.confirmPassword,
-              isSecure: true,
-              textContentType: .newPassword
-            )
-            if let error = viewModel.confirmPasswordError {
-              validationText(error)
-            }
-
-            // Optional referral code — Phase 1 attribution only.
-            // Empty input no-ops; bad input is silently ignored
-            // post-signup (logged, doesn't block onboarding).
-            AuthFormField(
-              title: "Referral Code (Optional)",
-              placeholder: "HALO-XXXXXX",
-              text: $viewModel.referralCode
-            )
-            .accessibilityHint("Enter a friend's referral code if you have one. This is optional.")
-
-            // Terms & Privacy consent
+            // Terms & Privacy consent — moved up so users picking the
+            // social path don't have to scroll past the entire manual
+            // form to find the checkbox. Same enforcement as before:
+            // tapping a disabled button highlights this row.
             HStack(alignment: .center, spacing: 12) {
               Button {
                 agreedToTerms.toggle()
@@ -146,8 +71,135 @@ struct SignUpView: View {
                   return .systemAction
                 })
             }
-            .padding(.top, 4)
             .animation(.spring(response: 0.3, dampingFraction: 0.5), value: termsHighlighted)
+
+            // Social Auth — at the top so users have a one-tap option
+            // before committing to the long manual form.
+            ZStack {
+              SocialAuthButtons(
+                isLoading: viewModel.isLoading,
+                onAppleSignIn: { idToken, nonce in
+                  Task {
+                    await viewModel.socialSignIn(
+                      provider: "apple", idToken: idToken, nonce: nonce,
+                      using: userManager, subscriptionService: subscriptionService,
+                      onNeedsSubscription: { showingSubscriptionOnboarding = true },
+                      onNeedsPlaid: { showingPlaidOnboarding = true },
+                      onSignedInAndOnboarded: { onComplete?(); dismiss() }
+                    )
+                  }
+                },
+                onGoogleSignIn: {
+                  handleGoogleSignIn()
+                },
+                showsLeadingDivider: false
+              )
+              .disabled(!agreedToTerms)
+              .opacity(!agreedToTerms ? 0.6 : 1.0)
+
+              // Catch taps on disabled buttons and highlight the checkbox
+              if !agreedToTerms {
+                Color.clear
+                  .contentShape(Rectangle())
+                  .onTapGesture { highlightTerms() }
+              }
+            }
+
+            // "or sign up with email" divider — separates the social
+            // path above from the manual form below.
+            HStack {
+              Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(height: 1)
+              Text("or sign up with email")
+                .foregroundColor(.gray)
+                .font(.subheadline)
+                .fixedSize()
+              Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(height: 1)
+            }
+            .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Or sign up with email")
+
+            AuthFormField(
+              title: "First Name",
+              placeholder: "Enter your first name",
+              text: $viewModel.firstName,
+              textContentType: .givenName
+            )
+            if let error = viewModel.firstNameError {
+              validationText(error)
+            }
+
+            AuthFormField(
+              title: "Last Name",
+              placeholder: "Enter your last name",
+              text: $viewModel.lastName,
+              textContentType: .familyName
+            )
+
+            DateOfBirthField(selectedDate: viewModel.dateOfBirth) {
+              showingDatePicker = true
+            }
+            if let error = viewModel.dateOfBirthError {
+              validationText(error)
+            }
+
+            AuthFormField(
+              title: "Phone Number",
+              placeholder: "Enter your phone number",
+              text: $viewModel.phoneNumber,
+              keyboardType: .phonePad,
+              textContentType: .username
+            )
+            if let error = viewModel.phoneError {
+              validationText(error)
+            }
+
+            AuthFormField(
+              title: "Email",
+              placeholder: "Enter your email",
+              text: $viewModel.email,
+              keyboardType: .emailAddress,
+              textContentType: .emailAddress
+            )
+            if let error = viewModel.emailError {
+              validationText(error)
+            }
+
+            AuthFormField(
+              title: "Password",
+              placeholder: "Create a password",
+              text: $viewModel.password,
+              isSecure: true,
+              textContentType: .newPassword
+            )
+            if let error = viewModel.passwordError {
+              validationText(error)
+            }
+
+            AuthFormField(
+              title: "Confirm Password",
+              placeholder: "Confirm your password",
+              text: $viewModel.confirmPassword,
+              isSecure: true,
+              textContentType: .newPassword
+            )
+            if let error = viewModel.confirmPasswordError {
+              validationText(error)
+            }
+
+            // Optional referral code — Phase 1 attribution only.
+            // Empty input no-ops; bad input is silently ignored
+            // post-signup (logged, doesn't block onboarding).
+            AuthFormField(
+              title: "Referral Code (Optional)",
+              placeholder: "HALO-XXXXXX",
+              text: $viewModel.referralCode
+            )
+            .accessibilityHint("Enter a friend's referral code if you have one. This is optional.")
 
             ZStack {
               AuthButton(
@@ -167,42 +219,12 @@ struct SignUpView: View {
                   .onTapGesture { highlightTerms() }
               }
             }
-            
-            // Social Auth
-            ZStack {
-              SocialAuthButtons(
-                isLoading: viewModel.isLoading,
-                onAppleSignIn: { idToken, nonce in
-                  Task {
-                    await viewModel.socialSignIn(
-                      provider: "apple", idToken: idToken, nonce: nonce,
-                      using: userManager, subscriptionService: subscriptionService,
-                      onNeedsSubscription: { showingSubscriptionOnboarding = true },
-                      onNeedsPlaid: { showingPlaidOnboarding = true },
-                      onSignedInAndOnboarded: { onComplete?(); dismiss() }
-                    )
-                  }
-                },
-                onGoogleSignIn: {
-                  handleGoogleSignIn()
-                }
-              )
-              .disabled(!agreedToTerms)
-              .opacity(!agreedToTerms ? 0.6 : 1.0)
-
-              // Catch taps on disabled buttons and highlight the checkbox
-              if !agreedToTerms {
-                Color.clear
-                  .contentShape(Rectangle())
-                  .onTapGesture { highlightTerms() }
-              }
-            }
 
             // Sign In Link
             HStack {
               Text("Already have an account?")
                 .foregroundColor(.gray)
-              
+
               Button("Sign In") {
                 showingSignIn = true
               }
