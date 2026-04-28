@@ -127,18 +127,20 @@ final class ConversationCoordinator {
     // voice activity above bargeInThreshold.
 
     /// Linear RMS that must be exceeded to count as a barge-in
-    /// candidate buffer. Set higher than voiceActivityRMSThreshold
-    /// because the speaker is actively playing Halo's TTS during
-    /// .speaking — even with .voiceChat AEC, residual bleed can land
-    /// around 0.02–0.04. 0.10 forces a clear user voice.
-    private let bargeInRMSThreshold: Float = 0.10
+    /// candidate buffer. Initially set to 0.10 (well above any AEC
+    /// bleed) but in practice .voiceChat AEC also slightly
+    /// attenuates the user's voice when both Halo and user are
+    /// speaking, so legitimate barge-in attempts often landed at
+    /// 0.04–0.06. Matching voiceActivityRMSThreshold is safe given
+    /// AEC's residual bleed sits below this floor.
+    private let bargeInRMSThreshold: Float = 0.04
 
-    /// Number of consecutive above-threshold buffers required before
-    /// we trust the signal and interrupt. Buffers arrive at roughly
-    /// 50fps, so 6 frames ≈ 120ms — enough to filter cough/door-slam
-    /// transients without making the user feel like they have to
-    /// shout to be heard.
-    private let bargeInRequiredFrames: Int = 6
+    /// Number of consecutive above-threshold buffers required
+    /// before we trust the signal. Buffers arrive at roughly 50fps
+    /// so 3 frames ≈ 60ms — enough to dodge a single-buffer spike
+    /// from a click / pop / breath without making the user feel
+    /// like they need to project to interrupt.
+    private let bargeInRequiredFrames: Int = 3
     private var bargeInConsecutiveFrames: Int = 0
 
     /// Set by `bargeIn()` immediately before stopping the player so
@@ -227,11 +229,32 @@ final class ConversationCoordinator {
             // engine-spin-up / tap-install latency. Best-effort — we
             // swallow errors because the view should still appear even
             // if mic permission hasn't been granted yet.
+            //
+            // In hands-free we go further and START RECORDING right
+            // after pre-warm, plus wire the buffer router. That makes
+            // barge-in work even during the welcome message — without
+            // this, the mic is dormant until the first turn ends.
             prewarmTask?.cancel()
             prewarmTask = Task { [weak self] in
                 guard let self else { return }
                 do {
                     try await self.voiceService.preWarmCapture()
+
+                    if self.conversationMode == .handsFree {
+                        // Wire the same router we use during a normal
+                        // listen turn. Once startListening fires for
+                        // the first real turn it'll re-wire with a
+                        // fresh closure — no duplicate calls.
+                        self.voiceService.onAudioBuffer = { [weak self] buffer in
+                            guard let self = self else { return }
+                            if self.isMicMuted { return }
+                            Task { @MainActor [weak self] in
+                                self?.routeAudioBuffer(buffer)
+                            }
+                        }
+                        try await self.voiceService.startRecording()
+                        Logger.info("Hands-free: voice service primed for barge-in during welcome")
+                    }
                 } catch {
                     Logger.debug("ConversationCoordinator: Pre-warm skipped: \(error)")
                 }
@@ -412,7 +435,18 @@ final class ConversationCoordinator {
 
     /// State-aware router for every mic buffer. Always invoked on
     /// MainActor (see `voiceService.onAudioBuffer` wiring).
+    private var routerLogCounter: Int = 0
     private func routeAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        // Log every ~50th buffer (about 1/sec) so we can see what
+        // state buffers are arriving in without spamming the console.
+        // Critical for diagnosing why barge-in doesn't fire during
+        // .speaking — confirms the handler is wired AND running.
+        routerLogCounter += 1
+        if routerLogCounter % 50 == 0 {
+            let rms = Self.computeRMS(buffer)
+            Logger.debug("Buffer router: state=\(state) mode=\(conversationMode.rawValue) muted=\(isMicMuted) RMS=\(String(format: "%.4f", rms))")
+        }
+
         switch state {
         case .listening:
             // Send to STT and tap silence detection.
@@ -443,14 +477,18 @@ final class ConversationCoordinator {
         let rms = Self.computeRMS(buffer)
 
         if rms < bargeInRMSThreshold {
+            if bargeInConsecutiveFrames > 0 {
+                Logger.debug("Barge-in: streak broken at \(bargeInConsecutiveFrames) frames (RMS=\(String(format: "%.4f", rms)))")
+            }
             bargeInConsecutiveFrames = 0
             return
         }
 
         bargeInConsecutiveFrames += 1
+        Logger.debug("Barge-in: candidate frame \(bargeInConsecutiveFrames)/\(bargeInRequiredFrames) (RMS=\(String(format: "%.4f", rms)))")
         if bargeInConsecutiveFrames >= bargeInRequiredFrames {
             bargeInConsecutiveFrames = 0
-            Logger.info("Hands-free: barge-in detected (RMS=\(String(format: "%.3f", rms))) — interrupting Halo")
+            Logger.info("Hands-free: barge-in detected (RMS=\(String(format: "%.4f", rms))) — interrupting Halo")
             bargeIn()
         }
     }
