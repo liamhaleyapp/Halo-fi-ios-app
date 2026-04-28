@@ -100,15 +100,25 @@ final class ConversationCoordinator {
     private var lastVoiceActivityAt: Date?
 
     /// RMS magnitude (linear, 0...1) above which we consider a
-    /// buffer to contain voice. 0.012 was chosen empirically against
-    /// hands-free TestFlight audio: louder than ambient hush, quieter
-    /// than typical conversational speech.
-    private let voiceActivityRMSThreshold: Float = 0.012
+    /// buffer to contain voice. 0.04 sits comfortably above the noise
+    /// floor of most setups (Mac/iPhone mics in a quiet room hover
+    /// around 0.01–0.03 from fan/hvac/breathing) without missing
+    /// normal conversational speech (typically 0.08–0.3 RMS).
+    /// First version used 0.012 and never committed because ambient
+    /// noise stayed above threshold continuously.
+    private let voiceActivityRMSThreshold: Float = 0.04
 
     /// How long after the user's last detected voice activity we wait
     /// before auto-committing the turn. Mirrors the
     /// silence_threshold_ms we configure on the backend (1.5s).
     private let silenceCommitInterval: TimeInterval = 1.5
+
+    /// Hard cap on a single listening turn. Even if silence detection
+    /// never fires (always-on background noise above threshold) we
+    /// commit after this so the conversation always progresses.
+    /// 12s comfortably covers a multi-sentence question; users rarely
+    /// monologue longer than that without pausing.
+    private let maxListenDuration: TimeInterval = 12.0
 
     /// Hands-free safety net — if the user opens the conversation,
     /// hears the greeting, but never speaks, auto-commit anyway after
@@ -370,21 +380,33 @@ final class ConversationCoordinator {
     }
 
     /// Per-buffer silence-detection tap for hands-free auto-commit.
-    /// Computes the buffer's RMS and tracks whether we've seen any
-    /// voice activity in this listen turn. Once we have, a trailing
-    /// silenceCommitInterval of sub-threshold audio triggers an
-    /// auto-commit. Also enforces the absolute max-listen safety net.
+    /// Three commit triggers, in priority order:
+    ///   1. Hard turn cap (maxListenDuration) — guarantees the
+    ///      conversation progresses even if RMS stays above threshold
+    ///      from ambient noise the whole time.
+    ///   2. No-speech timeout (maxListenWithoutSpeech) — user opened
+    ///      the conversation but never spoke; release the STT session.
+    ///   3. Silence after speech (silenceCommitInterval) — the normal
+    ///      end-of-utterance trigger.
     private func processAudioBufferForSilenceDetection(_ buffer: AVAudioPCMBuffer) {
         guard conversationMode == .handsFree, state == .listening else { return }
 
         let now = Date()
 
-        // Safety net: user opened conversation, never spoke. Commit
-        // the empty turn (which routes back to .idle and avoids burning
-        // the STT session indefinitely).
+        // Hard cap — fires regardless of whether we detected speech.
+        if let started = listenStartedAt,
+           now.timeIntervalSince(started) > maxListenDuration {
+            Logger.info("Hands-free: hard turn cap hit at \(String(format: "%.1f", now.timeIntervalSince(started)))s — committing")
+            stopListeningAndProcess()
+            return
+        }
+
+        // No-speech timeout — release STT if user is silent the
+        // whole time.
         if !hasDetectedSpeechInCurrentListen,
            let started = listenStartedAt,
            now.timeIntervalSince(started) > maxListenWithoutSpeech {
+            Logger.info("Hands-free: no-speech timeout — committing empty turn")
             stopListeningAndProcess()
             return
         }
@@ -392,8 +414,11 @@ final class ConversationCoordinator {
         let rms = Self.computeRMS(buffer)
 
         if rms >= voiceActivityRMSThreshold {
-            // Real voice activity (or loud ambient noise). Mark the
-            // turn as "heard" so silence after this point is meaningful.
+            // Real voice activity. Mark the turn as "heard" so
+            // silence after this point is meaningful.
+            if !hasDetectedSpeechInCurrentListen {
+                Logger.debug("Hands-free: first speech detected (RMS=\(String(format: "%.4f", rms)))")
+            }
             hasDetectedSpeechInCurrentListen = true
             lastVoiceActivityAt = now
             return
@@ -403,7 +428,9 @@ final class ConversationCoordinator {
         guard hasDetectedSpeechInCurrentListen,
               let lastActivity = lastVoiceActivityAt else { return }
 
-        if now.timeIntervalSince(lastActivity) >= silenceCommitInterval {
+        let silentFor = now.timeIntervalSince(lastActivity)
+        if silentFor >= silenceCommitInterval {
+            Logger.info("Hands-free: silence \(String(format: "%.1f", silentFor))s after speech — committing")
             stopListeningAndProcess()
         }
     }
@@ -621,7 +648,16 @@ final class ConversationCoordinator {
             // freshly reconnected here (stopListeningAndProcess
             // disconnected it when the previous turn submitted).
             if conversationMode == .handsFree && !isMicMuted {
-                Task { [weak self] in await self?.startListening() }
+                Task { [weak self] in
+                    // Settling time so the speaker tail and any AEC
+                    // engine state from the just-finished playback
+                    // don't bleed into the first listening buffers.
+                    // 400ms felt right in testing — long enough to
+                    // dodge audio-driver tail latency, short enough
+                    // that conversation still feels live.
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    await self?.startListening()
+                }
                 return
             }
             setState(.idle)
