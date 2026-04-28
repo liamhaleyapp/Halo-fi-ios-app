@@ -36,8 +36,10 @@ struct BudgetQuickActionDrawer: View {
             actionButton(
                 title: "What's my status?",
                 systemImage: "mic.circle.fill",
-                tint: .indigo,
-                accessibilityHint: "Switches to the voice tab and asks Halo for a full SSI status update.",
+                // Brighter than the previous indigo so it reads as a
+                // primary action against the dark Budget view.
+                tint: Color(red: 0.0, green: 0.55, blue: 1.0),
+                accessibilityHint: "Switches to the voice tab and asks Halo for a full SSI status update. Returns to Budget when the conversation ends.",
                 action: onAskStatus
             )
         }

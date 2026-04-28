@@ -12,6 +12,10 @@ extension Notification.Name {
     /// to deep-link to the Agent (voice) tab without injecting an
     /// environment binding all the way down the view tree.
     static let askHaloRequested = Notification.Name("askHaloRequested")
+    /// Posted by HomeView when the ConversationView dismisses. Used by
+    /// MainTabView to restore the user to whichever tab they came from
+    /// when the conversation was launched cross-tab via askHaloRequested.
+    static let conversationDismissed = Notification.Name("conversationDismissed")
 }
 
 struct MainTabView: View {
@@ -21,6 +25,10 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     @State private var feedbackService = AudioFeedbackService()
+    /// Tab the user was on when a cross-tab conversation was launched.
+    /// Restored when the conversation dismisses so the user lands back
+    /// where they started rather than getting stranded on the Agent tab.
+    @State private var conversationOriginTab: Int? = nil
 
     private enum AppRoute: Equatable {
         case loggedOut
@@ -58,9 +66,22 @@ struct MainTabView: View {
             }
         }
         // Phase 11 Track B — quick-action "Ask Halo" deep-link.
+        // Remember which tab the request came from so the user lands
+        // back there when the conversation dismisses.
         .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { _ in
-            if currentRoute == .main {
-                selectedTab = 0
+            guard currentRoute == .main else { return }
+            if selectedTab != 0 {
+                conversationOriginTab = selectedTab
+            }
+            selectedTab = 0
+        }
+        // Posted by HomeView when ConversationView closes. Restore the
+        // originating tab if we recorded one (otherwise stay on Agent
+        // — the user opened the agent directly).
+        .onReceive(NotificationCenter.default.publisher(for: .conversationDismissed)) { _ in
+            if let origin = conversationOriginTab {
+                selectedTab = origin
+                conversationOriginTab = nil
             }
         }
         // Refresh bank data on foreground. Plaid webhooks update the

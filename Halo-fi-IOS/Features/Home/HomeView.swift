@@ -35,6 +35,19 @@ struct HomeView: View {
                 ConversationView(initialPrompt: initialPrompt)
                     .navigationBarHidden(true)
             }
+            // Tell MainTabView the conversation closed so it can return
+            // the user to whichever tab launched the conversation. We
+            // can't observe ConversationView's onDisappear (fires for
+            // backgrounding too) — watching the binding flip true→false
+            // is the correct user-driven dismiss signal.
+            .onChange(of: showingConversation) { _, isPresented in
+                if !isPresented {
+                    NotificationCenter.default.post(
+                        name: .conversationDismissed,
+                        object: nil
+                    )
+                }
+            }
             // Phase 12 — accept cross-tab quick-action requests. The
             // Budget tab posts .askHaloRequested with a userInfo
             // prompt; MainTabView switches to tab 0 in parallel, so by
