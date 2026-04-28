@@ -46,9 +46,12 @@ struct BudgetView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         if let overview = dataManager.overview {
-                            // Phase 11 Track B — first in tab order
-                            // so blind users hit the action drawer
-                            // before any data card.
+                            monthSubtitle(overview)
+                            heroCard(overview)
+                            if let alertText = topCategoryAlert(overview) {
+                                categoryAlertRow(alertText)
+                            }
+                            breakdownByCategoryButton(overview)
                             BudgetQuickActionDrawer(
                                 onLogExpense: {
                                     showingManualDeductionSheet = true
@@ -67,12 +70,6 @@ struct BudgetView: View {
                                     )
                                 }
                             )
-                            monthSubtitle(overview)
-                            heroCard(overview)
-                            if let alertText = topCategoryAlert(overview) {
-                                categoryAlertRow(alertText)
-                            }
-                            breakdownByCategoryButton(overview)
                             monthlyIncomeSection(overview)
                             ssiSection(overview.ssiStatus)
                             alertsSection(overview.alerts)
@@ -351,16 +348,16 @@ struct BudgetView: View {
         if ssi.hasSsi {
             Section {
                 VStack(spacing: 12) {
-                    if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
-                        ForEach(alerts) { entry in
-                            SSIAlertBanner(entry: entry)
-                        }
-                    }
                     if let resources = ssi.resources {
                         SSIResourceHeroCard(resources: resources)
                     }
                     if let income = ssi.income {
                         SSIIncomeHeroCard(income: income)
+                    }
+                    if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
+                        ForEach(alerts) { entry in
+                            SSIAlertBanner(entry: entry)
+                        }
                     }
                     // Phase 7 — dedicated earn-room card. Only renders
                     // when v2 fields are populated AND the user has a
