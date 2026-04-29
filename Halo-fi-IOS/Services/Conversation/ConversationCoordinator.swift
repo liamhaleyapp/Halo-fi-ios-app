@@ -412,7 +412,7 @@ final class ConversationCoordinator {
             }
 
             // Connect to ElevenLabs STT (fetches fresh token each time)
-            try await sttService.connect()
+            try await connectWithTimeout()
 
         } catch {
             handleVoiceSetupError(error)
@@ -427,6 +427,41 @@ final class ConversationCoordinator {
         isVoiceSessionActive = false
 
         setState(.error(error.localizedDescription))
+    }
+
+    // MARK: - Connect watchdog
+
+    /// Race-with-timeout error. Conforms to `LocalizedError` so the
+    /// existing `handleVoiceSetupError` path renders the user-facing
+    /// message via `error.localizedDescription` — no special-casing
+    /// needed in the catch branch.
+    private enum ConnectError: LocalizedError {
+        case timeout
+        var errorDescription: String? {
+            switch self {
+            case .timeout: return "Couldn't connect"
+            }
+        }
+    }
+
+    /// Race the STT handshake against a `seconds`-second sleep so a
+    /// stalled `sttService.connect()` (network flap, server hung)
+    /// can't leave the user stuck on the `.connecting` spinner
+    /// forever. Whichever child finishes first wins; the other is
+    /// cancelled by the defer.
+    private func connectWithTimeout(seconds: TimeInterval = 10) async throws {
+        let service = sttService
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await service.connect()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw ConnectError.timeout
+            }
+            defer { group.cancelAll() }
+            try await group.next()
+        }
     }
 
     /// Stop listening (voice mode) - finalize and send transcript
