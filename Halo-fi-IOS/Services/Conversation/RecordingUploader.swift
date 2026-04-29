@@ -138,6 +138,66 @@ final class RecordingUploader: @unchecked Sendable {
         }
     }
 
+    // MARK: - Retry helpers
+
+    /// Race the request against transient backend / network failures.
+    /// Retries on URLError (timeout, DNS, connection drop) and on
+    /// retriable HTTP responses (408 Request Timeout, 429 Too Many
+    /// Requests, all 5xx). 4xx responses outside that whitelist are
+    /// client-side problems that won't self-heal — fail fast.
+    /// Exponential backoff (2s → 4s) with ±50% jitter so multiple
+    /// clients don't all retry on the same tick after a backend
+    /// hiccup. Status validation lives here so the retry loop can
+    /// react to 5xx; callers receive only 2xx responses.
+    private func dataWithRetry(
+        for request: URLRequest,
+        attempts: Int = 3,
+        initialDelay: Duration = .seconds(2)
+    ) async throws -> (Data, URLResponse) {
+        var delay = initialDelay
+        var lastError: Error = URLError(.cannotConnectToHost)
+
+        for attempt in 1...attempts {
+            do {
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                if (200..<300).contains(http.statusCode) {
+                    return (data, response)
+                }
+                // Non-2xx: surface as a URLError so the catch decides whether to retry.
+                throw URLError(.init(rawValue: http.statusCode))
+            } catch {
+                lastError = error
+                guard attempt < attempts, Self.isRetriable(error) else {
+                    throw error
+                }
+                let baseSeconds = Double(delay.components.seconds)
+                let jitteredMs = Int(baseSeconds * 1000 * Double.random(in: 0.5...1.5))
+                try? await Task.sleep(for: .milliseconds(jitteredMs))
+                delay *= 2
+            }
+        }
+        throw lastError
+    }
+
+    private static func isRetriable(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        let code = urlError.errorCode
+        // We synthesize URLError(.init(rawValue: statusCode)) for non-2xx
+        // responses, so a positive code in HTTP range is an HTTP status.
+        if (100..<600).contains(code) {
+            switch code {
+            case 408, 429, 500..<600: return true
+            default: return false
+            }
+        }
+        // Real URLError (negative code: timeout, DNS, lost connection,
+        // etc.) — all transient, all worth a retry.
+        return true
+    }
+
     // MARK: - Multipart upload
 
     private func postMultipart(
@@ -189,13 +249,7 @@ final class RecordingUploader: @unchecked Sendable {
 
         request.httpBody = body
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw URLError(.init(rawValue: http.statusCode))
-        }
+        let (data, _) = try await dataWithRetry(for: request)
 
         // Backend returns { success, id, audio_url }. Extract id so the
         // later PATCH can target this row.
@@ -233,13 +287,7 @@ final class RecordingUploader: @unchecked Sendable {
         request.timeoutInterval = 15
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (_, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw URLError(.init(rawValue: http.statusCode))
-        }
+        _ = try await dataWithRetry(for: request)
     }
 }
 
