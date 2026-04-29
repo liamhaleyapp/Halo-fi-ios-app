@@ -110,11 +110,11 @@ final class ConversationCoordinator {
     private let voiceActivityRMSThreshold: Float = 0.04
 
     /// How long after the user's last detected voice activity we wait
-    /// before auto-committing the turn. Tighter than the previous
-    /// 1.5s — users were finishing their question and waiting too
-    /// long for Halo to respond. 1.0s still avoids cutting off a
-    /// natural mid-sentence pause.
-    private let silenceCommitInterval: TimeInterval = 1.0
+    /// before auto-committing the turn. Was 1.0s — ChatGPT/Gemini
+    /// commit at ~600-700ms; 0.7s gives the same snappy feel without
+    /// cutting off mid-sentence pauses. If users report cut-offs,
+    /// nudge back up to 0.85s.
+    private let silenceCommitInterval: TimeInterval = 0.7
 
     // MARK: - Hands-free barge-in
     //
@@ -830,6 +830,8 @@ final class ConversationCoordinator {
     }
 
     private func handleSpeakingFinished() {
+        Logger.debug("ConversationCoordinator: handleSpeakingFinished state=\(state) mode=\(conversationMode.rawValue) muted=\(isMicMuted) ack=\(isPlayingAcknowledgment)")
+
         // The ack audio just finished — but the real agent response
         // is still on the way. Hold state in .processing so the
         // input button doesn't flicker to "Tap to talk".
@@ -845,28 +847,47 @@ final class ConversationCoordinator {
             }
             return
         }
-        if state == .speaking || state == .connecting {
-            // Hands-free: Halo finished speaking, mic should
-            // auto-resume so the user can keep talking without
-            // tapping anything. We skip if mic is muted; the user
-            // explicitly silenced themselves and unmute will
-            // restart listening on its own.
-            if conversationMode == .handsFree && !isMicMuted {
-                let wasBargeIn = bargeInRequested
-                bargeInRequested = false
-                Task { [weak self] in
-                    // Skip the settling delay on barge-in — the user
-                    // is already talking and waiting for the mic to
-                    // pick up; any pause feels like a dropped word.
-                    // For natural turn ends, 400ms gives the speaker
-                    // tail and AEC engine time to settle.
-                    if !wasBargeIn {
-                        try? await Task.sleep(nanoseconds: 400_000_000)
-                    }
-                    await self?.startListening()
-                }
-                return
+
+        // In hands-free, the playback-finished signal is deterministic:
+        // Halo stopped talking, mic should resume. We previously gated
+        // this on state == .speaking || .connecting, but agentResponse
+        // events can transiently flip state to .idle between audio
+        // chunks (when the response arrives before the first audioChunk),
+        // causing silent fall-through and the user has to tap the
+        // button to wake the mic. Trust the playback signal instead.
+        // Pattern-match exclusions (state is non-Hashable due to
+        // .error(String); use a switch to test).
+        let canAutoResume: Bool = {
+            switch state {
+            case .listening, .disconnected, .permissionNeeded, .error:
+                return false
+            default:
+                return true
             }
+        }()
+        if conversationMode == .handsFree && !isMicMuted && canAutoResume {
+            let wasBargeIn = bargeInRequested
+            bargeInRequested = false
+            Task { [weak self] in
+                // Skip the settling delay on barge-in — the user
+                // is already talking and waiting for the mic to
+                // pick up; any pause feels like a dropped word.
+                // For natural turn ends, 150ms gives the speaker
+                // tail + AEC engine time to settle without a
+                // perceptible gap (down from 400ms — old value
+                // felt sluggish vs ChatGPT/Gemini which resume
+                // in <100ms).
+                if !wasBargeIn {
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                }
+                await self?.startListening()
+            }
+            return
+        }
+
+        // Push-to-talk path (or hands-free with mute / unrecoverable
+        // state): just settle to idle so the user can tap to talk.
+        if state == .speaking || state == .connecting {
             setState(.idle)
         }
     }
