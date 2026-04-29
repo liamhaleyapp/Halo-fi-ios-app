@@ -172,15 +172,9 @@ class PlaidManager {
   }
   
   // MARK: - Public Token Exchange
-  
-  func exchangePublicToken(_ publicToken: String) async throws {
-    // In a real app, this would call your backend to exchange the public token
-    // for an access token and fetch initial account data
-    try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-    
-    // Simulate successful exchange
-  }
-  
+
+  // Token exchange is handled server-side via Plaid's ITEM_ADD_RESULT webhook. See BankService.connectMultipleBankAccounts → /bank/multi-connect/create.
+
   // MARK: - Redirect URL Handling
   
   /// Handles OAuth redirect URLs from Plaid
