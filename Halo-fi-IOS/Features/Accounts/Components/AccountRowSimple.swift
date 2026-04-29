@@ -19,7 +19,7 @@ struct AccountRowSimple: View {
           .foregroundColor(.white)
         Text(accountType.displayName)
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
       Spacer()
       Text(balance, format: .currency(code: "USD"))

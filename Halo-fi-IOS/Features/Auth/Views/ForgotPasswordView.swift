@@ -35,7 +35,7 @@ struct ForgotPasswordView: View {
             
             Text("Enter your email and we'll send you a link to reset your password")
               .font(.body)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
               .multilineTextAlignment(.center)
           }
           

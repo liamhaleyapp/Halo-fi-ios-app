@@ -64,21 +64,21 @@ struct AccessibleInstitutionCard: View {
 
           Text(item.isActive ? "Connected" : "Needs attention")
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
         }
 
         // Account count (if available)
         if let accounts = accounts, !accounts.isEmpty {
           Text("\(accounts.count) account\(accounts.count == 1 ? "" : "s")")
             .font(.caption)
-            .foregroundColor(.gray.opacity(0.8))
+            .foregroundColor(.white.opacity(0.8))
         } else if isLoading {
           HStack(spacing: 6) {
             ProgressView()
               .scaleEffect(0.6)
             Text("Loading...")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
           }
         }
       }
@@ -92,7 +92,7 @@ struct AccessibleInstitutionCard: View {
           .accessibilityHidden(true)
       } else {
         Image(systemName: "chevron.right")
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .font(.caption)
           .accessibilityHidden(true)
       }

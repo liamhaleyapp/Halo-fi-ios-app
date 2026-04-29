@@ -79,7 +79,7 @@ struct InstitutionAccountsView: View {
 
       Text("Loading accounts...")
         .font(.body)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
@@ -103,7 +103,7 @@ struct InstitutionAccountsView: View {
 
         Text(error)
           .font(.body)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }
@@ -226,16 +226,16 @@ struct BankAccountRow: View {
         HStack(spacing: 4) {
           Text(account.type.capitalized)
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
 
           if !account.mask.isEmpty {
             Text("•")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
 
             Text("ending in \(account.mask)")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
           }
         }
       }
@@ -249,7 +249,7 @@ struct BankAccountRow: View {
 
       Image(systemName: "chevron.right")
         .font(.caption)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
         .accessibilityHidden(true)
     }
     .padding(.horizontal, 20)

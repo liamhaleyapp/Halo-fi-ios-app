@@ -32,7 +32,7 @@ struct InstitutionDetailsView: View {
               VStack(alignment: .leading, spacing: 4) {
                 Text("Status")
                   .font(.caption)
-                  .foregroundColor(.gray)
+                  .foregroundColor(.white.opacity(0.85))
                 
                 HStack(spacing: 8) {
                   Circle()
@@ -54,7 +54,7 @@ struct InstitutionDetailsView: View {
             
             Text("Accounts")
               .font(.headline)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
               .padding(.horizontal, 20)
             
             ForEach(institution.accounts) { account in

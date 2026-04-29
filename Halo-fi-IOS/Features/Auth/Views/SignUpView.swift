@@ -115,7 +115,7 @@ struct SignUpView: View {
                 .fill(Color.gray.opacity(0.3))
                 .frame(height: 1)
               Text("or use your phone number")
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
                 .font(.subheadline)
                 .fixedSize()
               Rectangle()
@@ -226,7 +226,7 @@ struct SignUpView: View {
             // Sign In Link
             HStack {
               Text("Already have an account?")
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
 
               Button("Sign In") {
                 showingSignIn = true

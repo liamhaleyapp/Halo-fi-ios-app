@@ -22,7 +22,7 @@ struct PrivacyView: View {
           VStack(alignment: .leading, spacing: 16) {
             Text("Last updated: December 2024")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
             
             Text("Your privacy is important to us. This policy describes how we collect, use, and protect your information...")
               .font(.body)

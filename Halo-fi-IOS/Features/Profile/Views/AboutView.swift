@@ -156,7 +156,7 @@ struct LegalDocumentView: View {
                     if !lastUpdated.isEmpty {
                         Text("Last updated: \(lastUpdated)")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.white.opacity(0.85))
                     }
 
                     if isLoading {
@@ -171,7 +171,7 @@ struct LegalDocumentView: View {
                                     .foregroundColor(.white)
                                 Text(section.body)
                                     .font(.body)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.85))
                                     .lineLimit(nil)
                             }
                         }
@@ -280,7 +280,7 @@ struct HelpFeedbackView: View {
                     .foregroundColor(.white)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
             }
 
             Spacer()

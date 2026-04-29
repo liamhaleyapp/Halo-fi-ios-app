@@ -15,7 +15,7 @@ struct WhatIsHaloFiSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("What is Halo Fi?")
                     .font(.headline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
 
                 Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
                     .font(.body)
@@ -35,7 +35,7 @@ struct OurMissionSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Our Mission")
                     .font(.headline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
 
                 Text("To bring visibility to personal finances through accessible and intelligent technology \u{2014} empowering everyone, especially those with visual impairments.")
                     .font(.body)
@@ -55,7 +55,7 @@ struct AccessibilityFeaturesSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Accessibility")
                     .font(.headline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
 
                 featureRow(icon: "waveform", color: .blue, text: "Voice-first design for hands-free use")
                 featureRow(icon: "eye.fill", color: .green, text: "Full VoiceOver support")
@@ -89,7 +89,7 @@ struct DataSecuritySection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Data Security")
                     .font(.headline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
 
                 featureRow(icon: "lock.shield.fill", color: .teal, text: "AES-256 encryption at rest and in transit")
                 featureRow(icon: "key.fill", color: .yellow, text: "Bank credentials never stored")
@@ -142,7 +142,7 @@ struct LegalSection: View {
                     .foregroundColor(.white)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
                     .font(.caption)
                     .accessibilityHidden(true)
             }
@@ -178,7 +178,7 @@ struct SupportSection: View {
                     .foregroundColor(.white)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
                     .font(.caption)
                     .accessibilityHidden(true)
             }
@@ -199,7 +199,7 @@ struct AppVersionSection: View {
         HStack {
             Text("Version \(version) (\(build))")
                 .font(.footnote)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
             Spacer()
         }
         .padding(.horizontal, 20)

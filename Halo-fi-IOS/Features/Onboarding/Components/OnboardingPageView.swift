@@ -45,7 +45,7 @@ struct OnboardingPageView: View {
                 
                 Text(page.description)
                     .font(.body)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .lineLimit(4)
                     .padding(.horizontal, 20)

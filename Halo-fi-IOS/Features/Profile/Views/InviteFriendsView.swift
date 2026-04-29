@@ -102,7 +102,7 @@ struct InviteFriendsView: View {
             // Apple Offer Code pipeline is live.
             Text("Share Halo Fi with people who'd benefit. Discounts launching soon.")
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
 
             if invitedCount > 0 {
@@ -122,7 +122,7 @@ struct InviteFriendsView: View {
         VStack(spacing: 16) {
             Text("Your Referral Code")
                 .font(.headline)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
 
             if let code = referralCode {
                 Text(code)
@@ -256,7 +256,7 @@ struct InviteFriendsView: View {
 
             Text(text)
                 .font(.body)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Step \(number): \(text)")

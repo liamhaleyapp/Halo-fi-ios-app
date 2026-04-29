@@ -24,7 +24,7 @@ struct LinkNewAccountSection: View {
         Spacer()
         
         Image(systemName: "chevron.right")
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .font(.caption)
       }
       .padding(.horizontal, 20)

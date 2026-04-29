@@ -44,7 +44,7 @@ struct AuthHeaderView: View {
       
       Text(subtitle)
         .font(.body)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
         .multilineTextAlignment(.center)
         .accessibilitySortPriority(1)
     }

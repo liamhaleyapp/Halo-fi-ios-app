@@ -107,7 +107,7 @@ struct SignInView: View {
           // Sign Up Link
           HStack {
             Text("Don't have an account?")
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
             
             Button("Sign Up") {
               showingSignUp = true

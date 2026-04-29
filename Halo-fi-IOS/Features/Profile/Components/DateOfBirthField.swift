@@ -33,7 +33,7 @@ struct DateOfBirthField: View {
           Spacer()
           
           Image(systemName: "calendar")
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
             .font(.body)
         }
         .padding(.horizontal, 16)

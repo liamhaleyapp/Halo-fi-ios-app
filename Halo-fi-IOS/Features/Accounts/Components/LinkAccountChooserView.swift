@@ -90,7 +90,7 @@ struct LinkAccountChooserView: View {
 
           Text(subtitle)
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -98,7 +98,7 @@ struct LinkAccountChooserView: View {
         Spacer()
 
         Image(systemName: "chevron.right")
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .font(.caption)
       }
       .padding(.horizontal, 16)

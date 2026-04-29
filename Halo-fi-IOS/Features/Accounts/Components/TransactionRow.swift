@@ -93,7 +93,7 @@ struct TransactionRow: View {
         HStack(spacing: 8) {
           Text(categoryName)
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
           
           if transaction.pending {
             Text("• Pending")
@@ -113,7 +113,7 @@ struct TransactionRow: View {
         
         Text(formattedDate)
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
     }
     .padding(.vertical, 12)

@@ -33,7 +33,7 @@ struct SubscriptionManagementView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text("Current Plan")
               .font(.subheadline)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
             Text(subscriptionService.currentSubscription.displayName)
               .font(.headline)
               .foregroundColor(.white)
@@ -49,11 +49,11 @@ struct SubscriptionManagementView: View {
                   .foregroundColor(.orange)
                 Text("on \(renewalText)")
                   .font(.caption)
-                  .foregroundColor(.gray)
+                  .foregroundColor(.white.opacity(0.85))
               } else {
                 Text("Renews \(renewalText)")
                   .font(.caption)
-                  .foregroundColor(.gray)
+                  .foregroundColor(.white.opacity(0.85))
               }
             }
           } else {
@@ -87,7 +87,7 @@ struct SubscriptionManagementView: View {
           } label: {
             Text("Cancel Subscription")
               .font(.subheadline)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
           }
           .padding(.top, 16)
           .accessibilityHint("Opens Apple subscription management")

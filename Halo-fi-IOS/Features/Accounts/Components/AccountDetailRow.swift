@@ -25,7 +25,7 @@ struct AccountDetailRow: View {
         
         Text(account.name)
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
       
       Spacer()
@@ -38,12 +38,12 @@ struct AccountDetailRow: View {
         } else {
           Text("Not synced")
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
         }
         
         Text(account.type.displayName)
           .font(.caption2)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
     }
     .padding(.horizontal, 30)

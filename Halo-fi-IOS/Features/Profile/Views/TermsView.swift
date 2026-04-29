@@ -22,7 +22,7 @@ struct TermsView: View {
           VStack(alignment: .leading, spacing: 16) {
             Text("Last updated: December 2024")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
             
             Text("By using Halo Fi, you agree to these terms...")
               .font(.body)

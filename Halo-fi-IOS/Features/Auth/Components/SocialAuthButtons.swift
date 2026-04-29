@@ -58,7 +58,7 @@ struct SocialAuthButtons: View {
                         .fill(Color.gray.opacity(0.3))
                         .frame(height: 1)
                     Text("or")
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.85))
                         .font(.subheadline)
                     Rectangle()
                         .fill(Color.gray.opacity(0.3))

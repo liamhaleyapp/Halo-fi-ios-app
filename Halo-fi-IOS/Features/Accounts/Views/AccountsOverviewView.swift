@@ -124,7 +124,7 @@ struct AccountsOverviewView: View {
   private var searchField: some View {
     HStack(spacing: 12) {
       Image(systemName: "magnifyingglass")
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
         .accessibilityHidden(true)
 
       TextField("Search institutions", text: $searchText)
@@ -145,13 +145,13 @@ struct AccountsOverviewView: View {
     HStack {
       Text(title)
         .font(.headline)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
 
       Spacer()
 
       Text("\(count)")
         .font(.subheadline)
-        .foregroundColor(.gray.opacity(0.7))
+        .foregroundColor(.white.opacity(0.7))
     }
     .padding(.top, 16)
     .padding(.bottom, 8)
@@ -205,7 +205,7 @@ struct AccountsOverviewView: View {
 
       Text("Loading institutions...")
         .font(.body)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
@@ -229,7 +229,7 @@ struct AccountsOverviewView: View {
 
         Text("Connect your financial accounts to view live data")
           .font(.body)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }

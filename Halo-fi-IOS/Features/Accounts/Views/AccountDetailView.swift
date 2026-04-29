@@ -49,12 +49,12 @@ struct AccountDetailView: View {
           .tint(.white)
         Text("Syncing")
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
     } else if let lastSync = bankDataManager.lastTransactionSyncAt {
       Text(lastSync.relativeDescription)
         .font(.caption)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
     }
   }
   
@@ -72,7 +72,7 @@ struct AccountDetailView: View {
           .font(.largeTitle)
           .foregroundColor(.orange)
         Text(error)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }
@@ -81,9 +81,9 @@ struct AccountDetailView: View {
       VStack(spacing: 12) {
         Image(systemName: "list.bullet.rectangle")
           .font(.largeTitle)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
         Text("No transactions found")
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
@@ -110,7 +110,7 @@ struct AccountDetailView: View {
           
           Text(account.name)
             .font(.subheadline)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
         }
         
         Spacer()
@@ -122,7 +122,7 @@ struct AccountDetailView: View {
       VStack(alignment: .leading, spacing: 8) {
         Text("Balance")
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
         
         Text(account.balance, format: .currency(code: "USD"))
           .font(.system(size: 32, weight: .bold))
@@ -135,7 +135,7 @@ struct AccountDetailView: View {
           
           Text(account.isSynced ? "Synced" : "Not Synced")
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
         }
       }
     }
@@ -147,7 +147,7 @@ struct AccountDetailView: View {
   // MARK: - Transactions List View
   private var transactionsListView: some View {
     List {
-      Section(header: Text("Transactions").foregroundColor(.gray)) {
+      Section(header: Text("Transactions").foregroundColor(.white.opacity(0.85))) {
         ForEach(transactions) { transaction in
           TransactionRow(transaction: transaction)
         }

@@ -21,7 +21,7 @@ struct PostLoginSplashView: View {
 
                 Text("Setting up your experience...")
                     .font(.headline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
             }
         }
     }

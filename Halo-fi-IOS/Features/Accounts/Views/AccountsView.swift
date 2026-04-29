@@ -30,7 +30,7 @@ struct AccountsView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("Linked Institutions")
               .font(.headline)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
 
             ForEach(linkedItems, id: \.itemId) { item in
               LinkedItemCard(
@@ -61,7 +61,7 @@ struct AccountsView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("Manual Accounts")
               .font(.headline)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
 
             ForEach(bankDataManager.manualAccounts) { manual in
               ManualAccountRow(account: manual)
@@ -174,7 +174,7 @@ struct LinkedItemCard: View {
 
               Text(item.isActive ? "Connected" : "Needs Attention")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
             }
           }
 
@@ -185,7 +185,7 @@ struct LinkedItemCard: View {
               .scaleEffect(0.8)
           } else {
             Image(systemName: "chevron.right")
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
               .font(.caption)
           }
         }
@@ -211,7 +211,7 @@ struct LinkedItemCard: View {
 
                   Text(account.type.capitalized)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.85))
                 }
 
                 Spacer()
@@ -223,7 +223,7 @@ struct LinkedItemCard: View {
 
                 Image(systemName: "chevron.right")
                   .font(.caption2)
-                  .foregroundColor(.gray)
+                  .foregroundColor(.white.opacity(0.85))
               }
               .padding(.horizontal, 20)
               .padding(.vertical, 8)
@@ -235,7 +235,7 @@ struct LinkedItemCard: View {
             HStack {
               Text("+\(accounts.count - 3) more accounts")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
               Spacer()
             }
             .padding(.horizontal, 20)
@@ -249,7 +249,7 @@ struct LinkedItemCard: View {
         HStack {
           Text("No accounts found")
             .font(.caption)
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
           Spacer()
         }
         .padding(.horizontal, 20)
@@ -304,7 +304,7 @@ struct ManualAccountRow: View {
             Text(account.accountType.displayName)
           }
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
         }
 
         Spacer()
@@ -315,7 +315,7 @@ struct ManualAccountRow: View {
           .foregroundColor(.white)
 
         Image(systemName: "chevron.right")
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .font(.caption)
       }
       .padding(.horizontal, 20)

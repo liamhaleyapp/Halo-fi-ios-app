@@ -30,7 +30,7 @@ struct SettingsOption: View {
 
         Image(systemName: "chevron.right")
           .font(.caption)
-          .foregroundColor(.gray)
+          .foregroundColor(.white.opacity(0.85))
           .accessibilityHidden(true)
       }
       .padding(.horizontal, 16)

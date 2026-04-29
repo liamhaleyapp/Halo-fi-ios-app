@@ -279,7 +279,7 @@ private struct SettingsOptionLabel: View {
 
       Image(systemName: "chevron.right")
         .font(.caption)
-        .foregroundColor(.gray)
+        .foregroundColor(.white.opacity(0.85))
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)

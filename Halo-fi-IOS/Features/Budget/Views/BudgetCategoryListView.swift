@@ -125,11 +125,11 @@ struct BudgetCategoryListView: View {
         HStack {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
             Spacer()
             Text("\(count)")
                 .font(.subheadline)
-                .foregroundColor(.gray.opacity(0.7))
+                .foregroundColor(.white.opacity(0.70))
         }
         .padding(.top, 16)
         .padding(.bottom, 4)

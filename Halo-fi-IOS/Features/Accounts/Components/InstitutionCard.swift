@@ -34,14 +34,14 @@ struct InstitutionCard: View {
               
               Text(institution.status.displayText)
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.85))
             }
           }
           
           Spacer()
           
           Image(systemName: "chevron.right")
-            .foregroundColor(.gray)
+            .foregroundColor(.white.opacity(0.85))
             .font(.caption)
         }
         .padding(.horizontal, 30)
@@ -60,7 +60,7 @@ struct InstitutionCard: View {
           HStack {
             Text("+\(institution.accounts.count - 2) more accounts")
               .font(.caption)
-              .foregroundColor(.gray)
+              .foregroundColor(.white.opacity(0.85))
             Spacer()
           }
           .padding(.horizontal, 30)

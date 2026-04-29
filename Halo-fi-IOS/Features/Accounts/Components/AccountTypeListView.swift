@@ -31,7 +31,7 @@ struct AccountTypeListView: View {
           .padding(.top, 12)
         
         List {
-          Section(header: Text("Connected").foregroundColor(.gray)) {
+          Section(header: Text("Connected").foregroundColor(.white.opacity(0.85))) {
             ForEach(accounts) { account in
               NavigationLink(destination: AccountDetailView(account: account)) {
                 AccountRowSimple(
