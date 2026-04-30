@@ -446,24 +446,14 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         eventContinuation?.yield(.agentResponse(response))
     }
 
-    // MARK: - Terminal error codes
-
     /// Error codes the server uses to mean "this session is over,
     /// don't try to reconnect". Without this set, the listener
     /// loop reconnects after the WS closes, the server re-checks
     /// the limit, fails again, and we loop forever — which the
     /// production trace from 2026-04-25 hit on MINUTE_LIMIT_REACHED.
-    enum TerminalErrorCode: String, CaseIterable {
-        case minuteLimitReached    = "MINUTE_LIMIT_REACHED"
-        case authFailed            = "AUTH_FAILED"
-        case sessionExpired        = "SESSION_EXPIRED"
-        case subscriptionRequired  = "SUBSCRIPTION_REQUIRED"
-        case accountSuspended      = "ACCOUNT_SUSPENDED"
-        case invalidSession        = "INVALID_SESSION"
-    }
-
-    private static let terminalErrorCodes: Set<String> =
-        Set(TerminalErrorCode.allCases.map(\.rawValue))
+    private static let terminalErrorCodes: Set<String> = [
+        "MINUTE_LIMIT_REACHED",
+    ]
 
     private func handleError(_ error: ErrorPayload) {
         // Auto-retry on concurrent session (previous session still closing)
