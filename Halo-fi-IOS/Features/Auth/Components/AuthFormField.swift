@@ -14,6 +14,9 @@ struct AuthFormField: View {
   let isSecure: Bool
   let keyboardType: UIKeyboardType
   let textContentType: UITextContentType?
+  let onFocusChange: ((Bool) -> Void)?
+
+  @FocusState private var isFocused: Bool
 
   init(
     title: String,
@@ -21,7 +24,8 @@ struct AuthFormField: View {
     text: Binding<String>,
     isSecure: Bool = false,
     keyboardType: UIKeyboardType = .default,
-    textContentType: UITextContentType? = nil
+    textContentType: UITextContentType? = nil,
+    onFocusChange: ((Bool) -> Void)? = nil
   ) {
     self.title = title
     self.placeholder = placeholder
@@ -29,15 +33,16 @@ struct AuthFormField: View {
     self.isSecure = isSecure
     self.keyboardType = keyboardType
     self.textContentType = textContentType
+    self.onFocusChange = onFocusChange
   }
-  
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(title)
         .font(.headline)
         .foregroundColor(.white)
         .accessibilityHidden(true)
-      
+
       Group {
         if isSecure {
           SecureField(placeholder, text: $text)
@@ -49,6 +54,10 @@ struct AuthFormField: View {
       .keyboardType(keyboardType)
       .autocapitalization(autocapitalizationType)
       .textContentType(textContentType)
+      .focused($isFocused)
+      .onChange(of: isFocused) { _, newValue in
+        onFocusChange?(newValue)
+      }
       .accessibilityLabel(title)
       .accessibilityHint("Enter your \(title.lowercased())")
       .accessibilityValue(accessibilityValueText)

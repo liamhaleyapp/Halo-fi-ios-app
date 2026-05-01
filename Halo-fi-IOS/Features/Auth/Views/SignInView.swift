@@ -7,17 +7,32 @@
 
 import SwiftUI
 import GoogleSignIn
+import LocalAuthentication
 
 struct SignInView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
+  @Environment(DIContainer.self) private var container
 
   @State private var viewModel = SignInViewModel()
   @State private var showingSignUp = false
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
   @State private var showingForgotPassword = false
+
+  /// Tracks whether the auto-prompt-on-phone-field-focus has fired this view
+  /// lifecycle. Prevents re-prompting after the user dismisses the OS sheet.
+  @State private var hasAttemptedBiometricSignIn = false
+
+  /// Returning OAuth users see only the Apple/Google buttons by default.
+  /// Toggling this to false (via the "Use password instead" link) reveals
+  /// the full form. Returning password users always start with the form.
+  @State private var showOAuthOnlyMode = false
+
+  /// Has the on-appear logic fired yet? Avoids re-running mode detection
+  /// (and re-firing Face ID) on subsequent .onAppear from sheet dismissals.
+  @State private var hasResolvedAppearMode = false
   
   var body: some View {
     NavigationStack {
@@ -33,99 +48,13 @@ struct SignInView: View {
           onBackTap: { dismiss() }
         )
         
-        // Form
-        VStack(spacing: 20) {
-          AuthFormField(
-            title: "Phone Number",
-            placeholder: "Enter your phone number",
-            text: $viewModel.phoneNumber,
-            keyboardType: .phonePad,
-            textContentType: .username
-          )
-          if let error = viewModel.phoneError {
-            validationText(error)
+        // Form — branches based on returning user's last auth method
+        Group {
+          if showOAuthOnlyMode {
+            oauthOnlyContent
+          } else {
+            fullFormContent
           }
-          
-          AuthFormField(
-            title: "Password",
-            placeholder: "Enter your password",
-            text: $viewModel.password,
-            isSecure: true,
-            textContentType: .password
-          )
-          if let error = viewModel.passwordError {
-            validationText(error)
-          }
-          
-          // Forgot Password
-          HStack {
-            Spacer()
-            Button("Forgot Password?") {
-              showingForgotPassword = true
-            }
-            .foregroundColor(.blue)
-            .font(.body)
-            .accessibilityHint("Resets your password")
-          }
-          
-          AuthButton(
-            title: "Sign In",
-            isLoading: viewModel.isLoading,
-            isEnabled: !viewModel.isLoading,
-            action: {
-              Task {
-                await viewModel.signIn(
-                  using: userManager,
-                  subscriptionService: subscriptionService,
-                  onNeedsSubscription: { showingSubscriptionOnboarding = true },
-                  onNeedsPlaid: { showingPlaidOnboarding = true },
-                  onSignedInAndOnboarded: { dismiss() }
-                )
-              }
-            }
-          )
-          
-          // Social Auth
-          SocialAuthButtons(
-            isLoading: viewModel.isLoading,
-            onAppleSignIn: { idToken, nonce in
-              Task {
-                await viewModel.socialSignIn(
-                  provider: "apple", idToken: idToken, nonce: nonce,
-                  using: userManager, subscriptionService: subscriptionService,
-                  onNeedsSubscription: { showingSubscriptionOnboarding = true },
-                  onNeedsPlaid: { showingPlaidOnboarding = true },
-                  onSignedInAndOnboarded: { dismiss() }
-                )
-              }
-            },
-            onGoogleSignIn: {
-              handleGoogleSignIn()
-            }
-          )
-
-          // Sign Up Link
-          HStack {
-            Text("Don't have an account?")
-              .foregroundColor(.white.opacity(0.85))
-            
-            Button("Sign Up") {
-              showingSignUp = true
-            }
-            .foregroundColor(.blue)
-            .accessibilityHint("Creates a new account")
-          }
-          .font(.body)
-          
-#if DEBUG
-          SignInDebugMenu(
-            quickTestLogin: quickTestLogin,
-            mockUserLogin: mockUserLogin,
-            testSubscriptionFlow: testSubscriptionFlow,
-            testPlaidFlow: testPlaidFlow,
-            clearUserData: clearUserData
-          )
-#endif
         }
         .padding(.horizontal, 20)
 
@@ -160,7 +89,269 @@ struct SignInView: View {
     } message: {
       Text(viewModel.errorMessage)
     }
+    .sheet(isPresented: $viewModel.showingBiometricEnrollment) {
+      BiometricEnrollmentSheet(biometryType: currentBiometryType) { enable in
+        Task {
+          await viewModel.handleEnrollmentChoice(
+            enable: enable,
+            biometricAuthService: container.biometricAuthService,
+            credentialStore: container.biometricCredentialStore
+          )
+        }
+      }
+    }
+    .onAppear { resolveAppearMode() }
     } // NavigationStack
+  }
+
+  // MARK: - Returning-user mode resolution
+
+  /// Decides how to present the screen based on the user's last auth method.
+  /// - Biometric creds enrolled → fire Face ID immediately, regardless of
+  ///   last_auth_provider (handles post-reinstall where UserDefaults was wiped
+  ///   but the Keychain entry survived)
+  /// - apple / google → show OAuth-only layout
+  /// - first-time / unknown → show the full form
+  private func resolveAppearMode() {
+    guard !hasResolvedAppearMode else { return }
+    hasResolvedAppearMode = true
+
+    let lastProvider = UserDefaults.standard.string(forKey: "last_auth_provider")
+
+    switch lastProvider {
+    case "apple", "google":
+      showOAuthOnlyMode = true
+    default:
+      showOAuthOnlyMode = false
+    }
+
+    // Face ID auto-fire is gated only on enrolled creds — independent of the
+    // provider flag. This is the universal fast path for any returning user
+    // who set up biometrics, including those who just reinstalled the app.
+    if container.biometricCredentialStore.hasEnrolledCredentials {
+      attemptBiometricSignInIfEnrolled(force: true)
+    }
+  }
+
+  // MARK: - Form variants
+
+  @ViewBuilder
+  private var fullFormContent: some View {
+    VStack(spacing: 20) {
+      if shouldShowBiometricButton {
+        biometricSignInButton
+      }
+
+      AuthFormField(
+        title: "Phone Number",
+        placeholder: "Enter your phone number",
+        text: $viewModel.phoneNumber,
+        keyboardType: .numbersAndPunctuation,
+        textContentType: .username,
+        onFocusChange: { isFocused in
+          guard isFocused else { return }
+          attemptBiometricSignInIfEnrolled()
+        }
+      )
+      if let error = viewModel.phoneError {
+        validationText(error)
+      }
+
+      AuthFormField(
+        title: "Password",
+        placeholder: "Enter your password",
+        text: $viewModel.password,
+        isSecure: true,
+        textContentType: .password
+      )
+      if let error = viewModel.passwordError {
+        validationText(error)
+      }
+
+      // Forgot Password
+      HStack {
+        Spacer()
+        Button("Forgot Password?") {
+          showingForgotPassword = true
+        }
+        .foregroundColor(.blue)
+        .font(.body)
+        .accessibilityHint("Resets your password")
+      }
+
+      AuthButton(
+        title: "Sign In",
+        isLoading: viewModel.isLoading,
+        isEnabled: !viewModel.isLoading,
+        action: {
+          Task {
+            await viewModel.signIn(
+              using: userManager,
+              subscriptionService: subscriptionService,
+              biometricAuthService: container.biometricAuthService,
+              biometricCredentialStore: container.biometricCredentialStore,
+              onNeedsSubscription: { showingSubscriptionOnboarding = true },
+              onNeedsPlaid: { showingPlaidOnboarding = true },
+              onSignedInAndOnboarded: { dismiss() }
+            )
+          }
+        }
+      )
+
+      // Social Auth
+      SocialAuthButtons(
+        isLoading: viewModel.isLoading,
+        onAppleSignIn: { idToken, nonce in
+          Task {
+            await viewModel.socialSignIn(
+              provider: "apple", idToken: idToken, nonce: nonce,
+              using: userManager, subscriptionService: subscriptionService,
+              onNeedsSubscription: { showingSubscriptionOnboarding = true },
+              onNeedsPlaid: { showingPlaidOnboarding = true },
+              onSignedInAndOnboarded: { dismiss() }
+            )
+          }
+        },
+        onGoogleSignIn: {
+          handleGoogleSignIn()
+        }
+      )
+
+      signUpLink
+
+#if DEBUG
+      SignInDebugMenu(
+        quickTestLogin: quickTestLogin,
+        mockUserLogin: mockUserLogin,
+        testSubscriptionFlow: testSubscriptionFlow,
+        testPlaidFlow: testPlaidFlow,
+        clearUserData: clearUserData
+      )
+#endif
+    }
+  }
+
+  @ViewBuilder
+  private var oauthOnlyContent: some View {
+    VStack(spacing: 24) {
+      Spacer().frame(height: 12)
+
+      SocialAuthButtons(
+        isLoading: viewModel.isLoading,
+        onAppleSignIn: { idToken, nonce in
+          Task {
+            await viewModel.socialSignIn(
+              provider: "apple", idToken: idToken, nonce: nonce,
+              using: userManager, subscriptionService: subscriptionService,
+              onNeedsSubscription: { showingSubscriptionOnboarding = true },
+              onNeedsPlaid: { showingPlaidOnboarding = true },
+              onSignedInAndOnboarded: { dismiss() }
+            )
+          }
+        },
+        onGoogleSignIn: {
+          handleGoogleSignIn()
+        },
+        showsLeadingDivider: false
+      )
+
+      Button("Use password instead") {
+        withAnimation(.easeInOut(duration: 0.2)) {
+          showOAuthOnlyMode = false
+        }
+      }
+      .foregroundColor(.blue)
+      .font(.body)
+      .accessibilityHint("Shows the full sign-in form with phone number and password")
+
+      signUpLink
+    }
+  }
+
+  @ViewBuilder
+  private var signUpLink: some View {
+    HStack {
+      Text("Don't have an account?")
+        .foregroundColor(.white.opacity(0.85))
+
+      Button("Sign Up") {
+        showingSignUp = true
+      }
+      .foregroundColor(.blue)
+      .accessibilityHint("Creates a new account")
+    }
+    .font(.body)
+  }
+
+  // MARK: - Biometric helpers
+
+  private var currentBiometryType: LABiometryType {
+    if case .available(let type) = container.biometricAuthService.currentStatus() {
+      return type
+    }
+    return .none
+  }
+
+  private var shouldShowBiometricButton: Bool {
+    guard container.biometricCredentialStore.hasEnrolledCredentials else { return false }
+    if case .available = container.biometricAuthService.currentStatus() {
+      return true
+    }
+    return false
+  }
+
+  @ViewBuilder
+  private var biometricSignInButton: some View {
+    let label = currentBiometryType == .touchID ? "Sign in with Touch ID" : "Sign in with Face ID"
+    let icon = currentBiometryType == .touchID ? "touchid" : "faceid"
+
+    Button {
+      attemptBiometricSignInIfEnrolled(force: true)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: icon)
+          .font(.title3)
+        Text(label)
+          .font(.headline)
+          .fontWeight(.semibold)
+      }
+      .foregroundColor(.white)
+      .frame(maxWidth: .infinity)
+      .frame(height: 52)
+      .background(Color.white.opacity(0.15))
+      .overlay(
+        RoundedRectangle(cornerRadius: 14)
+          .stroke(Color.white.opacity(0.3), lineWidth: 1)
+      )
+      .cornerRadius(14)
+    }
+    .disabled(viewModel.isLoading)
+    .accessibilityHint("Authenticates with biometrics and signs in")
+  }
+
+  private func attemptBiometricSignInIfEnrolled(force: Bool = false) {
+    if !force {
+      guard !hasAttemptedBiometricSignIn else { return }
+    }
+    guard container.biometricCredentialStore.hasEnrolledCredentials else { return }
+    hasAttemptedBiometricSignIn = true
+
+    // Resign keyboard so the OS Face ID sheet isn't fighting the keyboard.
+    UIApplication.shared.sendAction(
+      #selector(UIResponder.resignFirstResponder),
+      to: nil, from: nil, for: nil
+    )
+
+    Task {
+      await viewModel.biometricSignIn(
+        using: userManager,
+        subscriptionService: subscriptionService,
+        credentialStore: container.biometricCredentialStore,
+        onNeedsSubscription: { showingSubscriptionOnboarding = true },
+        onNeedsPlaid: { showingPlaidOnboarding = true },
+        onSignedInAndOnboarded: { dismiss() }
+      )
+    }
   }
   
   @ViewBuilder
@@ -275,7 +466,9 @@ struct SignInView: View {
 }
 
 #Preview {
-  SignInView()
-    .environment(UserManager())
+  let container = DIContainer()
+  return SignInView()
+    .environment(container)
+    .environment(container.userManager)
     .environment(SubscriptionService())
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import LocalAuthentication
 
 enum SettingsDestination: Hashable {
   case profile, preferences, subscription, inviteFriends, about, accounts, contactUs
@@ -14,12 +15,18 @@ enum SettingsDestination: Hashable {
 struct SettingsView: View {
   @Environment(UserManager.self) private var userManager
   @Environment(SubscriptionService.self) private var subscriptionService
+  @Environment(DIContainer.self) private var container
 
   @State private var showLogoutConfirmation = false
   @State private var isLoggingOut = false
   @State private var showDeleteAccountConfirmation = false
   @State private var showDeleteAccountFinalConfirmation = false
   @State private var isDeletingAccount = false
+
+  /// Mirrors `biometricCredentialStore.hasEnrolledCredentials` so the Toggle
+  /// stays in sync. Re-read in .onAppear.
+  @State private var biometricEnrolled = false
+  @State private var showBiometricEnrollSheet = false
   // Temporary debug — voice-minute reset button. Drop the state +
   // the SettingsOption when minute-quota UX is finalized.
   @State private var isResettingMinutes = false
@@ -63,6 +70,8 @@ struct SettingsView: View {
             NavigationLink(value: SettingsDestination.about) {
               SettingsOptionLabel(icon: "info.circle.fill", title: "About")
             }
+
+            biometricToggleRow
 
             SettingsOption(
               icon: "rectangle.portrait.and.arrow.right",
@@ -121,6 +130,9 @@ struct SettingsView: View {
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.large)
+      .onAppear {
+        biometricEnrolled = container.biometricCredentialStore.hasEnrolledCredentials
+      }
       .navigationDestination(for: SettingsDestination.self) { destination in
         switch destination {
         case .profile:
@@ -190,6 +202,94 @@ struct SettingsView: View {
         dismissButton: .default(Text("OK"))
       )
     }
+    .sheet(isPresented: $showBiometricEnrollSheet) {
+      BiometricSettingsEnrollmentSheet(
+        phoneNumber: userManager.currentUser?.phone,
+        biometryType: currentBiometryType,
+        authService: container.authService,
+        biometricAuthService: container.biometricAuthService,
+        credentialStore: container.biometricCredentialStore
+      ) { enrolled in
+        if enrolled {
+          biometricEnrolled = true
+          // Mark as offered so the post-sign-in prompt doesn't reappear.
+          UserDefaults.standard.set(true, forKey: "biometric_enrollment_offered")
+        }
+      }
+    }
+  }
+
+  // MARK: - Biometric toggle
+
+  private var currentBiometryType: LABiometryType {
+    if case .available(let type) = container.biometricAuthService.currentStatus() {
+      return type
+    }
+    return .none
+  }
+
+  private var biometryDisplayName: String {
+    if case .available(let type) = container.biometricAuthService.currentStatus() {
+      switch type {
+      case .faceID: return "Face ID"
+      case .touchID: return "Touch ID"
+      default: return "biometrics"
+      }
+    }
+    return "biometrics"
+  }
+
+  private var biometryIcon: String {
+    if case .available(let type) = container.biometricAuthService.currentStatus(),
+       type == .touchID {
+      return "touchid"
+    }
+    return "faceid"
+  }
+
+  @ViewBuilder
+  private var biometricToggleRow: some View {
+    if case .available = container.biometricAuthService.currentStatus() {
+      HStack(spacing: 16) {
+        Image(systemName: biometryIcon)
+          .font(.title3)
+          .foregroundColor(.blue)
+          .frame(width: 28, height: 28)
+
+        Text("Sign in with \(biometryDisplayName)")
+          .font(.body)
+          .fontWeight(.medium)
+          .foregroundColor(.primary)
+
+        Spacer()
+
+        Toggle("", isOn: Binding(
+          get: { biometricEnrolled },
+          set: { newValue in handleBiometricToggle(newValue) }
+        ))
+        .labelsHidden()
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 14)
+      .background(Color.gray.opacity(0.1))
+      .cornerRadius(12)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("Sign in with \(biometryDisplayName)")
+      .accessibilityValue(biometricEnrolled ? "On" : "Off")
+    }
+  }
+
+  private func handleBiometricToggle(_ newValue: Bool) {
+    if newValue {
+      // We don't have the user's password from current session — present the
+      // enrollment sheet to collect + verify it, then save behind biometry.
+      showBiometricEnrollSheet = true
+      // Toggle stays off until the sheet's onComplete callback flips it.
+      biometricEnrolled = false
+    } else {
+      container.biometricCredentialStore.clear()
+      biometricEnrolled = false
+    }
   }
 
   private func performLogout() {
@@ -241,6 +341,10 @@ struct SettingsView: View {
       // Clear all local state for deleted user
       userManager.resetOnboarding()
       subscriptionService.clearCachedState()
+      container.biometricCredentialStore.clear()
+      // Wipe last-auth-provider so the deleted user's preference doesn't
+      // bias the SignInView for the next sign-in (e.g., a different account).
+      UserDefaults.standard.removeObject(forKey: "last_auth_provider")
       userManager.signOut()
     } catch {
       isDeletingAccount = false
@@ -289,7 +393,9 @@ private struct SettingsOptionLabel: View {
 }
 
 #Preview {
-  SettingsView()
-    .environment(UserManager())
+  let container = DIContainer()
+  return SettingsView()
+    .environment(container)
+    .environment(container.userManager)
     .environment(SubscriptionService())
 }

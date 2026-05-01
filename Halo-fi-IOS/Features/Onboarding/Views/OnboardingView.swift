@@ -55,6 +55,14 @@ struct OnboardingView: View {
       }
     }
     .navigationBarHidden(true)
+    .onAppear {
+      // Returning users on this device skip the marketing carousel and go
+      // straight to Sign In. They can dismiss back to see the carousel if
+      // they want to (e.g., to tap "Sign Up" for a different account).
+      if UserDefaults.standard.bool(forKey: "has_signed_in_before") && !showingSignIn {
+        showingSignIn = true
+      }
+    }
     .fullScreenCover(isPresented: $showingSignUp) {
       SignUpView()
     }

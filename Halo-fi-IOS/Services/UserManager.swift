@@ -28,6 +28,7 @@ final class UserManager {
     private let legacyOnboardingKey = "user_onboarding_completed"  // Legacy global key for migration
     private let tokenStorage: TokenStorageProtocol
     private let authService: AuthServiceProtocol
+    private let biometricCredentialStore: BiometricCredentialStoreProtocol
 
     /// Returns the per-user onboarding key for the given user ID
     private func onboardingKey(for userId: String) -> String {
@@ -55,12 +56,34 @@ final class UserManager {
         }
     }
 
-    init(tokenStorage: TokenStorageProtocol = TokenStorage(), authService: AuthServiceProtocol = AuthService.shared) {
+    init(
+        tokenStorage: TokenStorageProtocol = TokenStorage(),
+        authService: AuthServiceProtocol = AuthService.shared,
+        biometricCredentialStore: BiometricCredentialStoreProtocol = BiometricCredentialStore()
+    ) {
         self.tokenStorage = tokenStorage
         self.authService = authService
+        self.biometricCredentialStore = biometricCredentialStore
+        backfillFlagsFromKeychain()
         loadUserFromStorage()
         restoreOnboardingState()
         setupNotificationObservers()
+    }
+
+    /// iOS Keychain persists across app uninstall, but UserDefaults does not.
+    /// If biometric creds survived a reinstall, treat the device as a returning
+    /// user so SignInView skips the marketing carousel and the post-reinstall
+    /// Face ID auto-prompt fires correctly.
+    private func backfillFlagsFromKeychain() {
+        if biometricCredentialStore.hasEnrolledCredentials {
+            userDefaults.set(true, forKey: "has_signed_in_before")
+            // Biometric creds use password+phone caching, so the user is a
+            // password account by definition. Backfill the provider so the
+            // sign-in screen tailors itself appropriately.
+            if userDefaults.string(forKey: "last_auth_provider") == nil {
+                userDefaults.set("password", forKey: "last_auth_provider")
+            }
+        }
     }
 
     private func setupNotificationObservers() {
@@ -166,6 +189,12 @@ final class UserManager {
 
             Logger.debug("Token expires at: \(session.expirationDate), duration: \(formatTokenDuration(session.expiresIn))")
 
+            // Remember the auth method so the sign-in screen can tailor itself
+            // for returning users (auto Face ID for password, OAuth-only mode
+            // for Apple/Google). Visually-impaired users especially benefit
+            // from the smaller focusable surface this enables.
+            userDefaults.set("password", forKey: "last_auth_provider")
+
             let user = createUser(from: authUser)
             applySignInState(user: user)
 
@@ -205,6 +234,10 @@ final class UserManager {
                 expiresAt: session.expiresAt
             )
 
+            // Remember which OAuth provider was used so SignInView can show
+            // only that button on subsequent sign-ins.
+            userDefaults.set(provider, forKey: "last_auth_provider")
+
             let user = createUser(from: authUser)
             applySignInState(user: user)
 
@@ -228,6 +261,9 @@ final class UserManager {
         bankDataManager?.clearAllData()
 
         tokenStorage.clearTokens()
+        // Intentionally NOT clearing biometricCredentialStore — Face ID is
+        // enrolled per-device so the user can sign back in quickly. The
+        // explicit Settings toggle wipes it; account deletion does too.
 
         Task {
             do {
@@ -424,6 +460,11 @@ final class UserManager {
         isLoading = false
         isResolvingDestination = true  // Show splash while we fetch account data
 
+        // Mark this device as one that's seen a signed-in user. Used to skip
+        // the marketing carousel after sign-out — returning users go straight
+        // to SignInView. Persists across sign-outs by design.
+        userDefaults.set(true, forKey: "has_signed_in_before")
+
         Logger.info("UserManager.applySignInState: userId=\(user.id), isResolvingDestination=true")
 
         saveUserToStorage()
@@ -521,6 +562,10 @@ final class UserManager {
               let user = try? JSONDecoder().decode(User.self, from: data) else {
             return
         }
+
+        // Found a stored user — this device has seen sign-in before.
+        // Backfills the flag for users upgrading past the change that introduced it.
+        userDefaults.set(true, forKey: "has_signed_in_before")
 
         if tokenStorage.isTokenValid() {
             currentUser = user

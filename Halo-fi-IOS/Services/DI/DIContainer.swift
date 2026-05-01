@@ -18,6 +18,12 @@ final class DIContainer {
     /// Secure token storage for authentication
     let tokenStorage: TokenStorageProtocol
 
+    /// Biometric-protected credential store for "Sign in with Face ID"
+    let biometricCredentialStore: BiometricCredentialStoreProtocol
+
+    /// LocalAuthentication wrapper for biometric availability + prompts
+    let biometricAuthService: BiometricAuthService
+
     /// HTTP networking layer
     let networkService: NetworkServiceProtocol
 
@@ -65,6 +71,10 @@ final class DIContainer {
         let tokenStorage = TokenStorage()
         self.tokenStorage = tokenStorage
 
+        let biometricCredentialStore = BiometricCredentialStore()
+        self.biometricCredentialStore = biometricCredentialStore
+        self.biometricAuthService = BiometricAuthService()
+
         // Layer 2: Networking
         let networkService = NetworkService(tokenStorage: tokenStorage)
         self.networkService = networkService
@@ -81,7 +91,11 @@ final class DIContainer {
         self.accountPersistence = accountPersistence
 
         // Layer 4: State Managers
-        let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
+        let userManager = UserManager(
+            tokenStorage: tokenStorage,
+            authService: authService,
+            biometricCredentialStore: biometricCredentialStore
+        )
         let bankDataManager = BankDataManager(
             bankService: bankService,
             transactionPersistence: transactionPersistence,
@@ -109,6 +123,8 @@ final class DIContainer {
         networkService: NetworkServiceProtocol,
         authService: AuthServiceProtocol,
         bankService: BankServiceProtocol,
+        biometricCredentialStore: BiometricCredentialStoreProtocol,
+        biometricAuthService: BiometricAuthService,
         transactionPersistence: TransactionPersistenceProtocol? = nil,
         accountPersistence: AccountPersistenceProtocol? = nil
     ) {
@@ -116,10 +132,16 @@ final class DIContainer {
         self.networkService = networkService
         self.authService = authService
         self.bankService = bankService
+        self.biometricCredentialStore = biometricCredentialStore
+        self.biometricAuthService = biometricAuthService
         self.transactionPersistence = transactionPersistence
         self.accountPersistence = accountPersistence
 
-        let userManager = UserManager(tokenStorage: tokenStorage, authService: authService)
+        let userManager = UserManager(
+            tokenStorage: tokenStorage,
+            authService: authService,
+            biometricCredentialStore: biometricCredentialStore
+        )
         let bankDataManager = BankDataManager(
             bankService: bankService,
             transactionPersistence: transactionPersistence,
