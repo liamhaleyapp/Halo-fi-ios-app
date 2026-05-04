@@ -62,7 +62,7 @@ final class AuthService: AuthServiceProtocol {
         )
 
         guard response.success, response.authUser != nil, response.session != nil else {
-            throw AuthError.invalidCredentials
+            throw AuthError.serverError(400, response.error ?? "Social authentication failed")
         }
 
         return response
