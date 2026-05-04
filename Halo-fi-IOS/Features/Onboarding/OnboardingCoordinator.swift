@@ -11,24 +11,29 @@ import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
   case signUp = 0
-  case subscription = 1
-  case plaid = 2
-  
+  case aiConsent = 1
+  case subscription = 2
+  case plaid = 3
+
   var title: String {
     switch self {
     case .signUp:
       return "Create Account"
+    case .aiConsent:
+      return "Voice AI Consent"
     case .subscription:
       return "Choose Plan"
     case .plaid:
       return "Connect Bank"
     }
   }
-  
+
   var description: String {
     switch self {
     case .signUp:
       return "Sign up to get started"
+    case .aiConsent:
+      return "Review how Halo Fi processes your voice"
     case .subscription:
       return "Select your subscription"
     case .plaid:
@@ -111,19 +116,27 @@ class OnboardingCoordinator {
   
   func determineStartingStep(
     isAuthenticated: Bool,
-    hasActiveSubscription: Bool
+    hasActiveSubscription: Bool,
+    aiConsentGranted: Bool = true
   ) -> OnboardingStep {
-    
+
     // Not authenticated → always start at sign up
     guard isAuthenticated else {
       return .signUp
     }
-    
+
     // Authenticated: mark signup as complete if not already
     if !signUpCompleted {
       signUpCompleted = true
     }
-    
+
+    // Apple 5.1.1(i): consent gate sits between signup and any
+    // AI-touching feature. Block resume on later steps if consent
+    // was never granted (or was withdrawn).
+    if !aiConsentGranted {
+      return .aiConsent
+    }
+
     // No persisted state = user just signed up (fresh onboarding)
     // Always go to subscription step - don't check subscription status yet
     // because RevenueCat cache might have stale data for new users
@@ -197,6 +210,11 @@ class OnboardingCoordinator {
     switch step {
     case .signUp:
       signUpCompleted = true
+    case .aiConsent:
+      // Consent is recorded server-side via UserManager.recordAIConsent
+      // and mirrored to UserDefaults. No coordinator-local flag needed —
+      // userManager.aiConsentGranted is the source of truth.
+      break
     case .subscription:
       subscriptionCompleted = true
     case .plaid:

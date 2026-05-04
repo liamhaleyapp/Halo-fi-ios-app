@@ -77,6 +77,13 @@ struct UnifiedOnboardingFlowView: View {
       )
       .viewTransition(.fade)
 
+    case .aiConsent:
+      AIConsentView(
+        onAccept: handleAIConsentAccept,
+        onDecline: handleAIConsentDecline
+      )
+      .viewTransition(.fade)
+
     case .subscription:
       SubscriptionOnboardingStep(
         coordinator: coordinator,
@@ -133,7 +140,8 @@ struct UnifiedOnboardingFlowView: View {
       
       let startingStep = coordinator.determineStartingStep(
         isAuthenticated: userManager.isAuthenticated,
-        hasActiveSubscription: subscriptionService.hasActiveSubscription
+        hasActiveSubscription: subscriptionService.hasActiveSubscription,
+        aiConsentGranted: userManager.aiConsentGranted
       )
       
       // Set the step (this won't trigger didSet since we're still bootstrapping)
@@ -146,11 +154,28 @@ struct UnifiedOnboardingFlowView: View {
   
   private func handleSignUpComplete() {
     coordinator.markStepCompleted(.signUp)
-    // Always go to subscription after signup
-    // Don't check subscription status - RevenueCat might have stale cache for new users
+    // Apple 5.1.1(i): consent before any AI-bound data leaves the device.
+    // If the user already granted consent on a prior install (or via
+    // social sign-in to an existing account), skip straight to the
+    // subscription step.
+    if userManager.aiConsentGranted {
+      coordinator.goToStep(.subscription)
+    } else {
+      coordinator.goToStep(.aiConsent)
+    }
+  }
+
+  private func handleAIConsentAccept() {
+    coordinator.markStepCompleted(.aiConsent)
     coordinator.goToStep(.subscription)
   }
-  
+
+  private func handleAIConsentDecline() {
+    // AIConsentView already signed the user out. Tear down onboarding
+    // so the SignInView can reclaim the screen.
+    dismiss()
+  }
+
   private func handleSubscriptionComplete() {
     coordinator.markStepCompleted(.subscription)
     coordinator.nextStep()
