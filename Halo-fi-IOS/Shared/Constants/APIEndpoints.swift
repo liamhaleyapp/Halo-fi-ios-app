@@ -144,6 +144,7 @@ enum APIEndpoints {
         static let get = "/users/preferences"
         static let update = "/users/preferences"
         static let voices = "/users/voices"
+        static let aiConsent = "/users/preferences/ai-consent"
     }
 
     // MARK: - Legal

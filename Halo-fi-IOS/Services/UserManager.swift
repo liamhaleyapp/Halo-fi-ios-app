@@ -309,6 +309,73 @@ final class UserManager {
         isOnboarded = false
     }
 
+    // MARK: - AI Consent (Apple Guideline 5.1.1(i))
+
+    /// True once the user has accepted AI processing of their voice and
+    /// conversation data, AND the accepted policy version matches the
+    /// current backend policy version. Read on app launch and before any
+    /// agent conversation; if false, the consent screen must be presented
+    /// before sending any data to OpenAI / Anthropic / ElevenLabs.
+    var aiConsentGranted: Bool {
+        userDefaults.bool(forKey: "ai_consent.granted")
+    }
+
+    /// Privacy-policy version string captured at the time the user
+    /// accepted consent. When this falls behind the current /legal/privacy
+    /// last_updated value AND the policy has materially changed, we
+    /// re-prompt for consent.
+    var aiConsentPolicyVersion: String? {
+        userDefaults.string(forKey: "ai_consent.policy_version")
+    }
+
+    /// Record (or withdraw) AI processing consent. Sends to backend so
+    /// the decision survives reinstalls and is auditable, then mirrors
+    /// the result locally for fast reads.
+    func recordAIConsent(granted: Bool, policyVersion: String) async throws {
+        struct Body: Encodable {
+            let granted: Bool
+            let policy_version: String
+        }
+        struct Response: Codable {
+            let ai_consent_granted_at: String?
+            let ai_consent_policy_version: String?
+        }
+
+        let body = try JSONEncoder().encode(Body(granted: granted, policy_version: policyVersion))
+        let response: Response = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.Preferences.aiConsent,
+            method: .POST,
+            body: body,
+            responseType: Response.self
+        )
+
+        userDefaults.set(response.ai_consent_granted_at != nil, forKey: "ai_consent.granted")
+        userDefaults.set(response.ai_consent_policy_version, forKey: "ai_consent.policy_version")
+    }
+
+    /// Hydrate consent state from the server. Call on app launch and
+    /// after sign-in so `aiConsentGranted` reflects the source of truth.
+    func refreshAIConsentFromServer() async {
+        struct PrefsResponse: Codable {
+            let ai_consent_granted_at: String?
+            let ai_consent_policy_version: String?
+        }
+        do {
+            let prefs: PrefsResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: APIEndpoints.Preferences.get,
+                method: .GET,
+                body: nil,
+                responseType: PrefsResponse.self
+            )
+            userDefaults.set(prefs.ai_consent_granted_at != nil, forKey: "ai_consent.granted")
+            userDefaults.set(prefs.ai_consent_policy_version, forKey: "ai_consent.policy_version")
+        } catch {
+            // Non-fatal — local cache stays as-is. Caller decides whether
+            // to gate features on the cached value.
+            Logger.warn("Failed to refresh AI consent from server: \(error)")
+        }
+    }
+
     /// Checks if user has completed onboarding by checking persisted state or bank accounts
     func checkOnboardingStatus(bankDataManager: BankDataManager? = nil) async {
         guard let userId = currentUser?.id else { return }
