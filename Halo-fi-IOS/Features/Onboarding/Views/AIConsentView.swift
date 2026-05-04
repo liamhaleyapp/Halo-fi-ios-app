@@ -166,10 +166,8 @@ struct AIConsentView: View {
   }
 
   private func decline() {
-    Task {
-      try? await userManager.signOut()
-      onDecline()
-    }
+    userManager.signOut()
+    onDecline()
   }
 
   private func fetchCurrentPolicyVersion() async {
