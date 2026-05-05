@@ -97,7 +97,7 @@ struct AboutView: View {
         ),
         LegalSectionContent(
             heading: "Third-Party Services",
-            body: "We use Plaid for bank connectivity, Supabase for authentication and data storage, and ElevenLabs for voice services. Each service has its own privacy policy."
+            body: "We use Plaid for bank connectivity, Supabase for authentication and data storage, ElevenLabs for speech-to-text and text-to-speech, and OpenAI and Anthropic to power voice conversations. Conversation transcripts and de-identified account context are sent to OpenAI and Anthropic; voice recordings are sent to ElevenLabs. None of these providers train models on your data. Each service has its own privacy policy."
         ),
         LegalSectionContent(
             heading: "Your Rights",
