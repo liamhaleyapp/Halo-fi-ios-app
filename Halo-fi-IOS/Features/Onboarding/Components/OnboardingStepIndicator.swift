@@ -30,6 +30,8 @@ struct OnboardingStepIndicator: View {
     switch step {
     case .signUp:
       return signUpCompleted
+    case .aiConsent:
+      return signUpCompleted
     case .subscription:
       return subscriptionCompleted
     case .plaid:

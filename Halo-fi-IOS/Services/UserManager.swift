@@ -372,7 +372,7 @@ final class UserManager {
         } catch {
             // Non-fatal — local cache stays as-is. Caller decides whether
             // to gate features on the cached value.
-            Logger.warn("Failed to refresh AI consent from server: \(error)")
+            Logger.warning("Failed to refresh AI consent from server: \(error)")
         }
     }
 
