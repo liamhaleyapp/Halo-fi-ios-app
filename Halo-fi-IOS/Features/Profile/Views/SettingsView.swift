@@ -81,7 +81,7 @@ struct SettingsView: View {
               }
             )
 
-#if DEBUG || TESTFLIGHT
+#if DEBUG
             // Build Info Banner
             Divider()
               .padding(.vertical, 8)
@@ -93,7 +93,6 @@ struct SettingsView: View {
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 4)
 
-            #if DEBUG
             SettingsOption(
               icon: "arrow.counterclockwise",
               title: "Reset Onboarding",
@@ -101,7 +100,6 @@ struct SettingsView: View {
                 userManager.resetOnboarding()
               }
             )
-            #endif
 
             // Temporary admin-only "Reset Voice Minutes" — calls the
             // backend's /agent/admin/reset-minutes endpoint, which

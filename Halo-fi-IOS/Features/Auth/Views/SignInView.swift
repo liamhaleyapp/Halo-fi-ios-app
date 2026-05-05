@@ -60,7 +60,7 @@ struct SignInView: View {
 
         Spacer()
 
-#if DEBUG || TESTFLIGHT
+#if DEBUG
         // Build Info Banner
         Text(AppEnvironment.buildTypeDescription)
           .font(.caption2)
