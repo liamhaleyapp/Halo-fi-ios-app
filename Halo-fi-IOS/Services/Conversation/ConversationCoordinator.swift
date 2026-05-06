@@ -110,11 +110,12 @@ final class ConversationCoordinator {
     private let voiceActivityRMSThreshold: Float = 0.04
 
     /// How long after the user's last detected voice activity we wait
-    /// before auto-committing the turn. Was 1.0s — ChatGPT/Gemini
-    /// commit at ~600-700ms; 0.7s gives the same snappy feel without
-    /// cutting off mid-sentence pauses. If users report cut-offs,
-    /// nudge back up to 0.85s.
-    private let silenceCommitInterval: TimeInterval = 0.7
+    /// before auto-committing the turn. ChatGPT/Gemini commit at
+    /// ~600-700ms; we sit at 0.5s to feel snappy on a real device.
+    /// If users start reporting cut-offs mid-sentence, nudge back up
+    /// to 0.7s — we previously sat there but it felt sluggish in
+    /// hands-free testing.
+    private let silenceCommitInterval: TimeInterval = 0.5
 
     // MARK: - Hands-free barge-in
     //
@@ -206,6 +207,11 @@ final class ConversationCoordinator {
         self.streamingAudioPlayer = streamingAudioPlayer
         self.audioFeedback = audioFeedback
         self.transcriptStore = transcriptStore
+
+        // Sync the player's audio session config to the current
+        // conversation mode immediately. setConversationMode also keeps
+        // this in sync on subsequent toggles.
+        streamingAudioPlayer.needsAECDuringPlayback = (conversationMode == .handsFree)
 
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in
@@ -605,6 +611,15 @@ final class ConversationCoordinator {
     ///      end-of-utterance trigger.
     private func processAudioBufferForSilenceDetection(_ buffer: AVAudioPCMBuffer) {
         guard conversationMode == .handsFree, state == .listening else { return }
+        // When the user mutes their mic mid-listen we must NOT treat the
+        // resulting quiet stream as end-of-utterance — otherwise the
+        // silence-after-speech timer fires, the turn auto-commits, and
+        // state slips to .idle, which renders the mic button as
+        // "Tap to Talk" instead of an unmute. The user then has to tap
+        // three times (mute → idle → start listening → mute) before
+        // they get back to a listening state. setMicMuted resets the
+        // last-activity stamp on unmute so the timer starts fresh.
+        guard !isMicMuted else { return }
 
         let now = Date()
 
@@ -827,13 +842,30 @@ final class ConversationCoordinator {
     /// frames. Cheap toggle so users can pause for side conversations
     /// without re-fetching an STT token on every unmute.
     func setMicMuted(_ muted: Bool) {
+        let wasMuted = isMicMuted
         isMicMuted = muted
+        // On unmute, reset the silence-detection clock so the previous
+        // silence accumulated while muted doesn't immediately auto-commit
+        // an empty turn the moment the mic is live again. We also clear
+        // hasDetectedSpeechInCurrentListen so the user has to actually
+        // speak (not just unmute into ambient silence) before silence
+        // can trigger a commit.
+        if wasMuted && !muted {
+            lastVoiceActivityAt = nil
+            hasDetectedSpeechInCurrentListen = false
+            listenStartedAt = Date()
+        }
     }
 
     /// Update the active conversation mode. Called by the view model
     /// after reading @AppStorage; idempotent.
     func setConversationMode(_ mode: ConversationMode) {
         conversationMode = mode
+        // Hands-free needs AEC during TTS playback so Halo's voice
+        // doesn't bleed into the open mic and trigger false barge-in
+        // / silence detection. PTT mutes the mic during TTS so it can
+        // use the louder .default audio session mode.
+        streamingAudioPlayer?.needsAECDuringPlayback = (mode == .handsFree)
     }
 
     /// Hands-free explicit end. Equivalent to `disconnect()` but

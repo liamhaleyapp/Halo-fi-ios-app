@@ -43,6 +43,13 @@ final class StreamingAudioPlayer: NSObject {
     /// next play() but not retroactively.
     var playbackRate: Float = 1.0
 
+    /// Whether barge-in is needed during TTS playback. ConversationCoordinator
+    /// flips this to true for hands-free (mic stays open during TTS, needs
+    /// AEC so Halo's voice doesn't leak into the mic and trigger false
+    /// barge-in / silence-detection). Stays false for push-to-talk where
+    /// the mic is off during TTS, so we can use the louder .default mode.
+    var needsAECDuringPlayback: Bool = false
+
     // MARK: - Private
 
     private var audioPlayer: AVAudioPlayer?
@@ -53,25 +60,28 @@ final class StreamingAudioPlayer: NSObject {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            // .default mode for playback. We deliberately do NOT use
-            // .voiceChat here: .voiceChat applies hardware voice
-            // processing (AEC + AGC + telephony-style routing) which
-            // reduces output volume even at max system level — that
-            // was the "TTS too quiet" bug.
+            // Mode trade-off:
+            //  - .default with .defaultToSpeaker → loud TTS, no voice
+            //    processing. Safe ONLY when the mic isn't actively
+            //    feeding the barge-in / silence detector during
+            //    playback (push-to-talk default).
+            //  - .voiceChat → hardware AEC + AGC + telephony-style
+            //    routing. Required for hands-free so the open mic
+            //    doesn't pick up Halo's own voice and either fire a
+            //    false barge-in or block silence detection. Quieter
+            //    than .default; that's an accepted hands-free tradeoff.
             //
-            // VoiceService flips the mode back to .voiceChat whenever
-            // it activates for recording, so AEC is preserved during
-            // active mic capture (push-to-talk default). In hands-free
-            // mode where the mic stays open during playback, Halo's
-            // own voice may bleed into the mic — that's tracked
-            // separately (#7) and would need per-mode mode selection.
+            // ConversationCoordinator sets `needsAECDuringPlayback`
+            // based on the current conversation_mode and re-applies
+            // before each playback session.
+            let mode: AVAudioSession.Mode = needsAECDuringPlayback ? .voiceChat : .default
             try session.setCategory(
                 .playAndRecord,
-                mode: .default,
+                mode: mode,
                 options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)
-            Logger.info("StreamingAudioPlayer: Audio session configured")
+            Logger.info("StreamingAudioPlayer: Audio session configured (mode=\(mode == .voiceChat ? "voiceChat (AEC)" : "default (loud)"))")
         } catch {
             Logger.error("StreamingAudioPlayer: Failed to configure audio session: \(error)")
         }
