@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, subscription, inviteFriends, about, accounts, contactUs
+  case profile, preferences, workProfile, subscription, inviteFriends, about, accounts, contactUs
 }
 
 struct SettingsView: View {
@@ -49,6 +49,13 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.preferences) {
               SettingsOptionLabel(icon: "hexagon.fill", title: "Preferences")
+            }
+
+            // Drives BWE/IRWE classifier accuracy. Shown for everyone;
+            // copy inside the view explains it's primarily for SSI users
+            // with earned income.
+            NavigationLink(value: SettingsDestination.workProfile) {
+              SettingsOptionLabel(icon: "briefcase.fill", title: "Work Profile")
             }
 
             NavigationLink(value: SettingsDestination.subscription) {
@@ -139,6 +146,9 @@ struct SettingsView: View {
 
         case .preferences:
           PreferencesView()
+
+        case .workProfile:
+          WorkProfileView()
 
         case .subscription:
           SubscriptionManagementView()

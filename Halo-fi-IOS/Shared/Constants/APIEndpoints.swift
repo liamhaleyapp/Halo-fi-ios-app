@@ -67,6 +67,10 @@ enum APIEndpoints {
 
         /// PATCH - Update the authenticated user's profile (including income fields).
         static let me = "/users/me"
+
+        /// GET / PUT - Work-context profile (drives BWE/IRWE classifier).
+        /// Phase 3a — captures intent that Plaid descriptions don't carry.
+        static let workProfile = "/users/work-profile"
     }
 
     // MARK: - Budget
