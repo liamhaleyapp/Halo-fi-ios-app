@@ -129,15 +129,14 @@ struct PreferencesView: View {
                     selectedId: $voiceSpeed
                 )
 
-                // Conversation Style — Phase 1 surfaces the toggle.
-                // Phase 2 wires it into ConversationCoordinator so
-                // Hands-Free auto-resumes listening after Halo speaks
-                // and the mic button becomes a mute toggle. Default
-                // remains Push to Talk for users who prefer explicit
-                // turns.
+                // Conversation Style — Phase 2: backend selects the
+                // ElevenLabs commit_strategy from this preference (manual
+                // for PTT, VAD for hands-free), and ConversationCoordinator
+                // already routes the mic loop accordingly. Default stays
+                // Push to Talk for users who prefer explicit turns.
                 PreferenceDropdownSection(
                     title: "Conversation Style",
-                    subtitle: "Push to Talk: tap to speak, tap to send. Hands-Free (coming soon): natural back-and-forth.",
+                    subtitle: "Push to Talk: tap to speak, tap to send. Hands-Free: natural back-and-forth — Halo listens between replies.",
                     icon: "waveform",
                     options: conversationModeOptions,
                     selectedId: $conversationMode
