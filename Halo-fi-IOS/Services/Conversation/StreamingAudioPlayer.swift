@@ -61,6 +61,21 @@ final class StreamingAudioPlayer: NSObject {
     /// confuse the coordinator's `isBuffering` check.
     private var isAcceptingChunks: Bool = true
 
+    /// Queue of completed audio buffers (one per sentence in the
+    /// new sentence-streaming protocol). When the current player
+    /// finishes, the next buffer in this queue is dequeued and
+    /// played without any state-flip back to .idle. Empty between
+    /// turns and any time we're not chunked.
+    private var pendingBuffers: [Data] = []
+
+    /// True once an audio_complete with is_partial=false has landed,
+    /// telling us no more buffers will arrive for this turn. When the
+    /// queue drains AND this is true, we fire onPlaybackFinished so
+    /// ConversationCoordinator can transition out of .speaking.
+    /// While false, queue drains are silent — we just wait for the
+    /// next buffer.
+    private var isFinalQueued: Bool = false
+
     // MARK: - Audio session
 
     private func configureAudioSession() {
@@ -132,52 +147,92 @@ final class StreamingAudioPlayer: NSObject {
         isAcceptingChunks = true
     }
 
-    /// Play the accumulated MP3 data via AVAudioPlayer. Called when
-    /// audio_complete arrives from the WebSocket.
-    func playAccumulatedAudio() {
+    /// Snapshot the accumulated MP3 buffer onto the playback queue.
+    /// If nothing is currently playing, immediately starts the first
+    /// queued buffer. If something IS playing, the new buffer is
+    /// appended and will be played when the current player finishes
+    /// (no state-flip back to .idle in between).
+    ///
+    /// Pass `isFinal: true` for the LAST audio_complete of a turn —
+    /// when the queue eventually drains, onPlaybackFinished fires so
+    /// ConversationCoordinator can leave .speaking. Pass false for
+    /// intermediate sentence-by-sentence audio_completes.
+    ///
+    /// The legacy single-buffer behavior is preserved when callers
+    /// pass isFinal: true (default) and only one buffer is ever
+    /// queued — the same code path runs.
+    func playAccumulatedAudio(isFinal: Bool = true) {
+        // Drop late audio_complete events for an abandoned response
+        // (post-barge-in). Without this, a stale "final" audio_complete
+        // for the response the user interrupted would fire
+        // onPlaybackFinished and bounce ConversationCoordinator out of
+        // the listening session it just opened.
+        guard isAcceptingChunks else {
+            Logger.debug("StreamingAudioPlayer: dropping post-barge-in audio_complete (isFinal=\(isFinal))")
+            return
+        }
+
+        if isFinal { isFinalQueued = true }
+
         guard !isMuted else {
             Logger.info("StreamingAudioPlayer: Skipping playback (muted)")
             mp3Data = Data()
-            onPlaybackFinished?()
+            pendingBuffers.removeAll()
+            if isFinal {
+                isFinalQueued = false
+                onPlaybackFinished?()
+            }
             return
         }
 
-        guard !mp3Data.isEmpty else {
-            Logger.warning("StreamingAudioPlayer: No audio data accumulated")
-            onPlaybackFinished?()
+        if !mp3Data.isEmpty {
+            pendingBuffers.append(mp3Data)
+            mp3Data = Data()
+        }
+
+        if !isPlaying {
+            playNextBuffer()
+        }
+    }
+
+    /// Pull the next buffer off the queue and start playback. Called
+    /// initially by playAccumulatedAudio and again by the delegate
+    /// when each buffer finishes.
+    private func playNextBuffer() {
+        guard let nextData = pendingBuffers.first else {
+            // Queue empty.
+            isPlaying = false
+            audioPlayer = nil
+            // The turn is over only if the final audio_complete has
+            // already arrived. Otherwise we're between sentences and
+            // waiting for the next buffer to land.
+            if isFinalQueued {
+                isFinalQueued = false
+                onPlaybackFinished?()
+            }
             return
         }
 
-        Logger.info("StreamingAudioPlayer: Playing \(mp3Data.count) bytes of MP3 data")
+        pendingBuffers.removeFirst()
+        Logger.info("StreamingAudioPlayer: Playing \(nextData.count) bytes (queue=\(pendingBuffers.count) remaining)")
         configureAudioSession()
 
         do {
-            let player = try AVAudioPlayer(data: mp3Data)
+            let player = try AVAudioPlayer(data: nextData)
             player.delegate = self
             player.enableRate = true
             player.rate = playbackRate
-            guard player.prepareToPlay() else {
-                Logger.error("StreamingAudioPlayer: prepareToPlay returned false")
-                mp3Data = Data()
-                onPlaybackFinished?()
-                return
-            }
-            guard player.play() else {
-                Logger.error("StreamingAudioPlayer: play() returned false")
-                mp3Data = Data()
-                onPlaybackFinished?()
+            guard player.prepareToPlay(), player.play() else {
+                Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer; skipping")
+                playNextBuffer()
                 return
             }
             self.audioPlayer = player
             self.isPlaying = true
-            // Clear the accumulator now that we've handed it to the player —
-            // AVAudioPlayer copies the bytes internally on init.
-            mp3Data = Data()
             Logger.info("StreamingAudioPlayer: Playback started (\(player.duration)s, rate=\(playbackRate))")
         } catch {
             Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")
-            mp3Data = Data()
-            onPlaybackFinished?()
+            playNextBuffer()
         }
     }
 
@@ -186,8 +241,11 @@ final class StreamingAudioPlayer: NSObject {
         audioPlayer?.stop()
         audioPlayer = nil
         mp3Data = Data()
+        pendingBuffers.removeAll()
+        let wasFinalPending = isFinalQueued
+        isFinalQueued = false
 
-        if isPlaying {
+        if isPlaying || wasFinalPending {
             isPlaying = false
             onPlaybackFinished?()
         }
@@ -204,10 +262,16 @@ final class StreamingAudioPlayer: NSObject {
 extension StreamingAudioPlayer: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
-            Logger.info("StreamingAudioPlayer: Playback finished (success=\(flag))")
+            Logger.info("StreamingAudioPlayer: Buffer finished (success=\(flag), queue=\(self.pendingBuffers.count))")
+            // Advance the queue. If more buffers are waiting, plays
+            // the next one. If empty AND the final audio_complete
+            // has already landed, fires onPlaybackFinished. If empty
+            // AND we're still mid-turn (waiting for more sentences),
+            // stays silent and resumes when the next buffer is
+            // queued via playAccumulatedAudio.
             self.audioPlayer = nil
             self.isPlaying = false
-            self.onPlaybackFinished?()
+            self.playNextBuffer()
         }
     }
 
@@ -216,7 +280,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
             Logger.error("StreamingAudioPlayer: Decode error: \(error?.localizedDescription ?? "unknown")")
             self.audioPlayer = nil
             self.isPlaying = false
-            self.onPlaybackFinished?()
+            self.playNextBuffer()
         }
     }
 }

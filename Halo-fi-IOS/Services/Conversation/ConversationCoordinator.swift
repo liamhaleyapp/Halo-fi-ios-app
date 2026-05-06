@@ -1052,30 +1052,40 @@ final class ConversationCoordinator {
             streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
         case .audioComplete(let complete):
-            // The acknowledgment audio_complete arrives BEFORE the
-            // real agent response. Skip the transcript line + flag
-            // the player so handleSpeakingFinished can recover the
-            // .processing state instead of falling to .idle.
+            // Backend now emits intermediate audio_complete events on
+            // every sentence boundary (data.is_partial == true) so the
+            // client plays each sentence as it lands instead of waiting
+            // for the full response to finish synthesizing. The final
+            // event of the turn omits is_partial (or sets it to false)
+            // and carries the full message body.
             let isAck = complete.isAck
             let body = complete.responseText
-            Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), bodyLen=\(body.count), state=\(state)")
-            if isAck || body.isEmpty {
-                // Either the typed flag fired OR the body is empty
-                // (backend deliberately drops `message` on ack
-                // audio_complete) — don't add a transcript line.
-                isPlayingAcknowledgment = true
-            } else {
-                let responseId = currentAgentResponseId ?? UUID()
-                emitEvent(.agentFinal(body, id: responseId))
-                currentAgentResponseId = nil
-                backfillRecordingAgentResponse(body)
+            let isPartial: Bool = {
+                guard let data = complete.data,
+                      let raw = data["is_partial"]?.value else { return false }
+                return (raw as? Bool) ?? false
+            }()
+            Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), isPartial=\(isPartial), bodyLen=\(body.count), state=\(state)")
+
+            // Only emit the final transcript on the LAST audio_complete.
+            // Intermediate events have an empty body anyway, but this
+            // double-check keeps the contract clean.
+            if !isPartial {
+                if isAck || body.isEmpty {
+                    isPlayingAcknowledgment = true
+                } else {
+                    let responseId = currentAgentResponseId ?? UUID()
+                    emitEvent(.agentFinal(body, id: responseId))
+                    currentAgentResponseId = nil
+                    backfillRecordingAgentResponse(body)
+                }
             }
-            // Extract voice speed from server data (may arrive as Double or Int)
+            // Voice-speed override may arrive on any audio_complete; honor it.
             if let data = complete.data,
                let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
                 streamingAudioPlayer?.playbackRate = Float(speedValue)
             }
-            playAccumulatedAudio()
+            playAccumulatedAudio(isFinal: !isPartial)
 
         case .error(let error):
             audioFeedback.stopProcessingPulse()
@@ -1171,15 +1181,20 @@ final class ConversationCoordinator {
         }
     }
 
-    private func playAccumulatedAudio() {
+    private func playAccumulatedAudio(isFinal: Bool = true) {
         guard !isPrivacyMode, !isMuted else {
             Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted)")
             setState(.idle)
             return
         }
 
-        setState(.speaking)
-        streamingAudioPlayer?.playAccumulatedAudio()
+        // Move to .speaking on the first buffer that flips us out of
+        // .processing — subsequent intermediate audio_completes during
+        // sentence-streaming should not bounce state back and forth.
+        if state != .speaking {
+            setState(.speaking)
+        }
+        streamingAudioPlayer?.playAccumulatedAudio(isFinal: isFinal)
     }
 
     // MARK: - Accessibility Announcements
