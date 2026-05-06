@@ -597,7 +597,13 @@ final class ConversationCoordinator {
     private func bargeIn() {
         guard state == .speaking else { return }
         bargeInRequested = true
-        streamingAudioPlayer?.stop()
+        // stopAndDiscardPending: stop local playback AND drop any
+        // chunks the server is still streaming for the abandoned
+        // response. Otherwise late-arriving chunks refill the player's
+        // buffer, isBuffering flips to true, and startListening's
+        // bailout shoves the conversation back to .idle instead of
+        // routing into a fresh listen.
+        streamingAudioPlayer?.stopAndDiscardPending()
     }
 
     /// Per-buffer silence-detection tap for hands-free auto-commit.
@@ -802,6 +808,14 @@ final class ConversationCoordinator {
     private func sendTextInternal(_ message: String) async {
         do {
             currentAgentResponseId = UUID()
+
+            // We're starting a fresh turn — re-open the audio player's
+            // chunk gate. If the previous turn ended via barge-in, the
+            // gate was closed to drop late server-streamed chunks for
+            // the abandoned response. Now that we're requesting a new
+            // response, audio chunks arriving from here on are for the
+            // current turn and should be accepted.
+            streamingAudioPlayer?.resumeAcceptingChunks()
 
             let context: [String: AnyCodable] = [
                 "platform": AnyCodable("ios"),

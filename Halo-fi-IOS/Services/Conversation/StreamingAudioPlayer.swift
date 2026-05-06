@@ -54,6 +54,12 @@ final class StreamingAudioPlayer: NSObject {
 
     private var audioPlayer: AVAudioPlayer?
     private var mp3Data = Data()
+    /// When true, appendAudioChunk drops incoming bytes instead of
+    /// buffering them. Set by stopAndDiscardPending() (called from
+    /// barge-in) so server-side TTS chunks that are still in flight
+    /// after we've decided to interrupt don't refill mp3Data and
+    /// confuse the coordinator's `isBuffering` check.
+    private var isAcceptingChunks: Bool = true
 
     // MARK: - Audio session
 
@@ -89,14 +95,41 @@ final class StreamingAudioPlayer: NSObject {
 
     // MARK: - Public API
 
-    /// Append a base64-encoded MP3 chunk to the accumulator.
+    /// Append a base64-encoded MP3 chunk to the accumulator. Drops the
+    /// chunk silently when we're in post-barge-in discard mode — the
+    /// server hasn't yet been told to stop streaming, so chunks for the
+    /// abandoned response can still arrive after the user has interrupted.
     func appendAudioChunk(_ base64Audio: String) {
+        guard isAcceptingChunks else {
+            Logger.debug("StreamingAudioPlayer: dropping post-barge-in chunk")
+            return
+        }
         guard let rawData = Data(base64Encoded: base64Audio) else {
             Logger.error("StreamingAudioPlayer: Invalid base64 audio data")
             return
         }
         mp3Data.append(rawData)
         Logger.debug("StreamingAudioPlayer: Accumulated \(mp3Data.count) bytes total")
+    }
+
+    /// Variant of stop() that suppresses any further incoming chunks
+    /// until resumeAcceptingChunks() is called. Used by barge-in: we
+    /// stop the local player immediately, but the server is still
+    /// streaming TTS for the abandoned response. Without this gate
+    /// those chunks would refill mp3Data, making isBuffering report
+    /// true and causing ConversationCoordinator.startListening() to
+    /// bail out instead of resuming the mic.
+    func stopAndDiscardPending() {
+        isAcceptingChunks = false
+        stop()
+    }
+
+    /// Re-open the chunk gate. Called by ConversationCoordinator the
+    /// moment the user has committed a new turn — any audio that
+    /// arrives from here on is for the new agent response and should
+    /// be accepted.
+    func resumeAcceptingChunks() {
+        isAcceptingChunks = true
     }
 
     /// Play the accumulated MP3 data via AVAudioPlayer. Called when
