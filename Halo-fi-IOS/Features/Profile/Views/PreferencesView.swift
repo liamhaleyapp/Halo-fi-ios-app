@@ -23,6 +23,10 @@ struct PreferencesView: View {
     @State private var showingResult = false
     @State private var resultMessage = ""
     @State private var resultSuccess = false
+    /// Debounced auto-save handle. Each preference change schedules a
+    /// save and cancels the previous one so rapid toggles produce a
+    /// single API call after the user settles on a value.
+    @State private var saveTask: Task<Void, Never>?
 
     // MARK: - Selection Options
     private let languageOptions: [SelectionOption] = [
@@ -53,7 +57,7 @@ struct PreferencesView: View {
 
     private let conversationModeOptions: [SelectionOption] = [
         .init(id: "push_to_talk", title: "Push to Talk"),
-        .init(id: "hands_free", title: "Hands-Free"),
+        .init(id: "hands_free", title: "Hands-Free (Beta)"),
     ]
 
     private var speedValue: Float {
@@ -142,14 +146,6 @@ struct PreferencesView: View {
                     selectedId: $conversationMode
                 )
 
-                Spacer(minLength: 40)
-
-                // Save Button
-                SavePreferencesButton(onSave: {
-                    Task { await savePreferences() }
-                })
-                .disabled(isSaving)
-
                 Spacer(minLength: 100)
             }
             .padding(.top, 10)
@@ -157,7 +153,9 @@ struct PreferencesView: View {
         .navigationTitle("Preferences")
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(selectedColorScheme)
-        .alert(resultSuccess ? "Saved" : "Error", isPresented: $showingResult) {
+        // Errors only — successful auto-saves are silent + haptic.
+        // Showing "Saved" on every dropdown tap would be obnoxious.
+        .alert("Couldn't save", isPresented: $showingResult) {
             Button("OK") { }
         } message: {
             Text(resultMessage)
@@ -168,9 +166,38 @@ struct PreferencesView: View {
                 voiceAgent = Self.defaultVoiceId
             }
         }
+        // Auto-save on any preference change. Each setter writes to
+        // @AppStorage immediately for local persistence; we then
+        // schedule a debounced backend push so a rapid toggle (e.g.
+        // user opens dropdown, considers two options, settles) only
+        // produces one API call.
+        .onChange(of: voiceLanguage) { _, _ in scheduleAutoSave() }
+        .onChange(of: themeMode) { _, _ in scheduleAutoSave() }
+        .onChange(of: voiceAgent) { _, _ in scheduleAutoSave() }
+        .onChange(of: voiceSpeed) { _, _ in scheduleAutoSave() }
+        .onChange(of: conversationMode) { _, _ in scheduleAutoSave() }
+        .onDisappear {
+            // Cancel any pending debounced save when the user leaves
+            // the screen — the @AppStorage write already happened, so
+            // their local choice is preserved; we just don't need a
+            // late API call firing after navigation.
+            saveTask?.cancel()
+        }
     }
 
-    private func savePreferences() async {
+    /// Debounced auto-save. Cancels any in-flight save and schedules
+    /// a fresh one 350ms out. Tap-tap-tap on the same dropdown only
+    /// produces one PUT.
+    private func scheduleAutoSave() {
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            await savePreferences(silent: true)
+        }
+    }
+
+    private func savePreferences(silent: Bool = false) async {
         isSaving = true
         defer { isSaving = false }
 
@@ -207,16 +234,23 @@ struct PreferencesView: View {
                 responseType: PrefsResponse.self
             )
 
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            // Light haptic so the user gets quiet confirmation that
+            // their choice persisted, without an interruptive alert.
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
 
-            resultSuccess = true
-            resultMessage = "Your preferences have been saved."
+            if !silent {
+                resultSuccess = true
+                resultMessage = "Your preferences have been saved."
+                showingResult = true
+            }
         } catch {
+            // Even silent saves surface errors — the user needs to know
+            // their setting didn't make it to the backend.
             resultSuccess = false
             resultMessage = "Unable to save preferences. Please try again."
+            showingResult = true
         }
-        showingResult = true
     }
 }
 

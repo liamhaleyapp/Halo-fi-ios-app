@@ -333,7 +333,13 @@ final class ConversationCoordinator {
         voiceService.teardownCapture()
         sttService.disconnect()
         agentWebSocket.disconnect()
-        streamingAudioPlayer?.stop()
+        // stopAndDiscardPending (vs plain stop) closes the chunk gate
+        // so any audio_chunk / audio_complete events still in flight
+        // through the WebSocket / event-task pipeline don't sneak past
+        // disconnect and resurrect playback after the user has left
+        // the conversation. resumeAcceptingChunks() runs on the next
+        // sendTextInternal so a fresh conversation starts clean.
+        streamingAudioPlayer?.stopAndDiscardPending()
         transcriptStore?.discardDraft()
 
         isVoiceSessionActive = false
