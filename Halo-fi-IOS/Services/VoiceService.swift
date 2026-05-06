@@ -193,6 +193,16 @@ final class VoiceService: NSObject {
         Logger.info("VoiceService: Recording stopped (engine stays warm)")
     }
 
+    /// Empty the pre-roll ring without stopping the engine. Use this when
+    /// the audio window leading up to "now" is known to be contaminated
+    /// (e.g. Halo's TTS just played through the speaker — even with
+    /// .voiceChat AEC, the last ~700 ms in the ring can contain enough
+    /// of Halo's voice to corrupt the user's transcript). Cheaper than
+    /// teardown / re-init because the engine and tap stay live.
+    func discardPreroll() {
+        ringBuffer.removeAll()
+    }
+
     // MARK: - Audio buffer handling
 
     private func handleAudioBuffer(_ buffer: AVAudioPCMBuffer) {

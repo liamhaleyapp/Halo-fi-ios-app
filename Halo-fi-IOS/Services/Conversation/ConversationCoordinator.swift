@@ -407,6 +407,18 @@ final class ConversationCoordinator {
                         self.lastVoiceActivityAt = nil
                         self.listenStartedAt = Date()
 
+                        // Drop the pre-roll ring. The pre-warm engine has
+                        // been capturing whatever was happening before
+                        // this turn — including Halo's TTS playing
+                        // through the speaker. Even with .voiceChat AEC
+                        // the last ~700 ms isn't reliably clean, and
+                        // we've shipped real-device transcripts where
+                        // the user's turn started with Halo's last
+                        // sentence verbatim. Trade losing the
+                        // catch-opening-syllables benefit for clean
+                        // transcripts in PTT — an unambiguous win.
+                        self.voiceService.discardPreroll()
+
                         // Start recording first, then signal the user
                         try await self.voiceService.startRecording()
                         self.setState(.listening)
