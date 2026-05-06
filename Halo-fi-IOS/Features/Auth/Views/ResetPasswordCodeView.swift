@@ -55,6 +55,10 @@ struct ResetPasswordCodeView: View {
   @Environment(UserManager.self) private var userManager
 
   let method: PasswordResetMethod
+  /// Forwarded to SetNewPasswordView so its "Sign In" button can
+  /// dismiss the whole reset-password sheet and land the user back
+  /// on SignInView.
+  var onComplete: (() -> Void)?
 
   @State private var code = ""
   @State private var isVerifying = false
@@ -140,7 +144,7 @@ struct ResetPasswordCodeView: View {
     .navigationBarBackButtonHidden(false)
     .navigationDestination(isPresented: $navigateToSetPassword) {
       if let recoveryToken {
-        SetNewPasswordView(recoveryToken: recoveryToken)
+        SetNewPasswordView(recoveryToken: recoveryToken, onComplete: onComplete)
       }
     }
   }

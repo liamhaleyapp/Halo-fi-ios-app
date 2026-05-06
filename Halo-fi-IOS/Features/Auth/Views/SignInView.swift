@@ -75,7 +75,10 @@ struct SignInView: View {
       SignUpView()
     }
     .sheet(isPresented: $showingForgotPassword) {
-      ForgotPasswordView()
+      // onComplete dismisses the sheet so the user lands back on
+      // SignInView when they finish the reset flow (the flow's
+      // pushed views all forward this callback up).
+      ForgotPasswordView(onComplete: { showingForgotPassword = false })
     }
     .fullScreenCover(isPresented: $showingSubscriptionOnboarding) {
       SubscriptionOnboardingFlowView()

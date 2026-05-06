@@ -21,6 +21,13 @@ struct ForgotPasswordView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
 
+  /// Called once the entire flow finishes (user finished setting a new
+  /// password and tapped "Sign In" on the success alert). The presenter
+  /// (SignInView) hooks this up to set its showingForgotPassword
+  /// binding to false so the sheet dismisses cleanly back to sign-in.
+  /// Falls back to dismiss() if not provided.
+  var onComplete: (() -> Void)?
+
   @State private var channel: ResetChannel = .phone
   @State private var email = ""
   @State private var phoneNumber = ""
@@ -146,7 +153,7 @@ struct ForgotPasswordView: View {
         .padding(.top, 40)
       }
       .navigationDestination(item: $pendingMethod) { method in
-        ResetPasswordCodeView(method: method)
+        ResetPasswordCodeView(method: method, onComplete: onComplete ?? { dismiss() })
       }
     }
     .navigationBarHidden(true)

@@ -16,6 +16,11 @@ struct SetNewPasswordView: View {
   @Environment(UserManager.self) private var userManager
 
   let recoveryToken: String
+  /// Called when the user taps "Sign In" on the success alert. Threaded
+  /// down from ForgotPasswordView so we can dismiss the entire sheet
+  /// (popping all three views) and land the user back on SignInView
+  /// instead of leaving them stuck on ResetPasswordCodeView.
+  var onComplete: (() -> Void)?
 
   @State private var newPassword = ""
   @State private var confirmPassword = ""
@@ -109,9 +114,14 @@ struct SetNewPasswordView: View {
     .navigationBarBackButtonHidden(true)
     .alert("Password Updated", isPresented: $showSuccess) {
       Button("Sign In") {
-        // Pop back to the sign-in screen. The SignIn flow is presented
-        // as a sheet/nav stack; dismissing here returns to it.
-        dismiss()
+        // Dismiss the entire reset-password sheet so the user lands
+        // back on SignInView. Falls back to local dismiss() if no
+        // onComplete was supplied (preview/testing).
+        if let onComplete {
+          onComplete()
+        } else {
+          dismiss()
+        }
       }
     } message: {
       Text("Your password has been updated. You can now sign in with your new password.")
