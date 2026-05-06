@@ -477,19 +477,11 @@ final class ConversationCoordinator {
     }
 
     /// Stop listening (voice mode) - finalize and send transcript.
-    ///
-    /// Called when the user explicitly ends their turn (PTT button release
-    /// or manual stop in hands-free). Behaviour depends on the backend's
-    /// commit strategy for this user:
-    ///
-    /// - PTT users (commit_strategy="manual"): we MUST send an explicit
-    ///   commit message to ElevenLabs before disconnecting, otherwise the
-    ///   server holds the audio buffer and never emits a final transcript.
-    ///   commitAndDisconnect() handles that and waits up to
-    ///   commitFlushTimeout for the final transcript to arrive.
-    /// - Hands-free users (commit_strategy="vad"): server-side VAD has
-    ///   either already committed or will time out cleanly. A plain
-    ///   disconnect is faster and what the existing test surface assumes.
+    /// Called when the user explicitly ends their turn (PTT button
+    /// release or manual stop in hands-free). Backend serves
+    /// commit_strategy="vad" for both modes, so server-side VAD has
+    /// already committed by this point and a plain disconnect is
+    /// safe — no need for the explicit commit + 2s flush wait.
     func stopListening() {
         guard state == .listening else { return }
 
@@ -504,31 +496,23 @@ final class ConversationCoordinator {
         lastVoiceActivityAt = nil
         listenStartedAt = nil
 
-        // Stop recording immediately so the mic LED / haptic isn't held
-        // open while we wait for the commit-flush round trip.
+        // Stop recording and STT
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
+        sttService.disconnect()
 
-        // Show the processing UI while the flush completes — the final
-        // transcript may take up to commitFlushTimeout to arrive.
-        setState(.processing)
+        // Finalize draft and send to agent
+        if let finalText = transcriptStore?.finalizeDraft(), !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
+            setState(.processing)
+            // Kick off the thinking-pulse haptic + sound so the user
+            // knows Halo is working. Mirrors the public sendText path.
+            audioFeedback.feedbackForStateChange(.processing)
 
-        Task { [weak self] in
-            guard let self else { return }
-            if self.conversationMode == .pushToTalk {
-                await self.sttService.commitAndDisconnect()
-            } else {
-                self.sttService.disconnect()
+            Task {
+                await sendTextInternal(finalText)
             }
-
-            // After the (awaited) flush, the transcript store should have
-            // received the final transcript via its onTranscript callback.
-            if let finalText = self.transcriptStore?.finalizeDraft(),
-               !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
-                await self.sendTextInternal(finalText)
-            } else {
-                self.setState(.idle)
-            }
+        } else {
+            setState(.idle)
         }
     }
 
