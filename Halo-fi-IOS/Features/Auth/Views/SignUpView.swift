@@ -267,6 +267,27 @@ struct SignUpView: View {
       PlaidOnboardingView(isOnboarding: true)
         .navigationBarTitleDisplayMode(.inline)
     }
+    // Phone OTP verification screen for email/password signups.
+    // Presented when the backend returns requires_phone_verification=true.
+    // After verifyPhoneOTP succeeds the view fires onVerified, which
+    // calls back into the view model to perform the post-signup sign-in.
+    // Uses fullScreenCover (not navigationDestination) because SignUpView
+    // is itself presented via fullScreenCover with no NavigationStack.
+    .fullScreenCover(item: Binding(
+      get: { viewModel.pendingPhoneVerification },
+      set: { viewModel.pendingPhoneVerification = $0 }
+    )) { pending in
+      PhoneVerificationView(
+        idUser: pending.idUser,
+        phone: pending.phone,
+        smsAlreadySent: pending.smsAlreadySent,
+        onVerified: {
+          Task {
+            await viewModel.completePhoneVerification(using: userManager, onComplete: onComplete)
+          }
+        }
+      )
+    }
     .sheet(isPresented: $showingDatePicker) {
       NavigationStack {
         VStack {

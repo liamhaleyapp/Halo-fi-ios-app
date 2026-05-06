@@ -77,7 +77,7 @@ final class AuthService: AuthServiceProtocol {
         phone: String,
         password: String,
         dateOfBirth: Date
-    ) async throws {
+    ) async throws -> SignupResponse {
         if firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
             throw AuthError.validationError([])
         }
@@ -93,7 +93,7 @@ final class AuthService: AuthServiceProtocol {
 
         let requestBody = try JSONEncoder().encode(registerRequest)
 
-        _ = try await networkService.publicRequest(
+        return try await networkService.publicRequest(
             endpoint: "/users/signup",
             method: .POST,
             body: requestBody,

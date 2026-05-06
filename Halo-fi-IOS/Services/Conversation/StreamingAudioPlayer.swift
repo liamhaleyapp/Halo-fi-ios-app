@@ -53,12 +53,21 @@ final class StreamingAudioPlayer: NSObject {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            // .voiceChat enables hardware acoustic echo cancellation
-            // so Halo's TTS output played here doesn't get picked up
-            // by the mic during hands-free mode. .default has no AEC.
+            // .default mode for playback. We deliberately do NOT use
+            // .voiceChat here: .voiceChat applies hardware voice
+            // processing (AEC + AGC + telephony-style routing) which
+            // reduces output volume even at max system level — that
+            // was the "TTS too quiet" bug.
+            //
+            // VoiceService flips the mode back to .voiceChat whenever
+            // it activates for recording, so AEC is preserved during
+            // active mic capture (push-to-talk default). In hands-free
+            // mode where the mic stays open during playback, Halo's
+            // own voice may bleed into the mic — that's tracked
+            // separately (#7) and would need per-mode mode selection.
             try session.setCategory(
                 .playAndRecord,
-                mode: .voiceChat,
+                mode: .default,
                 options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)

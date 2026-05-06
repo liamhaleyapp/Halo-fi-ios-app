@@ -26,6 +26,13 @@ struct BiometricCredentialStore: BiometricCredentialStoreProtocol {
   // MARK: - Existence
 
   var hasEnrolledCredentials: Bool {
+    // iOS 14+ replacement for kSecUseAuthenticationUIFail: pass an LAContext
+    // with interactionNotAllowed = true so the keychain refuses to prompt
+    // and instead returns errSecInteractionNotAllowed when biometry would
+    // be required.
+    let context = LAContext()
+    context.interactionNotAllowed = true
+
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -33,7 +40,7 @@ struct BiometricCredentialStore: BiometricCredentialStoreProtocol {
       kSecMatchLimit as String: kSecMatchLimitOne,
       // Important: do NOT set kSecReturnData here — that would trigger the
       // biometry prompt. We only want to check for presence.
-      kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail
+      kSecUseAuthenticationContext as String: context
     ]
 
     let status = SecItemCopyMatching(query as CFDictionary, nil)

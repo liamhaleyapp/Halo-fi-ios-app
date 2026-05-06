@@ -148,11 +148,11 @@ final class UserManager {
         email: String,
         password: String,
         dateOfBirth: Date
-    ) async throws {
+    ) async throws -> SignupResponse {
         isLoading = true
 
         do {
-            try await authService.register(
+            let response = try await authService.register(
                 firstName: firstName,
                 lastName: lastName,
                 email: email,
@@ -161,10 +161,56 @@ final class UserManager {
                 dateOfBirth: dateOfBirth
             )
             isLoading = false
+            return response
         } catch {
             isLoading = false
             throw error
         }
+    }
+
+    /// Verify the phone OTP sent during signup. On success the user's
+    /// phone is marked confirmed in Supabase; the caller can then sign
+    /// in normally with phone + password.
+    func verifyPhoneOTP(idUser: String, code: String) async throws {
+        struct VerifyBody: Encodable {
+            let idUser: String
+            let verificationToken: String
+            enum CodingKeys: String, CodingKey {
+                case idUser = "id_user"
+                case verificationToken = "verification_token"
+            }
+        }
+        // Backend wraps verify_otp's response shape variably, so we just
+        // check the HTTP status. A failed verify returns 400 from the
+        // controller and is thrown by NetworkService as a serverError.
+        struct VerifyResponse: Codable {}
+
+        let body = try JSONEncoder().encode(VerifyBody(idUser: idUser, verificationToken: code))
+        let _: VerifyResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.verifyPhoneCode,
+            method: .POST,
+            body: body,
+            responseType: VerifyResponse.self
+        )
+    }
+
+    /// Trigger a fresh SMS OTP for an unverified user.
+    func resendPhoneOTP(idUser: String) async throws {
+        struct ResendBody: Encodable {
+            let userAuthId: String
+            enum CodingKeys: String, CodingKey {
+                case userAuthId = "user_auth_id"
+            }
+        }
+        struct ResendResponse: Codable {}
+
+        let body = try JSONEncoder().encode(ResendBody(userAuthId: idUser))
+        let _: ResendResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.resendPhoneCode,
+            method: .POST,
+            body: body,
+            responseType: ResendResponse.self
+        )
     }
 
     func signIn(phoneNumber: String, password: String) async throws {
@@ -296,6 +342,137 @@ final class UserManager {
             body: body,
             responseType: ResetResponse.self
         )
+    }
+
+    /// SMS variant of password reset request. Triggers a 6-digit OTP
+    /// to the user's phone via Supabase + Twilio. The flow afterwards
+    /// is identical to the email path: verify → set new password.
+    func resetPasswordSMS(phone: String) async throws {
+        struct ResetBody: Encodable {
+            let phone: String
+        }
+        struct ResetResponse: Codable {
+            let success: Bool
+            let message: String?
+        }
+
+        let body = try JSONEncoder().encode(ResetBody(phone: phone))
+        let _: ResetResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.resetPasswordSMS,
+            method: .POST,
+            body: body,
+            responseType: ResetResponse.self
+        )
+    }
+
+    /// SMS variant of OTP verification for password reset. Returns the
+    /// short-lived recovery access_token that should be passed to
+    /// setNewPassword.
+    func verifyPasswordResetSMSOTP(phone: String, code: String) async throws -> String {
+        struct VerifyBody: Encodable {
+            let phone: String
+            let token: String
+        }
+        struct VerifyResponse: Codable {
+            let success: Bool
+            let accessToken: String
+            let refreshToken: String
+            let tokenType: String
+            let expiresIn: Int
+
+            enum CodingKeys: String, CodingKey {
+                case success
+                case accessToken = "access_token"
+                case refreshToken = "refresh_token"
+                case tokenType = "token_type"
+                case expiresIn = "expires_in"
+            }
+        }
+
+        let body = try JSONEncoder().encode(VerifyBody(phone: phone, token: code))
+        let response: VerifyResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.verifyResetSMSOTP,
+            method: .POST,
+            body: body,
+            responseType: VerifyResponse.self
+        )
+        return response.accessToken
+    }
+
+    /// Step 2 of password reset. Submits the 6-digit code from the
+    /// reset email; on success the backend returns a short-lived
+    /// recovery access_token that must be passed to setNewPassword.
+    func verifyPasswordResetOTP(email: String, code: String) async throws -> String {
+        struct VerifyBody: Encodable {
+            let email: String
+            let token: String
+        }
+        struct VerifyResponse: Codable {
+            let success: Bool
+            let accessToken: String
+            let refreshToken: String
+            let tokenType: String
+            let expiresIn: Int
+
+            enum CodingKeys: String, CodingKey {
+                case success
+                case accessToken = "access_token"
+                case refreshToken = "refresh_token"
+                case tokenType = "token_type"
+                case expiresIn = "expires_in"
+            }
+        }
+
+        let body = try JSONEncoder().encode(VerifyBody(email: email, token: code))
+        let response: VerifyResponse = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.verifyResetOTP,
+            method: .POST,
+            body: body,
+            responseType: VerifyResponse.self
+        )
+        return response.accessToken
+    }
+
+    /// Step 3 of password reset. Sets the new password using the
+    /// recovery access_token from verifyPasswordResetOTP. Made out-of-band
+    /// of NetworkService because the recovery token isn't stored in
+    /// TokenStorage — it's a one-shot credential for this flow only.
+    func setNewPassword(recoveryAccessToken: String, newPassword: String) async throws {
+        struct SetBody: Encodable {
+            let newPassword: String
+            enum CodingKeys: String, CodingKey {
+                case newPassword = "new_password"
+            }
+        }
+        struct SetResponse: Codable {
+            let success: Bool
+            let message: String?
+        }
+
+        guard let url = URL(string: "\(APIEndpoints.baseURL)\(APIEndpoints.Auth.setNewPassword)") else {
+            throw AuthError.networkError
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(recoveryAccessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(SetBody(newPassword: newPassword))
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AuthError.networkError }
+
+        if !(200...204).contains(http.statusCode) {
+            // Surface the backend's error detail when present so the UI can
+            // show "password too weak" etc instead of a generic message.
+            let detail = (try? JSONDecoder().decode(SimpleErrorResponse.self, from: data))?.detail
+            throw AuthError.serverError(http.statusCode, detail)
+        }
+
+        let decoded = try JSONDecoder().decode(SetResponse.self, from: data)
+        if !decoded.success {
+            throw AuthError.serverError(http.statusCode, decoded.message)
+        }
     }
 
     // MARK: - User Onboarding

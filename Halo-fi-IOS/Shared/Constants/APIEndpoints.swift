@@ -33,6 +33,30 @@ enum APIEndpoints {
 
         /// POST - Request password reset email.
         static let resetPassword = "/auth/reset-password"
+
+        /// POST - Request password reset via SMS to a phone number.
+        /// Body: { phone }. Always returns 200 (anti-enumeration).
+        static let resetPasswordSMS = "/auth/reset-password-sms"
+
+        /// POST - Verify the 6-digit OTP from the password reset email.
+        /// Returns a short-lived recovery access_token used by setNewPassword.
+        static let verifyResetOTP = "/auth/verify-reset-otp"
+
+        /// POST - Verify the 6-digit OTP from the password reset SMS.
+        /// Body: { phone, token }. Returns same shape as verifyResetOTP.
+        static let verifyResetSMSOTP = "/auth/verify-reset-sms-otp"
+
+        /// POST - Set a new password. Requires the recovery access_token
+        /// from verifyResetOTP as the Bearer auth header.
+        static let setNewPassword = "/auth/set-new-password"
+
+        /// POST - Verify the 6-digit phone OTP sent during signup.
+        /// Body: { id_user, verification_token }.
+        static let verifyPhoneCode = "/auth/verification_code"
+
+        /// POST - Resend the phone OTP for a user that hasn't verified yet.
+        /// Body: { user_auth_id }.
+        static let resendPhoneCode = "/auth/resend_code"
     }
 
     // MARK: - User

@@ -27,6 +27,8 @@ protocol AuthServiceProtocol {
     ///   - phone: User's phone number
     ///   - password: User's password
     ///   - dateOfBirth: User's date of birth
+    /// - Returns: SignupResponse with the new user_auth_id and a flag
+    ///   indicating whether SMS phone verification is still required.
     func register(
         firstName: String,
         lastName: String,
@@ -34,7 +36,7 @@ protocol AuthServiceProtocol {
         phone: String,
         password: String,
         dateOfBirth: Date
-    ) async throws
+    ) async throws -> SignupResponse
 
     /// Refreshes an expired access token.
     /// - Parameter refreshToken: The refresh token to use
@@ -90,10 +92,11 @@ actor MockAuthService: AuthServiceProtocol {
         phone: String,
         password: String,
         dateOfBirth: Date
-    ) async throws {
+    ) async throws -> SignupResponse {
         guard shouldSucceed else {
             throw AuthError.networkError
         }
+        return SignupResponse(idUser: "mock-user-id", requiresPhoneVerification: true, smsSent: true)
     }
 
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {

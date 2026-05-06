@@ -27,11 +27,29 @@ class SignUpViewModel {
   var referralCode = ""
   
   // MARK: - UI state
-  
+
   var isLoading = false
   var errorMessage = ""
   var showingError = false
   var hasAttemptedSubmit = false
+
+  /// When non-nil, the signup network call has succeeded and the user
+  /// must verify the SMS OTP before we sign them in. SignUpView watches
+  /// this and pushes PhoneVerificationView. Cleared once verification
+  /// completes (success or user cancels).
+  ///
+  /// We hold the password here only because we need it to perform the
+  /// post-verification sign-in — it never leaves memory and is dropped
+  /// the instant verification finishes.
+  var pendingPhoneVerification: PendingPhoneVerification?
+
+  struct PendingPhoneVerification: Identifiable, Equatable {
+    let id = UUID()
+    let idUser: String
+    let phone: String
+    let password: String
+    let smsAlreadySent: Bool
+  }
   
   // MARK: - Derived / helpers
   
@@ -230,13 +248,13 @@ class SignUpViewModel {
   }
 
   func createAccount(using userManager: UserManager, onComplete: (() -> Void)?) async {
-    
+
     hasAttemptedSubmit = true
-    
+
     guard isFormValid else {
       return
     }
-    
+
     isLoading = true
     defer { isLoading = false }
 
@@ -247,7 +265,7 @@ class SignUpViewModel {
         return
       }
 
-      try await userManager.signUp(
+      let signupResponse = try await userManager.signUp(
         firstName: trimmedFirstName,
         lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),
         phone: fullPhone,
@@ -255,7 +273,24 @@ class SignUpViewModel {
         password: password,
         dateOfBirth: dateOfBirth
       )
-      
+
+      // If the backend created the user but still needs an SMS OTP to
+      // confirm the phone, hand off to PhoneVerificationView. The view
+      // calls back into completePhoneVerification(...) on success which
+      // performs the sign-in + referral redeem + onComplete chain.
+      //
+      // Older backends (or future social-only flows) that omit the flag
+      // fall through to the original sign-in-immediately path.
+      if signupResponse.requiresPhoneVerification == true {
+        pendingPhoneVerification = PendingPhoneVerification(
+          idUser: signupResponse.idUser,
+          phone: fullPhone,
+          password: password,
+          smsAlreadySent: signupResponse.smsSent ?? false
+        )
+        return
+      }
+
       try await userManager.signIn(
         phoneNumber: fullPhone,
         password: password
@@ -276,6 +311,30 @@ class SignUpViewModel {
         ? "An error occurred. Please try again."
         : error.localizedDescription
       }
+      showingError = true
+    }
+  }
+
+  /// Called by SignUpView once the user has successfully entered their
+  /// SMS OTP in PhoneVerificationView. Signs the user in with the
+  /// password we held in memory during the verification step, redeems
+  /// any referral, and fires onComplete.
+  func completePhoneVerification(using userManager: UserManager, onComplete: (() -> Void)?) async {
+    guard let pending = pendingPhoneVerification else { return }
+    isLoading = true
+    defer { isLoading = false }
+
+    do {
+      try await userManager.signIn(phoneNumber: pending.phone, password: pending.password)
+      await redeemReferralIfNeeded()
+      pendingPhoneVerification = nil
+      onComplete?()
+    } catch {
+      // Verification succeeded but sign-in failed — leave the
+      // verification state cleared and surface a recoverable error.
+      // The user can sign in manually from the sign-in screen.
+      pendingPhoneVerification = nil
+      errorMessage = "Phone verified, but sign-in failed. Please sign in with your phone and password."
       showingError = true
     }
   }
