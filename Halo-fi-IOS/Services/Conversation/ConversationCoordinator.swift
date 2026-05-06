@@ -149,6 +149,16 @@ final class ConversationCoordinator {
     /// a barge-in needs to flip to listening instantly.
     private var bargeInRequested: Bool = false
 
+    /// Timestamp of when Halo's TTS most recently stopped. Used by
+    /// startListening to decide whether the pre-roll ring is at risk
+    /// of containing Halo's own voice (bled in via the speaker→mic
+    /// path even with AEC) — if TTS ended within the last ~2 seconds
+    /// we discard the ring; otherwise we keep it so the user gets
+    /// the opening-syllable head-start that pre-warm exists for.
+    /// nil = no TTS has played this session yet.
+    private var lastSpeakingEndedAt: Date?
+    private let prerollContaminationWindow: TimeInterval = 2.0
+
     // MARK: - Recording capture (training data)
     //
     // Every listening turn's mic buffers are also accumulated here.
@@ -407,17 +417,22 @@ final class ConversationCoordinator {
                         self.lastVoiceActivityAt = nil
                         self.listenStartedAt = Date()
 
-                        // Drop the pre-roll ring. The pre-warm engine has
-                        // been capturing whatever was happening before
-                        // this turn — including Halo's TTS playing
-                        // through the speaker. Even with .voiceChat AEC
-                        // the last ~700 ms isn't reliably clean, and
-                        // we've shipped real-device transcripts where
-                        // the user's turn started with Halo's last
-                        // sentence verbatim. Trade losing the
-                        // catch-opening-syllables benefit for clean
-                        // transcripts in PTT — an unambiguous win.
-                        self.voiceService.discardPreroll()
+                        // Conditionally discard the pre-roll ring. Pre-roll
+                        // gives ~700 ms of head-start so the user's
+                        // opening syllables aren't clipped — keep that
+                        // win when it's safe. We ONLY drop the ring
+                        // when Halo just spoke (within the last
+                        // prerollContaminationWindow seconds), since
+                        // the speaker→mic bleed during/just-after TTS
+                        // can otherwise prepend Halo's last words to
+                        // the user's transcript even with .voiceChat
+                        // AEC. After the window, the ring has cycled
+                        // past anything Halo said and contains only
+                        // ambient — safe to flush.
+                        if let endedAt = self.lastSpeakingEndedAt,
+                           Date().timeIntervalSince(endedAt) < self.prerollContaminationWindow {
+                            self.voiceService.discardPreroll()
+                        }
 
                         // Start recording first, then signal the user
                         try await self.voiceService.startRecording()
@@ -927,6 +942,13 @@ final class ConversationCoordinator {
 
     private func handleSpeakingFinished() {
         Logger.debug("ConversationCoordinator: handleSpeakingFinished state=\(state) mode=\(conversationMode.rawValue) muted=\(isMicMuted) ack=\(isPlayingAcknowledgment)")
+
+        // Mark the TTS-end timestamp so startListening can decide
+        // whether the pre-roll ring is fresh enough to flush (Halo's
+        // voice may have bled into it within the last couple seconds)
+        // or safe to keep (Halo finished long enough ago that the
+        // ring has cycled past her voice and contains only ambient).
+        lastSpeakingEndedAt = Date()
 
         // The ack audio just finished — but the real agent response
         // is still on the way. Hold state in .processing so the
