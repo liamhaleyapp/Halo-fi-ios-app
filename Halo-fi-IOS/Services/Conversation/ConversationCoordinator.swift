@@ -208,11 +208,6 @@ final class ConversationCoordinator {
         self.audioFeedback = audioFeedback
         self.transcriptStore = transcriptStore
 
-        // Sync the player's audio session config to the current
-        // conversation mode immediately. setConversationMode also keeps
-        // this in sync on subsequent toggles.
-        streamingAudioPlayer.needsAECDuringPlayback = (conversationMode == .handsFree)
-
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in
                 self?.handleSpeakingFinished()
@@ -865,11 +860,6 @@ final class ConversationCoordinator {
     /// after reading @AppStorage; idempotent.
     func setConversationMode(_ mode: ConversationMode) {
         conversationMode = mode
-        // Hands-free needs AEC during TTS playback so Halo's voice
-        // doesn't bleed into the open mic and trigger false barge-in
-        // / silence detection. PTT mutes the mic during TTS so it can
-        // use the louder .default audio session mode.
-        streamingAudioPlayer?.needsAECDuringPlayback = (mode == .handsFree)
     }
 
     /// Hands-free explicit end. Equivalent to `disconnect()` but

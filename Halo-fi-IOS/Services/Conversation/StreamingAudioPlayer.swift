@@ -43,13 +43,6 @@ final class StreamingAudioPlayer: NSObject {
     /// next play() but not retroactively.
     var playbackRate: Float = 1.0
 
-    /// Whether barge-in is needed during TTS playback. ConversationCoordinator
-    /// flips this to true for hands-free (mic stays open during TTS, needs
-    /// AEC so Halo's voice doesn't leak into the mic and trigger false
-    /// barge-in / silence-detection). Stays false for push-to-talk where
-    /// the mic is off during TTS, so we can use the louder .default mode.
-    var needsAECDuringPlayback: Bool = false
-
     // MARK: - Private
 
     private var audioPlayer: AVAudioPlayer?
@@ -81,28 +74,22 @@ final class StreamingAudioPlayer: NSObject {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            // Mode trade-off:
-            //  - .default with .defaultToSpeaker → loud TTS, no voice
-            //    processing. Safe ONLY when the mic isn't actively
-            //    feeding the barge-in / silence detector during
-            //    playback (push-to-talk default).
-            //  - .voiceChat → hardware AEC + AGC + telephony-style
-            //    routing. Required for hands-free so the open mic
-            //    doesn't pick up Halo's own voice and either fire a
-            //    false barge-in or block silence detection. Quieter
-            //    than .default; that's an accepted hands-free tradeoff.
-            //
-            // ConversationCoordinator sets `needsAECDuringPlayback`
-            // based on the current conversation_mode and re-applies
-            // before each playback session.
-            let mode: AVAudioSession.Mode = needsAECDuringPlayback ? .voiceChat : .default
+            // Always .voiceChat for AEC. The "loud TTS" win we got from
+            // .default mode came at the cost of the mic capturing
+            // Halo's own voice from the speaker on the next turn —
+            // user-visible bug: the user's transcript started with
+            // Halo's last sentence verbatim. AEC keeps audio clean
+            // in both PTT and hands-free at the expense of slightly
+            // lower playback volume on the built-in speaker. Users
+            // can crank system volume; corrupt transcripts can't be
+            // fixed by the user.
             try session.setCategory(
                 .playAndRecord,
-                mode: mode,
+                mode: .voiceChat,
                 options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)
-            Logger.info("StreamingAudioPlayer: Audio session configured (mode=\(mode == .voiceChat ? "voiceChat (AEC)" : "default (loud)"))")
+            Logger.info("StreamingAudioPlayer: Audio session configured (.voiceChat)")
         } catch {
             Logger.error("StreamingAudioPlayer: Failed to configure audio session: \(error)")
         }
