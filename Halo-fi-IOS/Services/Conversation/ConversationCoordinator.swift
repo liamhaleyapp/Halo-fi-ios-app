@@ -543,8 +543,8 @@ final class ConversationCoordinator {
             // knows Halo is working. Mirrors the public sendText path.
             audioFeedback.feedbackForStateChange(.processing)
 
-            Task {
-                await sendTextInternal(finalText)
+            Task { [weak self] in
+                await self?.sendTextInternal(finalText)
             }
         } else {
             setState(.idle)
@@ -743,8 +743,8 @@ final class ConversationCoordinator {
         if let finalText = transcriptStore?.finalizeDraft() {
             setState(.processing)
 
-            Task {
-                await sendTextInternal(finalText)
+            Task { [weak self] in
+                await self?.sendTextInternal(finalText)
             }
 
             // Snapshot + handoff for the training-data upload. We
