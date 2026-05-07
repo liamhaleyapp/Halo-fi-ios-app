@@ -222,7 +222,12 @@ final class HapticEngine {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.stopContinuous()
-                try? self?.engine?.stop()
+                // CHHapticEngine.stop() is the non-throwing sync API
+                // (the async-with-completion alternative exists but we
+                // don't need to wait). No try? needed — that
+                // generated "no calls to throwing functions" + "use
+                // asynchronous alternative" warnings.
+                self?.engine?.stop()
             }
         }
         center.addObserver(
@@ -260,8 +265,10 @@ final class HapticEngine {
         case .tickAscending(let progress):
             // Ramp sharpness with progress so each tick sounds a
             // touch higher than the last. Intensity stays modest so
-            // a long swipe doesn't fatigue.
-            let clamped = max(0.0, min(1.0, progress))
+            // a long swipe doesn't fatigue. progress is Double for
+            // ergonomics at the call site; cast to Float here since
+            // CHHapticEventParameter.value wants Float.
+            let clamped = Float(max(0.0, min(1.0, progress)))
             return [event(
                 intensity: 0.45 + (clamped * 0.25),
                 sharpness: 0.30 + (clamped * 0.65)
