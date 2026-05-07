@@ -90,9 +90,13 @@ struct BudgetView: View {
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                if dataManager.overview == nil {
-                    await dataManager.refresh()
-                }
+                // Always refresh on tab appear — voice-driven edits
+                // ("set my food budget to $200") update server-side
+                // but iOS otherwise wouldn't see the change until the
+                // user pulled-to-refresh manually. One extra GET per
+                // tab visit is cheap; staleness was confusing enough
+                // to cost user trust.
+                await dataManager.refresh()
                 // Phase 11 Track A — announce the screen summary
                 // once data is in. Guarded by lastAnnouncedSummary
                 // so re-entering the tab without new data is silent.
