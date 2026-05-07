@@ -156,7 +156,20 @@ struct SSILoggedDeductionsCard: View {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             emailStatus = nil
         } catch {
-            exportError = "Couldn't send the email. Try again in a moment."
+            // Surface the backend's actual error so failures are
+            // diagnosable from the device — generic strings hid
+            // Mailgun config / domain issues we'd otherwise need
+            // Railway logs to see. AuthError.serverError carries
+            // the server's `detail` payload (e.g. "Failed to send
+            // email via Mailgun: ...") which is far more useful
+            // than a stock "couldn't send" line.
+            if let authErr = error as? AuthError,
+               let desc = authErr.errorDescription, !desc.isEmpty {
+                exportError = desc
+            } else {
+                exportError = "Couldn't send the email. \(error.localizedDescription)"
+            }
+            Logger.error("Email export failed: \(error)")
         }
     }
 
