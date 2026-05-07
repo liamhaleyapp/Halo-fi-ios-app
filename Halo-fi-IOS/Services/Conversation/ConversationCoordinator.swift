@@ -953,6 +953,21 @@ final class ConversationCoordinator {
         onEvent?(event)
     }
 
+    /// Coarse cache-invalidation signal for the Budget tab. Posted
+    /// after every meaningful agent reply (final agent_response or
+    /// final non-ack audio_complete) so BudgetDataManager can mark
+    /// its overview cache stale and refetch on the next view
+    /// appearance instead of serving pre-mutation rows. We post
+    /// unconditionally rather than inspecting the reply for
+    /// mutation hints — over-refreshing on a non-mutating turn
+    /// ("what's my balance") costs one extra GET, missing a real
+    /// mutation costs user trust. When the backend ships a
+    /// `data.mutated` boolean (or list) on the agent payload we
+    /// can scope this to mutating turns only.
+    private func postBudgetMutationNotificationIfNeeded() {
+        NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil)
+    }
+
     private func handleSpeakingFinished() {
         Logger.debug("ConversationCoordinator: handleSpeakingFinished state=\(state) mode=\(conversationMode.rawValue) muted=\(isMicMuted) ack=\(isPlayingAcknowledgment)")
 
@@ -1072,6 +1087,7 @@ final class ConversationCoordinator {
             }
             currentAgentResponseId = nil
             backfillRecordingAgentResponse(response.message)
+            postBudgetMutationNotificationIfNeeded()
 
         case .audioChunk(let chunk):
             audioFeedback.stopProcessingPulse()
@@ -1105,6 +1121,7 @@ final class ConversationCoordinator {
                     emitEvent(.agentFinal(body, id: responseId))
                     currentAgentResponseId = nil
                     backfillRecordingAgentResponse(body)
+                    postBudgetMutationNotificationIfNeeded()
                 }
             }
             // Voice-speed override may arrive on any audio_complete; honor it.

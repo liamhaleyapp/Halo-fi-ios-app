@@ -102,13 +102,20 @@ struct BudgetView: View {
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                // Always refresh on tab appear — voice-driven edits
-                // ("set my food budget to $200") update server-side
-                // but iOS otherwise wouldn't see the change until the
-                // user pulled-to-refresh manually. One extra GET per
-                // tab visit is cheap; staleness was confusing enough
-                // to cost user trust.
-                await dataManager.refresh()
+                // Refresh on tab appear *only when* the cache has
+                // gone stale (>freshnessWindow seconds since last
+                // fetch) or has been explicitly invalidated by a
+                // voice-driven mutation. Tab-hopping Budget ↔ Income
+                // ↔ Budget within the window now serves the cached
+                // overview instead of burning a GET per visit. Voice
+                // edits ("set my food budget to $200") still surface
+                // promptly because ConversationCoordinator posts
+                // .budgetDataDidMutate on each agent reply, which
+                // BudgetDataManager observes and turns into a stale
+                // mark before this `.task` next runs.
+                if dataManager.shouldRefresh {
+                    await dataManager.refresh()
+                }
                 // Phase 11 Track A — announce the screen summary
                 // once data is in. Guarded by lastAnnouncedSummary
                 // so re-entering the tab without new data is silent.
