@@ -233,20 +233,33 @@ final class ConversationCoordinator {
     /// flow is about to send a pre-prompt; the backend will skip
     /// its initial greeting so the user hears the answer to their
     /// tap, not a "Good evening" speech first.
-    func connect(skipGreeting: Bool = false) async {
+    func connect(
+        skipGreeting: Bool = false,
+        customGreetingId: String? = nil
+    ) async {
         guard state == .idle || state == .disconnected else { return }
 
         // Phase 12 — store the flag so connection_ack handling can
         // transition straight to .idle (otherwise state stays in
         // .connecting forever waiting for an intro message that
         // will never arrive, and queued prompts silently drop).
-        self.skipGreetingForCurrentConnection = skipGreeting
+        // Phase 9c — a customGreetingId means the backend WILL send
+        // a greeting (just not the welcome), so we don't want
+        // .connecting to short-circuit to .idle the way it does for
+        // skip_greeting. Treat custom greetings like the welcome
+        // for state-transition purposes.
+        self.skipGreetingForCurrentConnection = (
+            skipGreeting && (customGreetingId?.isEmpty ?? true)
+        )
 
         setState(.connecting)
         sessionId = UUID().uuidString
 
         do {
-            try await agentWebSocket.connect(skipGreeting: skipGreeting)
+            try await agentWebSocket.connect(
+                skipGreeting: skipGreeting,
+                customGreetingId: customGreetingId
+            )
 
             // Start consuming events from the new stream
             agentEventTask?.cancel()

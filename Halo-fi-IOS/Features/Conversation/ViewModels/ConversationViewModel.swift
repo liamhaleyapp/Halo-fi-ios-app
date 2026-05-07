@@ -60,7 +60,7 @@ final class ConversationViewModel {
 
     // MARK: - Lifecycle
 
-    func onAppear(skipGreeting: Bool = false) async {
+    func onAppear(skipGreeting: Bool = false, customGreetingId: String? = nil) async {
         // Play audio feedback when conversation opens
         audioFeedback.playConversationStartFeedback()
 
@@ -85,9 +85,17 @@ final class ConversationViewModel {
             self?.audioFeedback.playAgentMessageCompleteFeedback()
         }
 
-        // Connect to backend (Phase 12 — skip backend greeting when
-        // a quick-action button is about to send a pre-prompt).
-        await coordinator.connect(skipGreeting: skipGreeting)
+        // Connect to backend.
+        // - Phase 12: skip the welcome when a quick-action button is
+        //   about to send a pre-prompt the user already triggered.
+        // - Phase 9c: a customGreetingId asks the backend to send a
+        //   fixed canonical greeting instead — used by entry points
+        //   like "Log with voice" that want Halo to open with a
+        //   specific question, not "Good evening".
+        await coordinator.connect(
+            skipGreeting: skipGreeting,
+            customGreetingId: customGreetingId
+        )
     }
 
     func onDisappear() {

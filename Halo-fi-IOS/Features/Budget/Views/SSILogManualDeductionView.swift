@@ -158,16 +158,17 @@ struct SSILogManualDeductionView: View {
                     .disabled(isSubmitting || !canSubmit)
                 }
             }
-            // Voice intake conversation. The initial prompt deliberately
-            // doesn't include any amount/description so the agent's
-            // __detect_deduction_intent skips the auto-extract path —
-            // Halo asks "what expense would you like to log?" and the
-            // user's natural reply is what triggers the deduction
-            // logging. After Halo confirms, the user dismisses the
-            // conversation; the parent BudgetDataManager refreshes
-            // when this sheet itself dismisses.
+            // Voice intake conversation. customGreetingId tells the
+            // backend to skip the LLM welcome AND the acknowledgment
+            // pipeline, and instead stream a fixed canonical first
+            // turn — Halo's first words are exactly the question we
+            // want. No priming user-message appears in the transcript
+            // (avoids the "Help me log an expense" pseudo-utterance).
+            // The user's spoken reply ("I just took an Uber to work,
+            // $30") then matches __detect_deduction_intent on the
+            // backend and routes through the existing logging handler.
             .fullScreenCover(isPresented: $showingVoiceLog) {
-                ConversationView(initialPrompt: "Help me log an expense.")
+                ConversationView(customGreetingId: "deduction_intake")
             }
         }
     }

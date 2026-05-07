@@ -20,6 +20,12 @@ struct ConversationView: View {
 
     /// Optional prompt to auto-send after connecting (e.g., from quick action buttons)
     var initialPrompt: String? = nil
+    /// Phase 9c — when set, the backend sends a fixed canonical
+    /// greeting keyed by this id instead of the LLM-built welcome
+    /// AND no priming user-message is sent. Use this for entry
+    /// points like "Log with voice" where Halo should open with a
+    /// specific question. Currently supported ids: "deduction_intake".
+    var customGreetingId: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,12 +51,22 @@ struct ConversationView: View {
         .background(Color(.systemBackground))
         .onAppear {
             Task {
-                // Phase 12 — auto-skip the backend greeting whenever a
-                // quick-action button gave us a prompt. Free-form mic
-                // taps (no prompt) still get the welcome.
-                let hasPrompt = (initialPrompt?.isEmpty == false)
-                await viewModel.onAppear(skipGreeting: hasPrompt)
-                if let prompt = initialPrompt, !prompt.isEmpty {
+                // Three entry modes:
+                //  1. customGreetingId set  → backend sends a fixed
+                //     canonical greeting (e.g. deduction_intake's
+                //     "What expense would you like to log?"); no
+                //     priming user-message sent.
+                //  2. initialPrompt set     → Phase 12 quick-action;
+                //     backend skips the welcome and the user's first
+                //     message is the prompt itself.
+                //  3. Neither               → standard welcome flow.
+                let hasCustom = (customGreetingId?.isEmpty == false)
+                let hasPrompt = !hasCustom && (initialPrompt?.isEmpty == false)
+                await viewModel.onAppear(
+                    skipGreeting: hasPrompt,
+                    customGreetingId: customGreetingId
+                )
+                if hasPrompt, let prompt = initialPrompt, !prompt.isEmpty {
                     await viewModel.sendText(prompt)
                 }
             }

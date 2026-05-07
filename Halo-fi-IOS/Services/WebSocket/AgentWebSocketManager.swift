@@ -107,6 +107,11 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     /// reconnects after a dropped connection keep the same
     /// behavior (no surprise greeting mid-conversation).
     private var skipInitialGreeting: Bool = false
+    /// Custom-greeting id (e.g. "deduction_intake") that the backend
+    /// uses to send a fixed canonical greeting instead of the LLM
+    /// welcome. Persisted across reconnects so a dropped socket
+    /// doesn't suddenly switch back to the welcome on recovery.
+    private var customInitialGreetingId: String? = nil
 
     // MARK: - Init
 
@@ -116,7 +121,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     // MARK: - Connection Management
 
-    func connect(skipGreeting: Bool = false) async throws {
+    func connect(skipGreeting: Bool = false, customGreetingId: String? = nil) async throws {
         guard let accessToken = tokenStorage.getAccessToken() else {
             Logger.error("AgentWebSocket: Missing access token")
             throw AgentWebSocketError.missingToken
@@ -135,16 +140,22 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         concurrentSessionRetries = 0
         cumulativeReconnectAttempts = 0
 
-        // Persist skip-greeting for auto-reconnect parity (Phase 12).
+        // Persist skip-greeting + custom-greeting for auto-reconnect
+        // parity (Phase 12 / Phase 9c).
         skipInitialGreeting = skipGreeting
+        customInitialGreetingId = customGreetingId
 
         // Create session ID for this connection
         sessionId = UUID().uuidString
 
-        // Build WebSocket URL with token as query parameter
+        // Build WebSocket URL with token as query parameter. A custom
+        // greeting takes precedence over skip_greeting; the backend
+        // ignores skip_greeting when greeting=<id> is set.
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
         var items = [URLQueryItem(name: "token", value: accessToken)]
-        if skipGreeting {
+        if let customGreetingId, !customGreetingId.isEmpty {
+            items.append(URLQueryItem(name: "greeting", value: customGreetingId))
+        } else if skipGreeting {
             items.append(URLQueryItem(name: "skip_greeting", value: "true"))
         }
         urlComponents?.queryItems = items
@@ -340,7 +351,11 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
         var items = [URLQueryItem(name: "token", value: accessToken)]
-        if skipInitialGreeting {
+        if let id = customInitialGreetingId, !id.isEmpty {
+            // Honor the original custom greeting on reconnect — same
+            // reason as the skip flag below.
+            items.append(URLQueryItem(name: "greeting", value: id))
+        } else if skipInitialGreeting {
             // Reconnects honor the original skip flag so a dropped
             // mid-conversation socket doesn't suddenly play "Good
             // evening!" when it comes back.

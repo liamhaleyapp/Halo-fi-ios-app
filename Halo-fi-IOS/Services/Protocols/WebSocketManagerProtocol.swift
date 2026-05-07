@@ -66,11 +66,18 @@ protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
 
     /// Connects to the agent WebSocket server.
     ///
-    /// - Parameter skipGreeting: When true, the backend bypasses
-    ///   ``_send_initial_greeting`` so the user hears the answer
-    ///   to their pre-prompt instead of "Good evening" first
-    ///   (Phase 12).
-    func connect(skipGreeting: Bool) async throws
+    /// - Parameters:
+    ///   - skipGreeting: When true, the backend bypasses
+    ///     ``_send_initial_greeting`` so the user hears the answer
+    ///     to their pre-prompt instead of "Good evening" first
+    ///     (Phase 12).
+    ///   - customGreetingId: When set (e.g. "deduction_intake"), the
+    ///     backend sends a fixed canonical greeting instead of the
+    ///     LLM-built welcome — used by entry points like the "Log
+    ///     with voice" button on the Logged Deductions screen so
+    ///     Halo opens with exactly the right question and no fake
+    ///     priming user-message. Takes precedence over skipGreeting.
+    func connect(skipGreeting: Bool, customGreetingId: String?) async throws
 
     /// Sends a message to the agent
     /// - Parameters:
@@ -84,6 +91,12 @@ extension AgentWebSocketManagerProtocol {
     /// working without forcing every caller to pass `skipGreeting:
     /// false`.
     func connect() async throws {
-        try await connect(skipGreeting: false)
+        try await connect(skipGreeting: false, customGreetingId: nil)
+    }
+
+    /// Backward-compat overload for callers that still pass only the
+    /// skip flag (Phase 12 quick actions).
+    func connect(skipGreeting: Bool) async throws {
+        try await connect(skipGreeting: skipGreeting, customGreetingId: nil)
     }
 }
