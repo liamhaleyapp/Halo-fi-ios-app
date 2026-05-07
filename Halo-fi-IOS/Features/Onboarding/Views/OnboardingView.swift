@@ -32,6 +32,18 @@ struct OnboardingView: View {
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .animation(.easeInOut, value: currentPage)
+        // Game-quality swipe haptic — pitch ramps as the user
+        // approaches the last page so blind users feel where they
+        // are in the carousel by feel alone. Pairs with the
+        // existing visual page indicator. Edge-bounce isn't fired
+        // here because PageTabView swallows past-end swipes; the
+        // ascending tick at the final page is the "you're at the
+        // end" signal on its own.
+        .onChange(of: currentPage) { oldValue, newValue in
+            guard oldValue != newValue, !onboardingPages.isEmpty else { return }
+            let progress = Double(newValue) / Double(max(onboardingPages.count - 1, 1))
+            Haptics.engine.play(.tickAscending(progress: progress))
+        }
         
         // Bottom Section
         OnboardingBottomSection(

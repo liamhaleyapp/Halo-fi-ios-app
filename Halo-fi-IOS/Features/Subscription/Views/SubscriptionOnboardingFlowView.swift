@@ -68,6 +68,16 @@ struct SubscriptionOnboardingFlowView: View {
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             .animation(.easeInOut, value: currentPage)
+            // Game-quality swipe haptic — pitch ramps as the user
+            // approaches the last benefit page so blind users feel
+            // their position in the carousel without needing to count
+            // dots they can't see. Each tick gets brighter as
+            // progress approaches 1.0.
+            .onChange(of: currentPage) { oldValue, newValue in
+                guard oldValue != newValue, totalBenefitPages > 0 else { return }
+                let progress = Double(newValue) / Double(max(totalBenefitPages - 1, 1))
+                Haptics.engine.play(.tickAscending(progress: progress))
+            }
             
             // Bottom Section with navigation
             OnboardingBottomSection(
