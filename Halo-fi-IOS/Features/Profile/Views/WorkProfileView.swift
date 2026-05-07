@@ -129,6 +129,8 @@ struct WorkProfileView: View {
             .foregroundColor(.secondary)
         }
       }
+      .accessibilityValue(commutesToWorkplace ? "On" : "Off")
+      .accessibilityHint("Lets HaloFi flag rideshare and transit charges as Blind Work Expense candidates.")
     }
   }
 
@@ -177,6 +179,8 @@ struct WorkProfileView: View {
             .foregroundColor(.secondary)
         }
       }
+      .accessibilityValue(hasWorkServiceAnimal ? "On" : "Off")
+      .accessibilityHint("Lets HaloFi flag pet store, vet, and pet food charges as BWE candidates.")
     }
   }
 
@@ -191,6 +195,8 @@ struct WorkProfileView: View {
             .foregroundColor(.secondary)
         }
       }
+      .accessibilityValue(requiresWorkMeds ? "On" : "Off")
+      .accessibilityHint("Lets HaloFi treat pharmacy charges as Impairment-Related Work Expenses with high confidence.")
     }
   }
 
@@ -205,6 +211,8 @@ struct WorkProfileView: View {
             .foregroundColor(.secondary)
         }
       }
+      .accessibilityValue(usesAssistiveTechForWork ? "On" : "Off")
+      .accessibilityHint("Lets HaloFi flag screen reader and assistive software subscriptions as Blind Work Expenses.")
     }
   }
 

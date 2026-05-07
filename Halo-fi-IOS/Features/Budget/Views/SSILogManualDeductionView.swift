@@ -167,12 +167,26 @@ struct SSILogManualDeductionView: View {
             try await onSave(selectedType, cents, trimmedDesc, occurredOn, notesOrNil)
             // Track C — success haptic; sheet auto-dismisses next.
             Haptics.success()
+            // VoiceOver announcement so blind users hear confirmation
+            // before the sheet dismisses. Without this, a successful
+            // save was tactile-only and they couldn't tell whether it
+            // worked. Posting before dismiss is intentional —
+            // VoiceOver flushes the announcement queue on view
+            // teardown otherwise.
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Deduction saved."
+            )
             isSubmitting = false
             dismiss()
         } catch {
             // Track C — error haptic so the user feels the failure
             // even if VoiceOver hasn't announced the inline message.
             Haptics.error()
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Couldn't save the deduction. \(error.localizedDescription)"
+            )
             isSubmitting = false
             errorMessage = "Couldn't save: \(error.localizedDescription)"
         }

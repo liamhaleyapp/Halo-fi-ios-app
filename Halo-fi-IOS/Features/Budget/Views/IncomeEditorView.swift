@@ -56,6 +56,7 @@ struct IncomeEditorView: View {
                             Text(freq.1).tag(freq.0)
                         }
                     }
+                    .accessibilityHint("Sets how often your paycheck arrives so we can calculate your monthly income.")
                     TextField("Source (e.g. ADP, employer name)", text: $paycheckName)
                         .accessibilityLabel("Paycheck source name")
                 } header: {
@@ -67,6 +68,8 @@ struct IncomeEditorView: View {
 
                 Section {
                     Toggle("I receive SSI", isOn: $receivesSSI)
+                        .accessibilityValue(receivesSSI ? "On" : "Off")
+                        .accessibilityHint("Unlocks the SSI monitor on the Budget tab — projected check, resource limit tracking, and BWE / IRWE deductions.")
                     if receivesSSI {
                         TextField("Monthly SSI amount", text: $ssiAmount)
                             .keyboardType(.decimalPad)
@@ -81,6 +84,8 @@ struct IncomeEditorView: View {
 
                 Section {
                     Toggle("I receive SSDI", isOn: $receivesSSDI)
+                        .accessibilityValue(receivesSSDI ? "On" : "Off")
+                        .accessibilityHint("Lets us include your SSDI deposit in your monthly income totals.")
                     if receivesSSDI {
                         TextField("Monthly SSDI amount", text: $ssdiAmount)
                             .keyboardType(.decimalPad)

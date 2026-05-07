@@ -145,6 +145,14 @@ struct SSILoggedDeductionsCard: View {
             // doesn't permanently mark the card.
             emailStatus = "Sent to \(resp.sentTo) — \(resp.rowCount) row\(resp.rowCount == 1 ? "" : "s")."
             Haptics.engine.play(.successCascade)
+            // VoiceOver announcement — the inline text auto-clears
+            // after 5s which may be too brief for users who scroll
+            // to the card after triggering the export. The
+            // announcement guarantees they hear confirmation.
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Sent your deductions email to \(resp.sentTo)."
+            )
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             emailStatus = nil
         } catch {
@@ -197,6 +205,13 @@ struct SSILoggedDeductionsCard: View {
                     // round-trip. Blind users feel "done" without
                     // waiting for the row to disappear visually.
                     Haptics.success()
+                    // VoiceOver heads-up so the user knows the row
+                    // was removed without having to scroll the list
+                    // to confirm.
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "Deleted \(entry.description) deduction."
+                    )
                 }
             } label: {
                 Image(systemName: "trash")

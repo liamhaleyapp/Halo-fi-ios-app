@@ -72,6 +72,14 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()
+                // Game-quality haptic: ascending tick keyed to tab
+                // index so blind users feel which tab they landed on
+                // by pitch alone. 4 tabs (0-3) → progress 0.0 / 0.33
+                // / 0.67 / 1.0. Pairs with the existing earcon
+                // sound for a multi-channel cue.
+                let totalTabs = 4
+                let progress = Double(newTab) / Double(max(totalTabs - 1, 1))
+                Haptics.engine.play(.tickAscending(progress: progress))
             }
             // Leaving the Accounts tab resets its nested navigation
             // so the user always re-enters at the institutions list,
