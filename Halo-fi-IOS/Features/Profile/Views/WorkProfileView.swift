@@ -264,8 +264,7 @@ struct WorkProfileView: View {
     )
     do {
       profile = try await WorkProfileService.shared.update(patch)
-      let impact = UIImpactFeedbackGenerator(style: .light)
-      impact.impactOccurred()
+      Haptics.engine.play(.tapLight)
     } catch {
       saveError = "Couldn't save right now."
       Logger.error("WorkProfile save failed: \(error)")

@@ -30,7 +30,19 @@ struct MicButton: View {
     var body: some View {
         VStack(spacing: 16) {
             // Mic button with pulse
-            Button(action: onTap) {
+            Button(action: {
+                // Immediate tactile confirmation — fires synchronously
+                // on tap, BEFORE the WebSocket / mic spin-up that can
+                // take a few hundred ms. Real-device complaint was
+                // "you have to wait for a half a second before the
+                // voice agent starts" — the gap felt like dead air.
+                // tapCrisp gives the user "I registered your tap" the
+                // moment their finger comes off, then the
+                // state-transition haptic from AudioFeedbackService
+                // takes over once the connection lands.
+                Haptics.engine.play(.tapCrisp)
+                onTap()
+            }) {
                 ZStack {
                     // Pulse ring while actively listening — suppressed
                     // when shown as a mute toggle so the visual signal

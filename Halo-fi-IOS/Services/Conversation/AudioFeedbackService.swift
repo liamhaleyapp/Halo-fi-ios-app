@@ -77,33 +77,68 @@ final class AudioFeedbackService {
 
     // MARK: - State Change Feedback
 
-    /// Provide feedback for a state change
+    /// Provide feedback for a state change.
+    ///
+    /// Splits into TWO channels: the existing earcon sounds (preserved
+    /// for sighted users + a fallback layer) and the new
+    /// HapticEngine vocabulary (Duolingo-class CoreHaptics patterns
+    /// for blind / low-vision users who navigate by feel).
+    /// HapticEngine has its own UIImpactFeedbackGenerator fallback for
+    /// devices without CoreHaptics, so we don't double-fire here.
     func feedbackForStateChange(_ state: ConversationState) {
 
         switch state {
         case .listening:
             playStartListeningFeedback()
+            // Sharp double-tap when Halo enables the mic. Replaces the
+            // easy-to-miss visual cue. HapticEngine's tapCrisp is two
+            // quick events for blind users to recognize as
+            // "GO — speak now."
+            Haptics.engine.play(.tapCrisp)
+            Haptics.engine.startContinuous(.pulseListening)
 
         case .processing:
             playProcessingFeedback()
+            // Halo is thinking. Distinct heartbeat rhythm so the user
+            // knows the gap isn't dead air. Stops automatically when
+            // we hit .speaking or .idle.
+            Haptics.engine.startContinuous(.pulseThinking)
 
         case .speaking:
-            // No feedback for speaking start (TTS handles this)
-            break
+            // No feedback for speaking start (TTS handles this).
+            // Stop any continuous pulse from .processing so we don't
+            // double-cue while Halo is talking.
+            Haptics.engine.stopContinuous()
 
         case .idle:
             // Light feedback when returning to idle from listening
             playIdleFeedback()
+            Haptics.engine.stopContinuous()
+            Haptics.engine.play(.tapLight)
 
         case .error:
             playErrorFeedback()
+            Haptics.engine.stopContinuous()
+            Haptics.engine.play(.errorShake)
 
         case .disconnected:
             playDisconnectedFeedback()
+            Haptics.engine.stopContinuous()
 
-        case .connecting, .permissionNeeded:
-            // No feedback for these states
-            break
+        case .connecting:
+            // Soft swoosh + thinking-pulse so the gap between user
+            // tap and Halo-ready isn't tactile dead air. Real-device
+            // feedback called this out specifically — "you have to
+            // wait for a half a second before the voice agent
+            // starts."
+            Haptics.engine.play(.transitionSwoosh)
+            Haptics.engine.startContinuous(.pulseThinking)
+
+        case .permissionNeeded:
+            // Distinct error-shape so the user knows this isn't just
+            // a normal failure — they need to do something (grant
+            // mic permission).
+            Haptics.engine.play(.notification(.warning))
         }
     }
 

@@ -234,10 +234,10 @@ struct PreferencesView: View {
                 responseType: PrefsResponse.self
             )
 
-            // Light haptic so the user gets quiet confirmation that
-            // their choice persisted, without an interruptive alert.
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
+            // Quiet confirmation that the choice persisted — no
+            // interruptive alert. Routed through HapticEngine so it
+            // gets the CoreHaptics treatment on supported devices.
+            Haptics.engine.play(.tapLight)
 
             if !silent {
                 resultSuccess = true

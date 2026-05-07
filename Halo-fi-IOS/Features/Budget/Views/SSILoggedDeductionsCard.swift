@@ -144,8 +144,7 @@ struct SSILoggedDeductionsCard: View {
             // Brief inline confirmation; auto-clears after 5s so it
             // doesn't permanently mark the card.
             emailStatus = "Sent to \(resp.sentTo) — \(resp.rowCount) row\(resp.rowCount == 1 ? "" : "s")."
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            Haptics.engine.play(.successCascade)
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             emailStatus = nil
         } catch {

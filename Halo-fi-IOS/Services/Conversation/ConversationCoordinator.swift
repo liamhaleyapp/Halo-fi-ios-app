@@ -1230,6 +1230,22 @@ final class ConversationCoordinator {
     private let announcementDebounceInterval: TimeInterval = 0.8
 
     private func announceStateChange(_ state: ConversationState) {
+        // Suppress VoiceOver state announcements while the mic is hot
+        // OR while Halo is actively speaking. Real-device tests caught
+        // VoiceOver speaking the announcement THROUGH the device
+        // speaker, the mic picking it up, and the next STT turn
+        // including VoiceOver's voice as user-said. Halo's own audio
+        // already covers the audible-feedback channel for these
+        // states; the haptic patterns from HapticEngine cover the
+        // tactile channel. VoiceOver here is double-coverage that
+        // creates a feedback loop.
+        switch state {
+        case .listening, .processing, .speaking, .connecting:
+            return
+        default:
+            break
+        }
+
         let now = Date()
         guard now.timeIntervalSince(lastAnnouncementTime) >= announcementDebounceInterval else {
             return // Throttle announcements

@@ -27,6 +27,20 @@ struct ConversationView: View {
     /// specific question. Currently supported ids: "deduction_intake".
     var customGreetingId: String? = nil
 
+    /// True when VoiceOver should NOT read the transcript — i.e.
+    /// while Halo is speaking OR while the mic is open. Prevents
+    /// the speaker→mic feedback loop where VoiceOver-rendered
+    /// transcript text bleeds into STT and gets transcribed as user
+    /// input on the next turn.
+    private var shouldHideTranscriptFromVoiceOver: Bool {
+        switch viewModel.state {
+        case .speaking, .listening, .processing, .connecting:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -38,12 +52,30 @@ struct ConversationView: View {
                 onClose: { dismiss() }
             )
 
-            // Transcript
+            // Transcript.
+            //
+            // Hide from VoiceOver while Halo is actively speaking
+            // OR while the mic is hot (.listening, .processing). The
+            // microphone picks up VoiceOver's voice through the
+            // device speaker → STT mistakes it for the user → transcripts
+            // get contaminated and (worse) Halo's own response gets
+            // re-spoken in a feedback loop. Halo's TTS already covers
+            // the audio channel for blind users; VoiceOver here would
+            // be redundant AND harmful.
+            //
+            // The mic button + close button stay accessible (those are
+            // the only interactions VoiceOver users need in here).
+            //
+            // We re-enable VoiceOver on the transcript when the
+            // session is .idle / .disconnected / .error so users can
+            // review what was said via VoiceOver scrolling.
             TranscriptView(
                 entries: viewModel.entries,
                 onCopyEntry: viewModel.copyEntry,
                 isProcessing: viewModel.state == .processing
             )
+            .accessibilityElement(children: shouldHideTranscriptFromVoiceOver ? .ignore : .contain)
+            .accessibilityHidden(shouldHideTranscriptFromVoiceOver)
 
             // Input area (voice or text mode)
             inputArea
