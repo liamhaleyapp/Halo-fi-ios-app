@@ -29,6 +29,11 @@ struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingIncomeEditor = false
     @State private var showingManualDeductionSheet = false
+    /// Top-of-Budget "Log expense" quick-action drives this — opens
+    /// the voice intake conversation directly. The bottom "Add"
+    /// button on the Logged Deductions card still uses the typed
+    /// SSILogManualDeductionView path (showingManualDeductionSheet).
+    @State private var showingVoiceDeductionLog = false
     /// Phase 11 Track A — last announcement we already spoke, used
     /// to avoid re-announcing the same digest on every redraw.
     @State private var lastAnnouncedSummary: String?
@@ -54,7 +59,13 @@ struct BudgetView: View {
                             breakdownByCategoryButton(overview)
                             BudgetQuickActionDrawer(
                                 onLogExpense: {
-                                    showingManualDeductionSheet = true
+                                    // "Log expense" goes straight into
+                                    // the voice intake conversation — no
+                                    // intermediate sheet, no typed form.
+                                    // Users who want to type still have
+                                    // the "Add" button on the Logged
+                                    // Deductions card below.
+                                    showingVoiceDeductionLog = true
                                 },
                                 onAskStatus: {
                                     // Phase 12 — open ConversationView
@@ -108,6 +119,15 @@ struct BudgetView: View {
             }
             .sheet(isPresented: $showingIncomeEditor) {
                 IncomeEditorView()
+            }
+            // Voice intake conversation — opened by the top "Log
+            // expense" quick action. customGreetingId tells the
+            // backend to stream the canonical "What expense would
+            // you like to log?" greeting and put the session into
+            // intake mode so subsequent natural replies route
+            // through the deduction handler.
+            .fullScreenCover(isPresented: $showingVoiceDeductionLog) {
+                ConversationView(customGreetingId: "deduction_intake")
             }
             .sheet(isPresented: $showingManualDeductionSheet) {
                 SSILogManualDeductionView(
