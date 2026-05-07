@@ -21,13 +21,19 @@ struct SSILoggedDeductionsCard: View {
     let onAdd: () -> Void
     let onDelete: (SSIManualDeduction) async -> Void
     /// Phase 9 — closure that fetches the CSV bytes and returns a
-    /// temp-file URL for sharing. nil disables the Export button
-    /// (used in previews/tests).
+    /// temp-file URL for sharing. nil disables the Share option in
+    /// the export menu (used in previews/tests).
     let onExport: (() async throws -> URL)?
+    /// Phase 9b — closure that emails the same CSV directly to the
+    /// user's account address via the backend. Returns the recipient
+    /// + row count for an in-card success line. nil disables the
+    /// "Email me the file" option.
+    let onEmailExport: (() async throws -> SSIEmailDeductionsResponse)?
 
     @State private var isExporting = false
     @State private var exportedFile: ExportedCSVFile?
     @State private var exportError: String?
+    @State private var emailStatus: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -43,9 +49,22 @@ struct SSILoggedDeductionsCard: View {
                     }
                 }
                 Spacer(minLength: 0)
-                if let onExport, !deductions.isEmpty {
-                    Button {
-                        Task { await runExport(onExport) }
+                if !deductions.isEmpty && (onExport != nil || onEmailExport != nil) {
+                    Menu {
+                        if let onEmailExport {
+                            Button {
+                                Task { await runEmailExport(onEmailExport) }
+                            } label: {
+                                Label("Email me the file", systemImage: "envelope.fill")
+                            }
+                        }
+                        if let onExport {
+                            Button {
+                                Task { await runExport(onExport) }
+                            } label: {
+                                Label("Share…", systemImage: "square.and.arrow.up")
+                            }
+                        }
                     } label: {
                         if isExporting {
                             ProgressView().controlSize(.small)
@@ -54,10 +73,9 @@ struct SSILoggedDeductionsCard: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                     }
-                    .buttonStyle(.borderless)
                     .disabled(isExporting)
-                    .accessibilityLabel("Export this month's SSI deductions as a CSV file")
-                    .accessibilityHint("Opens the share sheet so you can email or save the file.")
+                    .accessibilityLabel("Export this month's SSI deductions")
+                    .accessibilityHint("Opens a menu to email the CSV to your account address or share it via the system share sheet.")
                 }
                 Button(action: onAdd) {
                     Label("Add", systemImage: "plus.circle.fill")
@@ -71,6 +89,12 @@ struct SSILoggedDeductionsCard: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .accessibilityLabel("Export failed: \(exportError)")
+            }
+            if let emailStatus {
+                Text(emailStatus)
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .accessibilityLabel(emailStatus)
             }
 
             if deductions.isEmpty {
@@ -99,11 +123,33 @@ struct SSILoggedDeductionsCard: View {
     private func runExport(_ provider: () async throws -> URL) async {
         isExporting = true
         exportError = nil
+        emailStatus = nil
         defer { isExporting = false }
         do {
             exportedFile = ExportedCSVFile(url: try await provider())
         } catch {
             exportError = "Couldn't generate the file. Try again in a moment."
+        }
+    }
+
+    private func runEmailExport(
+        _ provider: () async throws -> SSIEmailDeductionsResponse
+    ) async {
+        isExporting = true
+        exportError = nil
+        emailStatus = nil
+        defer { isExporting = false }
+        do {
+            let resp = try await provider()
+            // Brief inline confirmation; auto-clears after 5s so it
+            // doesn't permanently mark the card.
+            emailStatus = "Sent to \(resp.sentTo) — \(resp.rowCount) row\(resp.rowCount == 1 ? "" : "s")."
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            emailStatus = nil
+        } catch {
+            exportError = "Couldn't send the email. Try again in a moment."
         }
     }
 

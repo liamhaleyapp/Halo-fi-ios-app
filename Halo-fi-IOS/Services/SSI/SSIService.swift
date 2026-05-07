@@ -45,6 +45,25 @@ protocol SSIServiceProtocol {
     /// period. ``month`` nil exports the full year. Returns raw
     /// CSV bytes the caller writes to disk for the share sheet.
     func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data
+
+    /// Phase 9b — same CSV but emailed via Mailgun to the user's
+    /// account email. Returns the recipient address + row count for
+    /// in-app confirmation.
+    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse
+}
+
+struct SSIEmailDeductionsResponse: Codable {
+    let success: Bool
+    let sentTo: String
+    let period: String
+    let rowCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case sentTo = "sent_to"
+        case period
+        case rowCount = "row_count"
+    }
 }
 
 // MARK: - Request / response models
@@ -282,6 +301,16 @@ final class SSIService: SSIServiceProtocol {
     func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data {
         let endpoint = APIEndpoints.SSI.exportDeductions(year: year, month: month)
         return try await networkService.authenticatedRawDataRequest(endpoint: endpoint)
+    }
+
+    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse {
+        let endpoint = APIEndpoints.SSI.emailDeductions(year: year, month: month)
+        return try await networkService.authenticatedRequest(
+            endpoint: endpoint,
+            method: .POST,
+            body: nil,
+            responseType: SSIEmailDeductionsResponse.self
+        )
     }
 
     private static func appendingTz(_ endpoint: String, userTz: String?) -> String {

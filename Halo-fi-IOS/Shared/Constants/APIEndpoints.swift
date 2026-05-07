@@ -218,6 +218,17 @@ enum APIEndpoints {
             }
             return "/ssi/deductions/export?year=\(year)"
         }
+
+        /// POST — same CSV as exportDeductions but emails it to the
+        /// authenticated user's account address via Mailgun. Returns
+        /// `{success, sent_to, period, row_count}`. Used by the
+        /// "Email me the file" button on the Logged Deductions card.
+        static func emailDeductions(year: Int, month: Int?) -> String {
+            if let m = month {
+                return "/ssi/deductions/email?year=\(year)&month=\(m)"
+            }
+            return "/ssi/deductions/email?year=\(year)"
+        }
     }
 
     // MARK: - WebSocket

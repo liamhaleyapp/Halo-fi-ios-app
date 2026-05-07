@@ -414,6 +414,14 @@ struct BudgetView: View {
                                 year: cal.component(.year, from: now),
                                 month: cal.component(.month, from: now)
                             )
+                        },
+                        onEmailExport: {
+                            let now = Date()
+                            let cal = Calendar.current
+                            return try await dataManager.emailDeductionsCSV(
+                                year: cal.component(.year, from: now),
+                                month: cal.component(.month, from: now)
+                            )
                         }
                     )
                 }

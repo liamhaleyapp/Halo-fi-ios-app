@@ -219,6 +219,20 @@ final class BudgetDataManager {
         try data.write(to: tempURL, options: .atomic)
         return tempURL
     }
+
+    /// Phase 9b — server-side email export. The backend builds the
+    /// same CSV the share-sheet path generates, attaches it to a
+    /// transactional email, and sends to the user's account address
+    /// via Mailgun. Returns the recipient + row count for an in-app
+    /// confirmation line.
+    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse {
+        do {
+            return try await ssiService.emailDeductionsCSV(year: year, month: month)
+        } catch {
+            Logger.error("BudgetDataManager: email CSV failed: \(error)")
+            throw error
+        }
+    }
 }
 
 // MARK: - Errors

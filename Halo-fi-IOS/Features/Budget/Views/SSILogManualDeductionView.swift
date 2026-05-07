@@ -28,6 +28,11 @@ struct SSILogManualDeductionView: View {
     @State private var notes: String = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String?
+    /// When true, present ConversationView in a sheet so Halo can
+    /// walk the user through logging the deduction by voice. The
+    /// existing form stays visible underneath as a fallback for
+    /// users who'd rather type.
+    @State private var showingVoiceLog = false
 
     init(
         isBlind: Bool,
@@ -43,6 +48,49 @@ struct SSILogManualDeductionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Voice-first entry — the headline action. Tapping
+                // opens a primed conversation: Halo asks "what expense
+                // would you like to log?" and the user answers in one
+                // breath ("I just took an Uber to work, $30"). Backend
+                // intent detection extracts amount / description /
+                // type / date and writes the row, same path as the
+                // typed form below. The form remains as a fallback
+                // for users who'd rather type than speak.
+                Section {
+                    Button {
+                        showingVoiceLog = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mic.circle.fill")
+                                .font(.system(size: 28))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Log with voice")
+                                    .font(.headline)
+                                Text("Tap and tell Halo about the expense")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.85))
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens a voice conversation that walks you through logging an expense.")
+                    .listRowBackground(
+                        LinearGradient(
+                            colors: [Color.purple, Color.indigo],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                } footer: {
+                    Text("Or fill in the form below to type your entry.")
+                }
+
                 Section {
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
@@ -109,6 +157,17 @@ struct SSILogManualDeductionView: View {
                     }
                     .disabled(isSubmitting || !canSubmit)
                 }
+            }
+            // Voice intake conversation. The initial prompt deliberately
+            // doesn't include any amount/description so the agent's
+            // __detect_deduction_intent skips the auto-extract path —
+            // Halo asks "what expense would you like to log?" and the
+            // user's natural reply is what triggers the deduction
+            // logging. After Halo confirms, the user dismisses the
+            // conversation; the parent BudgetDataManager refreshes
+            // when this sheet itself dismisses.
+            .fullScreenCover(isPresented: $showingVoiceLog) {
+                ConversationView(initialPrompt: "Help me log an expense.")
             }
         }
     }
