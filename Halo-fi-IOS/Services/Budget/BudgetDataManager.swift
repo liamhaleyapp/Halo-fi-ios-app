@@ -225,9 +225,17 @@ final class BudgetDataManager {
     /// transactional email, and sends to the user's account address
     /// via Mailgun. Returns the recipient + row count for an in-app
     /// confirmation line.
-    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse {
+    func emailDeductionsCSV(
+        year: Int,
+        month: Int?,
+        to: String? = nil
+    ) async throws -> SSIEmailDeductionsResponse {
         do {
-            return try await ssiService.emailDeductionsCSV(year: year, month: month)
+            return try await ssiService.emailDeductionsCSV(
+                year: year,
+                month: month,
+                to: to
+            )
         } catch {
             Logger.error("BudgetDataManager: email CSV failed: \(error)")
             throw error

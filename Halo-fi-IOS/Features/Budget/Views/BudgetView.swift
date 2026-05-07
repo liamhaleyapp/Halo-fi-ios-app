@@ -27,6 +27,7 @@ import SwiftUI
 
 struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(UserManager.self) private var userManager
     @State private var showingIncomeEditor = false
     @State private var showingManualDeductionSheet = false
     /// Top-of-Budget "Log expense" quick-action drives this — opens
@@ -439,14 +440,16 @@ struct BudgetView: View {
                                 month: cal.component(.month, from: now)
                             )
                         },
-                        onEmailExport: {
+                        onEmailExport: { recipient in
                             let now = Date()
                             let cal = Calendar.current
                             return try await dataManager.emailDeductionsCSV(
                                 year: cal.component(.year, from: now),
-                                month: cal.component(.month, from: now)
+                                month: cal.component(.month, from: now),
+                                to: recipient
                             )
-                        }
+                        },
+                        accountEmail: userManager.currentUser?.email
                     )
                 }
             } header: {

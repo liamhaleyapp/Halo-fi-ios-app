@@ -24,16 +24,23 @@ struct SSILoggedDeductionsCard: View {
     /// temp-file URL for sharing. nil disables the Share option in
     /// the export menu (used in previews/tests).
     let onExport: (() async throws -> URL)?
-    /// Phase 9b — closure that emails the same CSV directly to the
-    /// user's account address via the backend. Returns the recipient
-    /// + row count for an in-card success line. nil disables the
-    /// "Email me the file" option.
-    let onEmailExport: (() async throws -> SSIEmailDeductionsResponse)?
+    /// Phase 9b — closure that emails the same CSV via the backend.
+    /// The argument is the recipient address: pass nil to use the
+    /// account email on file, or a non-empty string to send to a
+    /// caseworker / family member / self when no account email
+    /// exists yet (phone-first signup). Returns the recipient + row
+    /// count for an in-card success line. nil disables the option.
+    let onEmailExport: ((String?) async throws -> SSIEmailDeductionsResponse)?
+    /// Pre-fill value for the email-prompt sheet. When the account
+    /// has an email on file, we seed the field so the common path is
+    /// "tap, glance, send". Empty/nil shows an empty field.
+    let accountEmail: String?
 
     @State private var isExporting = false
     @State private var exportedFile: ExportedCSVFile?
     @State private var exportError: String?
     @State private var emailStatus: String?
+    @State private var showingEmailPrompt = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -51,11 +58,11 @@ struct SSILoggedDeductionsCard: View {
                 Spacer(minLength: 0)
                 if !deductions.isEmpty && (onExport != nil || onEmailExport != nil) {
                     Menu {
-                        if let onEmailExport {
+                        if onEmailExport != nil {
                             Button {
-                                Task { await runEmailExport(onEmailExport) }
+                                showingEmailPrompt = true
                             } label: {
-                                Label("Email me the file", systemImage: "envelope.fill")
+                                Label("Email the file", systemImage: "envelope.fill")
                             }
                         }
                         if let onExport {
@@ -118,6 +125,18 @@ struct SSILoggedDeductionsCard: View {
         .sheet(item: $exportedFile) { file in
             CSVShareSheet(url: file.url) { exportedFile = nil }
         }
+        .sheet(isPresented: $showingEmailPrompt) {
+            EmailRecipientPromptSheet(
+                defaultEmail: accountEmail,
+                onCancel: { showingEmailPrompt = false },
+                onSend: { address in
+                    showingEmailPrompt = false
+                    if let onEmailExport {
+                        Task { await runEmailExport(onEmailExport, to: address) }
+                    }
+                }
+            )
+        }
     }
 
     private func runExport(_ provider: () async throws -> URL) async {
@@ -133,14 +152,19 @@ struct SSILoggedDeductionsCard: View {
     }
 
     private func runEmailExport(
-        _ provider: () async throws -> SSIEmailDeductionsResponse
+        _ provider: (String?) async throws -> SSIEmailDeductionsResponse,
+        to address: String
     ) async {
         isExporting = true
         exportError = nil
         emailStatus = nil
         defer { isExporting = false }
         do {
-            let resp = try await provider()
+            // Trim once at the boundary; pass nil only if the user
+            // explicitly cleared the field (then the backend uses the
+            // account email).
+            let trimmed = address.trimmingCharacters(in: .whitespaces)
+            let resp = try await provider(trimmed.isEmpty ? nil : trimmed)
             // Brief inline confirmation; auto-clears after 5s so it
             // doesn't permanently mark the card.
             emailStatus = "Sent to \(resp.sentTo) — \(resp.rowCount) row\(resp.rowCount == 1 ? "" : "s")."
@@ -369,4 +393,84 @@ private struct CSVShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Email recipient prompt
+
+/// Lightweight modal for picking who receives the deductions email.
+/// Presented from the "Email the file" menu item.
+///
+/// Why a typed-in recipient instead of always using the account
+/// email: phone-first signups don't always have an email on file,
+/// and SSI users routinely need to send the file to a caseworker
+/// or family member rather than themselves. Forcing it through the
+/// account-email path made the feature unusable for the most common
+/// flow (testing surfaced a "No email on file" 400 immediately).
+private struct EmailRecipientPromptSheet: View {
+    let defaultEmail: String?
+    let onCancel: () -> Void
+    let onSend: (String) -> Void
+
+    @State private var address: String = ""
+    @FocusState private var fieldFocused: Bool
+
+    private var trimmed: String {
+        address.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Loose client-side check so the Send button can disable for
+    /// obvious typos. Real validation lives on the backend (Mailgun
+    /// rejects malformed addresses anyway); this just spares users a
+    /// roundtrip when they haven't finished typing.
+    private var looksValid: Bool {
+        let t = trimmed
+        guard let at = t.firstIndex(of: "@") else { return false }
+        let local = t[..<at]
+        let domain = t[t.index(after: at)...]
+        return !local.isEmpty && domain.contains(".") && !domain.hasSuffix(".")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("name@example.com", text: $address)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($fieldFocused)
+                        .accessibilityLabel("Recipient email address")
+                        .accessibilityHint("Send the deductions CSV to this address.")
+                } header: {
+                    Text("Send to").textCase(nil)
+                } footer: {
+                    Text("Use your own email, your SSA caseworker's, or a family member who helps with paperwork.")
+                }
+            }
+            .navigationTitle("Email deductions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") { onSend(trimmed) }
+                        .disabled(!looksValid)
+                }
+            }
+            .onAppear {
+                if address.isEmpty, let seed = defaultEmail, !seed.isEmpty {
+                    address = seed
+                }
+                // Defer focus so the sheet's enter animation completes
+                // before the keyboard slides up — avoids the jank of
+                // both happening on the same frame.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    fieldFocused = true
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }

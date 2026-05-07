@@ -46,10 +46,20 @@ protocol SSIServiceProtocol {
     /// CSV bytes the caller writes to disk for the share sheet.
     func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data
 
-    /// Phase 9b — same CSV but emailed via Mailgun to the user's
-    /// account email. Returns the recipient address + row count for
-    /// in-app confirmation.
-    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse
+    /// Phase 9b — same CSV but emailed via Mailgun. If ``to`` is nil
+    /// the backend uses the user's account email; otherwise the user-
+    /// provided recipient (caseworker, family member, or self when no
+    /// account email is on file). Returns the address actually used +
+    /// row count for in-app confirmation.
+    func emailDeductionsCSV(
+        year: Int,
+        month: Int?,
+        to: String?
+    ) async throws -> SSIEmailDeductionsResponse
+}
+
+private struct SSIEmailDeductionsBody: Encodable {
+    let to: String?
 }
 
 struct SSIEmailDeductionsResponse: Codable {
@@ -303,12 +313,26 @@ final class SSIService: SSIServiceProtocol {
         return try await networkService.authenticatedRawDataRequest(endpoint: endpoint)
     }
 
-    func emailDeductionsCSV(year: Int, month: Int?) async throws -> SSIEmailDeductionsResponse {
+    func emailDeductionsCSV(
+        year: Int,
+        month: Int?,
+        to: String?
+    ) async throws -> SSIEmailDeductionsResponse {
         let endpoint = APIEndpoints.SSI.emailDeductions(year: year, month: month)
+        // Only encode a body when an override recipient was supplied —
+        // sending `{"to": null}` works too, but a nil body matches the
+        // pre-feature shape and keeps the no-override path identical
+        // to its prior behavior.
+        let body: Data?
+        if let to, !to.isEmpty {
+            body = try? JSONEncoder().encode(SSIEmailDeductionsBody(to: to))
+        } else {
+            body = nil
+        }
         return try await networkService.authenticatedRequest(
             endpoint: endpoint,
             method: .POST,
-            body: nil,
+            body: body,
             responseType: SSIEmailDeductionsResponse.self
         )
     }
