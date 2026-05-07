@@ -449,6 +449,9 @@ struct BudgetView: View {
                                 to: recipient
                             )
                         },
+                        // Pre-fill the recipient sheet with the
+                        // user's account email so the common path
+                        // (sending to themselves) is tap-Send.
                         accountEmail: userManager.currentUser?.email
                     )
                 }
