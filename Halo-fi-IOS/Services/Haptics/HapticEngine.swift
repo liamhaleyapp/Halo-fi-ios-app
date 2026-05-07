@@ -436,9 +436,44 @@ extension HapticPattern: Equatable {
     }
 }
 
-// MARK: - Singleton accessor
+// MARK: - Singleton accessor + legacy convenience API
+//
+// Older call sites (Shared/Helpers/Haptics.swift, Phase 11 Track C)
+// used Haptics.success() / .error() / .warning() / .tap() — keep
+// those entry points so we don't have to migrate ~15 callers, but
+// route them through the new engine so they get CoreHaptics
+// patterns on supported hardware. New code should prefer
+// Haptics.engine.play(.namedPattern) for richer choice.
 
 @MainActor
 enum Haptics {
     static let engine = HapticEngine()
+
+    /// "The thing happened" — saving a deduction, confirming a
+    /// candidate, completing an action. Routes to the
+    /// success-cascade CoreHaptics pattern (three ascending beats)
+    /// instead of the basic notification haptic.
+    static func success() {
+        engine.play(.successCascade)
+    }
+
+    /// "The thing didn't happen" — server rejected, validation
+    /// failed, network error. Routes to the error-shake pattern.
+    static func error() {
+        engine.play(.errorShake)
+    }
+
+    /// "Something needs your attention." Stays on the system
+    /// warning notification haptic since CoreHaptics' transient
+    /// vocabulary doesn't have a clean three-beat warning shape
+    /// distinct from .successCascade.
+    static func warning() {
+        engine.play(.notification(.warning))
+    }
+
+    /// Light tap — confirm a button press registered before the
+    /// next view appears or VoiceOver announces.
+    static func tap() {
+        engine.play(.tapCrisp)
+    }
 }
