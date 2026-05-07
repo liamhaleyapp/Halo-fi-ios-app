@@ -222,12 +222,12 @@ final class HapticEngine {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.stopContinuous()
-                // CHHapticEngine.stop() is the non-throwing sync API
-                // (the async-with-completion alternative exists but we
-                // don't need to wait). No try? needed — that
-                // generated "no calls to throwing functions" + "use
-                // asynchronous alternative" warnings.
-                self?.engine?.stop()
+                // Use the async overload of CHHapticEngine.stop()
+                // since we're already inside a Task. The completion-
+                // handler variant otherwise generates a "consider
+                // using asynchronous alternative" warning under
+                // recent SDKs.
+                try? await self?.engine?.stop()
             }
         }
         center.addObserver(
