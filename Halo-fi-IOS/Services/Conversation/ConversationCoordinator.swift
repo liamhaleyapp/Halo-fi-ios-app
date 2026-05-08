@@ -953,17 +953,9 @@ final class ConversationCoordinator {
         onEvent?(event)
     }
 
-    /// Coarse cache-invalidation signal for the Budget tab. Posted
-    /// after every meaningful agent reply (final agent_response or
-    /// final non-ack audio_complete) so BudgetDataManager can mark
-    /// its overview cache stale and refetch on the next view
-    /// appearance instead of serving pre-mutation rows. We post
-    /// unconditionally rather than inspecting the reply for
-    /// mutation hints — over-refreshing on a non-mutating turn
-    /// ("what's my balance") costs one extra GET, missing a real
-    /// mutation costs user trust. When the backend ships a
-    /// `data.mutated` boolean (or list) on the agent payload we
-    /// can scope this to mutating turns only.
+    /// Coarse: posts on every agent reply, not just mutating ones.
+    /// Trades one extra GET on non-mutating turns for never missing
+    /// a real mutation.
     private func postBudgetMutationNotificationIfNeeded() {
         NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil)
     }

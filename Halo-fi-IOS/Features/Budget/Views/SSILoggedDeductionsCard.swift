@@ -41,19 +41,9 @@ struct SSILoggedDeductionsCard: View {
     @State private var exportError: String?
     @State private var emailStatus: String?
     @State private var showingEmailPrompt = false
-    /// While true the email button shows a spinner instead of
-    /// firing again. Covers the biometric prompt window (~1s on
-    /// Face ID success, longer on prompt + retry).
     @State private var isAuthenticating = false
-    /// Cancellable handle for the 5-second emailStatus auto-clear
-    /// so navigating off the card doesn't leave a dangling Task
-    /// writing to a dismounted view's state on next run.
     @State private var emailStatusClearTask: Task<Void, Never>?
 
-    /// Stateless wrapper around LocalAuthentication. Each
-    /// authenticate() call internally creates a fresh LAContext, so
-    /// keeping a single per-card instance is safe and avoids
-    /// plumbing this through the DI container.
     private let biometricAuth = BiometricAuthService()
 
     var body: some View {
@@ -152,10 +142,6 @@ struct SSILoggedDeductionsCard: View {
             )
         }
         .onDisappear {
-            // Stop the 5s emailStatus-clear timer if the user
-            // navigates away mid-status. Without this the Task
-            // continues, no-ops on the next state write, and we'd
-            // hold a tiny resource we don't need.
             emailStatusClearTask?.cancel()
         }
     }
@@ -172,13 +158,9 @@ struct SSILoggedDeductionsCard: View {
         }
     }
 
-    /// Auth gate before opening the recipient picker. Triggers
-    /// Face ID / Touch ID; on success flips `showingEmailPrompt`
-    /// so the user can review / edit the destination before any
-    /// network call. On a device without biometrics enrolled we
-    /// fall through to the recipient sheet — the sheet's explicit
-    /// Send button still gates one-tap exfiltration on an
-    /// unattended unlocked device.
+    /// Face ID / Touch ID gate before opening the recipient picker.
+    /// Falls through on devices without biometrics — the recipient
+    /// sheet's Send button still gates the network call.
     private func beginEmailExportFlow() async {
         guard !isAuthenticating else { return }
         isAuthenticating = true
@@ -189,11 +171,9 @@ struct SSILoggedDeductionsCard: View {
                 reason: "Confirm it's you before emailing your SSI deductions."
             )
         } catch BiometricAuthService.BiometricError.cancelled {
-            // User cancelled — silent abort, no error surfaced.
             return
         } catch BiometricAuthService.BiometricError.notAvailable {
-            // No biometrics enrolled. Fall through to the recipient
-            // sheet, which still gates the send via its Send button.
+            // Fall through to the recipient sheet.
         } catch BiometricAuthService.BiometricError.lockedOut {
             emailStatus = "Biometric is locked. Unlock with your passcode and try again."
             scheduleEmailStatusClear()
@@ -216,18 +196,9 @@ struct SSILoggedDeductionsCard: View {
         emailStatus = nil
         defer { isExporting = false }
         do {
-            // Trim once at the boundary; pass nil only if the user
-            // explicitly cleared the field (then the backend uses the
-            // account email).
             let trimmed = address.trimmingCharacters(in: .whitespaces)
             let resp = try await provider(trimmed.isEmpty ? nil : trimmed)
 
-            // Validate the backend's reported recipient against what
-            // the user actually requested (typed value, or the
-            // account email if they cleared the field). A mismatch
-            // shouldn't happen, but if the backend is misconfigured
-            // or compromised we want the user to see *where* it
-            // actually went rather than a generic success line.
             let expected = trimmed.isEmpty ? (accountEmail ?? "") : trimmed
             if !expected.isEmpty,
                resp.sentTo.caseInsensitiveCompare(expected) != .orderedSame {
@@ -237,27 +208,14 @@ struct SSILoggedDeductionsCard: View {
                     argument: emailStatus ?? ""
                 )
             } else {
-                // Brief inline confirmation; auto-clears after 5s so
-                // it doesn't permanently mark the card.
                 emailStatus = "Sent to \(resp.sentTo) — \(resp.rowCount) row\(resp.rowCount == 1 ? "" : "s")."
                 Haptics.engine.play(.successCascade)
-                // VoiceOver announcement — the inline text auto-clears
-                // after 5s which may be too brief for users who scroll
-                // to the card after triggering the export. The
-                // announcement guarantees they hear confirmation.
                 UIAccessibility.post(
                     notification: .announcement,
                     argument: "Sent your deductions email to \(resp.sentTo)."
                 )
             }
         } catch {
-            // Surface the backend's actual error so failures are
-            // diagnosable from the device — generic strings hid
-            // Mailgun config / domain issues we'd otherwise need
-            // Railway logs to see. AuthError.serverError carries
-            // the server's `detail` payload (e.g. "Failed to send
-            // email via Mailgun: ...") which is far more useful
-            // than a stock "couldn't send" line.
             if let authErr = error as? AuthError,
                let desc = authErr.errorDescription, !desc.isEmpty {
                 exportError = desc
@@ -269,9 +227,6 @@ struct SSILoggedDeductionsCard: View {
         scheduleEmailStatusClear()
     }
 
-    /// Auto-clear emailStatus after 5 seconds. Cancels any prior
-    /// pending clear so the most recent status survives its full
-    /// window even if multiple sends happen back-to-back.
     private func scheduleEmailStatusClear() {
         emailStatusClearTask?.cancel()
         emailStatusClearTask = Task { @MainActor in

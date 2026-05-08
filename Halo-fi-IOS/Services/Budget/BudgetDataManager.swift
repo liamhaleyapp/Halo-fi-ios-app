@@ -38,21 +38,13 @@ final class BudgetDataManager {
     private let service: BudgetServiceProtocol
     private let ssiService: SSIServiceProtocol
     private var refreshTask: Task<Void, Never>?
-    /// Marked nonisolated so `deinit` (which is implicitly
-    /// nonisolated under Swift's concurrency model) can read it
-    /// without violating MainActor isolation. NSObjectProtocol is
-    /// Sendable, so this doesn't need the `unsafe` qualifier.
-    private nonisolated var mutationObserver: NSObjectProtocol?
+    /// Annotations needed so deinit can read this without crossing
+    /// the @Observable wrapper or MainActor isolation.
+    @ObservationIgnored
+    private nonisolated(unsafe) var mutationObserver: NSObjectProtocol?
 
     // MARK: - Tuning
 
-    /// How long a successful overview fetch is considered "fresh
-    /// enough" to skip on tab re-appearance. Set high enough that
-    /// rapid Budget ↔ Income tab-bouncing doesn't burn a GET on
-    /// every hop, low enough that a user who comes back after a
-    /// minute still sees current data without manually pulling to
-    /// refresh. Voice-driven mutations call `markStale()` to bypass
-    /// the window, so this only governs view-induced refreshes.
     private static let freshnessWindow: TimeInterval = 30
 
     // MARK: - Init
@@ -64,16 +56,12 @@ final class BudgetDataManager {
         self.service = service
         self.ssiService = ssiService
 
-        // Listen for out-of-band mutations (voice commands processed
-        // by the agent) and invalidate the cache so the next tab
-        // visit refetches. addObserver's `queue: .main` runs the
-        // closure on the main thread, but Swift concurrency doesn't
-        // treat that as MainActor-isolated — hop explicitly via Task.
         mutationObserver = NotificationCenter.default.addObserver(
             forName: .budgetDataDidMutate,
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            // queue:.main is main-thread but not MainActor-isolated.
             Task { @MainActor [weak self] in
                 self?.markStale()
             }
@@ -88,21 +76,11 @@ final class BudgetDataManager {
 
     // MARK: - API
 
-    /// True when the cache is stale enough that the next view
-    /// appearance should refetch. Driven by `lastFetched` and
-    /// invalidated explicitly by `markStale()`. Read from
-    /// `BudgetView.task` so tab-hopping doesn't burn redundant
-    /// GETs while still picking up voice-driven mutations.
     var shouldRefresh: Bool {
         guard let lastFetched else { return true }
         return Date().timeIntervalSince(lastFetched) >= Self.freshnessWindow
     }
 
-    /// Force the next `shouldRefresh` read to return true. Called
-    /// by the `.budgetDataDidMutate` observer when an agent reply
-    /// suggests server state may have changed underneath us, and
-    /// callable directly by anything else that needs to bypass the
-    /// freshness window without immediately fetching.
     func markStale() {
         lastFetched = nil
     }
