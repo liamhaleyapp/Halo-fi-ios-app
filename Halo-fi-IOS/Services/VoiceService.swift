@@ -82,6 +82,13 @@ final class VoiceService: NSObject {
             // gets transcribed as user input. .default has no AEC.
             try recordingSession?.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
             try recordingSession?.setActive(true)
+            // .defaultToSpeaker is unreliable on .voiceChat — force it.
+            // See StreamingAudioPlayer.forceSpeakerIfNoHeadphones for the
+            // full rationale; reusing it here keeps both audio-session
+            // configuration paths consistent.
+            if let session = recordingSession {
+                StreamingAudioPlayer.forceSpeakerIfNoHeadphones(session: session)
+            }
         } catch {
             Logger.error("Failed to setup audio session: \(error)")
         }
@@ -95,6 +102,7 @@ final class VoiceService: NSObject {
             options: [.defaultToSpeaker, .allowBluetooth]
         )
         try session.setActive(true)
+        StreamingAudioPlayer.forceSpeakerIfNoHeadphones(session: session)
     }
 
     // MARK: - Pre-warm

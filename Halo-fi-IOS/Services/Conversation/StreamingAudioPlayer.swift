@@ -89,9 +89,50 @@ final class StreamingAudioPlayer: NSObject {
                 options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
             )
             try session.setActive(true)
-            Logger.info("StreamingAudioPlayer: Audio session configured (.voiceChat)")
+
+            // `.voiceChat` defaults to the receiver (earpiece) on
+            // .playAndRecord even with .defaultToSpeaker set — the
+            // option is supposed to override that but is unreliable
+            // on iOS 17+. Users heard Halo "way too quiet" because
+            // audio was routing through the small phone-call speaker
+            // instead of the loud bottom speaker. Force the speaker
+            // explicitly here, BUT only when no headphones/Bluetooth
+            // route is active so AirPods users still get audio in
+            // their AirPods.
+            Self.forceSpeakerIfNoHeadphones(session: session)
+
+            let routeDescription = session.currentRoute.outputs
+                .map { $0.portType.rawValue }
+                .joined(separator: ",")
+            Logger.info("StreamingAudioPlayer: Audio session configured (.voiceChat) route=\(routeDescription)")
         } catch {
             Logger.error("StreamingAudioPlayer: Failed to configure audio session: \(error)")
+        }
+    }
+
+    /// Override the output port to the loud speaker unless a headset
+    /// or Bluetooth output is currently routed. Apple's docs note that
+    /// `.defaultToSpeaker` on a `.voiceChat` session "may" override the
+    /// receiver default — in practice it often doesn't. This explicit
+    /// override is the reliable path.
+    ///
+    /// Marked `nonisolated` so VoiceService (and other future callers
+    /// that aren't MainActor) can use it without an await dance —
+    /// AVAudioSession's mutators are thread-safe and have no MainActor
+    /// requirement of their own.
+    nonisolated static func forceSpeakerIfNoHeadphones(session: AVAudioSession) {
+        let headphoneTypes: Set<AVAudioSession.Port> = [
+            .headphones, .bluetoothA2DP, .bluetoothLE, .bluetoothHFP,
+            .airPlay, .carAudio, .usbAudio,
+        ]
+        let isOnHeadphones = session.currentRoute.outputs.contains {
+            headphoneTypes.contains($0.portType)
+        }
+        guard !isOnHeadphones else { return }
+        do {
+            try session.overrideOutputAudioPort(.speaker)
+        } catch {
+            Logger.error("StreamingAudioPlayer: overrideOutputAudioPort(.speaker) failed: \(error)")
         }
     }
 
@@ -209,6 +250,12 @@ final class StreamingAudioPlayer: NSObject {
             player.delegate = self
             player.enableRate = true
             player.rate = playbackRate
+            // Max gain at the player. AVAudioPlayer.volume is the per-
+            // player gain (0...1) multiplied with system volume; setting
+            // it to 1.0 is the default but we set it explicitly as
+            // protection against any future code path that lowers it
+            // (mute toggles, ducking experiments, etc.).
+            player.volume = 1.0
             guard player.prepareToPlay(), player.play() else {
                 Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer; skipping")
                 playNextBuffer()
