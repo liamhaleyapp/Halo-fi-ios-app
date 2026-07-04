@@ -51,6 +51,18 @@ enum Logger {
         log("🟣", message, file: file)
     }
 
+    /// Sensitive log — DEBUG builds ONLY (compiled out of TestFlight and
+    /// App Store). Use for anything containing user content: voice
+    /// transcripts, agent responses, raw request/response bodies, or
+    /// financial data. Keeps real conversations off the device console for
+    /// TestFlight testers (F048). The message is autoclosed so it isn't
+    /// even built outside DEBUG.
+    static func sensitive(_ message: @autoclosure () -> String, file: String = #file) {
+        #if DEBUG
+        log("🔒", message(), file: file)
+        #endif
+    }
+
     // MARK: - Network Logging
 
     /// Log a network request.

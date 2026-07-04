@@ -423,7 +423,7 @@ final class ElevenLabsSTTService {
             let isFinal = event.isCommitted
             if isFinal || now.timeIntervalSince(lastUpdateTime) >= updateThrottleInterval {
                 lastUpdateTime = now
-                Logger.debug("ElevenLabsSTT: Transcript (\(isFinal ? "final" : "partial")): \(event.text)")
+                Logger.sensitive("ElevenLabsSTT: Transcript (\(isFinal ? "final" : "partial")): \(event.text)")
                 onTranscription?(event.text, isFinal)
             }
             if isFinal {

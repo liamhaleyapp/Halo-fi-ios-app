@@ -166,14 +166,21 @@ struct ProfileView: View {
           originalDateOfBirth = dateOfBirth
           hasChanges = false
           isSaving = false
+          // Blind users can't see a toast — confirm the save with a
+          // success haptic and a spoken VoiceOver announcement (F043).
+          Haptics.success()
+          UIAccessibility.post(notification: .announcement, argument: "Profile saved")
         }
-        
-        // TODO: Show success toast or alert
       } catch {
         await MainActor.run {
           isSaving = false
+          // Announce the failure audibly instead of failing silently (F043).
+          Haptics.error()
+          UIAccessibility.post(
+            notification: .announcement,
+            argument: "Couldn't save your profile. Please try again."
+          )
         }
-        // TODO: Show error message
         Logger.error("Error saving profile: \(error)")
       }
     }

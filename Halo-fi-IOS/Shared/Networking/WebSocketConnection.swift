@@ -86,9 +86,9 @@ extension WebSocketConnection {
       throw WebSocketConnectionError.encodingError
     }
 
-    // Log the outgoing JSON
+    // Log the outgoing JSON (may contain auth token / message text)
     let jsonString = String(data: messageData, encoding: .utf8) ?? ""
-    Logger.debug("WebSocket SEND: \(jsonString)")
+    Logger.sensitive("WebSocket SEND: \(jsonString)")
 
     do {
       // Send as STRING instead of binary data (servers typically expect JSON as text)

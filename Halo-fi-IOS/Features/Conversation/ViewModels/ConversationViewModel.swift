@@ -187,7 +187,15 @@ final class ConversationViewModel {
     }
 
     func copyEntry(_ entry: TranscriptEntry) {
-        UIPasteboard.general.string = entry.text
+        // Copy locally only (no Handoff / Universal Clipboard) and auto-expire
+        // after 60s — a transcript line can contain a balance (F048).
+        UIPasteboard.general.setItems(
+            [["public.utf8-plain-text": entry.text]],
+            options: [
+                .localOnly: true,
+                .expirationDate: Date().addingTimeInterval(60)
+            ]
+        )
 
         // Announce for accessibility
         UIAccessibility.post(

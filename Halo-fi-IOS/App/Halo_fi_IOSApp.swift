@@ -76,6 +76,7 @@ struct Halo_fi_IOSApp: App {
         .environment(subscriptionService)
         .environment(plaidManager)
         .preferredColorScheme(preferredColorScheme)
+        .privacyScreen()
         .onAppear {
           Task {
             await subscriptionService.initialize()
@@ -89,4 +90,30 @@ struct Halo_fi_IOSApp: App {
         }
     }
   }
+}
+
+/// Covers the whole app with an opaque screen whenever it isn't active, so the
+/// iOS App Switcher snapshot can't leak balances or transactions to anyone who
+/// opens the multitasker (F048). Uses `scenePhase != .active`, which triggers
+/// during the pre-snapshot `.inactive` phase.
+private struct PrivacyScreenModifier: ViewModifier {
+  @Environment(\.scenePhase) private var scenePhase
+
+  func body(content: Content) -> some View {
+    content.overlay {
+      if scenePhase != .active {
+        ZStack {
+          Color(.systemBackground).ignoresSafeArea()
+          Image(systemName: "lock.fill")
+            .font(.system(size: 44))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+        }
+      }
+    }
+  }
+}
+
+private extension View {
+  func privacyScreen() -> some View { modifier(PrivacyScreenModifier()) }
 }

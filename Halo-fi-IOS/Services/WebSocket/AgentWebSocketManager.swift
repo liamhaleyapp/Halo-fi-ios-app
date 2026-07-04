@@ -411,7 +411,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             Logger.debug("Audio chunk received: \(chunk.audio.count) base64 chars")
             eventContinuation?.yield(.audioChunk(chunk))
         case .audioComplete(let complete):
-            Logger.info("Audio complete. Text: \(complete.responseText.prefix(80))...")
+            Logger.sensitive("Audio complete. Text: \(complete.responseText.prefix(80))...")
             eventContinuation?.yield(.audioComplete(complete))
         case .voiceStatus(let payload):
             Logger.info("Voice status: \(payload.text)")
@@ -439,7 +439,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private func handleStreamChunk(_ chunk: StreamChunkPayload) {
         isStreaming = true
         streamingText += chunk.chunk
-        Logger.debug("Stream chunk: \(chunk.chunk)")
+        Logger.sensitive("Stream chunk: \(chunk.chunk)")
         eventContinuation?.yield(.streamChunk(chunk))
 
         if chunk.complete == true {
@@ -454,9 +454,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         isStreaming = false
         streamingText = ""
         lastAgentResponse = response.message
-        Logger.info("Agent Response: \(response.message)")
+        Logger.sensitive("Agent Response: \(response.message)")
         if let data = response.data {
-            Logger.debug("Response data: \(data)")
+            Logger.sensitive("Response data: \(data)")
         }
         eventContinuation?.yield(.agentResponse(response))
     }
