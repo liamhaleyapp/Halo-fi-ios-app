@@ -86,7 +86,7 @@ final class StreamingAudioPlayer: NSObject {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
+                options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers]
             )
             try session.setActive(true)
 

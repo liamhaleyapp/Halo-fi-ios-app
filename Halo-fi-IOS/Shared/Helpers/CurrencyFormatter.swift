@@ -20,6 +20,16 @@ enum CurrencyFormatter {
         return formatter
     }()
 
+    /// Separate cached formatter for the spoken / accessibility path so we
+    /// never mutate the shared display formatter's `numberStyle` (and reset
+    /// it) — that mutate-then-reset could interleave across threads and emit
+    /// the wrong style (F044).
+    private static let accessibilityFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currencyPlural
+        return formatter
+    }()
+
     // MARK: - Public API
 
     /// Formats a monetary amount with the specified currency.
@@ -36,12 +46,9 @@ enum CurrencyFormatter {
     /// - Parameters:
     ///   - amount: The monetary amount to format.
     ///   - currency: ISO 4217 currency code. Defaults to "USD".
-    /// - Returns: A string suitable for VoiceOver (e.g., "1,234 dollars and 56 cents").
+    /// - Returns: A spoken-friendly string (e.g., "1,234.56 US dollars").
     static func formatForAccessibility(_ amount: Double, currency: String = "USD") -> String {
-        formatter.currencyCode = currency
-        formatter.numberStyle = .currencyPlural
-        let result = formatter.string(from: NSNumber(value: amount)) ?? "\(amount) \(currency)"
-        formatter.numberStyle = .currency
-        return result
+        accessibilityFormatter.currencyCode = currency
+        return accessibilityFormatter.string(from: NSNumber(value: amount)) ?? "\(amount) \(currency)"
     }
 }
