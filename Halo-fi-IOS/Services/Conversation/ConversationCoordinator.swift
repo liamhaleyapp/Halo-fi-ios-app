@@ -1285,10 +1285,57 @@ final class ConversationCoordinator {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+
+        // Audio-session interruptions (phone call, Siri, alarm). Without
+        // this, an incoming call deactivates the session and the
+        // conversation dies in silent .idle with no way to recover (F045).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioInterruption(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: nil
+        )
     }
 
     @objc private func appWillResignActive() {
-        // Stop all audio activity when app goes to background
+        pauseAudioAndReturnToIdle(announcement: "Conversation paused")
+    }
+
+    @objc private func appDidBecomeActive() {
+        // Could auto-reconnect here if needed
+    }
+
+    /// Handle an audio-session interruption (phone call, Siri, alarm, another
+    /// app taking the session). On `.began` the OS has already deactivated our
+    /// session, so tear down cleanly and tell the user; on `.ended` let them
+    /// know they can continue (the next tap re-activates the session). We do
+    /// NOT auto-restart the mic — resuming is user-initiated (F045).
+    @objc private func handleAudioInterruption(_ notification: Notification) {
+        guard
+            let info = notification.userInfo,
+            let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: rawType)
+        else { return }
+
+        switch type {
+        case .began:
+            pauseAudioAndReturnToIdle(announcement: "Conversation paused")
+        case .ended:
+            let shouldResume = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) } ?? false
+            if shouldResume {
+                UIAccessibility.post(notification: .announcement, argument: "Ready. Tap to continue.")
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    /// Tear down live audio (mic + STT + playback) and return to idle,
+    /// announcing why. Shared by app-backgrounding and audio-session
+    /// interruptions so a blind user always HEARS what happened instead of
+    /// dropping into a silent idle state (F045 / V4).
+    private func pauseAudioAndReturnToIdle(announcement: String) {
         if state == .listening {
             voiceService.stopRecording()
             voiceService.onAudioBuffer = nil
@@ -1301,15 +1348,15 @@ final class ConversationCoordinator {
             streamingAudioPlayer?.stop()
         }
 
-        // Emit paused status
         if state != .idle && state != .disconnected {
             emitEvent(.status("Paused"))
+            // Bump the throttle timestamp so the generic .idle state
+            // announcement is suppressed and our specific message is the
+            // one the user hears (no double-speak).
+            lastAnnouncementTime = Date()
             setState(.idle)
+            UIAccessibility.post(notification: .announcement, argument: announcement)
         }
-    }
-
-    @objc private func appDidBecomeActive() {
-        // Could auto-reconnect here if needed
     }
 
     deinit {
