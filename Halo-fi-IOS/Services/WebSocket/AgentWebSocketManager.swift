@@ -535,7 +535,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             streamAudio: true
         )
 
-        Logger.info("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")
+        Logger.sensitive("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")
 
         try await connection.send(payload)
 

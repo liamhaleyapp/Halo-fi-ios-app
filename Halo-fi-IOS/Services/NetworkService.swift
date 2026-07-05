@@ -267,9 +267,9 @@ final class NetworkService: NetworkServiceProtocol {
             return try JSONDecoder().decode(T.self, from: emptyJSON)
         }
 
-        // Debug: Print raw response JSON
+        // Raw response body can contain balances/PII — DEBUG-only (F048).
         if let jsonString = String(data: data, encoding: .utf8) {
-            Logger.debug("📦 Raw Response JSON:\n\(jsonString)")
+            Logger.sensitive("📦 Raw Response JSON:\n\(jsonString)")
         }
 
         return try JSONDecoder().decode(T.self, from: data)
