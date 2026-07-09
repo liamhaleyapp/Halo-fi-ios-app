@@ -219,6 +219,12 @@ final class StreamingAudioPlayer: NSObject {
         }
 
         if !isPlaying {
+            // Configure the audio session once at the START of a playback
+            // sequence, not per buffer. Reconfiguring (setCategory +
+            // setActive + speaker override) between queued sentence buffers
+            // added a 10-50ms pop/gap on every sentence; subsequent buffers
+            // dequeued by the delegate reuse the already-active session.
+            configureAudioSession()
             playNextBuffer()
         }
     }
@@ -243,7 +249,6 @@ final class StreamingAudioPlayer: NSObject {
 
         pendingBuffers.removeFirst()
         Logger.info("StreamingAudioPlayer: Playing \(nextData.count) bytes (queue=\(pendingBuffers.count) remaining)")
-        configureAudioSession()
 
         do {
             let player = try AVAudioPlayer(data: nextData)
