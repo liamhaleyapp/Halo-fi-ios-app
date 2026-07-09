@@ -20,9 +20,10 @@ struct SSIDeductionConfirmView: View {
     let candidate: SSIDeductionCandidate
 
     /// Called with the type the user confirmed. Caller writes to the
-    /// API, refreshes Budget data, and dismisses the sheet. Nil means
-    /// the user dismissed without confirming.
-    let onConfirm: (SSIExclusionType) async -> Void
+    /// API and refreshes Budget data. Throws if the write fails so the
+    /// sheet can surface the error and stay open instead of faking a
+    /// success the user's benefit total wouldn't actually reflect.
+    let onConfirm: (SSIExclusionType) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: SSIExclusionType
@@ -31,7 +32,7 @@ struct SSIDeductionConfirmView: View {
 
     init(
         candidate: SSIDeductionCandidate,
-        onConfirm: @escaping (SSIExclusionType) async -> Void
+        onConfirm: @escaping (SSIExclusionType) async throws -> Void
     ) {
         self.candidate = candidate
         self.onConfirm = onConfirm
@@ -111,15 +112,21 @@ struct SSIDeductionConfirmView: View {
                 Text(BudgetFormatter.cents(candidate.amountCents))
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text(candidate.transactionDate)
+                Text(friendlyDate)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(candidate.description). Amount \(BudgetFormatter.cents(candidate.amountCents)). Dated \(candidate.transactionDate)."
+            "\(candidate.description). Amount \(BudgetFormatter.cents(candidate.amountCents)). Dated \(friendlyDate)."
         )
+    }
+
+    /// Human-friendly transaction date for both the visible label and
+    /// VoiceOver. Falls back to the raw ISO string only if parsing fails.
+    private var friendlyDate: String {
+        BudgetFormatter.friendlyDate(candidate.transactionDate) ?? candidate.transactionDate
     }
 
     @ViewBuilder
@@ -147,12 +154,30 @@ struct SSIDeductionConfirmView: View {
     private func submit() async {
         isSubmitting = true
         errorMessage = nil
-        await onConfirm(selectedType)
-        // Track C — haptic confirm so VoiceOver users feel the
-        // save before the sheet's dismiss animation completes.
-        Haptics.success()
-        isSubmitting = false
-        dismiss()
+        do {
+            try await onConfirm(selectedType)
+            // Track C — haptic confirm so VoiceOver users feel the
+            // save before the sheet's dismiss animation completes.
+            Haptics.success()
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Deduction saved."
+            )
+            isSubmitting = false
+            dismiss()
+        } catch {
+            // Save failed — never signal success. Keep the sheet open so
+            // the user can retry, and make the failure both tactile and
+            // audible for VoiceOver (the inline message alone isn't
+            // announced automatically).
+            Haptics.error()
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Couldn't save the deduction. \(error.localizedDescription)"
+            )
+            isSubmitting = false
+            errorMessage = "Couldn't save: \(error.localizedDescription)"
+        }
     }
 }
 

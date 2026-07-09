@@ -319,6 +319,17 @@ final class UserManager {
             }
         }
 
+        // Clear this user's local AI-consent mirror before dropping
+        // currentUser (the key is derived from the user id). The server
+        // remains the source of truth and re-hydrates on next sign-in;
+        // this just guarantees no stale flag lingers on the device.
+        if let grantedKey = aiConsentKey("granted") {
+            userDefaults.removeObject(forKey: grantedKey)
+        }
+        if let versionKey = aiConsentKey("policy_version") {
+            userDefaults.removeObject(forKey: versionKey)
+        }
+
         currentUser = nil
         isAuthenticated = false
         clearUserFromStorage()
@@ -494,7 +505,18 @@ final class UserManager {
     /// agent conversation; if false, the consent screen must be presented
     /// before sending any data to OpenAI / Anthropic / ElevenLabs.
     var aiConsentGranted: Bool {
-        userDefaults.bool(forKey: "ai_consent.granted")
+        guard let key = aiConsentKey("granted") else { return false }
+        return userDefaults.bool(forKey: key)
+    }
+
+    /// Per-user key for the local AI-consent mirror. Scoping by user id
+    /// stops a second user on a shared device (common for this audience
+    /// with caregivers) from inheriting a prior user's cached consent
+    /// and skipping the Apple 5.1.1(i) consent screen. Returns nil when
+    /// no user is signed in, so reads safely default to "not consented".
+    private func aiConsentKey(_ suffix: String) -> String? {
+        guard let uid = currentUser?.id else { return nil }
+        return "ai_consent.\(uid).\(suffix)"
     }
 
     /// Privacy-policy version string captured at the time the user
@@ -502,7 +524,8 @@ final class UserManager {
     /// last_updated value AND the policy has materially changed, we
     /// re-prompt for consent.
     var aiConsentPolicyVersion: String? {
-        userDefaults.string(forKey: "ai_consent.policy_version")
+        guard let key = aiConsentKey("policy_version") else { return nil }
+        return userDefaults.string(forKey: key)
     }
 
     /// Record (or withdraw) AI processing consent. Sends to backend so
@@ -526,8 +549,12 @@ final class UserManager {
             responseType: Response.self
         )
 
-        userDefaults.set(response.ai_consent_granted_at != nil, forKey: "ai_consent.granted")
-        userDefaults.set(response.ai_consent_policy_version, forKey: "ai_consent.policy_version")
+        if let grantedKey = aiConsentKey("granted") {
+            userDefaults.set(response.ai_consent_granted_at != nil, forKey: grantedKey)
+        }
+        if let versionKey = aiConsentKey("policy_version") {
+            userDefaults.set(response.ai_consent_policy_version, forKey: versionKey)
+        }
     }
 
     /// Hydrate consent state from the server. Call on app launch and
@@ -544,8 +571,12 @@ final class UserManager {
                 body: nil,
                 responseType: PrefsResponse.self
             )
-            userDefaults.set(prefs.ai_consent_granted_at != nil, forKey: "ai_consent.granted")
-            userDefaults.set(prefs.ai_consent_policy_version, forKey: "ai_consent.policy_version")
+            if let grantedKey = aiConsentKey("granted") {
+                userDefaults.set(prefs.ai_consent_granted_at != nil, forKey: grantedKey)
+            }
+            if let versionKey = aiConsentKey("policy_version") {
+                userDefaults.set(prefs.ai_consent_policy_version, forKey: versionKey)
+            }
         } catch {
             // Non-fatal — local cache stays as-is. Caller decides whether
             // to gate features on the cached value.
@@ -712,6 +743,12 @@ final class UserManager {
         Logger.info("UserManager.applySignInState: userId=\(user.id), isResolvingDestination=true")
 
         saveUserToStorage()
+
+        // Hydrate AI-consent from the server (the source of truth) now that
+        // currentUser is set, so a fresh sign-in never gates on a stale or
+        // absent local mirror. Previously this call had no callers, so the
+        // per-user consent state was never reconciled after sign-in.
+        Task { await refreshAIConsentFromServer() }
 
         // Configure bank data manager - it will notify us when done via NotificationCenter
         bankDataManager?.configureForUser(userId: user.id)

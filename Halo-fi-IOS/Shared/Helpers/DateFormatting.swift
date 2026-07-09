@@ -20,9 +20,17 @@ enum DateFormatting {
     }()
 
     /// ISO8601 formatter for date-only values.
+    ///
+    /// Anchored to the device's current timezone. `ISO8601DateFormatter`
+    /// defaults to GMT, which would parse a bare `yyyy-MM-dd` (Plaid's
+    /// transaction-date format) as GMT midnight — one calendar day
+    /// earlier than the local `apiDateFormatter` and the local calendar
+    /// that `formatSmart` compares against. That shifted every US user's
+    /// transaction one day back in both display and spoken output.
     private static let iso8601DateOnly: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
+        formatter.timeZone = .current
         return formatter
     }()
 
