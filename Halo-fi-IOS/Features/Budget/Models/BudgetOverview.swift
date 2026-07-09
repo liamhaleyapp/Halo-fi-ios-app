@@ -308,6 +308,13 @@ struct SSIIncome: Codable, Equatable {
     let countableUnearnedCents: Int?
     let waterfall: SSIIncomeWaterfall?
     let v2Note: String?
+    // Resource-suspension: when true the user is over the $2,000 resource
+    // limit, so this month's check is $0 regardless of income. The income
+    // projection / earn-room is meaningless here — show spend-down guidance
+    // instead, and do NOT fall through to the §1619(b) (earnings) banner.
+    let paymentSuspendedOverResources: Bool?
+    let spendDownCents: Int?
+    let spendDownFormatted: String?
 
     enum CodingKeys: String, CodingKey {
         case countableCents = "countable_cents"
@@ -321,6 +328,9 @@ struct SSIIncome: Codable, Equatable {
         case countableUnearnedCents = "countable_unearned_cents"
         case waterfall
         case v2Note = "v2_note"
+        case paymentSuspendedOverResources = "payment_suspended_over_resources"
+        case spendDownCents = "spend_down_cents"
+        case spendDownFormatted = "spend_down_formatted"
     }
 }
 

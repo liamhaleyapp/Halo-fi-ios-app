@@ -369,7 +369,13 @@ struct BudgetView: View {
                     if let resources = ssi.resources {
                         SSIResourceHeroCard(resources: resources)
                     }
-                    if let income = ssi.income {
+                    // Hidden when over the resource limit — the income
+                    // projection is meaningless while the check is suspended
+                    // for resources; the spend-down banner below tells that
+                    // story instead (avoids a "$0 check" card whose subtitle
+                    // still shows FBR-minus-countable income math).
+                    if let income = ssi.income,
+                       income.paymentSuspendedOverResources != true {
                         SSIIncomeHeroCard(income: income)
                     }
                     if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
@@ -387,11 +393,22 @@ struct BudgetView: View {
                        let earnRoom = income.earnRoomGrossCents {
                         SSIEarnRoomHeroCard(earnRoomCents: earnRoom)
                     }
-                    // Phase 7 — §1619(b) Medicaid continuation banner.
-                    // Surfaces ONLY when projected SSI = $0 (engine v2).
+                    // §1619(b) Medicaid continuation banner. Surfaces when
+                    // projected SSI = $0 because of INCOME — NOT when the
+                    // check is suspended for being over the resource limit
+                    // (that's a resource problem, not an earnings one, and
+                    // has its own spend-down card below).
                     if let income = ssi.income,
-                       income.eligibleForCash == false {
+                       income.eligibleForCash == false,
+                       income.paymentSuspendedOverResources != true {
                         SSIMedicaidContinuationBanner()
+                    }
+                    // Resource-limit suspension: this month's check is $0
+                    // because countable resources exceed the limit. Show
+                    // spend-down guidance instead of income framing.
+                    if let income = ssi.income,
+                       income.paymentSuspendedOverResources == true {
+                        SSISpendDownBanner(spendDownFormatted: income.spendDownFormatted)
                     }
                     if let next = ssi.nextSsaDeposit {
                         SSINextDepositCard(next: next)
@@ -403,13 +420,13 @@ struct BudgetView: View {
                         SSIDeductionCandidatesCard(
                             candidates: dataManager.ssiCandidates,
                             onConfirm: { candidate, type in
-                                do {
-                                    try await dataManager.confirmSSIDeduction(
-                                        candidate: candidate, as: type
-                                    )
-                                } catch {
-                                    // Soft-fail; data manager already logged.
-                                }
+                                // Let failures propagate to the confirm
+                                // sheet so it surfaces the error and stays
+                                // open — never a silent success on a write
+                                // that would leave the SSI total wrong.
+                                try await dataManager.confirmSSIDeduction(
+                                    candidate: candidate, as: type
+                                )
                             }
                         )
                     }
@@ -1052,6 +1069,42 @@ private struct SSIEarnRoomHeroCard: View {
 /// (eligibleForCash == false). Many users assume losing the cash
 /// means losing Medicaid too — §8.2 of the rules engine notes this
 /// is the highest-impact thing to communicate when projected = $0.
+private struct SSISpendDownBanner: View {
+    let spendDownFormatted: String?
+
+    private var spendDownPhrase: String {
+        if let amount = spendDownFormatted, !amount.isEmpty {
+            return "spending down about \(amount) before the first of next month would requalify you"
+        }
+        return "getting back under the limit before the first of next month would requalify you"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No SSI check expected this month")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("You're over the $2,000 resource limit, so your check is paused this month regardless of your income. \(spendDownPhrase.prefix(1).capitalized + spendDownPhrase.dropFirst()). Check with SSA before making big moves.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No SSI check expected this month. You're over the two thousand dollar resource limit, so your check is paused this month regardless of your income. \(spendDownPhrase.prefix(1).capitalized + spendDownPhrase.dropFirst()). Check with SSA before making big moves.")
+    }
+}
+
 private struct SSIMedicaidContinuationBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1087,7 +1140,7 @@ private struct SSIMedicaidContinuationBanner: View {
 /// lets the user accept, switch buckets, or dismiss without writing.
 private struct SSIDeductionCandidatesCard: View {
     let candidates: [SSIDeductionCandidate]
-    let onConfirm: (SSIDeductionCandidate, SSIExclusionType) async -> Void
+    let onConfirm: (SSIDeductionCandidate, SSIExclusionType) async throws -> Void
 
     @State private var presented: SSIDeductionCandidate?
 
@@ -1119,7 +1172,7 @@ private struct SSIDeductionCandidatesCard: View {
             SSIDeductionConfirmView(
                 candidate: candidate,
                 onConfirm: { type in
-                    await onConfirm(candidate, type)
+                    try await onConfirm(candidate, type)
                 }
             )
         }
