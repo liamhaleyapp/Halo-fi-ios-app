@@ -933,12 +933,16 @@ final class ConversationCoordinator {
         let oldState = state
         state = newState
 
-        // Belt-and-suspenders: the per-event stops at the .agentResponse,
-        // .audioChunk, and .error sites missed several transitions
-        // (manual disconnect, error fallthroughs, etc.) and the
-        // thinking-pulse haptic kept ticking forever — even after the
-        // conversation closed. Stopping it on every leave-from-processing
-        // catches all of those paths in one place.
+        // SINGLE CHOKE POINT for continuous haptics. Reconcile the looping
+        // pulse to the new state on EVERY transition — this is what
+        // guarantees the "thinking"/"listening" buzz can't outlive the
+        // conversation. Any exit (disconnect, end, speaking, error, idle)
+        // maps to nil below and stops the loop; the engine's safety lease
+        // is the backstop if a transition is ever missed entirely.
+        Haptics.engine.setContinuous(Self.continuousHaptic(for: newState))
+
+        // Legacy AUDIBLE thinking-pulse (sound loop, no longer a haptic) —
+        // stop it whenever we leave .processing.
         if oldState == .processing && newState != .processing {
             audioFeedback.stopProcessingPulse()
         }
@@ -946,6 +950,17 @@ final class ConversationCoordinator {
         // Announce state change for accessibility (throttled)
         if oldState != newState {
             announceStateChange(newState)
+        }
+    }
+
+    /// Map a conversation state to its continuous haptic (nil = none).
+    /// Listening pulses while the mic is hot; thinking pulses while
+    /// connecting or awaiting the response; every other state is silent.
+    private static func continuousHaptic(for state: ConversationState) -> HapticPattern? {
+        switch state {
+        case .listening: return .pulseListening
+        case .processing, .connecting: return .pulseThinking
+        default: return nil
         }
     }
 

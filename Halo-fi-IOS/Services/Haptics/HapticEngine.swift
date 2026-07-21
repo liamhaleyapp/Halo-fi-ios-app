@@ -98,7 +98,18 @@ final class HapticEngine {
 
     private var engine: CHHapticEngine?
     private var continuousPlayer: CHHapticAdvancedPatternPlayer?
+    /// What is ACTUALLY playing right now.
     private var continuousPattern: HapticPattern?
+    /// What the app WANTS playing (driven by the conversation state
+    /// machine via setContinuous). Kept separate from continuousPattern
+    /// so that after an engine reset we can re-apply the desired pattern
+    /// instead of silently dying, and a stale player can't block a restart.
+    private var desiredContinuous: HapticPattern?
+    /// Safety lease: a continuous pattern auto-stops if it isn't refreshed
+    /// within this window. Guarantees a missed state transition degrades to
+    /// SILENCE, never an endless buzz — the worst failure for a blind user.
+    private var leaseTimer: Timer?
+    private let continuousLeaseSeconds: TimeInterval = 45
 
     // System fallback generators — pre-allocated to avoid first-tap
     // latency. Apple recommends preparing them before use.
@@ -174,13 +185,65 @@ final class HapticEngine {
     /// Stop any continuous pattern. Safe to call when nothing is
     /// playing.
     func stopContinuous() {
+        leaseTimer?.invalidate()
+        leaseTimer = nil
         if let player = continuousPlayer {
-            do { try player.stop(atTime: CHHapticTimeImmediate) } catch {}
+            do {
+                try player.stop(atTime: CHHapticTimeImmediate)
+            } catch {
+                // The player refused to stop — it may still be looping.
+                // Restart the whole engine as a fail-safe so the device
+                // can't buzz forever (the catastrophic failure for a blind
+                // user); the restart re-applies the desired pattern.
+                Logger.warning("HapticEngine: continuous stop failed (\(error)); restarting engine")
+                Task { @MainActor [weak self] in
+                    try? await self?.engine?.stop()
+                    try? self?.engine?.start()
+                }
+            }
             continuousPlayer = nil
         }
         fallbackTimer?.invalidate()
         fallbackTimer = nil
         continuousPattern = nil
+    }
+
+    // MARK: - Single choke point for continuous haptics
+
+    /// The ONLY method the conversation state machine should call to drive
+    /// continuous feedback. Pass a continuous pattern to run it, or nil to
+    /// stop. Diffs against what's playing (no-op if unchanged) and arms the
+    /// safety lease so a missed transition can never leave the device
+    /// buzzing indefinitely.
+    func setContinuous(_ pattern: HapticPattern?) {
+        desiredContinuous = (pattern?.isContinuous == true) ? pattern : nil
+        applyContinuous()
+    }
+
+    /// Reconcile what's playing with `desiredContinuous`.
+    private func applyContinuous() {
+        guard let pattern = desiredContinuous else {
+            stopContinuous()
+            return
+        }
+        startContinuous(pattern)  // diffs internally (no-op if same)
+        armLease()
+    }
+
+    /// (Re)start the auto-stop safety lease for the active pattern.
+    private func armLease() {
+        leaseTimer?.invalidate()
+        guard desiredContinuous != nil else { return }
+        leaseTimer = Timer.scheduledTimer(
+            withTimeInterval: continuousLeaseSeconds, repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.continuousPattern != nil else { return }
+                Logger.warning("HapticEngine: continuous lease expired (\(self.continuousLeaseSeconds)s) — auto-stopping to prevent a stuck loop")
+                self.desiredContinuous = nil
+                self.stopContinuous()
+            }
+        }
     }
 
     // MARK: - Engine lifecycle
@@ -198,12 +261,25 @@ final class HapticEngine {
             // next pattern still plays.
             engine.resetHandler = { [weak self] in
                 Task { @MainActor in
-                    try? self?.engine?.start()
+                    guard let self else { return }
+                    // The reset invalidated any live player. Clear the
+                    // ACTUAL state (so the idempotency guard can't block a
+                    // restart), restart the engine, then re-apply whatever
+                    // pattern the app still wants — resume, not silently die.
+                    self.continuousPlayer = nil
+                    self.continuousPattern = nil
+                    try? self.engine?.start()
+                    self.applyContinuous()
                 }
             }
-            engine.stoppedHandler = { _ in
-                // System stopped us (Background, route change). We'll
-                // restart in observeAppLifecycle on foreground.
+            engine.stoppedHandler = { [weak self] _ in
+                // System stopped us (background, route change). Drop the
+                // dead player/pattern; observeAppLifecycle re-applies the
+                // desired pattern on foreground.
+                Task { @MainActor in
+                    self?.continuousPlayer = nil
+                    self?.continuousPattern = nil
+                }
             }
             try engine.start()
             self.engine = engine
@@ -221,6 +297,8 @@ final class HapticEngine {
             object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                // Stop the loop but KEEP the desired pattern so it can
+                // resume on foreground if the state machine still wants it.
                 self?.stopContinuous()
                 // Use the async overload of CHHapticEngine.stop()
                 // since we're already inside a Task. The completion-
@@ -235,7 +313,10 @@ final class HapticEngine {
             object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                try? self?.engine?.start()
+                guard let self else { return }
+                try? self.engine?.start()
+                // Resume whatever the app still wants playing.
+                self.applyContinuous()
             }
         }
     }

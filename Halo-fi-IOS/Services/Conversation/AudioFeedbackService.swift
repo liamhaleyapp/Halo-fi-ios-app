@@ -85,6 +85,11 @@ final class AudioFeedbackService {
     /// for blind / low-vision users who navigate by feel).
     /// HapticEngine has its own UIImpactFeedbackGenerator fallback for
     /// devices without CoreHaptics, so we don't double-fire here.
+    ///
+    /// NOTE: this method handles ONLY the transient cues + earcons. The
+    /// continuous "thinking"/"listening" pulse is driven exclusively by
+    /// ConversationCoordinator.setState via Haptics.engine.setContinuous,
+    /// so it can't be started here and orphaned when a stop is missed.
     func feedbackForStateChange(_ state: ConversationState) {
 
         switch state {
@@ -95,44 +100,32 @@ final class AudioFeedbackService {
             // quick events for blind users to recognize as
             // "GO — speak now."
             Haptics.engine.play(.tapCrisp)
-            Haptics.engine.startContinuous(.pulseListening)
 
         case .processing:
             playProcessingFeedback()
-            // Halo is thinking. Distinct heartbeat rhythm so the user
-            // knows the gap isn't dead air. Stops automatically when
-            // we hit .speaking or .idle.
-            Haptics.engine.startContinuous(.pulseThinking)
 
         case .speaking:
             // No feedback for speaking start (TTS handles this).
-            // Stop any continuous pulse from .processing so we don't
-            // double-cue while Halo is talking.
-            Haptics.engine.stopContinuous()
+            break
 
         case .idle:
             // Light feedback when returning to idle from listening
             playIdleFeedback()
-            Haptics.engine.stopContinuous()
             Haptics.engine.play(.tapLight)
 
         case .error:
             playErrorFeedback()
-            Haptics.engine.stopContinuous()
             Haptics.engine.play(.errorShake)
 
         case .disconnected:
             playDisconnectedFeedback()
-            Haptics.engine.stopContinuous()
 
         case .connecting:
-            // Soft swoosh + thinking-pulse so the gap between user
-            // tap and Halo-ready isn't tactile dead air. Real-device
-            // feedback called this out specifically — "you have to
-            // wait for a half a second before the voice agent
-            // starts."
+            // Soft swoosh so the gap between user tap and Halo-ready
+            // isn't tactile dead air. Real-device feedback called this
+            // out specifically — "you have to wait for a half a second
+            // before the voice agent starts."
             Haptics.engine.play(.transitionSwoosh)
-            Haptics.engine.startContinuous(.pulseThinking)
 
         case .permissionNeeded:
             // Distinct error-shape so the user knows this isn't just
@@ -168,19 +161,18 @@ final class AudioFeedbackService {
 
     private func startProcessingPulse() {
         stopProcessingPulse()
-        processingPulseTask = Task { @MainActor in
+        processingPulseTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                // 1.5s cadence — snappy enough to feel responsive
-                // without stacking on itself. Tested 3s and it felt
-                // sluggish; 1s would be too busy with the haptic.
+                // 1.5s cadence for the AUDIBLE thinking tone only. The
+                // repeating TACTILE cue is the CoreHaptics pulseThinking
+                // loop (driven by setState) — firing a light impact here
+                // too doubled the tactile signature.
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                guard !Task.isCancelled else { break }
-                lightImpactGenerator.prepare()
-                lightImpactGenerator.impactOccurred(intensity: 0.4)
+                guard let self, !Task.isCancelled else { break }
                 // Soft repeating "thinking" tone. Quieter than the
                 // initial pulse so it sits in the background instead
                 // of demanding attention each tick.
-                playSound(agentTypingSoundURL, volume: 0.18)
+                self.playSound(self.agentTypingSoundURL, volume: 0.18)
             }
         }
     }
