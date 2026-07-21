@@ -46,6 +46,7 @@ class SignUpViewModel {
   struct PendingPhoneVerification: Identifiable, Equatable {
     let id = UUID()
     let idUser: String
+    let email: String
     let phone: String
     let password: String
     let smsAlreadySent: Bool
@@ -136,6 +137,8 @@ class SignUpViewModel {
   
   var phoneError: String? {
     guard hasAttemptedSubmit else { return nil }
+    // Phone is optional — no error when left blank.
+    if phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
     let result = USPhoneFormatting.validate(phoneNumber)
     return USPhoneFormatting.errorMessage(for: result)
   }
@@ -173,12 +176,12 @@ class SignUpViewModel {
   // MARK: - Overall form validity
   
   var isFormValid: Bool {
+    // Phone and DOB are optional. A phone, if entered, is validated in the
+    // register flow; leaving it blank is allowed.
     isFirstNameValid &&
     isEmailValid &&
-    isPhoneValid &&
     isPasswordValid &&
-    isConfirmPasswordValid &&
-    isDateOfBirthValid
+    isConfirmPasswordValid
   }
   
   // MARK: - Actions
@@ -259,10 +262,16 @@ class SignUpViewModel {
     defer { isLoading = false }
 
     do {
-      guard let fullPhone = USPhoneFormatting.formatForAPI(phoneNumber) else {
-        errorMessage = "Invalid phone number format."
-        showingError = true
-        return
+      // Phone is optional. If the user entered one, validate + normalize it;
+      // if it's blank, sign up without a phone (no SMS verification step).
+      var fullPhone = ""
+      if !phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        guard let normalized = USPhoneFormatting.formatForAPI(phoneNumber) else {
+          errorMessage = "Please enter a valid phone number, or leave it blank."
+          showingError = true
+          return
+        }
+        fullPhone = normalized
       }
 
       let signupResponse = try await userManager.signUp(
@@ -270,8 +279,7 @@ class SignUpViewModel {
         lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),
         phone: fullPhone,
         email: trimmedEmail,
-        password: password,
-        dateOfBirth: dateOfBirth
+        password: password
       )
 
       // If the backend created the user but still needs an SMS OTP to
@@ -281,9 +289,11 @@ class SignUpViewModel {
       //
       // Older backends (or future social-only flows) that omit the flag
       // fall through to the original sign-in-immediately path.
-      if signupResponse.requiresPhoneVerification == true {
+      // Only run SMS verification when the user actually provided a phone.
+      if signupResponse.requiresPhoneVerification == true && !fullPhone.isEmpty {
         pendingPhoneVerification = PendingPhoneVerification(
           idUser: signupResponse.idUser,
+          email: email,
           phone: fullPhone,
           password: password,
           smsAlreadySent: signupResponse.smsSent ?? false
@@ -292,7 +302,7 @@ class SignUpViewModel {
       }
 
       try await userManager.signIn(
-        phoneNumber: fullPhone,
+        email: email,
         password: password
       )
 
@@ -325,7 +335,7 @@ class SignUpViewModel {
     defer { isLoading = false }
 
     do {
-      try await userManager.signIn(phoneNumber: pending.phone, password: pending.password)
+      try await userManager.signIn(email: pending.email, password: pending.password)
       await redeemReferralIfNeeded()
       pendingPhoneVerification = nil
       onComplete?()

@@ -12,7 +12,7 @@ import SwiftUI
 import LocalAuthentication
 
 struct BiometricSettingsEnrollmentSheet: View {
-  let phoneNumber: String?
+  let email: String?
   let biometryType: LABiometryType
   let authService: AuthServiceProtocol
   let biometricAuthService: BiometricAuthService
@@ -41,8 +41,8 @@ struct BiometricSettingsEnrollmentSheet: View {
     }
   }
 
-  private var formattedPhone: String {
-    phoneNumber ?? "—"
+  private var formattedEmail: String {
+    email ?? "—"
   }
 
   var body: some View {
@@ -77,7 +77,7 @@ struct BiometricSettingsEnrollmentSheet: View {
             Text("Phone")
               .font(.caption)
               .foregroundColor(.secondary)
-            Text(formattedPhone)
+            Text(formattedEmail)
               .font(.body)
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 16)
@@ -133,8 +133,8 @@ struct BiometricSettingsEnrollmentSheet: View {
             )
             .cornerRadius(14)
           }
-          .disabled(password.isEmpty || phoneNumber == nil || isSubmitting)
-          .opacity((password.isEmpty || phoneNumber == nil) ? 0.5 : 1.0)
+          .disabled(password.isEmpty || email == nil || isSubmitting)
+          .opacity((password.isEmpty || email == nil) ? 0.5 : 1.0)
 
           Spacer(minLength: 16)
         }
@@ -157,11 +157,10 @@ struct BiometricSettingsEnrollmentSheet: View {
   }
 
   private func submit() async {
-    guard let rawPhone = phoneNumber, !rawPhone.isEmpty else {
-      errorMessage = "We don't have a phone number on your profile. Please contact support."
+    guard let rawEmail = email?.trimmingCharacters(in: .whitespaces), !rawEmail.isEmpty else {
+      errorMessage = "We don't have an email on your profile. Please contact support."
       return
     }
-    let normalizedPhone = USPhoneFormatting.formatForAPI(rawPhone) ?? rawPhone
     guard !password.isEmpty else { return }
 
     errorMessage = nil
@@ -172,7 +171,7 @@ struct BiometricSettingsEnrollmentSheet: View {
     // discarded — the user is already signed in via UserManager and we don't
     // disturb that session.
     do {
-      _ = try await authService.login(phoneNumber: normalizedPhone, password: password)
+      _ = try await authService.login(email: rawEmail, password: password)
     } catch {
       errorMessage = "That password didn't work. Please try again."
       return
@@ -181,7 +180,7 @@ struct BiometricSettingsEnrollmentSheet: View {
     // Confirm intent with biometrics, then persist.
     do {
       try await biometricAuthService.authenticate(reason: "Enable \(biometryName) sign-in")
-      try credentialStore.save(BiometricCredentials(phone: normalizedPhone, password: password))
+      try credentialStore.save(BiometricCredentials(email: rawEmail, password: password))
       onComplete(true)
       dismiss()
     } catch BiometricAuthService.BiometricError.cancelled {

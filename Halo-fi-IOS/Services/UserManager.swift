@@ -147,7 +147,7 @@ final class UserManager {
         phone: String,
         email: String,
         password: String,
-        dateOfBirth: Date
+        dateOfBirth: Date? = nil
     ) async throws -> SignupResponse {
         isLoading = true
 
@@ -213,12 +213,12 @@ final class UserManager {
         )
     }
 
-    func signIn(phoneNumber: String, password: String) async throws {
+    func signIn(email: String, password: String) async throws {
         isLoading = true
 
         do {
             let authResponse = try await authService.login(
-                phoneNumber: phoneNumber,
+                email: email,
                 password: password
             )
 

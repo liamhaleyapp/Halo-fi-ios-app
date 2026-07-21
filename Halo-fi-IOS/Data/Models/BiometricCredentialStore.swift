@@ -52,7 +52,7 @@ struct BiometricCredentialStore: BiometricCredentialStoreProtocol {
   // MARK: - Save
 
   func save(_ credentials: BiometricCredentials) throws {
-    let payload = try JSONEncoder().encode(["phone": credentials.phone,
+    let payload = try JSONEncoder().encode(["email": credentials.email,
                                             "password": credentials.password])
 
     var aclError: Unmanaged<CFError>?
@@ -130,11 +130,11 @@ struct BiometricCredentialStore: BiometricCredentialStoreProtocol {
     switch result {
     case .success(let data):
       guard let dict = try? JSONDecoder().decode([String: String].self, from: data),
-            let phone = dict["phone"],
+            let email = dict["email"],
             let password = dict["password"] else {
         throw BiometricCredentialError.encodingError
       }
-      return BiometricCredentials(phone: phone, password: password)
+      return BiometricCredentials(email: email, password: password)
     case .failure(let error):
       throw error
     }

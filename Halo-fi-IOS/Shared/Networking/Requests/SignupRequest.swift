@@ -10,9 +10,11 @@ struct SignupRequest: Codable {
   let firstName: String
   let lastName: String
   let email: String
-  let phone: String
+  // Phone and date of birth are optional (Apple 5.1.1(v) bars requiring
+  // phone; DOB isn't core to functionality and was removed from the form).
+  let phone: String?
   let password: String
-  let dateOfBirth: String
+  let dateOfBirth: String?
   
   enum CodingKeys: String, CodingKey {
     case firstName = "first_name"

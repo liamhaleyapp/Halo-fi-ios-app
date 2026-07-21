@@ -10,6 +10,8 @@
 	<true/>
 	<key>CFBundleSpokenName</key>
 	<string>HAY low FYE</string>
+	<key>CFBundleDisplayName</key>
+	<string>HaloFi</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

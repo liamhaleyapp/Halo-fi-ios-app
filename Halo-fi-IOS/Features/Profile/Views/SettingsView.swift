@@ -212,7 +212,7 @@ struct SettingsView: View {
     }
     .sheet(isPresented: $showBiometricEnrollSheet) {
       BiometricSettingsEnrollmentSheet(
-        phoneNumber: userManager.currentUser?.phone,
+        email: userManager.currentUser?.email,
         biometryType: currentBiometryType,
         authService: container.authService,
         biometricAuthService: container.biometricAuthService,

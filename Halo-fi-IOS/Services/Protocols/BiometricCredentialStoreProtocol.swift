@@ -9,7 +9,7 @@
 import Foundation
 
 struct BiometricCredentials: Equatable {
-  let phone: String
+  let email: String
   let password: String
 }
 

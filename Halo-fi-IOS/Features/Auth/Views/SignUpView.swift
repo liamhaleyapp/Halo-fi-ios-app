@@ -143,15 +143,8 @@ struct SignUpView: View {
               textContentType: .familyName
             )
 
-            DateOfBirthField(selectedDate: viewModel.dateOfBirth) {
-              showingDatePicker = true
-            }
-            if let error = viewModel.dateOfBirthError {
-              validationText(error)
-            }
-
             AuthFormField(
-              title: "Phone Number",
+              title: "Phone Number (optional)",
               placeholder: "Enter your phone number",
               text: $viewModel.phoneNumber,
               keyboardType: .phonePad,

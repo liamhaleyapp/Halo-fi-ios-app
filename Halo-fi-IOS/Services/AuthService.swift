@@ -20,9 +20,9 @@ final class AuthService: AuthServiceProtocol {
 
     // MARK: - Login
 
-    func login(phoneNumber: String, password: String) async throws -> LoginResponse {
+    func login(email: String, password: String) async throws -> LoginResponse {
         let loginRequest = LoginRequest(
-            phone: phoneNumber,
+            email: email,
             password: password
         )
 
@@ -76,9 +76,10 @@ final class AuthService: AuthServiceProtocol {
         email: String,
         phone: String,
         password: String,
-        dateOfBirth: Date
+        dateOfBirth: Date? = nil
     ) async throws -> SignupResponse {
-        if firstName.isEmpty || lastName.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty {
+        // Phone and DOB are optional; only name, email, and password required.
+        if firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty {
             throw AuthError.validationError([])
         }
 
@@ -86,9 +87,9 @@ final class AuthService: AuthServiceProtocol {
             firstName: firstName,
             lastName: lastName,
             email: email,
-            phone: phone,
+            phone: phone.isEmpty ? nil : phone,
             password: password,
-            dateOfBirth: DateFormatting.formatForAPI(dateOfBirth)
+            dateOfBirth: dateOfBirth.map { DateFormatting.formatForAPI($0) }
         )
 
         let requestBody = try JSONEncoder().encode(registerRequest)

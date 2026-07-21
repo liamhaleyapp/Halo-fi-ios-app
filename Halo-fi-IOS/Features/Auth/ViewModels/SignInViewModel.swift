@@ -12,7 +12,7 @@ import Observation
 @Observable
 class SignInViewModel {
   // Form state
-  var phoneNumber = ""
+  var email = ""
   var password = ""
 
   // UI state
@@ -33,11 +33,11 @@ class SignInViewModel {
   private static let enrollmentOfferedKey = "biometric_enrollment_offered"
 
   // Helpers
-  private var isPhoneValid: Bool {
-    if case .valid = USPhoneFormatting.validate(phoneNumber) {
-      return true
-    }
-    return false
+  private var isEmailValid: Bool {
+    let trimmed = email.trimmingCharacters(in: .whitespaces)
+    // Lightweight format check; the backend performs full validation.
+    return trimmed.contains("@") && trimmed.contains(".")
+      && !trimmed.hasPrefix("@") && !trimmed.hasSuffix("@")
   }
 
   private var isPasswordValid: Bool {
@@ -45,10 +45,11 @@ class SignInViewModel {
   }
 
   // Per-field errors
-  var phoneError: String? {
+  var emailError: String? {
     guard hasAttemptedSubmit else { return nil }
-    let result = USPhoneFormatting.validate(phoneNumber)
-    return USPhoneFormatting.errorMessage(for: result)
+    if email.trimmingCharacters(in: .whitespaces).isEmpty { return "Email is required." }
+    if !isEmailValid { return "Enter a valid email address." }
+    return nil
   }
 
   var passwordError: String? {
@@ -58,7 +59,7 @@ class SignInViewModel {
   }
 
   var isFormValid: Bool {
-    isPhoneValid && isPasswordValid
+    isEmailValid && isPasswordValid
   }
 
   // Actions
@@ -115,13 +116,8 @@ class SignInViewModel {
     isLoading = true
 
     do {
-      guard let fullPhone = USPhoneFormatting.formatForAPI(phoneNumber) else {
-        errorMessage = "Invalid phone number format."
-        showingError = true
-        isLoading = false
-        return
-      }
-      try await userManager.signIn(phoneNumber: fullPhone, password: password)
+      let loginEmail = email.trimmingCharacters(in: .whitespaces)
+      try await userManager.signIn(email: loginEmail, password: password)
 
       // Successful sign-in. Decide where to route.
       let routeAction = await resolveRouteAction(
@@ -135,7 +131,7 @@ class SignInViewModel {
       isLoading = false
 
       // Offer Face ID enrollment if applicable, otherwise route immediately.
-      let creds = BiometricCredentials(phone: fullPhone, password: password)
+      let creds = BiometricCredentials(email: loginEmail, password: password)
       if shouldOfferEnrollment(
         biometricAuthService: biometricAuthService,
         credentialStore: biometricCredentialStore
@@ -173,7 +169,7 @@ class SignInViewModel {
       isLoading = true
       defer { isLoading = false }
 
-      try await userManager.signIn(phoneNumber: creds.phone, password: creds.password)
+      try await userManager.signIn(email: creds.email, password: creds.password)
 
       let routeAction = await resolveRouteAction(
         userManager: userManager,

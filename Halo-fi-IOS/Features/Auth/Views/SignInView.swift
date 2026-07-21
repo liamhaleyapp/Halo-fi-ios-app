@@ -146,17 +146,17 @@ struct SignInView: View {
       }
 
       AuthFormField(
-        title: "Phone Number",
-        placeholder: "Enter your phone number",
-        text: $viewModel.phoneNumber,
-        keyboardType: .numbersAndPunctuation,
+        title: "Email",
+        placeholder: "Enter your email",
+        text: $viewModel.email,
+        keyboardType: .emailAddress,
         textContentType: .username,
         onFocusChange: { isFocused in
           guard isFocused else { return }
           attemptBiometricSignInIfEnrolled()
         }
       )
-      if let error = viewModel.phoneError {
+      if let error = viewModel.emailError {
         validationText(error)
       }
 
@@ -444,7 +444,7 @@ struct SignInView: View {
       await MainActor.run {
         userManager.signOut()
         // Clear form fields
-        viewModel.phoneNumber = ""
+        viewModel.email = ""
         viewModel.password = ""
         viewModel.errorMessage = ""
         viewModel.showingError = false

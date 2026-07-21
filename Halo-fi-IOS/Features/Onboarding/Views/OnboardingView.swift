@@ -83,18 +83,9 @@ struct OnboardingView: View {
     }
     .fullScreenCover(isPresented: $showingPermissionRequest) {
       PermissionRequestView(
-        onPermissionGranted: {
+        onContinue: {
           showingPermissionRequest = false
-          // Continue to sign up/sign in based on what was originally requested
-          if currentPage == onboardingPages.count - 1 {
-            showingSignUp = true
-          } else {
-            showingSignIn = true
-          }
-        },
-        onSkip: {
-          showingPermissionRequest = false
-          // Allow user to continue without permission
+          // Onboarding proceeds regardless of the mic grant/deny outcome.
           if currentPage == onboardingPages.count - 1 {
             showingSignUp = true
           } else {

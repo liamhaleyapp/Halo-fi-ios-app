@@ -10,12 +10,12 @@ import Foundation
 /// Protocol defining authentication service operations.
 /// Enables dependency injection and mocking for tests.
 protocol AuthServiceProtocol {
-    /// Authenticates a user with phone number and password.
+    /// Authenticates a user with email and password.
     /// - Parameters:
-    ///   - phoneNumber: The user's phone number
+    ///   - email: The user's email address
     ///   - password: The user's password
     /// - Returns: LoginResponse containing tokens and user info
-    func login(phoneNumber: String, password: String) async throws -> LoginResponse
+    func login(email: String, password: String) async throws -> LoginResponse
 
     func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse
 
@@ -35,7 +35,7 @@ protocol AuthServiceProtocol {
         email: String,
         phone: String,
         password: String,
-        dateOfBirth: Date
+        dateOfBirth: Date?
     ) async throws -> SignupResponse
 
     /// Refreshes an expired access token.
@@ -71,7 +71,7 @@ actor MockAuthService: AuthServiceProtocol {
     var mockUser: UserProfileResponse?
     var mockLoginResponse: LoginResponse?
 
-    func login(phoneNumber: String, password: String) async throws -> LoginResponse {
+    func login(email: String, password: String) async throws -> LoginResponse {
         guard shouldSucceed, let response = mockLoginResponse else {
             throw AuthError.invalidCredentials
         }
@@ -91,7 +91,7 @@ actor MockAuthService: AuthServiceProtocol {
         email: String,
         phone: String,
         password: String,
-        dateOfBirth: Date
+        dateOfBirth: Date?
     ) async throws -> SignupResponse {
         guard shouldSucceed else {
             throw AuthError.networkError
