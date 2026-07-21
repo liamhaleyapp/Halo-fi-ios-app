@@ -109,6 +109,10 @@ struct SubscriptionManagementView: View {
         .onRestoreCompleted { _ in
           Task { await subscriptionService.checkSubscriptionStatus() }
         }
+        // App Store 3.1.2(c): EULA + Privacy links in the purchase flow.
+        .safeAreaInset(edge: .bottom) {
+          SubscriptionLegalLinks()
+        }
     }
     .onAppear {
       Task { await subscriptionService.checkSubscriptionStatus() }

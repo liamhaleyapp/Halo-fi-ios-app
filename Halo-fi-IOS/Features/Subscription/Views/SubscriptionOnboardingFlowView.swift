@@ -146,10 +146,36 @@ struct SubscriptionOnboardingFlowView: View {
             }
           }
         }
+        // App Store 3.1.2(c): Terms of Use (EULA) + Privacy Policy must be
+        // reachable inside the purchase flow.
+        .safeAreaInset(edge: .bottom) {
+          SubscriptionLegalLinks()
+        }
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Connect Bank")
     .accessibilityHint("Step 3 of 3 in the setup process")
+  }
+}
+
+/// Terms of Use (EULA) + Privacy Policy links shown inside the subscription
+/// purchase flow. Required by App Store Guideline 3.1.2(c). Reused by both
+/// the onboarding paywall and the subscription-management paywall.
+struct SubscriptionLegalLinks: View {
+  private let termsURL = URL(string: "https://halofiapp.com/terms")!
+  private let privacyURL = URL(string: "https://halofiapp.com/privacy")!
+
+  var body: some View {
+    HStack(spacing: 20) {
+      Link("Terms of Use", destination: termsURL)
+      Link("Privacy Policy", destination: privacyURL)
+    }
+    .font(.footnote)
+    .foregroundStyle(.secondary)
+    .padding(.vertical, 10)
+    .frame(maxWidth: .infinity)
+    .background(.thinMaterial)
+    .accessibilityElement(children: .contain)
   }
 }
 
