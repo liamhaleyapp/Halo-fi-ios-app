@@ -14,10 +14,13 @@ struct AccountDetailView: View {
   @State private var transactions: [Transaction] = []
   @State private var isLoadingInitial = false  // Only for first load with no cache
   @State private var transactionError: String?
+  // Scales the balance with Dynamic Type instead of a fixed 32pt (App Store
+  // Guideline 4 typography). minimumScaleFactor keeps big amounts on one line.
+  @ScaledMetric(relativeTo: .largeTitle) private var balanceFontSize: CGFloat = 32
 
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
 
       VStack(spacing: 0) {
         // Account Header
@@ -46,15 +49,15 @@ struct AccountDetailView: View {
       HStack(spacing: 4) {
         ProgressView()
           .scaleEffect(0.7)
-          .tint(.white)
+          .tint(Color.haloTextPrimary)
         Text("Syncing")
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
     } else if let lastSync = bankDataManager.lastTransactionSyncAt {
       Text(lastSync.relativeDescription)
         .font(.caption)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
     }
   }
   
@@ -63,7 +66,7 @@ struct AccountDetailView: View {
     if isLoadingInitial && transactions.isEmpty {
       // Only show spinner for initial load with no cached data
       ProgressView()
-        .tint(.white)
+        .tint(Color.haloTextPrimary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else if let error = transactionError, transactions.isEmpty {
       // Only show error if we have no cached data to display
@@ -72,7 +75,7 @@ struct AccountDetailView: View {
           .font(.largeTitle)
           .foregroundColor(.orange)
         Text(error)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }
@@ -81,9 +84,9 @@ struct AccountDetailView: View {
       VStack(spacing: 12) {
         Image(systemName: "list.bullet.rectangle")
           .font(.largeTitle)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
         Text("No transactions found")
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
@@ -106,27 +109,29 @@ struct AccountDetailView: View {
           Text(account.nickname)
             .font(.title2)
             .fontWeight(.bold)
-            .foregroundColor(.white)
+            .foregroundColor(Color.haloTextPrimary)
           
           Text(account.name)
             .font(.subheadline)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
         }
         
         Spacer()
       }
       
       Divider()
-        .background(Color.gray.opacity(0.3))
+        .background(Color.haloSeparator)
       
       VStack(alignment: .leading, spacing: 8) {
         Text("Balance")
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
         
         Text(account.balance, format: .currency(code: "USD"))
-          .font(.system(size: 32, weight: .bold))
-          .foregroundColor(account.balance >= 0 ? .green : .red)
+          .font(.system(size: balanceFontSize, weight: .bold))
+          .minimumScaleFactor(0.6)
+          .lineLimit(1)
+          .foregroundColor(account.balance >= 0 ? Color.haloPositive : Color.haloNegative)
         
         HStack(spacing: 8) {
           Circle()
@@ -135,19 +140,19 @@ struct AccountDetailView: View {
           
           Text(account.isSynced ? "Synced" : "Not Synced")
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
         }
       }
     }
     .padding(20)
-    .background(Color.gray.opacity(0.1))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
   }
   
   // MARK: - Transactions List View
   private var transactionsListView: some View {
     List {
-      Section(header: Text("Transactions").foregroundColor(.white.opacity(0.85))) {
+      Section(header: Text("Transactions").foregroundColor(Color.haloTextSecondary)) {
         ForEach(transactions) { transaction in
           TransactionRow(transaction: transaction)
         }

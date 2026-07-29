@@ -17,7 +17,7 @@ struct ProfileHeader: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         ProfileHeader(onBack: {})
     }
 }

@@ -78,7 +78,7 @@ struct PreferenceDropdownSection: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
-        .background(Color.gray.opacity(0.08))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
         .sheet(isPresented: $showingSheet) {
             SelectionListView(
@@ -93,7 +93,7 @@ struct PreferenceDropdownSection: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         VStack(spacing: 16) {
             PreferenceDropdownSection(
                 title: "Voice Language",

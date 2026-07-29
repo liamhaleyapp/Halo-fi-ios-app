@@ -82,7 +82,7 @@ struct BiometricSettingsEnrollmentSheet: View {
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 16)
               .padding(.vertical, 12)
-              .background(Color.gray.opacity(0.12))
+              .background(Color.haloSecondaryBackground)
               .cornerRadius(10)
           }
 
@@ -94,7 +94,7 @@ struct BiometricSettingsEnrollmentSheet: View {
               .textContentType(.password)
               .padding(.horizontal, 16)
               .padding(.vertical, 12)
-              .background(Color.gray.opacity(0.12))
+              .background(Color.haloSecondaryBackground)
               .cornerRadius(10)
               .accessibilityLabel("Password")
           }

@@ -38,7 +38,7 @@ struct LinkNewAccountSection: View {
 // MARK: - Preview
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     LinkNewAccountSection(onTap: {})
       .padding()
   }

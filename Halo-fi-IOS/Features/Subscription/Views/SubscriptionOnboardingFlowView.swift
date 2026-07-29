@@ -30,7 +30,7 @@ struct SubscriptionOnboardingFlowView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         
         // Show benefit slides first
         if !showingSubscriptionView {
@@ -49,7 +49,7 @@ struct SubscriptionOnboardingFlowView: View {
                 }) {
                   Image(systemName: "chevron.left")
                     .font(.title2)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                     .padding()
                 }
                 

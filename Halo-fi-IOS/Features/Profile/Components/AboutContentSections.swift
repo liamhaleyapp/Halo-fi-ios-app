@@ -15,11 +15,11 @@ struct WhatIsHaloFiSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("What is Halo Fi?")
                     .font(.headline)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
 
                 Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible. Halo Fi empowers everyone, especially those who are visually impaired, with intuitive and supportive tools built around voice and ease of use.")
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(nil)
             }
@@ -35,11 +35,11 @@ struct OurMissionSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Our Mission")
                     .font(.headline)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
 
                 Text("To bring visibility to personal finances through accessible and intelligent technology \u{2014} empowering everyone, especially those with visual impairments.")
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(nil)
             }
@@ -55,7 +55,7 @@ struct AccessibilityFeaturesSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Accessibility")
                     .font(.headline)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
 
                 featureRow(icon: "waveform", color: .blue, text: "Voice-first design for hands-free use")
                 featureRow(icon: "eye.fill", color: .green, text: "Full VoiceOver support")
@@ -76,7 +76,7 @@ struct AccessibilityFeaturesSection: View {
                 .frame(width: 24)
             Text(text)
                 .font(.body)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
             Spacer()
         }
     }
@@ -89,7 +89,7 @@ struct DataSecuritySection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Data Security")
                     .font(.headline)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
 
                 featureRow(icon: "lock.shield.fill", color: .teal, text: "AES-256 encryption at rest and in transit")
                 featureRow(icon: "key.fill", color: .yellow, text: "Bank credentials never stored")
@@ -109,7 +109,7 @@ struct DataSecuritySection: View {
                 .frame(width: 24)
             Text(text)
                 .font(.body)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
             Spacer()
         }
     }
@@ -139,16 +139,16 @@ struct LegalSection: View {
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
                     .font(.caption)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.haloSecondaryBackground)
             .cornerRadius(16)
         }
     }
@@ -175,16 +175,16 @@ struct SupportSection: View {
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
                     .font(.caption)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.haloSecondaryBackground)
             .cornerRadius(16)
         }
     }
@@ -199,7 +199,7 @@ struct AppVersionSection: View {
         HStack {
             Text("Version \(version) (\(build))")
                 .font(.footnote)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -211,7 +211,7 @@ struct AppVersionSection: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         ScrollView {
             VStack(spacing: 12) {
                 WhatIsHaloFiSection()

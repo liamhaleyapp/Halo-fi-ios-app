@@ -22,6 +22,8 @@ struct InviteFriendsView: View {
     @State private var invitedCount: Int = 0
     @State private var loading = true
     @State private var loadError: String?
+    // Scales the referral code with Dynamic Type instead of a fixed 32pt.
+    @ScaledMetric(relativeTo: .largeTitle) private var codeFontSize: CGFloat = 32
 
     private let networkService = NetworkService.shared
 
@@ -93,7 +95,7 @@ struct InviteFriendsView: View {
             Text("Invite friends to HaloFi")
                 .font(.title3)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
@@ -102,7 +104,7 @@ struct InviteFriendsView: View {
             // Apple Offer Code pipeline is live.
             Text("Share Halo Fi with people who'd benefit. Discounts launching soon.")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
                 .multilineTextAlignment(.center)
 
             if invitedCount > 0 {
@@ -122,12 +124,14 @@ struct InviteFriendsView: View {
         VStack(spacing: 16) {
             Text("Your Referral Code")
                 .font(.headline)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
 
             if let code = referralCode {
                 Text(code)
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .font(.system(size: codeFontSize, weight: .bold, design: .monospaced))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .foregroundColor(.haloTextPrimary)
                     .tracking(2)
                     .accessibilityLabel("Referral code: \(code.map { String($0) }.joined(separator: " "))")
 
@@ -145,13 +149,13 @@ struct InviteFriendsView: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
                     .background(
                         showingCopied
                             ? Color.green.opacity(0.3)
-                            : Color.gray.opacity(0.2)
+                            : Color.haloSecondaryBackground
                     )
                     .cornerRadius(12)
                 }
@@ -159,7 +163,7 @@ struct InviteFriendsView: View {
                 .accessibilityHint("Double-tap to copy your referral code to clipboard")
             } else if loading {
                 ProgressView()
-                    .tint(.white)
+                    .tint(.haloTextPrimary)
                     .accessibilityLabel("Loading your referral code")
             } else if let loadError {
                 Text(loadError)
@@ -169,10 +173,10 @@ struct InviteFriendsView: View {
                 Button("Retry") {
                     Task { await loadStats() }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Color.gray.opacity(0.2))
+                .background(Color.haloSecondaryBackground)
                 .cornerRadius(10)
             }
         }
@@ -223,7 +227,7 @@ struct InviteFriendsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("How It Works")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             howItWorksStep(number: "1", text: "Share your code or link with a friend")
@@ -256,7 +260,7 @@ struct InviteFriendsView: View {
 
             Text(text)
                 .font(.body)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Step \(number): \(text)")

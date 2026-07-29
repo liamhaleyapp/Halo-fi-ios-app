@@ -20,7 +20,7 @@ struct OnboardingView: View {
   var body: some View {
     ZStack {
       // Background
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
       
       VStack(spacing: 0) {
         // Page Content

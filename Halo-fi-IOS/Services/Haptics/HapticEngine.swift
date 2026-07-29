@@ -198,7 +198,7 @@ final class HapticEngine {
                 Logger.warning("HapticEngine: continuous stop failed (\(error)); restarting engine")
                 Task { @MainActor [weak self] in
                     try? await self?.engine?.stop()
-                    try? self?.engine?.start()
+                    try? await self?.engine?.start()
                 }
             }
             continuousPlayer = nil

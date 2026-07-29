@@ -23,7 +23,7 @@ struct EmptyStateView: View {
 
             Text(title)
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(message)
@@ -75,7 +75,7 @@ extension EmptyStateView {
 
 #Preview("With Action Button") {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         EmptyStateView(
             icon: "building.2",
             title: "No Accounts Linked",
@@ -89,7 +89,7 @@ extension EmptyStateView {
 
 #Preview("Without Action Button") {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         EmptyStateView(
             icon: "creditcard",
             title: "No Accounts Found",
@@ -101,7 +101,7 @@ extension EmptyStateView {
 
 #Preview("Compact") {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         EmptyStateView.compact("No accounts found")
             .padding()
     }

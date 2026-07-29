@@ -18,7 +18,7 @@ struct AccountsOverviewView: View {
   var body: some View {
     NavigationStack(path: $navigationPath) {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
 
         if isLoadingLinkedItems && !hasAppeared {
           loadingView
@@ -124,18 +124,18 @@ struct AccountsOverviewView: View {
   private var searchField: some View {
     HStack(spacing: 12) {
       Image(systemName: "magnifyingglass")
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
         .accessibilityHidden(true)
 
       TextField("Search institutions", text: $searchText)
-        .foregroundColor(.white)
+        .foregroundColor(Color.haloTextPrimary)
         .autocorrectionDisabled()
         .accessibilityLabel("Search institutions")
         .accessibilityHint("Type to filter your linked banks")
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
-    .background(Color.gray.opacity(0.15))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(12)
   }
 
@@ -145,13 +145,13 @@ struct AccountsOverviewView: View {
     HStack {
       Text(title)
         .font(.headline)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
 
       Spacer()
 
       Text("\(count)")
         .font(.subheadline)
-        .foregroundColor(.white.opacity(0.7))
+        .foregroundColor(Color.haloTextSecondary)
     }
     .padding(.top, 16)
     .padding(.bottom, 8)
@@ -201,11 +201,11 @@ struct AccountsOverviewView: View {
     VStack(spacing: 16) {
       ProgressView()
         .scaleEffect(1.2)
-        .tint(.white)
+        .tint(Color.haloTextPrimary)
 
       Text("Loading institutions...")
         .font(.body)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
@@ -225,11 +225,11 @@ struct AccountsOverviewView: View {
         Text("No Linked Accounts")
           .font(.title3)
           .fontWeight(.semibold)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
 
         Text("Connect your financial accounts to view live data")
           .font(.body)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }

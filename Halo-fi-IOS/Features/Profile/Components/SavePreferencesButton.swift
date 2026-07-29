@@ -28,7 +28,7 @@ struct SavePreferencesButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     SavePreferencesButton(onSave: {})
   }
 }

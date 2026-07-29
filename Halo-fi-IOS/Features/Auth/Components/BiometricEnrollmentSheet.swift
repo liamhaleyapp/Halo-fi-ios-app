@@ -113,7 +113,7 @@ struct BiometricEnrollmentSheet: View {
 }
 
 #Preview {
-  Color.black
+  Color.haloBackground
     .ignoresSafeArea()
     .sheet(isPresented: .constant(true)) {
       BiometricEnrollmentSheet(biometryType: .faceID) { _ in }

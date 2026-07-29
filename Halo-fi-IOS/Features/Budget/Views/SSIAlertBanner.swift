@@ -41,7 +41,7 @@ struct SSIAlertBanner: View {
                 // tinted card without losing visual hierarchy.
                 Text(entry.body)
                     .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .foregroundStyle(Color.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let label = entry.actionLabel, onAction != nil {
                     Button(label) { onAction?() }

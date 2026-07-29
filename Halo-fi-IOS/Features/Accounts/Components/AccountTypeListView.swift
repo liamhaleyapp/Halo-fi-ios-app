@@ -20,18 +20,18 @@ struct AccountTypeListView: View {
   
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
       
       VStack(alignment: .leading, spacing: 16) {
         Text(title)
           .font(.largeTitle)
           .fontWeight(.heavy)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.top, 12)
         
         List {
-          Section(header: Text("Connected").foregroundColor(.white.opacity(0.85))) {
+          Section(header: Text("Connected").foregroundColor(Color.haloTextSecondary)) {
             ForEach(accounts) { account in
               NavigationLink(destination: AccountDetailView(account: account)) {
                 AccountRowSimple(
@@ -40,7 +40,7 @@ struct AccountTypeListView: View {
                   accountType: account.type
                 )
               }
-              .listRowBackground(Color.gray.opacity(0.15))
+              .listRowBackground(Color.haloSecondaryBackground)
             }
           }
         }

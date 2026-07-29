@@ -47,7 +47,7 @@ struct BudgetView: View {
         // downs flash and immediately bounce back to the list.
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.haloBackground.ignoresSafeArea()
 
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -508,7 +508,7 @@ struct BudgetView: View {
             if !threshold.isEmpty {
                 Text("When \(alert.comparison) \(threshold)")
                     .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.80))
+                    .foregroundStyle(Color.haloTextSecondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -523,11 +523,11 @@ struct BudgetView: View {
         HStack {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(Color.haloTextSecondary)
             Spacer()
             Text("\(count)")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.70))
+                .foregroundColor(Color.haloTextSecondary)
         }
         .padding(.top, 16)
         .padding(.bottom, 4)
@@ -540,7 +540,7 @@ struct BudgetView: View {
         Text(text)
             .font(.caption)
             .fontWeight(.semibold)
-            .foregroundStyle(Color.white.opacity(0.80))
+            .foregroundStyle(Color.haloTextSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 8)
             .accessibilityAddTraits(.isHeader)

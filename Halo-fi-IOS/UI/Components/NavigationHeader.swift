@@ -18,7 +18,8 @@ struct NavigationHeader: View {
 
         var textColor: Color {
             switch self {
-            case .dark: return .white
+            // Adaptive: white in Dark (unchanged), black in Light.
+            case .dark: return .haloTextPrimary
             case .light: return .primary
             }
         }
@@ -65,7 +66,7 @@ struct NavigationHeader: View {
 
 #Preview("Dark Style") {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         VStack {
             NavigationHeader(title: "Profile", onBack: {}, style: .dark)
             Spacer()

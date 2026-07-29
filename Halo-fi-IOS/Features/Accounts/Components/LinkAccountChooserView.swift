@@ -20,7 +20,7 @@ struct LinkAccountChooserView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
 
         VStack(spacing: 12) {
           chooserOption(
@@ -49,7 +49,7 @@ struct LinkAccountChooserView: View {
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Button("Cancel") { dismiss() }
-            .foregroundColor(.white)
+            .foregroundColor(Color.haloTextPrimary)
         }
       }
       .navigationDestination(for: ChooserDestination.self) { destination in
@@ -65,7 +65,6 @@ struct LinkAccountChooserView: View {
         }
       }
     }
-    .preferredColorScheme(.dark)
   }
 
   private func chooserOption(
@@ -86,11 +85,11 @@ struct LinkAccountChooserView: View {
           Text(title)
             .font(.body)
             .fontWeight(.semibold)
-            .foregroundColor(.white)
+            .foregroundColor(Color.haloTextPrimary)
 
           Text(subtitle)
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -98,12 +97,12 @@ struct LinkAccountChooserView: View {
         Spacer()
 
         Image(systemName: "chevron.right")
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .font(.caption)
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 16)
-      .background(Color.gray.opacity(0.1))
+      .background(Color.haloSecondaryBackground)
       .cornerRadius(16)
     }
     .buttonStyle(.plain)

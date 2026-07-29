@@ -18,7 +18,7 @@ struct SignInDebugMenu: View {
   var body: some View {
     VStack(spacing: 12) {
       Divider()
-        .background(Color.gray.opacity(0.3))
+        .background(Color.haloSeparator)
       
       Text("DEBUG MENU")
         .font(.caption)

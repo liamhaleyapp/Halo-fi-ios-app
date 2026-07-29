@@ -68,7 +68,7 @@ struct ForgotPasswordView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
 
         VStack(spacing: 24) {
           VStack(spacing: 16) {
@@ -79,11 +79,11 @@ struct ForgotPasswordView: View {
             Text("Reset Password")
               .font(.largeTitle)
               .fontWeight(.bold)
-              .foregroundColor(.white)
+              .foregroundColor(.haloTextPrimary)
 
             Text("Choose how you'd like to receive a 6-digit reset code.")
               .font(.body)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(.haloTextSecondary)
               .multilineTextAlignment(.center)
           }
 
@@ -103,7 +103,7 @@ struct ForgotPasswordView: View {
             VStack(alignment: .leading, spacing: 8) {
               Text("Phone")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
 
               TextField("(555) 555-5555", text: $phoneNumber)
                 .textFieldStyle(CustomTextFieldStyle())
@@ -114,7 +114,7 @@ struct ForgotPasswordView: View {
             VStack(alignment: .leading, spacing: 8) {
               Text("Email")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
 
               TextField("Enter your email", text: $email)
                 .textFieldStyle(CustomTextFieldStyle())

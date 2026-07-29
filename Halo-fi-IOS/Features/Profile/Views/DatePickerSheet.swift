@@ -15,13 +15,13 @@ struct DatePickerSheet: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
-        
+        Color.haloBackground.ignoresSafeArea()
+
         VStack(spacing: 24) {
           Text("Select Date of Birth")
             .font(.title2)
             .fontWeight(.semibold)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
             .padding(.top, 20)
           
           DatePicker(
@@ -31,8 +31,7 @@ struct DatePickerSheet: View {
           )
           .datePickerStyle(.graphical)
           .accentColor(.blue)
-          .colorScheme(.dark)
-          
+
           ActionButton(
             title: "Done",
             gradient: LinearGradient(

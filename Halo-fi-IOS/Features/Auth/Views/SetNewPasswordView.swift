@@ -34,7 +34,7 @@ struct SetNewPasswordView: View {
 
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
 
       VStack(spacing: 24) {
         VStack(spacing: 16) {
@@ -45,18 +45,18 @@ struct SetNewPasswordView: View {
           Text("New Password")
             .font(.largeTitle)
             .fontWeight(.bold)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           Text("Choose a new password (at least 8 characters).")
             .font(.body)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
             .multilineTextAlignment(.center)
         }
 
         VStack(alignment: .leading, spacing: 8) {
           Text("New password")
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
           SecureField("Enter new password", text: $newPassword)
             .textFieldStyle(CustomTextFieldStyle())
             .textContentType(.newPassword)
@@ -65,7 +65,7 @@ struct SetNewPasswordView: View {
         VStack(alignment: .leading, spacing: 8) {
           Text("Confirm password")
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
           SecureField("Re-enter new password", text: $confirmPassword)
             .textFieldStyle(CustomTextFieldStyle())
             .textContentType(.newPassword)

@@ -21,28 +21,28 @@ struct LargeNavButton: View {
         
         Image(systemName: icon)
           .font(.title2)
-          .foregroundColor(.white)
+          .foregroundColor(.white)  // on the colored tile — stays white in both modes
           .accessibilityHidden(true)
       }
-      
+
       Text(title)
         .font(.title3)
         .fontWeight(.semibold)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .multilineTextAlignment(.leading)
         .lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
-      
+
       Spacer()
-      
+
       Image(systemName: "chevron.right")
         .font(.headline)
-        .foregroundColor(.white.opacity(0.8))
+        .foregroundColor(.haloTextSecondary)
         .accessibilityHidden(true)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
-    .background(Color.gray.opacity(0.12))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(title)
@@ -51,7 +51,7 @@ struct LargeNavButton: View {
 }
 
 #Preview {
-  ZStack { Color.black.ignoresSafeArea() }
+  ZStack { Color.haloBackground.ignoresSafeArea() }
     .overlay(
       LargeNavButton(
         title: "Preview Button",

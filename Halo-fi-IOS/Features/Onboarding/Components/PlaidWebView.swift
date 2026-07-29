@@ -73,7 +73,7 @@ struct PlaidWebView: UIViewRepresentable {
 // MARK: - Preview
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     PlaidWebView(
       linkToken: "demo-token",
       onSuccess: { _ in },

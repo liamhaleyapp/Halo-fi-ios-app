@@ -14,13 +14,13 @@ struct InstitutionDetailsView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         
         VStack(spacing: 20) {
           Text(institution.name)
             .font(.title2)
             .fontWeight(.semibold)
-            .foregroundColor(.white)
+            .foregroundColor(Color.haloTextPrimary)
             .padding(.top, 20)
           
           VStack(alignment: .leading, spacing: 16) {
@@ -32,7 +32,7 @@ struct InstitutionDetailsView: View {
               VStack(alignment: .leading, spacing: 4) {
                 Text("Status")
                   .font(.caption)
-                  .foregroundColor(.white.opacity(0.85))
+                  .foregroundColor(Color.haloTextSecondary)
                 
                 HStack(spacing: 8) {
                   Circle()
@@ -41,7 +41,7 @@ struct InstitutionDetailsView: View {
                   
                   Text(institution.status.displayText)
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundColor(Color.haloTextPrimary)
                 }
               }
               
@@ -49,12 +49,12 @@ struct InstitutionDetailsView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.haloSecondaryBackground)
             .cornerRadius(16)
             
             Text("Accounts")
               .font(.headline)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
               .padding(.horizontal, 20)
             
             ForEach(institution.accounts) { account in
@@ -71,7 +71,7 @@ struct InstitutionDetailsView: View {
           Button("Done") {
             dismiss()
           }
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
         }
       }
     }

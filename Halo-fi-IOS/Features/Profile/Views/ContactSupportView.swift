@@ -15,7 +15,7 @@ struct ContactSupportView: View {
   
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
       
       VStack(spacing: 0) {
         ModalHeader(title: "Contact Support", onDone: { dismiss() })
@@ -24,7 +24,7 @@ struct ContactSupportView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("How can we help you?")
               .font(.body)
-              .foregroundColor(.white)
+              .foregroundColor(.haloTextPrimary)
             
             TextField("Your message...", text: $message, axis: .vertical)
               .textFieldStyle(CustomTextFieldStyle())

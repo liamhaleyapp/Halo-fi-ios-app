@@ -12,20 +12,20 @@ struct CustomTextFieldStyle: TextFieldStyle {
     configuration
       .padding(.horizontal, 16)
       .padding(.vertical, 16)
-      .background(Color.gray.opacity(0.2))
+      .background(Color.haloSecondaryBackground)
       .cornerRadius(12)
-      .foregroundColor(.white)
+      .foregroundColor(.haloTextPrimary)
       .accentColor(.blue)
       .overlay(
         RoundedRectangle(cornerRadius: 12)
-          .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+          .stroke(Color.haloSeparator, lineWidth: 1)
       )
   }
 }
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack(spacing: 20) {
       TextField("Email", text: .constant(""))
         .textFieldStyle(CustomTextFieldStyle())

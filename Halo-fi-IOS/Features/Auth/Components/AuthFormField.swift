@@ -40,7 +40,7 @@ struct AuthFormField: View {
     VStack(alignment: .leading, spacing: 8) {
       Text(title)
         .font(.headline)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .accessibilityHidden(true)
 
       Group {
@@ -84,7 +84,7 @@ struct AuthFormField: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack(spacing: 20) {
       AuthFormField(
         title: "Email",

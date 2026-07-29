@@ -22,27 +22,27 @@ struct DateOfBirthField: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Date of Birth")
         .font(.headline)
-        .foregroundColor(.white)
-      
+        .foregroundColor(.haloTextPrimary)
+
       Button(action: onTap) {
         HStack {
           Text(dateFormatter.string(from: selectedDate))
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
             .font(.body)
-          
+
           Spacer()
-          
+
           Image(systemName: "calendar")
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
             .font(.body)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
-        .background(Color.gray.opacity(0.2))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(12)
         .overlay(
           RoundedRectangle(cornerRadius: 12)
-            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+            .stroke(Color.haloSeparator, lineWidth: 1)
         )
       }
       .buttonStyle(HapticPlainButtonStyle())
@@ -52,7 +52,7 @@ struct DateOfBirthField: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     DateOfBirthField(selectedDate: Date()) {}
       .padding()
   }

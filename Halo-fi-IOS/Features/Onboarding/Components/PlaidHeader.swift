@@ -51,7 +51,7 @@ struct PlaidHeader: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     PlaidHeader(onCancel: {})
   }
 }

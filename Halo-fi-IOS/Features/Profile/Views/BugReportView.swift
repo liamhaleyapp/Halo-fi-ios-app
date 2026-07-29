@@ -15,7 +15,7 @@ struct BugReportView: View {
   
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
       
       VStack(spacing: 0) {
         ModalHeader(title: "Report a Bug / Feedback", onDone: { dismiss() })
@@ -24,7 +24,7 @@ struct BugReportView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("Help us improve Halo Fi")
               .font(.body)
-              .foregroundColor(.white)
+              .foregroundColor(.haloTextPrimary)
             
             TextField("Describe the issue or share your feedback...", text: $bugDescription, axis: .vertical)
               .textFieldStyle(CustomTextFieldStyle())

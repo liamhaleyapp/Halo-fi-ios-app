@@ -19,7 +19,7 @@ struct AboutHeader: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         AboutHeader(onBack: {})
     }
 }

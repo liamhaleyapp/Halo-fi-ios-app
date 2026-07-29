@@ -69,7 +69,7 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 24)
-        .background(Color.gray.opacity(0.08))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(20)
 
         // Save Button

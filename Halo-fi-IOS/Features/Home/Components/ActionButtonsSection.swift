@@ -52,7 +52,7 @@ struct ActionButtonsSection: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         ActionButtonsSection(onAction: { _ in })
     }
 }

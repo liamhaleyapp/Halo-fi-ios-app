@@ -18,6 +18,8 @@ struct BudgetCategoryDetailView: View {
     let initial: BudgetStatusCategory
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingLimitEditor = false
+    // Scales the hero "spent" amount with Dynamic Type instead of a fixed 40pt.
+    @ScaledMetric(relativeTo: .largeTitle) private var amountFontSize: CGFloat = 40
 
     /// Latest version of this category from the data manager, or the
     /// initial snapshot if the manager hasn't refreshed yet (or the
@@ -65,7 +67,9 @@ struct BudgetCategoryDetailView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(category.formatted["spent"] ?? "$0.00")
-                    .font(.system(size: 40, weight: .bold))
+                    .font(.system(size: amountFontSize, weight: .bold))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
                 Text("of \(category.formatted["limit"] ?? "$0.00")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

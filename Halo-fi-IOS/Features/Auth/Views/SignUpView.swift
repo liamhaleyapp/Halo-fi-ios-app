@@ -28,8 +28,8 @@ struct SignUpView: View {
   var body: some View {
     ZStack {
       // Background
-      Color.black.ignoresSafeArea()
-      
+      Color.haloBackground.ignoresSafeArea()
+
       ScrollView {
         VStack(spacing: 24) {
           // Header
@@ -112,14 +112,14 @@ struct SignUpView: View {
             // username), so the label reflects that.
             HStack {
               Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(Color.haloSeparator)
                 .frame(height: 1)
               Text("or use your phone number")
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
                 .font(.subheadline)
                 .fixedSize()
               Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(Color.haloSeparator)
                 .frame(height: 1)
             }
             .padding(.vertical, 4)
@@ -219,7 +219,7 @@ struct SignUpView: View {
             // Sign In Link
             HStack {
               Text("Already have an account?")
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(.haloTextSecondary)
 
               Button("Sign In") {
                 showingSignIn = true
@@ -296,7 +296,7 @@ struct SignUpView: View {
 
           Spacer()
         }
-        .background(Color.black)
+        .background(Color.haloBackground)
         .navigationTitle("Select Date of Birth")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

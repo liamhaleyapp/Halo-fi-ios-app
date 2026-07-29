@@ -61,7 +61,7 @@ struct StepIndicatorDot: View {
       
       Text(step.title)
         .font(.caption2)
-        .foregroundColor(isActive ? .white : .gray)
+        .foregroundColor(isActive ? .haloTextPrimary : .gray)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
@@ -71,7 +71,7 @@ struct StepIndicatorDot: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack {
       OnboardingStepIndicator(
         currentStep: .subscription,

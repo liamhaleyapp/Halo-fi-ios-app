@@ -20,11 +20,11 @@ struct AccountRow: View {
       VStack(alignment: .leading, spacing: 2) {
         Text(account.nickname)
           .font(.caption)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
         
         Text(account.type.displayName)
           .font(.caption2)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
       
       Spacer()
@@ -32,16 +32,16 @@ struct AccountRow: View {
       if account.isSynced {
         Text(account.balance.formatted(.currency(code: "USD")))
           .font(.caption)
-          .foregroundColor(account.balance >= 0 ? .green : .red)
+          .foregroundColor(account.balance >= 0 ? Color.haloPositive : Color.haloNegative)
       } else {
         Text("Not synced")
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
     }
     .padding(.horizontal, 30)
     .padding(.vertical, 12)
-    .background(Color.gray.opacity(0.05))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(12)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(account.nickname), \(account.type.displayName)")
@@ -56,7 +56,7 @@ struct AccountRow: View {
 
 #Preview("Account Row") {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     AccountRow(account: FinancialAccount(
       id: "1",
       type: .checking,

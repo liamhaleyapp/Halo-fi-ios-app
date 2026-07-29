@@ -156,7 +156,7 @@ struct LegalDocumentView: View {
                     if !lastUpdated.isEmpty {
                         Text("Last updated: \(lastUpdated)")
                             .font(.caption)
-                            .foregroundColor(.white.opacity(0.85))
+                            .foregroundColor(.haloTextSecondary)
                     }
 
                     if isLoading {
@@ -168,10 +168,10 @@ struct LegalDocumentView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(section.heading)
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.haloTextPrimary)
                                 Text(section.body)
                                     .font(.body)
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .foregroundColor(.haloTextSecondary)
                                     .lineLimit(nil)
                             }
                         }
@@ -180,7 +180,7 @@ struct LegalDocumentView: View {
                 .padding(20)
                 .padding(.bottom, 40)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.haloBackground.ignoresSafeArea())
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -254,7 +254,7 @@ struct HelpFeedbackView: View {
                 }
                 .padding(20)
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(Color.haloBackground.ignoresSafeArea())
             .navigationTitle("Help & Feedback")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -277,16 +277,16 @@ struct HelpFeedbackView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.haloTextPrimary)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.haloTextSecondary)
             }
 
             Spacer()
         }
         .padding(16)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(detail)")

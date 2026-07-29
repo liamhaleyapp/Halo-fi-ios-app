@@ -54,7 +54,7 @@ struct AccessibleInstitutionCard: View {
         Text(item.institutionName)
           .font(.body)
           .fontWeight(.medium)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
 
         // Status indicator
         HStack(spacing: 8) {
@@ -64,21 +64,21 @@ struct AccessibleInstitutionCard: View {
 
           Text(item.isActive ? "Connected" : "Needs attention")
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
         }
 
         // Account count (if available)
         if let accounts = accounts, !accounts.isEmpty {
           Text("\(accounts.count) account\(accounts.count == 1 ? "" : "s")")
             .font(.caption)
-            .foregroundColor(.white.opacity(0.8))
+            .foregroundColor(Color.haloTextSecondary)
         } else if isLoading {
           HStack(spacing: 6) {
             ProgressView()
               .scaleEffect(0.6)
             Text("Loading...")
               .font(.caption)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
           }
         }
       }
@@ -92,14 +92,14 @@ struct AccessibleInstitutionCard: View {
           .accessibilityHidden(true)
       } else {
         Image(systemName: "chevron.right")
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .font(.caption)
           .accessibilityHidden(true)
       }
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
-    .background(Color.gray.opacity(0.1))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
     .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
@@ -112,7 +112,7 @@ struct AccessibleInstitutionCard: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack(spacing: 12) {
       AccessibleInstitutionCard(
         item: ConnectedItem(

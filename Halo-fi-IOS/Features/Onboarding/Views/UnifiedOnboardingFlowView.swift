@@ -31,7 +31,7 @@ struct UnifiedOnboardingFlowView: View {
   var body: some View {
     NavigationStack {
       ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
 
         VStack(spacing: 0) {
           // Step indicator (hidden on sign up step)
@@ -236,11 +236,11 @@ struct AccessibleOnboardingHeader: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Step \(stepIndex + 1) of \(totalSteps)")
         .font(.title2.weight(.semibold))   // nice and big
-        .foregroundColor(.white)
-      
+        .foregroundColor(.haloTextPrimary)
+
       Text(currentStep.title)              // “Create your account”, “Choose a plan”, etc.
         .font(.title.weight(.bold))
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .accessibilityAddTraits(.isHeader)
       
       ProgressView(
@@ -253,7 +253,7 @@ struct AccessibleOnboardingHeader: View {
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
-    .background(Color.black)
+    .background(Color.haloBackground)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Step \(stepIndex + 1) of \(totalSteps): \(currentStep.title)")
   }

@@ -39,33 +39,33 @@ struct AIConsentView: View {
         Text("Voice AI Consent")
           .font(.largeTitle)
           .fontWeight(.bold)
-          .foregroundColor(.white)
+          .foregroundColor(.haloTextPrimary)
           .multilineTextAlignment(.center)
 
         VStack(alignment: .leading, spacing: 16) {
           Text("Halo Fi uses AI to power voice conversations.")
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           Text("To answer your questions, we send transcripts and your account context to OpenAI, Anthropic, and ElevenLabs. None of them train models on your data.")
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
 
           Text("Halo Fi stores recordings on our own servers to improve quality. Withdraw consent anytime via Settings → Contact Us.")
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
 
           if showingDetails {
             VStack(alignment: .leading, spacing: 12) {
-              Divider().background(Color.white.opacity(0.3))
+              Divider().background(Color.haloSeparator)
 
               Text("Data sent to providers:")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
 
               detailBullet("OpenAI / Anthropic", "Transcribed conversation text + account context (transactions, balances, budget, SSI status). No name, email, phone, or full account numbers.")
               detailBullet("ElevenLabs", "Raw voice recordings for speech-to-text, generated text for text-to-speech.")
 
               Text("Data stored by Halo Fi:")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.haloTextPrimary)
                 .padding(.top, 8)
 
               detailBullet("Voice recordings + transcripts", "Encrypted at rest. Used to diagnose issues, audit agent quality, support fraud investigations, and train our own models on de-identified data.")
@@ -128,7 +128,7 @@ struct AIConsentView: View {
           Button(action: { showingDeclineConfirm = true }) {
             Text("I don't accept")
               .font(.subheadline)
-              .foregroundColor(.white.opacity(0.7))
+              .foregroundColor(.haloTextSecondary)
           }
           .disabled(isProcessing)
           .accessibilityHint("Cancels sign-up and returns to the sign-in screen")
@@ -137,7 +137,7 @@ struct AIConsentView: View {
         .padding(.bottom, 32)
       }
     }
-    .background(Color.black.ignoresSafeArea())
+    .background(Color.haloBackground.ignoresSafeArea())
     .alert("Without consent, Halo Fi can't function", isPresented: $showingDeclineConfirm) {
       Button("Go back", role: .cancel) { }
       Button("Sign out", role: .destructive) { decline() }
@@ -191,10 +191,10 @@ struct AIConsentView: View {
       Text(heading)
         .font(.subheadline)
         .fontWeight(.semibold)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
       Text(body)
         .font(.caption)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(.haloTextSecondary)
     }
   }
 }

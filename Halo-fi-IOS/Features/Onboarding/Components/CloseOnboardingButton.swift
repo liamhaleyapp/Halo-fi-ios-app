@@ -22,11 +22,14 @@ struct CloseOnboardingButton: View {
     Button(action: handleTap) {
       Image(systemName: "xmark")
         .font(.title)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .padding(12)
         .background(
+          // Adaptive translucent chip so both the glyph and the disc stay
+          // visible in Light (was a white glyph on a white-15% disc that
+          // washed out on a light background).
           Circle()
-            .fill(Color.white.opacity(0.15))
+            .fill(Color(.tertiarySystemFill))
         )
     }
     .frame(minWidth: 44, minHeight: 44, alignment: .center)
@@ -58,8 +61,8 @@ struct CloseOnboardingButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
-    
+    Color.haloBackground.ignoresSafeArea()
+
     VStack {
       HStack {
         Spacer()

@@ -25,7 +25,7 @@ struct ProfileField: View {
         
         Text(title)
           .font(.headline)
-          .foregroundColor(.white)
+          .foregroundColor(.haloTextPrimary)
         
         Spacer()
       }
@@ -45,7 +45,7 @@ struct ProfileField: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack(spacing: 20) {
       ProfileField(
         title: "Full Name",

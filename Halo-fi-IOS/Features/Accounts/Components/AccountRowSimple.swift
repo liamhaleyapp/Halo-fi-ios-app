@@ -16,14 +16,14 @@ struct AccountRowSimple: View {
     HStack {
       VStack(alignment: .leading, spacing: 4) {
         Text(name)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
         Text(accountType.displayName)
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
       Spacer()
       Text(balance, format: .currency(code: "USD"))
-        .foregroundColor(balance >= 0 ? .green : .red)
+        .foregroundColor(balance >= 0 ? Color.haloPositive : Color.haloNegative)
     }
   }
 }

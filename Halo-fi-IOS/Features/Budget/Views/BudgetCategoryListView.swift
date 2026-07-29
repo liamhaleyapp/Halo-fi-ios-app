@@ -18,7 +18,7 @@ struct BudgetCategoryListView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.haloBackground.ignoresSafeArea()
 
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -125,11 +125,11 @@ struct BudgetCategoryListView: View {
         HStack {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(Color.haloTextSecondary)
             Spacer()
             Text("\(count)")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.70))
+                .foregroundColor(Color.haloTextSecondary)
         }
         .padding(.top, 16)
         .padding(.bottom, 4)

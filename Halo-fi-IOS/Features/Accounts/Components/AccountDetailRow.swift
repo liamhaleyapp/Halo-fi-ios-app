@@ -21,11 +21,11 @@ struct AccountDetailRow: View {
         Text(account.nickname)
           .font(.body)
           .fontWeight(.medium)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
         
         Text(account.name)
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
       
       Spacer()
@@ -34,28 +34,28 @@ struct AccountDetailRow: View {
         if account.isSynced {
           Text(account.balance.formatted(.currency(code: "USD")))
             .font(.body)
-            .foregroundColor(account.balance >= 0 ? .green : .red)
+            .foregroundColor(account.balance >= 0 ? Color.haloPositive : Color.haloNegative)
         } else {
           Text("Not synced")
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
         }
         
         Text(account.type.displayName)
           .font(.caption2)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
     }
     .padding(.horizontal, 30)
     .padding(.vertical, 20)
-    .background(Color.gray.opacity(0.1))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
   }
 }
 
 #Preview("Account Detail Row") {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     AccountDetailRow(account: FinancialAccount(
       id: "1",
       type: .checking,

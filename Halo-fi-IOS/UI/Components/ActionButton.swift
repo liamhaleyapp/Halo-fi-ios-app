@@ -32,7 +32,7 @@ struct ActionButton: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         VStack(spacing: 16) {
             ActionButton(
                 title: "Daily Snapshot",

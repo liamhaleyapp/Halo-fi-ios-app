@@ -33,10 +33,10 @@ struct SubscriptionManagementView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text("Current Plan")
               .font(.subheadline)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(.haloTextSecondary)
             Text(subscriptionService.currentSubscription.displayName)
               .font(.headline)
-              .foregroundColor(.white)
+              .foregroundColor(.haloTextPrimary)
           }
 
           Spacer()
@@ -49,11 +49,11 @@ struct SubscriptionManagementView: View {
                   .foregroundColor(.orange)
                 Text("on \(renewalText)")
                   .font(.caption)
-                  .foregroundColor(.white.opacity(0.85))
+                  .foregroundColor(.haloTextSecondary)
               } else {
                 Text("Renews \(renewalText)")
                   .font(.caption)
-                  .foregroundColor(.white.opacity(0.85))
+                  .foregroundColor(.haloTextSecondary)
               }
             }
           } else {
@@ -63,7 +63,7 @@ struct SubscriptionManagementView: View {
           }
         }
         .padding(16)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
         .accessibilityElement(children: .combine)
 
@@ -87,7 +87,7 @@ struct SubscriptionManagementView: View {
           } label: {
             Text("Cancel Subscription")
               .font(.subheadline)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(.haloTextSecondary)
           }
           .padding(.top, 16)
           .accessibilityHint("Opens Apple subscription management")
@@ -97,7 +97,7 @@ struct SubscriptionManagementView: View {
       .padding(.top, 10)
       .padding(.bottom, 100)
     }
-    .background(Color.black.ignoresSafeArea())
+    .background(Color.haloBackground.ignoresSafeArea())
     .navigationTitle("Subscription")
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingPaywall) {

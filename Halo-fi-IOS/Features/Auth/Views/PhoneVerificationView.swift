@@ -44,7 +44,7 @@ struct PhoneVerificationView: View {
 
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
 
       VStack(spacing: 24) {
         VStack(spacing: 16) {
@@ -55,18 +55,18 @@ struct PhoneVerificationView: View {
           Text("Verify Your Phone")
             .font(.largeTitle)
             .fontWeight(.bold)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           Text("We sent a 6-digit code to \(phone). Enter it below to finish creating your account.")
             .font(.body)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
             .multilineTextAlignment(.center)
         }
 
         VStack(alignment: .leading, spacing: 8) {
           Text("Code")
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           TextField("123456", text: $code)
             .textFieldStyle(CustomTextFieldStyle())
@@ -117,7 +117,7 @@ struct PhoneVerificationView: View {
               .progressViewStyle(CircularProgressViewStyle(tint: .blue))
           } else if resendCooldownSeconds > 0 {
             Text("Resend code in \(resendCooldownSeconds)s")
-              .foregroundColor(.white.opacity(0.6))
+              .foregroundColor(.haloTextTertiary)
           } else {
             Text("Didn't get a code? Resend")
               .foregroundColor(.blue)

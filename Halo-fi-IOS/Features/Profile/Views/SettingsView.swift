@@ -279,7 +279,7 @@ struct SettingsView: View {
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 14)
-      .background(Color.gray.opacity(0.1))
+      .background(Color.haloSecondaryBackground)
       .cornerRadius(12)
       .accessibilityElement(children: .combine)
       .accessibilityLabel("Sign in with \(biometryDisplayName)")
@@ -391,11 +391,11 @@ private struct SettingsOptionLabel: View {
 
       Image(systemName: "chevron.right")
         .font(.caption)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(.haloTextSecondary)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
-    .background(Color.gray.opacity(0.1))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(12)
   }
 }

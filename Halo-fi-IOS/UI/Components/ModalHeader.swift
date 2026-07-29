@@ -18,7 +18,7 @@ struct ModalHeader: View {
         Button("Done") {
           onDone()
         }
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .font(.body)
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -29,7 +29,7 @@ struct ModalHeader: View {
       Text(title)
         .font(.title2)
         .fontWeight(.semibold)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .padding(.top, 8)
         .padding(.bottom, 16)
         .accessibilityAddTraits(.isHeader)
@@ -39,7 +39,7 @@ struct ModalHeader: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     ModalHeader(title: "Meet the Team", onDone: {})
   }
 }

@@ -52,7 +52,7 @@ struct AuthButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack(spacing: 20) {
       AuthButton(
         title: "Sign In",

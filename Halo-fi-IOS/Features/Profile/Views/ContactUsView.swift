@@ -59,7 +59,7 @@ struct ContactUsView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.haloBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 ModalHeader(title: "Contact Us", onDone: { dismiss() })
@@ -70,7 +70,7 @@ struct ContactUsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Topic")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.haloTextPrimary)
 
                             HStack(spacing: 10) {
                                 ForEach(ContactTopic.allCases) { topic in
@@ -83,16 +83,16 @@ struct ContactUsView: View {
                                                 .foregroundColor(selectedTopic == topic ? topic.color : .gray)
                                             Text(topic.label)
                                                 .font(.caption2)
-                                                .foregroundColor(selectedTopic == topic ? .white : .gray)
+                                                .foregroundColor(selectedTopic == topic ? .haloTextPrimary : .gray)
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .fill(selectedTopic == topic ? Color.gray.opacity(0.2) : Color.clear)
+                                                .fill(selectedTopic == topic ? Color.haloSecondaryBackground : Color.clear)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(selectedTopic == topic ? topic.color.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
+                                                        .stroke(selectedTopic == topic ? topic.color.opacity(0.5) : Color.haloSeparator, lineWidth: 1)
                                                 )
                                         )
                                     }
@@ -106,7 +106,7 @@ struct ContactUsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Message")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.haloTextPrimary)
 
                             TextField("Tell us what's on your mind...", text: $message, axis: .vertical)
                                 .textFieldStyle(CustomTextFieldStyle())

@@ -19,9 +19,9 @@ struct AuthHeaderView: View {
         Button(action: onBackTap) {
           Image(systemName: "chevron.left")
             .font(.title2)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
             .padding(8)
-            .background(Color.white.opacity(0.2))
+            .background(Color.haloSecondaryBackground)
             .clipShape(Circle())
         }
         .accessibilityLabel("Back")
@@ -37,14 +37,14 @@ struct AuthHeaderView: View {
       Text(title)
         .font(.largeTitle)
         .fontWeight(.bold)
-        .foregroundColor(.white)
+        .foregroundColor(.haloTextPrimary)
         .multilineTextAlignment(.center)
         .accessibilityAddTraits(.isHeader)
         .accessibilitySortPriority(2)
       
       Text(subtitle)
         .font(.body)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(.haloTextSecondary)
         .multilineTextAlignment(.center)
         .accessibilitySortPriority(1)
     }
@@ -53,7 +53,7 @@ struct AuthHeaderView: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     AuthHeaderView(
       title: "Welcome Back",
       subtitle: "Sign in to continue your financial journey",

@@ -63,23 +63,23 @@ struct TransactionRow: View {
             .aspectRatio(contentMode: .fit)
         } placeholder: {
           Circle()
-            .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+            .fill(transaction.amount >= 0 ? Color.haloNegative.opacity(0.2) : Color.haloPositive.opacity(0.2))
             .overlay(
               Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
                 .font(.caption)
-                .foregroundColor(transaction.amount >= 0 ? .red : .green)
+                .foregroundColor(transaction.amount >= 0 ? Color.haloNegative : Color.haloPositive)
             )
         }
         .frame(width: 40, height: 40)
         .clipShape(Circle())
       } else {
         Circle()
-          .fill(transaction.amount >= 0 ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+          .fill(transaction.amount >= 0 ? Color.haloNegative.opacity(0.2) : Color.haloPositive.opacity(0.2))
           .frame(width: 40, height: 40)
           .overlay(
             Image(systemName: transaction.amount >= 0 ? "arrow.up" : "arrow.down")
               .font(.caption)
-              .foregroundColor(transaction.amount >= 0 ? .red : .green)
+              .foregroundColor(transaction.amount >= 0 ? Color.haloNegative : Color.haloPositive)
           )
       }
       
@@ -87,13 +87,13 @@ struct TransactionRow: View {
         Text(displayName)
           .font(.body)
           .fontWeight(.medium)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
           .lineLimit(1)
         
         HStack(spacing: 8) {
           Text(categoryName)
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
           
           if transaction.pending {
             Text("• Pending")
@@ -109,15 +109,15 @@ struct TransactionRow: View {
         Text(transaction.amount, format: .currency(code: transaction.currency))
           .font(.body)
           .fontWeight(.semibold)
-          .foregroundColor(transaction.amount >= 0 ? .red : .green)
+          .foregroundColor(transaction.amount >= 0 ? Color.haloNegative : Color.haloPositive)
         
         Text(formattedDate)
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
       }
     }
     .padding(.vertical, 12)
-    .listRowBackground(Color.gray.opacity(0.15))
+    .listRowBackground(Color.haloSecondaryBackground)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
   }
@@ -125,7 +125,7 @@ struct TransactionRow: View {
 
 #Preview("Transaction Row - Debit") {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     List {
       TransactionRow(transaction: Transaction(
         amount: -45.99,
@@ -165,7 +165,7 @@ struct TransactionRow: View {
 
 #Preview("Transaction Row - Credit") {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     List {
       TransactionRow(transaction: Transaction(
         amount: 2500.00,
@@ -205,7 +205,7 @@ struct TransactionRow: View {
 
 #Preview("Transaction Row - Pending") {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     List {
       TransactionRow(transaction: Transaction(
         amount: -89.50,

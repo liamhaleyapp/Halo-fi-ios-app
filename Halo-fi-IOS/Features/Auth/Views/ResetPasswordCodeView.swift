@@ -68,7 +68,7 @@ struct ResetPasswordCodeView: View {
 
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
 
       VStack(spacing: 24) {
         VStack(spacing: 16) {
@@ -79,18 +79,18 @@ struct ResetPasswordCodeView: View {
           Text("Enter Code")
             .font(.largeTitle)
             .fontWeight(.bold)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           Text("We sent a 6-digit code to your \(method.channelName) (\(method.displayValue)).")
             .font(.body)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(.haloTextSecondary)
             .multilineTextAlignment(.center)
         }
 
         VStack(alignment: .leading, spacing: 8) {
           Text("Code")
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(.haloTextPrimary)
 
           TextField("123456", text: $code)
             .textFieldStyle(CustomTextFieldStyle())

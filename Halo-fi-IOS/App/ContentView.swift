@@ -23,7 +23,9 @@ extension EnvironmentValues {
 // MARK: - Content View
 
 struct ContentView: View {
-    @AppStorage("themeMode") private var themeMode: String = "Dark"
+    // Must match the default in Halo_fi_IOSApp / PreferencesView. Now that
+    // the UI is fully adaptive, "System" (follow the OS) is the default.
+    @AppStorage("themeMode") private var themeMode: String = "System"
 
     var body: some View {
         MainTabView()

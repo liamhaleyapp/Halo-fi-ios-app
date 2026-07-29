@@ -30,7 +30,7 @@ struct AccountsView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("Linked Institutions")
               .font(.headline)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
 
             ForEach(linkedItems, id: \.itemId) { item in
               LinkedItemCard(
@@ -61,7 +61,7 @@ struct AccountsView: View {
           VStack(alignment: .leading, spacing: 12) {
             Text("Manual Accounts")
               .font(.headline)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
 
             ForEach(bankDataManager.manualAccounts) { manual in
               ManualAccountRow(account: manual)
@@ -165,7 +165,7 @@ struct LinkedItemCard: View {
             Text(item.institutionName)
               .font(.body)
               .fontWeight(.medium)
-              .foregroundColor(.white)
+              .foregroundColor(Color.haloTextPrimary)
 
             HStack(spacing: 8) {
               Circle()
@@ -174,7 +174,7 @@ struct LinkedItemCard: View {
 
               Text(item.isActive ? "Connected" : "Needs Attention")
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(Color.haloTextSecondary)
             }
           }
 
@@ -185,13 +185,13 @@ struct LinkedItemCard: View {
               .scaleEffect(0.8)
           } else {
             Image(systemName: "chevron.right")
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
               .font(.caption)
           }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
       }
 
@@ -207,11 +207,11 @@ struct LinkedItemCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                   Text(account.name)
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(Color.haloTextPrimary)
 
                   Text(account.type.capitalized)
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(Color.haloTextSecondary)
                 }
 
                 Spacer()
@@ -219,11 +219,11 @@ struct LinkedItemCard: View {
                 Text(formatCurrency(account.currentBalance ?? 0, currency: account.currency))
                   .font(.subheadline)
                   .fontWeight(.medium)
-                  .foregroundColor(.white)
+                  .foregroundColor(Color.haloTextPrimary)
 
                 Image(systemName: "chevron.right")
                   .font(.caption2)
-                  .foregroundColor(.white.opacity(0.85))
+                  .foregroundColor(Color.haloTextSecondary)
               }
               .padding(.horizontal, 20)
               .padding(.vertical, 8)
@@ -235,7 +235,7 @@ struct LinkedItemCard: View {
             HStack {
               Text("+\(accounts.count - 3) more accounts")
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(Color.haloTextSecondary)
               Spacer()
             }
             .padding(.horizontal, 20)
@@ -249,14 +249,14 @@ struct LinkedItemCard: View {
         HStack {
           Text("No accounts found")
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
           Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
       }
     }
-    .background(Color.gray.opacity(0.05))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
   }
 
@@ -292,7 +292,7 @@ struct ManualAccountRow: View {
           Text(account.name)
             .font(.body)
             .fontWeight(.medium)
-            .foregroundColor(.white)
+            .foregroundColor(Color.haloTextPrimary)
 
           HStack(spacing: 6) {
             if let inst = account.institutionName, !inst.isEmpty {
@@ -304,7 +304,7 @@ struct ManualAccountRow: View {
             Text(account.accountType.displayName)
           }
           .font(.caption)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
         }
 
         Spacer()
@@ -312,15 +312,15 @@ struct ManualAccountRow: View {
         Text(formatCurrency(account.balance, currency: account.currency))
           .font(.subheadline)
           .fontWeight(.medium)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
 
         Image(systemName: "chevron.right")
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .font(.caption)
       }
       .padding(.horizontal, 20)
       .padding(.vertical, 16)
-      .background(Color.gray.opacity(0.1))
+      .background(Color.haloSecondaryBackground)
       .cornerRadius(16)
     }
     .buttonStyle(.plain)

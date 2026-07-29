@@ -17,6 +17,53 @@ import SwiftUI
 
 enum DesignTokens {
 
+    // MARK: - Adaptive surfaces & text (Light / Dark)
+    //
+    // HaloFi was built dark-only: ~70 hardcoded `Color.black` backgrounds
+    // and ~260 hardcoded `.white` text colors. That looked right in Dark but
+    // broke under System-following-Light (adaptive system chrome flipped to
+    // light while the hardcoded blacks stayed dark → mismatched screens).
+    //
+    // These tokens map onto Apple's semantic UIColors. In DARK they resolve
+    // to the exact near-black / white the app already used, so the dark
+    // appearance is unchanged; in LIGHT they flip correctly. Replace
+    // hardcoded `Color.black` screen backgrounds and `.white` primary text
+    // with these — NOT white/black that sits on a colored fill (a gradient
+    // button label stays `.white` in both modes).
+    enum Surface {
+        /// Primary screen background. Dark: #000 (matches old Color.black),
+        /// Light: #FFF.
+        static let background = Color(uiColor: .systemBackground)
+        /// Cards / elevated rows over the background.
+        static let secondary = Color(uiColor: .secondarySystemBackground)
+        /// Inputs, chips, the third elevation level.
+        static let tertiary = Color(uiColor: .tertiarySystemBackground)
+        /// Grouped-list background (Form / settings screens).
+        static let grouped = Color(uiColor: .systemGroupedBackground)
+    }
+
+    enum Text {
+        /// Primary text. Dark: white (matches old `.white`), Light: black.
+        static let primary = Color(uiColor: .label)
+        /// Secondary text — replaces `.white.opacity(0.8...0.85)`.
+        static let secondary = Color(uiColor: .secondaryLabel)
+        /// De-emphasized text — replaces `.white.opacity(~0.6)`.
+        static let tertiary = Color(uiColor: .tertiaryLabel)
+    }
+
+    enum Fill {
+        static let separator = Color(uiColor: .separator)
+        /// Translucent fill for tracks / subtle chips on any background.
+        static let subtle = Color(uiColor: .quaternarySystemFill)
+    }
+
+    /// Money +/- and pass/fail states, legible in both modes (system
+    /// green/red already adapt their luminance per appearance).
+    enum Status {
+        static let positive = Color(uiColor: .systemGreen)
+        static let negative = Color(uiColor: .systemRed)
+    }
+
     // MARK: - SSI hero cards
 
     enum SSI {
@@ -71,4 +118,33 @@ enum DesignTokens {
         static let translucentFill: Color = .white.opacity(0.22)
         static let translucentFillSubtle: Color = .white.opacity(0.18)
     }
+}
+
+// MARK: - Terse adaptive accessors
+//
+// Shorthand for the DesignTokens.Surface / Text tokens above so migrating
+// a hardcoded color is a one-word swap: `Color.black` → `.haloBackground`,
+// `.white` (primary text) → `.haloTextPrimary`.
+extension Color {
+    /// Primary screen background (Dark #000 / Light #FFF). Replaces
+    /// `Color.black` used as a screen or ZStack background.
+    static let haloBackground = DesignTokens.Surface.background
+    /// Card / elevated surface over the background.
+    static let haloSecondaryBackground = DesignTokens.Surface.secondary
+    /// Input / chip surface.
+    static let haloTertiaryBackground = DesignTokens.Surface.tertiary
+    /// Grouped-list background.
+    static let haloGroupedBackground = DesignTokens.Surface.grouped
+    /// Primary text (Dark white / Light black). Replaces `.white` used as
+    /// primary text ON the screen background — NOT on a colored fill.
+    static let haloTextPrimary = DesignTokens.Text.primary
+    /// Secondary text — replaces `.white.opacity(~0.85)`.
+    static let haloTextSecondary = DesignTokens.Text.secondary
+    /// De-emphasized text — replaces `.white.opacity(~0.6)`.
+    static let haloTextTertiary = DesignTokens.Text.tertiary
+    /// Hairline separators.
+    static let haloSeparator = DesignTokens.Fill.separator
+    /// Positive / negative money + status, adaptive in both modes.
+    static let haloPositive = DesignTokens.Status.positive
+    static let haloNegative = DesignTokens.Status.negative
 }

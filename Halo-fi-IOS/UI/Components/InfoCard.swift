@@ -19,14 +19,14 @@ struct InfoCard<Content: View>: View {
       .padding(.horizontal, 20)
       .padding(.vertical, 12)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.gray.opacity(0.1))
+      .background(Color.haloSecondaryBackground)
       .cornerRadius(16)
   }
 }
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     InfoCard {
       VStack(alignment: .leading, spacing: 12) {
         Text("What is Halo Fi?")
@@ -35,7 +35,7 @@ struct InfoCard<Content: View>: View {
         
         Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible.")
           .font(.body)
-          .foregroundColor(.white)
+          .foregroundColor(.haloTextPrimary)
           .multilineTextAlignment(.leading)
       }
     }

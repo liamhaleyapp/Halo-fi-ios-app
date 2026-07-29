@@ -21,7 +21,7 @@ struct HaloFiLogo: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         VStack(spacing: 20) {
             HaloFiLogo(size: 120)
             HaloFiLogo(size: 80)

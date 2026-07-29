@@ -17,7 +17,7 @@ struct InstitutionAccountsView: View {
 
   var body: some View {
     ZStack {
-      Color.black.ignoresSafeArea()
+      Color.haloBackground.ignoresSafeArea()
 
       if isLoadingAccounts {
         loadingView
@@ -75,11 +75,11 @@ struct InstitutionAccountsView: View {
     VStack(spacing: 16) {
       ProgressView()
         .scaleEffect(1.2)
-        .tint(.white)
+        .tint(Color.haloTextPrimary)
 
       Text("Loading accounts...")
         .font(.body)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
@@ -99,11 +99,11 @@ struct InstitutionAccountsView: View {
         Text("Couldn't Load Accounts")
           .font(.title3)
           .fontWeight(.semibold)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
 
         Text(error)
           .font(.body)
-          .foregroundColor(.white.opacity(0.85))
+          .foregroundColor(Color.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal, 40)
       }
@@ -221,21 +221,21 @@ struct BankAccountRow: View {
         Text(account.name)
           .font(.body)
           .fontWeight(.medium)
-          .foregroundColor(.white)
+          .foregroundColor(Color.haloTextPrimary)
 
         HStack(spacing: 4) {
           Text(account.type.capitalized)
             .font(.caption)
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
 
           if !account.mask.isEmpty {
             Text("•")
               .font(.caption)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
 
             Text("ending in \(account.mask)")
               .font(.caption)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
           }
         }
       }
@@ -245,16 +245,16 @@ struct BankAccountRow: View {
       Text(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))
         .font(.body)
         .fontWeight(.medium)
-        .foregroundColor((account.currentBalance ?? 0) >= 0 ? .green : .red)
+        .foregroundColor((account.currentBalance ?? 0) >= 0 ? Color.haloPositive : Color.haloNegative)
 
       Image(systemName: "chevron.right")
         .font(.caption)
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Color.haloTextSecondary)
         .accessibilityHidden(true)
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
-    .background(Color.gray.opacity(0.1))
+    .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)

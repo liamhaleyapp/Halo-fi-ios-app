@@ -30,7 +30,7 @@ struct SaveProfileButton: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     VStack {
       SaveProfileButton(isEnabled: true, onSave: {})
       SaveProfileButton(isEnabled: false, onSave: {})

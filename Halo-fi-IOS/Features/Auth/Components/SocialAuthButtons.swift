@@ -30,8 +30,20 @@ struct SocialAuthButtons: View {
     /// Defaults to .signIn so existing SignInView call sites keep their
     /// current copy without a code change.
     var mode: SocialAuthMode = .signIn
+    /// Called when Apple sign-in fails for a REAL reason (not a user
+    /// cancel). Optional — this view also shows its own alert — so
+    /// existing call sites need no change, but a parent can bind this to
+    /// clear its own loading state.
+    var onAppleSignInError: (String) -> Void = { _ in }
 
     @State private var currentNonce: String?
+    // Scales the Google button label with Dynamic Type instead of a fixed
+    // 19pt (App Store Guideline 4). Apple's own button scales already.
+    @ScaledMetric(relativeTo: .body) private var googleLabelSize: CGFloat = 19
+    /// Non-nil drives a user-visible failure alert. App Store review
+    /// (2.1(a)) rejected the build because Apple sign-in failed with no
+    /// feedback — the guard below used to `return` silently.
+    @State private var appleErrorMessage: String?
 
     private var appleButtonLabel: SignInWithAppleButton.Label {
         // Apple's HIG: .signIn for returning users, .signUp for new
@@ -55,13 +67,13 @@ struct SocialAuthButtons: View {
             if showsLeadingDivider {
                 HStack {
                     Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(Color.haloSeparator)
                         .frame(height: 1)
                     Text("or")
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(.haloTextSecondary)
                         .font(.subheadline)
                     Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(Color.haloSeparator)
                         .frame(height: 1)
                 }
                 .padding(.vertical, 4)
@@ -89,7 +101,9 @@ struct SocialAuthButtons: View {
                     googleLogo
                         .frame(width: 18, height: 18)
                     Text(googleButtonText)
-                        .font(.system(size: 19, weight: .medium))
+                        .font(.system(size: googleLabelSize, weight: .medium))
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
                 }
                 .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
@@ -100,6 +114,17 @@ struct SocialAuthButtons: View {
             .disabled(isLoading)
             .opacity(isLoading ? 0.6 : 1.0)
             .accessibilityLabel(googleButtonText)
+        }
+        .alert(
+            "Sign in with Apple failed",
+            isPresented: Binding(
+                get: { appleErrorMessage != nil },
+                set: { if !$0 { appleErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { appleErrorMessage = nil }
+        } message: {
+            Text(appleErrorMessage ?? "Something went wrong. Please try again.")
         }
     }
 
@@ -125,15 +150,22 @@ struct SocialAuthButtons: View {
                   let identityTokenData = appleIDCredential.identityToken,
                   let idToken = String(data: identityTokenData, encoding: .utf8),
                   let nonce = currentNonce else {
+                // Never fail silently — the reviewer sees a dead button.
+                Logger.error("Apple Sign In: missing credential, identity token, or nonce")
+                let msg = "We couldn't read your Apple credentials. Please try again."
+                appleErrorMessage = msg
+                onAppleSignInError(msg)
                 return
             }
             onAppleSignIn(idToken, nonce)
 
         case .failure(let error):
-            // ASAuthorizationError.canceled is normal (user dismissed)
-            if (error as? ASAuthorizationError)?.code != .canceled {
-                Logger.error("Apple Sign In failed: \(error.localizedDescription)")
-            }
+            // ASAuthorizationError.canceled is normal (user dismissed) — stay silent.
+            if (error as? ASAuthorizationError)?.code == .canceled { return }
+            Logger.error("Apple Sign In failed: \(error.localizedDescription)")
+            let msg = "Apple Sign In couldn't be completed. Please try again."
+            appleErrorMessage = msg
+            onAppleSignInError(msg)
         }
     }
 

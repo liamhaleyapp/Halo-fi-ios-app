@@ -25,7 +25,7 @@ struct InstitutionCard: View {
             Text(institution.name)
               .font(.body)
               .fontWeight(.medium)
-              .foregroundColor(.white)
+              .foregroundColor(Color.haloTextPrimary)
             
             HStack(spacing: 8) {
               Circle()
@@ -34,19 +34,19 @@ struct InstitutionCard: View {
               
               Text(institution.status.displayText)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(Color.haloTextSecondary)
             }
           }
           
           Spacer()
           
           Image(systemName: "chevron.right")
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(Color.haloTextSecondary)
             .font(.caption)
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 24)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
       }
       
@@ -60,7 +60,7 @@ struct InstitutionCard: View {
           HStack {
             Text("+\(institution.accounts.count - 2) more accounts")
               .font(.caption)
-              .foregroundColor(.white.opacity(0.85))
+              .foregroundColor(Color.haloTextSecondary)
             Spacer()
           }
           .padding(.horizontal, 30)
@@ -75,7 +75,7 @@ struct InstitutionCard: View {
 
 #Preview {
   ZStack {
-    Color.black.ignoresSafeArea()
+    Color.haloBackground.ignoresSafeArea()
     InstitutionCard(
       institution: FinancialInstitution(
         id: "1",

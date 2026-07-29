@@ -62,7 +62,7 @@ struct OnboardingBottomSection: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        Color.haloBackground.ignoresSafeArea()
         OnboardingBottomSection(
             currentPage: 1,
             totalPages: 3,

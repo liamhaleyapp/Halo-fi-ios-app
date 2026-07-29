@@ -38,8 +38,8 @@ struct SignInView: View {
     NavigationStack {
     ZStack {
       // Background
-      Color.black.ignoresSafeArea()
-      
+      Color.haloBackground.ignoresSafeArea()
+
       VStack(spacing: 24) {
         // Header
         AuthHeaderView(
@@ -275,7 +275,7 @@ struct SignInView: View {
   private var signUpLink: some View {
     HStack {
       Text("Don't have an account?")
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(.haloTextSecondary)
 
       Button("Sign Up") {
         showingSignUp = true
@@ -318,13 +318,13 @@ struct SignInView: View {
           .font(.headline)
           .fontWeight(.semibold)
       }
-      .foregroundColor(.white)
+      .foregroundColor(.haloTextPrimary)
       .frame(maxWidth: .infinity)
       .frame(height: 52)
-      .background(Color.white.opacity(0.15))
+      .background(Color.haloSecondaryBackground)
       .overlay(
         RoundedRectangle(cornerRadius: 14)
-          .stroke(Color.white.opacity(0.3), lineWidth: 1)
+          .stroke(Color.haloSeparator, lineWidth: 1)
       )
       .cornerRadius(14)
     }
