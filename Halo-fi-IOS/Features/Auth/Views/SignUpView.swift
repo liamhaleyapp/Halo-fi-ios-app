@@ -235,6 +235,7 @@ struct SignUpView: View {
         .padding(.top, 40)
         .readableContentWidth()
       }
+      .scrollDismissesKeyboard(.interactively)
     }
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignIn) {

@@ -40,6 +40,10 @@ struct SignInView: View {
       // Background
       Color.haloBackground.ignoresSafeArea()
 
+      // ScrollView (not a fixed VStack) so the form stays reachable while
+      // the keyboard is up, and swipe-down dismisses it (App Store review
+      // found the keyboard could trap the sign-in options off-screen).
+      ScrollView {
       VStack(spacing: 24) {
         // Header
         AuthHeaderView(
@@ -70,6 +74,8 @@ struct SignInView: View {
       }
       .padding(.top, 40)
       .readableContentWidth()
+      }
+      .scrollDismissesKeyboard(.interactively)
     }
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignUp) {
