@@ -14,6 +14,8 @@
 import SwiftUI
 
 struct BudgetCategoryListView: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var emptyIconSize: CGFloat = 40
     @Environment(BudgetDataManager.self) private var dataManager
 
     var body: some View {
@@ -59,7 +61,7 @@ struct BudgetCategoryListView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "chart.pie")
-                .font(.system(size: 40))
+                .font(.system(size: emptyIconSize))
                 .foregroundStyle(.secondary)
             Text("No category spending yet this month")
                 .font(.subheadline)

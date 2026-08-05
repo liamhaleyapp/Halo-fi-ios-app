@@ -12,13 +12,15 @@ struct EmptyStateView: View {
     let title: String
     let message: String
     var action: (() -> Void)?
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var iconSize: CGFloat = 48
     var actionTitle: String?
 
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundColor(.gray.opacity(0.5))
+                .font(.system(size: iconSize))
+                .foregroundColor(.secondary)
                 .accessibilityHidden(true)
 
             Text(title)
@@ -62,7 +64,7 @@ extension EmptyStateView {
         HStack {
             Text(message)
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(.secondary)
             Spacer()
         }
         .padding(.horizontal, 20)

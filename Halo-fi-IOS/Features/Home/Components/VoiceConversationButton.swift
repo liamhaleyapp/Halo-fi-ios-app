@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct VoiceConversationButton: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var micIconSize: CGFloat = 50
   let onTap: () -> Void
   
   var body: some View {
@@ -38,7 +40,7 @@ struct VoiceConversationButton: View {
           
           // Mic icon for voice conversation
           Image(systemName: "mic.fill")
-            .font(.system(size: 50, weight: .medium))
+            .font(.system(size: micIconSize, weight: .medium))
             .foregroundColor(.white)
             .accessibilityHidden(true)
         }

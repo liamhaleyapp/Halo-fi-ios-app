@@ -233,6 +233,7 @@ struct SignUpView: View {
           Spacer()
         }
         .padding(.top, 40)
+        .readableContentWidth()
       }
     }
     .navigationBarHidden(true)

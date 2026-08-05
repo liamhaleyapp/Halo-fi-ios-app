@@ -29,6 +29,7 @@ struct HomeView: View {
                         showingConversation = true
                     })
                 }
+                .readableContentWidth()
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $showingConversation) {

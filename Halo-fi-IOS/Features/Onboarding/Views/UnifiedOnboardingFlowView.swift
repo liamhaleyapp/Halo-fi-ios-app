@@ -43,6 +43,7 @@ struct UnifiedOnboardingFlowView: View {
           stepContent
             .id(coordinator.currentStep)
         }
+        .readableContentWidth()
         .animation(.easeInOut(duration: 0.3), value: coordinator.currentStep)
 
         // Close button overlay (shown after sign up)

@@ -98,6 +98,8 @@ struct Halo_fi_IOSApp: App {
 /// during the pre-snapshot `.inactive` phase.
 private struct PrivacyScreenModifier: ViewModifier {
   @Environment(\.scenePhase) private var scenePhase
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var lockIconSize: CGFloat = 44
 
   func body(content: Content) -> some View {
     content.overlay {
@@ -105,7 +107,7 @@ private struct PrivacyScreenModifier: ViewModifier {
         ZStack {
           Color(.systemBackground).ignoresSafeArea()
           Image(systemName: "lock.fill")
-            .font(.system(size: 44))
+            .font(.system(size: lockIconSize))
             .foregroundStyle(.secondary)
             .accessibilityHidden(true)
         }

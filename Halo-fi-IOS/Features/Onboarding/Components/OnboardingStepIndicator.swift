@@ -44,17 +44,20 @@ struct StepIndicatorDot: View {
   let step: OnboardingStep
   let isActive: Bool
   let isCompleted: Bool
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .caption2) private var checkmarkSize: CGFloat = 8
+  @ScaledMetric(relativeTo: .caption2) private var dotSize: CGFloat = 12
   
   var body: some View {
     VStack(spacing: 4) {
       ZStack {
         Circle()
           .fill(isCompleted || isActive ? Color.blue : Color.gray.opacity(0.3))
-          .frame(width: 12, height: 12)
-        
+          .frame(width: dotSize, height: dotSize)
+
         if isCompleted {
           Image(systemName: "checkmark")
-            .font(.system(size: 8, weight: .bold))
+            .font(.system(size: checkmarkSize, weight: .bold))
             .foregroundColor(.white)
         }
       }

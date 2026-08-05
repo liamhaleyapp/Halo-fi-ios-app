@@ -9,6 +9,8 @@ import SwiftUI
 
 // MARK: - Onboarding Page View Component
 struct OnboardingPageView: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var pageIconSize: CGFloat = 60
     let page: OnboardingPage
     
     var body: some View {
@@ -24,7 +26,7 @@ struct OnboardingPageView: View {
                     .frame(width: 120, height: 120)
                     .overlay(
                         Image(systemName: page.icon)
-                            .font(.system(size: 60))
+                            .font(.system(size: pageIconSize))
                             .foregroundColor(.white)
                     )
             }

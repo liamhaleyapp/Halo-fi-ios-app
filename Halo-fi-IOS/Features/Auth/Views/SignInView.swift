@@ -69,6 +69,7 @@ struct SignInView: View {
 #endif
       }
       .padding(.top, 40)
+      .readableContentWidth()
     }
     .navigationBarHidden(true)
     .fullScreenCover(isPresented: $showingSignUp) {

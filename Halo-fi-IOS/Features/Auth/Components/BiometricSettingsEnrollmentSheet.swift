@@ -12,6 +12,8 @@ import SwiftUI
 import LocalAuthentication
 
 struct BiometricSettingsEnrollmentSheet: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var iconSize: CGFloat = 56
   let email: String?
   let biometryType: LABiometryType
   let authService: AuthServiceProtocol
@@ -50,7 +52,7 @@ struct BiometricSettingsEnrollmentSheet: View {
       ScrollView {
         VStack(spacing: 24) {
           Image(systemName: iconName)
-            .font(.system(size: 56))
+            .font(.system(size: iconSize))
             .foregroundStyle(
               LinearGradient(
                 colors: [Color.purple, Color.indigo],

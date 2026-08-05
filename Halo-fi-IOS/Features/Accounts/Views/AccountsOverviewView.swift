@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct AccountsOverviewView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var emptyIconSize: CGFloat = 56
   @Environment(BankDataManager.self) private var bankDataManager
   @State private var showingPlaidOnboarding = false
   @State private var isLoadingLinkedItems = false
@@ -113,6 +115,7 @@ struct AccountsOverviewView: View {
       .padding(.horizontal, 20)
       .padding(.top, 20)
       .padding(.bottom, 100)
+      .readableContentWidth()
     }
     .refreshable {
       await bankDataManager.forceRefresh()
@@ -217,8 +220,8 @@ struct AccountsOverviewView: View {
   private var emptyStateView: some View {
     VStack(spacing: 20) {
       Image(systemName: "building.2")
-        .font(.system(size: 56))
-        .foregroundColor(.gray.opacity(0.5))
+        .font(.system(size: emptyIconSize))
+        .foregroundColor(.secondary)
         .accessibilityHidden(true)
 
       VStack(spacing: 8) {

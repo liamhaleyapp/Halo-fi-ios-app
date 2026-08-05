@@ -13,6 +13,8 @@
 import SwiftUI
 
 struct TextInputArea: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var sendIconSize: CGFloat = 36
     @Binding var text: String
     let state: ConversationState
     let isEnabled: Bool
@@ -71,7 +73,7 @@ struct TextInputArea: View {
             onSend()
         }) {
             Image(systemName: "arrow.up.circle.fill")
-                .font(.system(size: 36))
+                .font(.system(size: sendIconSize))
                 .foregroundColor(canSend ? .blue : .gray)
         }
         .disabled(!canSend)

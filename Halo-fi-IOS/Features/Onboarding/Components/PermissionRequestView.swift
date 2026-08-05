@@ -14,6 +14,8 @@
 import SwiftUI
 
 struct PermissionRequestView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var micIconSize: CGFloat = 60
   private let permissionManager = PermissionManager.shared
   @State private var isRequestingPermission = false
 
@@ -30,7 +32,7 @@ struct PermissionRequestView: View {
       // Header — informational priming only.
       VStack(spacing: 16) {
         Image(systemName: "mic.fill")
-          .font(.system(size: 60))
+          .font(.system(size: micIconSize))
           .foregroundColor(.blue)
           .accessibilityHidden(true)
 

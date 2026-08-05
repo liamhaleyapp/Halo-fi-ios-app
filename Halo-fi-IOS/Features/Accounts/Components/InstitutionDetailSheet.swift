@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct InstitutionDetailSheet: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var headerIconSize: CGFloat = 48
     let institution: ConnectedItem
     let onFixConnection: () -> Void
     let onDisconnect: () async throws -> Void
@@ -23,7 +25,7 @@ struct InstitutionDetailSheet: View {
                 // Institution header
                 VStack(spacing: 8) {
                     Image(systemName: "building.2.fill")
-                        .font(.system(size: 48))
+                        .font(.system(size: headerIconSize))
                         .foregroundStyle(.tint)
                     Text(institution.institutionName)
                         .font(.title2)

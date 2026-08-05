@@ -65,6 +65,7 @@ struct OnboardingView: View {
           }
         )
       }
+      .readableContentWidth()
     }
     .navigationBarHidden(true)
     .onAppear {

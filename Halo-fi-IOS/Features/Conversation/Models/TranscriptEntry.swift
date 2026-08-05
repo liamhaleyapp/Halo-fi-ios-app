@@ -127,7 +127,9 @@ extension TranscriptEntry.Speaker {
         case .user:
             return .secondary
         case .userDraft:
-            return .secondary.opacity(0.7)  // More muted for draft
+            // Draft stays visually distinct via its dot indicator; the label
+            // itself keeps full .secondary contrast (WCAG AA, Guideline 4).
+            return .secondary
         case .agent:
             return .blue
         case .system:

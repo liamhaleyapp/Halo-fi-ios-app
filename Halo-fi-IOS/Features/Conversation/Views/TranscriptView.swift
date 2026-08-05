@@ -12,6 +12,8 @@
 import SwiftUI
 
 struct TranscriptView: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var emptyIconSize: CGFloat = 48
     let entries: [TranscriptEntry]
     let onCopyEntry: ((TranscriptEntry) -> Void)?
     var isProcessing: Bool = false
@@ -59,6 +61,7 @@ struct TranscriptView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                         .padding(.bottom, 80) // Space for jump button
+                        .readableContentWidth()
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .coordinateSpace(name: "transcriptScroll")
@@ -151,7 +154,7 @@ struct TranscriptView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
+                .font(.system(size: emptyIconSize))
                 .foregroundColor(.secondary)
                 .accessibilityHidden(true)
 

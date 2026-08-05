@@ -15,6 +15,8 @@
 import SwiftUI
 
 struct PhoneVerificationView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var headerIconSize: CGFloat = 60
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
 
@@ -49,7 +51,7 @@ struct PhoneVerificationView: View {
       VStack(spacing: 24) {
         VStack(spacing: 16) {
           Image(systemName: "iphone.radiowaves.left.and.right")
-            .font(.system(size: 60))
+            .font(.system(size: headerIconSize))
             .foregroundColor(.blue)
 
           Text("Verify Your Phone")
@@ -117,7 +119,7 @@ struct PhoneVerificationView: View {
               .progressViewStyle(CircularProgressViewStyle(tint: .blue))
           } else if resendCooldownSeconds > 0 {
             Text("Resend code in \(resendCooldownSeconds)s")
-              .foregroundColor(.haloTextTertiary)
+              .foregroundColor(.haloTextSecondary)
           } else {
             Text("Didn't get a code? Resend")
               .foregroundColor(.blue)

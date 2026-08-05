@@ -96,6 +96,7 @@ struct BudgetView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 100)
+                    .readableContentWidth()
                 }
                 .refreshable { await dataManager.refresh() }
             }

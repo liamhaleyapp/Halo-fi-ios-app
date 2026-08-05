@@ -18,6 +18,8 @@
 import SwiftUI
 
 struct ForgotPasswordView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var headerIconSize: CGFloat = 60
   @Environment(\.dismiss) private var dismiss
   @Environment(UserManager.self) private var userManager
 
@@ -73,7 +75,7 @@ struct ForgotPasswordView: View {
         VStack(spacing: 24) {
           VStack(spacing: 16) {
             Image(systemName: "lock.rotation")
-              .font(.system(size: 60))
+              .font(.system(size: headerIconSize))
               .foregroundColor(.blue)
 
             Text("Reset Password")

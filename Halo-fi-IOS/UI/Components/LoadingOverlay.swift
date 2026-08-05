@@ -26,7 +26,7 @@ struct LoadingOverlay: View {
         var subtitleColor: Color {
             switch self {
             case .system: return .secondary
-            case .gradient: return .white.opacity(0.7)
+            case .gradient: return .white.opacity(0.85)
             }
         }
 

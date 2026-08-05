@@ -136,6 +136,7 @@ struct AIConsentView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
       }
+      .readableContentWidth()
     }
     .background(Color.haloBackground.ignoresSafeArea())
     .alert("Without consent, Halo Fi can't function", isPresented: $showingDeclineConfirm) {

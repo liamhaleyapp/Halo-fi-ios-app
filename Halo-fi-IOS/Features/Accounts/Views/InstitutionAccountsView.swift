@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct InstitutionAccountsView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var errorIconSize: CGFloat = 48
   @Environment(BankDataManager.self) private var bankDataManager
   let item: ConnectedItem
 
@@ -91,7 +93,7 @@ struct InstitutionAccountsView: View {
   private func errorView(_ error: String) -> some View {
     VStack(spacing: 20) {
       Image(systemName: "exclamationmark.triangle")
-        .font(.system(size: 48))
+        .font(.system(size: errorIconSize))
         .foregroundColor(.orange)
         .accessibilityHidden(true)
 

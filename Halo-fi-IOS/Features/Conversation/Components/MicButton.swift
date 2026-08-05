@@ -12,6 +12,8 @@
 import SwiftUI
 
 struct MicButton: View {
+    // Scales with Dynamic Type (App Store Guideline 4).
+    @ScaledMetric(relativeTo: .largeTitle) private var micIconSize: CGFloat = 50
     let state: ConversationState
     let isEnabled: Bool
     let onTap: () -> Void
@@ -112,7 +114,7 @@ struct MicButton: View {
     @ViewBuilder
     private var buttonIcon: some View {
         Image(systemName: iconName)
-            .font(.system(size: 50, weight: .medium))
+            .font(.system(size: micIconSize, weight: .medium))
             .foregroundColor(.white)
             .accessibilityHidden(true)
     }

@@ -6,8 +6,6 @@
 	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>HaloFi uses Face ID so you can sign in quickly without typing your password.</string>
-	<key>UIRequiresFullScreen</key>
-	<true/>
 	<key>CFBundleSpokenName</key>
 	<string>HAY low FYE</string>
 	<key>CFBundleDisplayName</key>

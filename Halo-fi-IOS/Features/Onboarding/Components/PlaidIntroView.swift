@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct PlaidIntroView: View {
+  // Scales with Dynamic Type (App Store Guideline 4).
+  @ScaledMetric(relativeTo: .largeTitle) private var headerIconSize: CGFloat = 64
   let action: () -> Void
   var body: some View {
   
@@ -15,7 +17,7 @@ struct PlaidIntroView: View {
       VStack(spacing: 24) {
         // Icon
         Image(systemName: "lock.shield.fill")
-          .font(.system(size: 64))
+          .font(.system(size: headerIconSize))
           .foregroundStyle(.blue)
           .padding(.top, 40)
         
