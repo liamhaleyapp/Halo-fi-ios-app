@@ -43,16 +43,29 @@ struct MainTabView: View {
         case loggedOut
         case resolving
         case onboarding
+        case aiConsent
         case main
     }
 
+    /// Bumped when the AI-consent gate resolves. `aiConsentGranted` reads
+    /// UserDefaults (not observable state), so the route must take an
+    /// explicit dependency to re-evaluate after consent is recorded.
+    @State private var consentRefreshToken = 0
+
     private var currentRoute: AppRoute {
+        _ = consentRefreshToken
         if !userManager.isAuthenticated {
             return .loggedOut
         } else if userManager.isResolvingDestination {
             return .resolving
         } else if !userManager.isOnboarded {
             return .onboarding
+        } else if !userManager.aiConsentGranted {
+            // Apple 5.1.1(i): consent must gate EVERY path into the app,
+            // not just first-run onboarding. Users who skip onboarding
+            // (existing accounts, reinstalls, pre-provisioned demo
+            // accounts) land here until consent is recorded.
+            return .aiConsent
         } else {
             return .main
         }
@@ -144,6 +157,25 @@ struct MainTabView: View {
             UnifiedOnboardingFlowView()
                 .dynamicTypeSize(.medium ... .accessibility5)
                 .viewTransition(.fade)
+        case .aiConsent:
+            AIConsentView(
+                onAccept: { consentRefreshToken += 1 },
+                // AIConsentView signs the user out on decline; the
+                // isAuthenticated flip re-routes to loggedOut. The bump
+                // just forces the route to re-evaluate immediately.
+                onDecline: { consentRefreshToken += 1 }
+            )
+            .task {
+                // Server is the source of truth. A consented user on a
+                // fresh install may hit this gate before the async
+                // hydration lands — re-check and self-dismiss rather
+                // than re-prompting someone who already agreed.
+                await userManager.refreshAIConsentFromServer()
+                if userManager.aiConsentGranted {
+                    consentRefreshToken += 1
+                }
+            }
+            .viewTransition(.fade)
         case .main:
             ZStack { tabContent }
                 .viewTransition(.fade)
