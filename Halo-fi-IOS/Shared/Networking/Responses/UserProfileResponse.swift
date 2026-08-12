@@ -11,6 +11,42 @@ struct UserProfileResponse: Codable {
     let success: Bool
     let message: String?
     let data: UserProfileDataContainer?
+
+    enum CodingKeys: String, CodingKey {
+        case success, message, data
+    }
+
+    init(success: Bool, message: String? = nil, data: UserProfileDataContainer? = nil) {
+        self.success = success
+        self.message = message
+        self.data = data
+    }
+
+    init(from decoder: Decoder) throws {
+        // Wrapped shape: {success, message, data: {...}}
+        if let container = try? decoder.container(keyedBy: CodingKeys.self),
+           let success = try container.decodeIfPresent(Bool.self, forKey: .success) {
+            self.success = success
+            self.message = try container.decodeIfPresent(String.self, forKey: .message)
+            self.data = try container.decodeIfPresent(UserProfileDataContainer.self, forKey: .data)
+            return
+        }
+        // Flat DTO — GET/PUT /auth/me return the user object directly with
+        // no success/data envelope. Requiring `success` made every profile
+        // save "fail" client-side (silently) even though the server had
+        // already committed the change.
+        let user = try UserProfileData(from: decoder)
+        self.success = true
+        self.message = nil
+        self.data = UserProfileDataContainer(user: user)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(success, forKey: .success)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(data, forKey: .data)
+    }
 }
 
 struct UserProfileDataContainer: Codable {
@@ -93,5 +129,38 @@ struct UserProfileData: Codable {
         case householdSize = "household_size"
         case emailConfirmed = "email_confirmed"
         case phoneConfirmed = "phone_confirmed"
+    }
+
+    private enum AltKeys: String, CodingKey {
+        case idUser = "id_user"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // The /auth/me DTO names the id "id_user"; other payloads use "id".
+        if let id = try c.decodeIfPresent(String.self, forKey: .id) {
+            self.id = id
+        } else {
+            let alt = try decoder.container(keyedBy: AltKeys.self)
+            self.id = try alt.decode(String.self, forKey: .idUser)
+        }
+        // Email can be absent (accounts created without one — the response
+        // strips nulls). Don't let that fail the whole profile decode.
+        self.email = try c.decodeIfPresent(String.self, forKey: .email) ?? ""
+        self.firstName = try c.decodeIfPresent(String.self, forKey: .firstName) ?? ""
+        self.lastName = try c.decodeIfPresent(String.self, forKey: .lastName)
+        self.phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        self.status = try c.decodeIfPresent(String.self, forKey: .status)
+        self.score = try c.decodeIfPresent(Int.self, forKey: .score)
+        self.parents = try c.decodeIfPresent(String.self, forKey: .parents)
+        self.motivations = try c.decodeIfPresent(String.self, forKey: .motivations)
+        self.referralCode = try c.decodeIfPresent(String.self, forKey: .referralCode)
+        self.dateOfBirth = try c.decodeIfPresent(String.self, forKey: .dateOfBirth)
+        self.location = try c.decodeIfPresent(String.self, forKey: .location)
+        self.maritalStatus = try c.decodeIfPresent(String.self, forKey: .maritalStatus)
+        self.dependent = try c.decodeIfPresent(Int.self, forKey: .dependent)
+        self.householdSize = try c.decodeIfPresent(Int.self, forKey: .householdSize)
+        self.emailConfirmed = try c.decodeIfPresent(Bool.self, forKey: .emailConfirmed)
+        self.phoneConfirmed = try c.decodeIfPresent(Bool.self, forKey: .phoneConfirmed)
     }
 }
