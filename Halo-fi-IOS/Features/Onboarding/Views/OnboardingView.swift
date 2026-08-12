@@ -14,6 +14,12 @@ struct OnboardingView: View {
   @State private var showingSignUp = false
   @State private var showingSignIn = false
   @State private var showingPermissionRequest = false
+  /// Which auth screen the user asked for before the mic-permission
+  /// detour. Used to route AFTER the permission screen — previously the
+  /// router guessed from the carousel page, sending first-time users who
+  /// tapped "Get Started" on an early page to Sign In instead of Sign Up.
+  private enum AuthDestination { case signUp, signIn }
+  @State private var pendingAuthDestination: AuthDestination = .signUp
   
   private let onboardingPages = OnboardingData.pages
   
@@ -49,14 +55,16 @@ struct OnboardingView: View {
         OnboardingBottomSection(
           currentPage: currentPage,
           totalPages: onboardingPages.count,
-          onGetStarted: { 
+          onGetStarted: {
+            pendingAuthDestination = .signUp
             if permissionManager.microphonePermission == .notDetermined {
               showingPermissionRequest = true
             } else {
               showingSignUp = true
             }
           },
-          onSignIn: { 
+          onSignIn: {
+            pendingAuthDestination = .signIn
             if permissionManager.microphonePermission == .notDetermined {
               showingPermissionRequest = true
             } else {
@@ -90,10 +98,11 @@ struct OnboardingView: View {
         onContinue: {
           showingPermissionRequest = false
           // Onboarding proceeds regardless of the mic grant/deny outcome.
-          if currentPage == onboardingPages.count - 1 {
-            showingSignUp = true
-          } else {
-            showingSignIn = true
+          // Route to the screen the user actually asked for — "Get
+          // Started" → Sign Up, "I already have an account" → Sign In.
+          switch pendingAuthDestination {
+          case .signUp: showingSignUp = true
+          case .signIn: showingSignIn = true
           }
         }
       )
