@@ -44,14 +44,28 @@ final class AuthService: AuthServiceProtocol {
 
     // MARK: - Social Login
 
-    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse {
+    func socialLogin(
+        provider: String,
+        idToken: String,
+        nonce: String?,
+        firstName: String? = nil,
+        lastName: String? = nil
+    ) async throws -> LoginResponse {
         struct SocialLoginBody: Encodable {
             let provider: String
             let id_token: String
             let nonce: String?
+            // Apple only surfaces the user's name in the on-device
+            // credential on FIRST authorization — never in the id_token —
+            // so the client must forward it or the account is named "User".
+            let first_name: String?
+            let last_name: String?
         }
 
-        let body = SocialLoginBody(provider: provider, id_token: idToken, nonce: nonce)
+        let body = SocialLoginBody(
+            provider: provider, id_token: idToken, nonce: nonce,
+            first_name: firstName, last_name: lastName
+        )
         let requestBody = try JSONEncoder().encode(body)
 
         let response: LoginResponse = try await networkService.publicRequest(

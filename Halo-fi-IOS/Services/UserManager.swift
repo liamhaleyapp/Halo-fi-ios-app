@@ -259,14 +259,22 @@ final class UserManager {
         }
     }
 
-    func socialSignIn(provider: String, idToken: String, nonce: String? = nil) async throws {
+    func socialSignIn(
+        provider: String,
+        idToken: String,
+        nonce: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil
+    ) async throws {
         isLoading = true
 
         do {
             let authResponse = try await authService.socialLogin(
                 provider: provider,
                 idToken: idToken,
-                nonce: nonce
+                nonce: nonce,
+                firstName: firstName,
+                lastName: lastName
             )
 
             guard let session = authResponse.session,

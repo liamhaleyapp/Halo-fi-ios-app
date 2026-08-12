@@ -20,7 +20,11 @@ enum SocialAuthMode {
 
 struct SocialAuthButtons: View {
     let isLoading: Bool
-    let onAppleSignIn: (String, String) -> Void  // (idToken, nonce)
+    /// (idToken, nonce, givenName, familyName). Name is non-nil ONLY on the
+    /// very first authorization for this Apple ID — Apple never puts it in
+    /// the id_token, so if we don't forward it here it is lost forever and
+    /// the account is created as "User".
+    let onAppleSignIn: (String, String, String?, String?) -> Void
     let onGoogleSignIn: () -> Void
     /// When the social buttons sit at the bottom of a form, the leading
     /// "or" divider separates them from the form above. When they're
@@ -200,7 +204,11 @@ struct SocialAuthButtons: View {
                 onAppleSignInError(msg)
                 return
             }
-            onAppleSignIn(idToken, nonce)
+            // fullName is only populated on the FIRST authorization ever;
+            // nil on every subsequent sign-in.
+            let givenName = appleIDCredential.fullName?.givenName
+            let familyName = appleIDCredential.fullName?.familyName
+            onAppleSignIn(idToken, nonce, givenName, familyName)
 
         case .failure(let error):
             // ASAuthorizationError.canceled is normal (user dismissed) — stay silent.

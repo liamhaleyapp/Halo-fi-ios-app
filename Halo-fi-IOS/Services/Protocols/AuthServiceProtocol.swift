@@ -17,7 +17,7 @@ protocol AuthServiceProtocol {
     /// - Returns: LoginResponse containing tokens and user info
     func login(email: String, password: String) async throws -> LoginResponse
 
-    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse
+    func socialLogin(provider: String, idToken: String, nonce: String?, firstName: String?, lastName: String?) async throws -> LoginResponse
 
     /// Registers a new user.
     /// - Parameters:
@@ -78,7 +78,7 @@ actor MockAuthService: AuthServiceProtocol {
         return response
     }
 
-    func socialLogin(provider: String, idToken: String, nonce: String?) async throws -> LoginResponse {
+    func socialLogin(provider: String, idToken: String, nonce: String?, firstName: String?, lastName: String?) async throws -> LoginResponse {
         guard shouldSucceed, let response = mockLoginResponse else {
             throw AuthError.invalidCredentials
         }

@@ -78,10 +78,11 @@ struct SignUpView: View {
             ZStack {
               SocialAuthButtons(
                 isLoading: viewModel.isLoading,
-                onAppleSignIn: { idToken, nonce in
+                onAppleSignIn: { idToken, nonce, givenName, familyName in
                   Task {
                     await viewModel.socialSignIn(
                       provider: "apple", idToken: idToken, nonce: nonce,
+                      firstName: givenName, lastName: familyName,
                       using: userManager, subscriptionService: subscriptionService,
                       onNeedsSubscription: { showingSubscriptionOnboarding = true },
                       onNeedsPlaid: { showingPlaidOnboarding = true },

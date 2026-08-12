@@ -68,6 +68,8 @@ class SignInViewModel {
     provider: String,
     idToken: String,
     nonce: String? = nil,
+    firstName: String? = nil,
+    lastName: String? = nil,
     using userManager: UserManager,
     subscriptionService: SubscriptionService,
     onNeedsSubscription: @escaping () -> Void,
@@ -78,7 +80,10 @@ class SignInViewModel {
     defer { isLoading = false }
 
     do {
-      try await userManager.socialSignIn(provider: provider, idToken: idToken, nonce: nonce)
+      try await userManager.socialSignIn(
+        provider: provider, idToken: idToken, nonce: nonce,
+        firstName: firstName, lastName: lastName
+      )
 
       if userManager.isOnboarded {
         onSignedInAndOnboarded()
