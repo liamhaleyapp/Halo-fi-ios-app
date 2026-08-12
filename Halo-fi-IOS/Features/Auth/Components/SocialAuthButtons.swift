@@ -40,6 +40,12 @@ struct SocialAuthButtons: View {
     // Scales the Google button label with Dynamic Type instead of a fixed
     // 19pt (App Store Guideline 4). Apple's own button scales already.
     @ScaledMetric(relativeTo: .body) private var googleLabelSize: CGFloat = 19
+    // Screen background is `.systemBackground` — pure white in light mode.
+    // A `.white` Apple button on it has no visible edge, which is what
+    // Guideline 4 flagged ("buttons should be clearly identifiable to
+    // users as buttons"). Follow Apple's HIG instead: black-on-light,
+    // white-on-dark.
+    @Environment(\.colorScheme) private var colorScheme
     /// Non-nil drives a user-visible failure alert. App Store review
     /// (2.1(a)) rejected the build because Apple sign-in failed with no
     /// feedback — the guard below used to `return` silently.
@@ -53,6 +59,28 @@ struct SocialAuthButtons: View {
         case .signIn: return .signIn
         case .signUp: return .signUp
         }
+    }
+
+    private var appleButtonStyle: SignInWithAppleButton.Style {
+        colorScheme == .dark ? .white : .black
+    }
+
+    /// Google's branding guidelines pair the light button with a
+    /// #747775 stroke and the dark button with #8E918F. Without the
+    /// stroke the light button disappears on a white background the
+    /// same way the Apple one did.
+    private var googleFill: Color {
+        colorScheme == .dark ? Color(red: 0.075, green: 0.075, blue: 0.078) : .white
+    }
+
+    private var googleStroke: Color {
+        colorScheme == .dark
+            ? Color(red: 0.557, green: 0.569, blue: 0.561)
+            : Color(red: 0.455, green: 0.463, blue: 0.459)
+    }
+
+    private var googleLabelColor: Color {
+        colorScheme == .dark ? Color(red: 0.888, green: 0.894, blue: 0.898) : .black
     }
 
     private var googleButtonText: String {
@@ -89,7 +117,13 @@ struct SocialAuthButtons: View {
             } onCompletion: { result in
                 handleAppleSignIn(result: result)
             }
-            .signInWithAppleButtonStyle(.white)
+            .signInWithAppleButtonStyle(appleButtonStyle)
+            // The wrapped ASAuthorizationAppleIDButton bakes its style in
+            // at creation and ignores later changes — without this, a
+            // runtime light/dark switch leaves a black button on a black
+            // background. Recreate the button when the scheme flips.
+            .id(colorScheme)
+            .frame(maxWidth: .infinity)
             .frame(height: 56)
             .cornerRadius(16)
             .disabled(isLoading)
@@ -105,11 +139,20 @@ struct SocialAuthButtons: View {
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                 }
-                .foregroundColor(.black)
+                .foregroundColor(googleLabelColor)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
-                .background(Color.white)
-                .cornerRadius(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(googleFill)
+                )
+                // strokeBorder draws fully inside the shape — a plain
+                // .stroke straddles the edge and gets half-clipped by
+                // the rounded shape, leaving a hairline.
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(googleStroke, lineWidth: 1)
+                )
             }
             .disabled(isLoading)
             .opacity(isLoading ? 0.6 : 1.0)

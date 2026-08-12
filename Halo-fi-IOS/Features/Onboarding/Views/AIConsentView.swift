@@ -49,7 +49,7 @@ struct AIConsentView: View {
           Text("To answer your questions, we send transcripts and your account context to OpenAI, Anthropic, and ElevenLabs. None of them train models on your data.")
             .foregroundColor(.haloTextSecondary)
 
-          Text("Halo Fi stores recordings on our own servers to improve quality. Withdraw consent anytime via Settings → Contact Us.")
+          Text("Halo Fi stores recordings on our own servers to improve quality. Withdraw consent anytime via Settings → AI & Data Sharing.")
             .foregroundColor(.haloTextSecondary)
 
           if showingDetails {

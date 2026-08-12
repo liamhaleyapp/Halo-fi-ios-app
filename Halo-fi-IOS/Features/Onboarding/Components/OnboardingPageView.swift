@@ -56,6 +56,8 @@ struct OnboardingPageView: View {
             Spacer()
         }
         .padding(.horizontal, 20)
+        .readableContentWidth()
+        .frame(maxWidth: .infinity)
     }
 }
 

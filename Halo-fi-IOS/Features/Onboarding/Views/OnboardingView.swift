@@ -65,7 +65,10 @@ struct OnboardingView: View {
           }
         )
       }
-      .readableContentWidth()
+      // Readable width is applied per-section (page text, CTA buttons)
+      // rather than to the whole stack — capping the stack left the
+      // bottom section's background inset from the screen edges on iPad,
+      // which read as a clipped floating panel.
     }
     .navigationBarHidden(true)
     .onAppear {

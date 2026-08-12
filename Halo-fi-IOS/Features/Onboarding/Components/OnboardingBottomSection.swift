@@ -48,10 +48,19 @@ struct OnboardingBottomSection: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
+            // Buttons stay readable-width on iPad; the scrim behind them
+            // still spans the full screen (see .frame below).
+            .readableContentWidth()
         }
+        // Was a hardcoded black gradient from the dark-only era, which
+        // drew as a floating black slab on the light-mode white
+        // background. Fading the screen background into itself keeps the
+        // original "carousel fades out under the CTA" intent and is
+        // invisible in both themes.
+        .frame(maxWidth: .infinity)
         .background(
             LinearGradient(
-                colors: [Color.black.opacity(0.8), Color.black],
+                colors: [Color.haloBackground.opacity(0), Color.haloBackground],
                 startPoint: .top,
                 endPoint: .bottom
             )

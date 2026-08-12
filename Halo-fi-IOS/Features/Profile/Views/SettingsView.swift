@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, workProfile, subscription, inviteFriends, about, accounts, contactUs
+  case profile, preferences, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -68,6 +68,13 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.accounts) {
               SettingsOptionLabel(icon: "building.2.fill", title: "Manage Linked Accounts")
+            }
+
+            // Apple 5.1.1(i)/5.1.2(i): the disclosure of what we send to
+            // the AI providers has to be reachable in-app at any time, not
+            // only behind the one-time onboarding consent gate.
+            NavigationLink(value: SettingsDestination.aiDataSharing) {
+              SettingsOptionLabel(icon: "waveform.circle.fill", title: "AI & Data Sharing")
             }
 
             NavigationLink(value: SettingsDestination.contactUs) {
@@ -165,6 +172,10 @@ struct SettingsView: View {
 
         case .contactUs:
           ContactUsView()
+
+        case .aiDataSharing:
+          AIDataSharingView()
+            .environment(userManager)
         }
       }
       // MainTabView posts this when the user leaves the Settings
