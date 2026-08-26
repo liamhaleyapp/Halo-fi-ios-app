@@ -63,8 +63,29 @@ final class BudgetDataManager {
         ) { [weak self] _ in
             // queue:.main is main-thread but not MainActor-isolated.
             Task { @MainActor [weak self] in
+                // Refresh, not just invalidate: markStale alone only takes
+                // effect on the tab's next .task, so a Budget tab already on
+                // screen behind the conversation overlay kept showing the
+                // pre-voice-edit numbers. Debounced — the notification fires
+                // on every agent reply, and refresh() already coalesces
+                // concurrent calls.
                 self?.markStale()
+                self?.scheduleDebouncedRefresh()
             }
+        }
+    }
+
+    /// Debounce voice-driven refreshes: agent replies can arrive in bursts
+    /// (ack + partials + final), so wait for a quiet moment before hitting
+    /// the API once.
+    private var pendingMutationRefresh: Task<Void, Never>?
+
+    private func scheduleDebouncedRefresh() {
+        pendingMutationRefresh?.cancel()
+        pendingMutationRefresh = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.refresh()
         }
     }
 
