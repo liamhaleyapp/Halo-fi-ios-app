@@ -148,17 +148,21 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         // Create session ID for this connection
         sessionId = UUID().uuidString
 
-        // Build WebSocket URL with token as query parameter. A custom
-        // greeting takes precedence over skip_greeting; the backend
-        // ignores skip_greeting when greeting=<id> is set.
+        // JWT goes in the Authorization HEADER, not the URL: query-param
+        // tokens land in proxy/access logs and browser history, replayable
+        // until expiry (the backend prefers the header). A custom greeting
+        // takes precedence over skip_greeting; the backend ignores
+        // skip_greeting when greeting=<id> is set.
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        var items = [URLQueryItem(name: "token", value: accessToken)]
+        var items: [URLQueryItem] = []
         if let customGreetingId, !customGreetingId.isEmpty {
             items.append(URLQueryItem(name: "greeting", value: customGreetingId))
         } else if skipGreeting {
             items.append(URLQueryItem(name: "skip_greeting", value: "true"))
         }
-        urlComponents?.queryItems = items
+        if !items.isEmpty {
+            urlComponents?.queryItems = items
+        }
 
         guard let url = urlComponents?.url else {
             Logger.error("AgentWebSocket: Invalid URL")
@@ -168,7 +172,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         Logger.info("AgentWebSocket: Connecting to \(baseURL)/agent/ws")
 
         // Create WebSocket connection
-        let webSocketTask = URLSession.shared.webSocketTask(with: url)
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let webSocketTask = URLSession.shared.webSocketTask(with: request)
         webSocketConnection = WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>(
             webSocketTask: webSocketTask
         )
@@ -350,7 +356,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         }
 
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        var items = [URLQueryItem(name: "token", value: accessToken)]
+        var items: [URLQueryItem] = []
         if let id = customInitialGreetingId, !id.isEmpty {
             // Honor the original custom greeting on reconnect — same
             // reason as the skip flag below.
@@ -361,13 +367,18 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             // evening!" when it comes back.
             items.append(URLQueryItem(name: "skip_greeting", value: "true"))
         }
-        urlComponents?.queryItems = items
+        if !items.isEmpty {
+            urlComponents?.queryItems = items
+        }
 
         guard let url = urlComponents?.url else {
             throw AgentWebSocketError.invalidURL
         }
 
-        let webSocketTask = URLSession.shared.webSocketTask(with: url)
+        // Token via Authorization header (see connect()).
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let webSocketTask = URLSession.shared.webSocketTask(with: request)
         webSocketConnection = WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>(
             webSocketTask: webSocketTask
         )
