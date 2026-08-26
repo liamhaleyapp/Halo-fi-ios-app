@@ -1331,6 +1331,18 @@ final class ConversationCoordinator {
             name: AVAudioSession.interruptionNotification,
             object: nil
         )
+
+        // Route changes: iOS can silently revert the output to the quiet
+        // earpiece (category churn, override cleared by the system). The
+        // speaker override was previously re-applied only at
+        // playback-sequence start, so a mid-session reversion stuck for
+        // the rest of the turn — "Halo suddenly way quieter at max volume".
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
     }
 
     @objc private func appWillResignActive() {
@@ -1357,12 +1369,47 @@ final class ConversationCoordinator {
         case .began:
             pauseAudioAndReturnToIdle(announcement: "Conversation paused")
         case .ended:
+            // Re-apply the session config + speaker override NOW: iOS can
+            // reactivate the session routed to the earpiece, and nothing
+            // else re-applies the override until the next playback sequence
+            // — the first response after a Siri/call/alarm interruption
+            // played "way too quiet even at max volume".
+            do {
+                try StreamingAudioPlayer.configureSharedSession()
+            } catch {
+                Logger.error("Failed to reconfigure audio session after interruption: \(error)")
+            }
             let shouldResume = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
                 .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) } ?? false
             if shouldResume {
                 UIAccessibility.post(notification: .announcement, argument: "Ready. Tap to continue.")
             }
         @unknown default:
+            break
+        }
+    }
+
+    /// Re-assert the loud-speaker route when the system clears our override.
+    /// Only for reasons that indicate a config/override change — plugging in
+    /// headphones (.newDeviceAvailable) must NOT be fought.
+    @objc private func handleAudioRouteChange(_ notification: Notification) {
+        guard
+            let info = notification.userInfo,
+            let rawReason = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason)
+        else { return }
+
+        switch reason {
+        case .categoryChange, .override:
+            let session = AVAudioSession.sharedInstance()
+            let isReceiver = session.currentRoute.outputs.contains {
+                $0.portType == .builtInReceiver
+            }
+            if isReceiver {
+                Logger.warning("Audio route reverted to receiver — re-forcing speaker")
+                StreamingAudioPlayer.forceSpeakerIfNoHeadphones(session: session)
+            }
+        default:
             break
         }
     }

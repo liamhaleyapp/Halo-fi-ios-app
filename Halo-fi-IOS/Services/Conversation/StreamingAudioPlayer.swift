@@ -83,23 +83,16 @@ final class StreamingAudioPlayer: NSObject {
             // lower playback volume on the built-in speaker. Users
             // can crank system volume; corrupt transcripts can't be
             // fixed by the user.
-            try session.setCategory(
-                .playAndRecord,
-                mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers]
-            )
-            try session.setActive(true)
-
             // `.voiceChat` defaults to the receiver (earpiece) on
             // .playAndRecord even with .defaultToSpeaker set — the
             // option is supposed to override that but is unreliable
             // on iOS 17+. Users heard Halo "way too quiet" because
             // audio was routing through the small phone-call speaker
-            // instead of the loud bottom speaker. Force the speaker
-            // explicitly here, BUT only when no headphones/Bluetooth
-            // route is active so AirPods users still get audio in
-            // their AirPods.
-            Self.forceSpeakerIfNoHeadphones(session: session)
+            // instead of the loud bottom speaker. configureSharedSession
+            // forces the speaker explicitly, BUT only when no
+            // headphones/Bluetooth route is active so AirPods users
+            // still get audio in their AirPods.
+            try Self.configureSharedSession(session: session)
 
             let routeDescription = session.currentRoute.outputs
                 .map { $0.portType.rawValue }
@@ -108,6 +101,31 @@ final class StreamingAudioPlayer: NSObject {
         } catch {
             Logger.error("StreamingAudioPlayer: Failed to configure audio session: \(error)")
         }
+    }
+
+    /// THE audio-session option set for the whole app. Three components
+    /// used to call setCategory with three DIFFERENT option sets — and every
+    /// setCategory with changed options triggers a route re-evaluation that
+    /// clears any prior overrideOutputAudioPort, which is how playback kept
+    /// reverting to the quiet earpiece mid-session. One constant, one config
+    /// path.
+    nonisolated static let sessionOptions: AVAudioSession.CategoryOptions = [
+        .defaultToSpeaker, .allowBluetoothHFP, .duckOthers,
+    ]
+
+    /// Apply the app's one true audio-session configuration:
+    /// .playAndRecord + .voiceChat (hardware AEC — never change this to
+    /// .default: Halo starts transcribing her own voice) + the shared
+    /// options, then force the loud speaker when no headphones are routed.
+    nonisolated static func configureSharedSession(
+        session: AVAudioSession = AVAudioSession.sharedInstance(),
+        activate: Bool = true
+    ) throws {
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: sessionOptions)
+        if activate {
+            try session.setActive(true)
+        }
+        forceSpeakerIfNoHeadphones(session: session)
     }
 
     /// Override the output port to the loud speaker unless a headset

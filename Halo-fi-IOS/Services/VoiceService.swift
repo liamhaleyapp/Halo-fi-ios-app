@@ -80,14 +80,12 @@ final class VoiceService: NSObject {
             // (AEC). Without it, the speaker output bleeds into the
             // mic during full-duplex conversations — Halo's own voice
             // gets transcribed as user input. .default has no AEC.
-            try recordingSession?.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
-            try recordingSession?.setActive(true)
-            // .defaultToSpeaker is unreliable on .voiceChat — force it.
-            // See StreamingAudioPlayer.forceSpeakerIfNoHeadphones for the
-            // full rationale; reusing it here keeps both audio-session
-            // configuration paths consistent.
+            // Shared config: previously this site used a DIFFERENT
+            // option set than the player, and each mismatched
+            // setCategory cleared the speaker override (quiet-earpiece
+            // regressions mid-session).
             if let session = recordingSession {
-                StreamingAudioPlayer.forceSpeakerIfNoHeadphones(session: session)
+                try StreamingAudioPlayer.configureSharedSession(session: session)
             }
         } catch {
             Logger.error("Failed to setup audio session: \(error)")
@@ -95,14 +93,7 @@ final class VoiceService: NSObject {
     }
 
     private func activateSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playAndRecord,
-            mode: .voiceChat,
-            options: [.defaultToSpeaker, .allowBluetoothHFP]
-        )
-        try session.setActive(true)
-        StreamingAudioPlayer.forceSpeakerIfNoHeadphones(session: session)
+        try StreamingAudioPlayer.configureSharedSession()
     }
 
     // MARK: - Pre-warm
