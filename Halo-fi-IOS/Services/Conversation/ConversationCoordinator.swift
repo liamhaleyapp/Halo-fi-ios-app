@@ -159,6 +159,70 @@ final class ConversationCoordinator {
     private var lastSpeakingEndedAt: Date?
     private let prerollContaminationWindow: TimeInterval = 2.0
 
+    // MARK: - Hands-free stall-proofing + idle watchdog
+    //
+    // Session minutes are metered by wall-clock connection time (server
+    // heartbeat every 10s), so any path that strands hands-free in a
+    // silent .idle/.error state burns the user's quota with zero signal —
+    // the worst failure shape for a blind user. Two defenses:
+    //   1. Silent dead-ends (empty commit, agent error, guardrail
+    //      rejection) recover back to .listening with an audio cue
+    //      instead of stalling.
+    //   2. An idle watchdog warns after `idleWarningInterval` without
+    //      meaningful activity and ends the session at `idleEndInterval`.
+    private var consecutiveEmptyHandsFreeTurns = 0
+    private var lastMeaningfulActivityAt: Date?
+    private var idleWarningIssued = false
+    private var idleWatchdogTask: Task<Void, Never>?
+    private let idleWarningInterval: TimeInterval = 105
+    private let idleEndInterval: TimeInterval = 135
+
+    /// Something real happened (user sent a turn, Halo finished speaking,
+    /// session connected) — push the idle watchdog out.
+    private func markMeaningfulActivity() {
+        lastMeaningfulActivityAt = Date()
+        idleWarningIssued = false
+    }
+
+    private func startIdleWatchdog() {
+        idleWatchdogTask?.cancel()
+        markMeaningfulActivity()
+        idleWatchdogTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                guard let last = self.lastMeaningfulActivityAt else { continue }
+                // Never end mid-turn — only quiet states count as idle.
+                switch self.state {
+                case .idle, .listening, .error:
+                    break
+                default:
+                    continue
+                }
+                let idleFor = Date().timeIntervalSince(last)
+                if idleFor >= self.idleEndInterval {
+                    Logger.info("Idle watchdog: ending session after \(Int(idleFor))s of inactivity")
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "Ending the conversation to save your minutes. Tap to start again."
+                    )
+                    self.audioFeedback.feedbackForStateChange(.disconnected)
+                    self.disconnect()
+                    return
+                }
+                if idleFor >= self.idleWarningInterval, !self.idleWarningIssued {
+                    self.idleWarningIssued = true
+                    Logger.info("Idle watchdog: warning after \(Int(idleFor))s of inactivity")
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "Still there? I'll end the conversation soon to save your minutes."
+                    )
+                    self.audioFeedback.playSuccessFeedback()
+                }
+            }
+        }
+    }
+
     // MARK: - Recording capture (training data)
     //
     // Every listening turn's mic buffers are also accumulated here.
@@ -304,6 +368,8 @@ final class ConversationCoordinator {
                     Logger.debug("ConversationCoordinator: Pre-warm skipped: \(error)")
                 }
             }
+
+            startIdleWatchdog()
         } catch {
             setState(.error(error.localizedDescription))
         }
@@ -315,6 +381,9 @@ final class ConversationCoordinator {
         agentEventTask = nil
         prewarmTask?.cancel()
         prewarmTask = nil
+        idleWatchdogTask?.cancel()
+        idleWatchdogTask = nil
+        consecutiveEmptyHandsFreeTurns = 0
 
         // Phase 12 — clear quick-action state so a fresh connect
         // doesn't replay a stale prompt.
@@ -751,6 +820,8 @@ final class ConversationCoordinator {
 
         // Finalize draft and send to agent
         if let finalText = transcriptStore?.finalizeDraft() {
+            consecutiveEmptyHandsFreeTurns = 0
+            markMeaningfulActivity()
             setState(.processing)
 
             Task { [weak self] in
@@ -776,8 +847,30 @@ final class ConversationCoordinator {
             )
         } else {
             // Empty turn — drop any accumulated buffers so they
-            // don't leak into the next listen.
+            // don't leak into the next listen. (Note: empty turns are
+            // never uploaded — the uploader only fires above.)
             capturedBuffers = []
+
+            // Hands-free: a silent .idle here kills the loop while the
+            // session keeps metering. Resume listening quietly for the
+            // first couple of empty turns; the idle watchdog is the
+            // backstop that eventually ends a truly abandoned session.
+            if conversationMode == .handsFree && !isMicMuted {
+                consecutiveEmptyHandsFreeTurns += 1
+                if consecutiveEmptyHandsFreeTurns == 2 {
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "Still listening. Say something, or tap the button to end."
+                    )
+                }
+                setState(.idle)
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    await self?.startListening()
+                }
+                return
+            }
+
             // Empty or invalid transcript - just go idle
             setState(.idle)
         }
@@ -994,6 +1087,8 @@ final class ConversationCoordinator {
         // or safe to keep (Halo finished long enough ago that the
         // ring has cycled past her voice and contains only ambient).
         lastSpeakingEndedAt = Date()
+        // A full Halo reply just played — real conversation activity.
+        markMeaningfulActivity()
 
         // The ack audio just finished — but the real agent response
         // is still on the way. Hold state in .processing so the
@@ -1152,6 +1247,24 @@ final class ConversationCoordinator {
             audioFeedback.stopProcessingPulse()
             setState(.error(error.error))
             audioFeedback.feedbackForStateChange(.error(error.error))
+
+            // Hands-free: an agent error (including guardrail rejections,
+            // which arrive as plain error events with no TTS) used to
+            // strand the loop in .error forever — dead air with minutes
+            // metering. Announce and auto-recover to listening, mirroring
+            // the STT-error recovery path.
+            if conversationMode == .handsFree && !isMicMuted {
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    guard let self, case .error = self.state else { return }
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "I couldn't process that. I'm listening again."
+                    )
+                    self.setState(.idle)
+                    await self.startListening()
+                }
+            }
 
         case .acknowledgment(let ack):
             Logger.info("ConversationCoordinator: Agent acknowledged, thinking...")
