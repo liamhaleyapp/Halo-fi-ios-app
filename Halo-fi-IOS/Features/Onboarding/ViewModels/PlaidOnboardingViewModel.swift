@@ -20,6 +20,9 @@ class PlaidOnboardingViewModel {
   var isDismissing = false
   var shouldSignOut = false
   var isCompletingLinking = false
+  /// True when the linked-accounts check failed — the intro screen must say
+  /// "couldn't confirm your linked accounts" instead of implying none exist.
+  var linkedStateUnconfirmed = false
   
   var isLoading: Bool {
     plaidManager.isCreatingLinkToken || isCompletingLinking
@@ -362,7 +365,10 @@ class PlaidOnboardingViewModel {
     guard !hasStartedFlow else { return }
 
     do {
-      try await bankDataManager.fetchAccounts(forceRefresh: false)
+      // Force a server fetch: a stale-empty 5-min cache here presents
+      // "link your bank" to a user whose accounts are already connected,
+      // which is how the duplicate-Amex re-link happened.
+      try await bankDataManager.fetchAccounts(forceRefresh: true)
       let hasAccounts = bankDataManager.accounts?.isEmpty == false
 
       if hasAccounts {
@@ -373,7 +379,11 @@ class PlaidOnboardingViewModel {
 
       // Don't auto-start Plaid - let user see intro and tap button
     } catch {
-      // Don't auto-start on error either - show intro screen
+      // A failed fetch must NOT silently present the link flow as if
+      // nothing were connected — surface it so the user (VoiceOver-first)
+      // knows the linked state is unconfirmed, not absent.
+      linkedStateUnconfirmed = true
+      Logger.error("PlaidOnboarding: could not confirm linked accounts: \(error)")
     }
   }
 }

@@ -45,7 +45,10 @@ struct PlaidOnboardingView: View {
         }
         // Initial state - show intro and start button
         else {
-          PlaidIntroView {
+          PlaidIntroView(
+            alreadyLinked: (bankDataManager.linkedItems ?? []).map { $0.institutionName },
+            linkedStateUnconfirmed: viewModel.linkedStateUnconfirmed
+          ) {
             viewModel.startPlaidFlow(
               bankDataManager: bankDataManager,
               userManager: userManager
@@ -71,7 +74,12 @@ struct PlaidOnboardingView: View {
       viewModel.onDismiss = { dismiss() }
 
       // 2. During onboarding, skip Plaid if accounts already exist.
-      //    When linking additional accounts, always show the intro.
+      //    When linking additional accounts, always show the intro — but make
+      //    sure linkedItems is populated so the "Already connected" list and
+      //    re-link confirmation render for the add-account entry point.
+      if !isOnboarding, bankDataManager.linkedItems == nil {
+        try? await bankDataManager.fetchAccounts(forceRefresh: false)
+      }
       if isOnboarding {
         await viewModel.bootstrapIfNeeded(
           userManager: userManager,
