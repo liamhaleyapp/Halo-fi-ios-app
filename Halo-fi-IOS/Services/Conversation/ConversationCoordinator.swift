@@ -511,43 +511,53 @@ final class ConversationCoordinator {
         }
     }
 
-    /// Stop listening (voice mode) - finalize and send transcript.
+    /// Stop listening (voice mode) - flush the tail, finalize, and send.
     /// Called when the user explicitly ends their turn (PTT button
-    /// release or manual stop in hands-free). Backend serves
-    /// commit_strategy="vad" for both modes, so server-side VAD has
-    /// already committed by this point and a plain disconnect is
-    /// safe — no need for the explicit commit + 2s flush wait.
+    /// release or manual stop in hands-free). A plain disconnect here
+    /// shaved the last VAD window of speech: the "server VAD already
+    /// committed" assumption was false while committed_transcript
+    /// messages were being dropped as unknown, so we now explicitly
+    /// commit-flush (bounded 2s wait inside commitAndDisconnect) and
+    /// finalize AFTER the flush so the tail words land in the draft.
     func stopListening() {
         guard state == .listening else { return }
 
         // Play stop listening feedback immediately
         audioFeedback.feedbackForStateChange(.idle)
 
-        // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
-        isVoiceSessionActive = false
+        // Show "processing" right away so the stop feels acknowledged
+        // while the commit flush (< 2s) completes.
+        setState(.processing)
+        audioFeedback.feedbackForStateChange(.processing)
 
         // Reset silence detection so the next listen starts clean.
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
 
-        // Stop recording and STT
+        // Stop recording; keep the STT session alive for the flush.
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
-        sttService.disconnect()
 
-        // Finalize draft and send to agent
-        if let finalText = transcriptStore?.finalizeDraft(), !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
-            setState(.processing)
-            // Kick off the thinking-pulse haptic + sound so the user
-            // knows Halo is working. Mirrors the public sendText path.
-            audioFeedback.feedbackForStateChange(.processing)
+        Task { [weak self] in
+            guard let self else { return }
+            // Flush buffered audio: ElevenLabs emits the final committed
+            // transcript, which onTranscription folds into the draft via
+            // commitSegment before we finalize.
+            await self.sttService.commitAndDisconnect()
 
-            Task { [weak self] in
-                await self?.sendTextInternal(finalText)
+            // Mark inactive AFTER the flush (onTranscription is gated on
+            // isVoiceSessionActive) — and after disconnect so the
+            // "unexpected disconnect" path doesn't fire.
+            self.isVoiceSessionActive = false
+
+            // Finalize draft (all committed segments + live remainder) and send
+            if let finalText = self.transcriptStore?.finalizeDraft(),
+               !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
+                await self.sendTextInternal(finalText)
+            } else {
+                self.setState(.idle)
             }
-        } else {
-            setState(.idle)
         }
     }
 
@@ -1166,19 +1176,30 @@ final class ConversationCoordinator {
     // MARK: - STT Callbacks (ElevenLabs)
 
     private func setupSTTCallbacks() {
-        // Handle transcription updates (partial and final)
+        // Handle transcription updates (partial and committed)
         sttService.onTranscription = { [weak self] text, isFinal in
             guard let self = self else { return }
             guard self.isVoiceSessionActive else { return }
 
-            // Always update the draft with the latest text so it's available
-            // for finalization, even if state has already moved to .processing
-            // (e.g., user tapped stop and we're waiting for the commit flush).
-            self.transcriptStore?.updateDraft(text)
-
             if isFinal {
-                // Committed transcript from VAD - auto-stop and process
-                self.stopListeningAndProcess()
+                // Server committed a segment. Fold it into the accumulated
+                // draft — the next partial carries ONLY the new segment's
+                // words, so this must never clear what came before.
+                self.transcriptStore?.commitSegment(text)
+
+                // A mid-speech commit is a SEGMENT BOUNDARY, not end of
+                // turn. Only hands-free auto-sends (its silence detection
+                // + server VAD agree the user stopped); in push-to-talk
+                // the user's finger ends the turn — auto-sending here
+                // would fire mid-monologue at every ~20-25s rollover.
+                if self.conversationMode == .handsFree {
+                    self.stopListeningAndProcess()
+                }
+            } else {
+                // Partial: replaces only the current segment's text so it's
+                // available for finalization, even if state has already
+                // moved to .processing (user tapped stop, commit flushing).
+                self.transcriptStore?.updateDraft(text)
             }
         }
 

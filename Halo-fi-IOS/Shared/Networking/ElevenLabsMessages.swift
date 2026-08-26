@@ -29,10 +29,16 @@ struct ElevenLabsTranscriptEvent: Codable {
         case words
     }
 
-    /// Check if this is a final/committed transcript
+    /// Check if this is a final/committed transcript.
+    /// Scribe v2 Realtime signals segment commits with message type
+    /// "committed_transcript" (per the realtime STT docs) — that type was
+    /// missing here, so commits were dropped as unknown and each segment
+    /// rollover wiped the on-screen draft.
     var isCommitted: Bool {
-        // final_transcript message type OR explicit is_final flag
-        messageType == "final_transcript" || (isFinal ?? false)
+        messageType == "committed_transcript"
+            || messageType == "committed_transcript_with_timestamps"
+            || messageType == "final_transcript"
+            || (isFinal ?? false)
     }
 }
 
@@ -102,7 +108,8 @@ enum ElevenLabsIncomingMessage {
 
         // Decode based on type
         switch messageType {
-        case "transcript", "partial_transcript", "final_transcript":
+        case "transcript", "partial_transcript", "final_transcript",
+             "committed_transcript", "committed_transcript_with_timestamps":
             if let event = try? JSONDecoder().decode(ElevenLabsTranscriptEvent.self, from: data) {
                 self = .transcript(event)
             } else {

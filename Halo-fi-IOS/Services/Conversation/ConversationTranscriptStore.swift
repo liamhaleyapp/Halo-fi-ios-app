@@ -46,6 +46,20 @@ final class ConversationTranscriptStore {
     private var draftEntryId: UUID?
     private var draftText: String = ""
 
+    /// Text from STT segments the server already committed this turn.
+    /// Scribe v2 rolls to a new segment mid-speech (~20-25s VAD/buffer
+    /// commit) whose partials contain ONLY the new segment's words — before
+    /// this existed, each rollover wiped the screen and tap-send delivered
+    /// just the last segment.
+    private var committedText: String = ""
+
+    /// committedText + current segment draft — what renders and what sends.
+    private var fullDraftText: String {
+        committedText.isEmpty
+            ? draftText
+            : (draftText.isEmpty ? committedText : "\(committedText) \(draftText)")
+    }
+
     // MARK: - Public Methods
 
     /// Append a new event and update entries
@@ -64,27 +78,48 @@ final class ConversationTranscriptStore {
         streamingUserText = ""
         draftEntryId = nil
         draftText = ""
+        committedText = ""
     }
 
     // MARK: - Draft Management (ElevenLabs STT)
 
-    /// Update draft with new transcription text (replaces entire text, not appends)
-    /// ElevenLabs sends complete transcripts that may revise earlier words
+    /// Update draft with new transcription text. The incoming text replaces
+    /// only the CURRENT SEGMENT's portion (ElevenLabs partials revise the
+    /// whole segment); text from previously committed segments is preserved
+    /// in front of it. Never clear anything on a segment rollover.
     func updateDraft(_ text: String) {
         draftText = text
+        renderDraft()
+    }
 
+    /// The server committed the current segment (committed_transcript).
+    /// Fold its final text into committedText and reset the segment draft —
+    /// the next partial will contain only the NEW segment's words.
+    func commitSegment(_ text: String) {
+        let segment = text.trimmingCharacters(in: .whitespaces)
+        if !segment.isEmpty {
+            committedText = committedText.isEmpty
+                ? segment
+                : "\(committedText) \(segment)"
+        }
+        draftText = ""
+        renderDraft()
+    }
+
+    private func renderDraft() {
+        let display = fullDraftText
         if let existingId = draftEntryId,
            let index = entries.firstIndex(where: { $0.id == existingId }) {
             // Update existing draft entry
-            entries[index].text = text
-        } else {
+            entries[index].text = display
+        } else if !display.isEmpty {
             // Create new draft entry
             let id = UUID()
             draftEntryId = id
             entries.append(TranscriptEntry(
                 id: id,
                 speaker: .userDraft,
-                text: text,
+                text: display,
                 timestamp: Date(),
                 isStreaming: true
             ))
@@ -92,7 +127,8 @@ final class ConversationTranscriptStore {
     }
 
     /// Finalize draft into a permanent user message
-    /// Returns the finalized text (for sending to agent)
+    /// Returns the finalized text (for sending to agent) — ALL committed
+    /// segments plus the live remainder, not just the last segment.
     @discardableResult
     func finalizeDraft() -> String? {
         guard let id = draftEntryId,
@@ -100,7 +136,7 @@ final class ConversationTranscriptStore {
             return nil
         }
 
-        let finalText = draftText
+        let finalText = fullDraftText
 
         // Skip if empty or whitespace-only
         guard !finalText.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -120,6 +156,7 @@ final class ConversationTranscriptStore {
         // Clear draft state
         draftEntryId = nil
         draftText = ""
+        committedText = ""
 
         return finalText
     }
@@ -134,6 +171,7 @@ final class ConversationTranscriptStore {
         // Clear draft state
         draftEntryId = nil
         draftText = ""
+        committedText = ""
     }
 
     // MARK: - Event Processing
@@ -284,9 +322,9 @@ extension ConversationTranscriptStore {
         draftEntryId != nil
     }
 
-    /// Current draft text (if any)
+    /// Current draft text (if any) — committed segments + live remainder
     var currentDraftText: String? {
-        draftEntryId != nil ? draftText : nil
+        draftEntryId != nil ? fullDraftText : nil
     }
 
     /// The most recent entry (for scrolling to bottom)
