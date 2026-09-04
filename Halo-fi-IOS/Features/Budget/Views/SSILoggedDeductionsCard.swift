@@ -23,6 +23,12 @@ struct SSILoggedDeductionsCard: View {
     let expenseType: ExpenseType
     let onAdd: () -> Void
     let onDelete: (SSIManualDeduction) async -> Void
+    /// WP3 — "Needs receipt" tap / rotor "Attach receipt": opens capture.
+    let onAttachReceipt: (SSIManualDeduction) -> Void
+    /// WP3 — rotor "Change type".
+    let onChangeType: (SSIManualDeduction, SSIExclusionType) async -> Void
+    /// WP3 — rotor "View receipt".
+    let onViewReceipt: (SSIManualDeduction) -> Void
     /// Phase 9 — closure that fetches the CSV bytes and returns a
     /// temp-file URL for sharing. nil disables the Share option in
     /// the export menu (used in previews/tests).
@@ -271,7 +277,23 @@ struct SSILoggedDeductionsCard: View {
                 Text("\(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                if let line = matchStatusLine(entry) {
+                if let value = valueLine(entry) {
+                    Text(value)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if entry.resolvedMatchStatus == "needs_receipt" {
+                    // Tapping the state opens capture — the receipt is the
+                    // one thing SSA will ask for.
+                    Button {
+                        onAttachReceipt(entry)
+                    } label: {
+                        Label("Needs receipt — add it", systemImage: "doc.viewfinder")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.borderless)
+                } else if let line = matchStatusLine(entry) {
                     Text(line)
                         .font(.caption2)
                         .foregroundStyle(matchStatusColor(entry))
@@ -309,28 +331,77 @@ struct SSILoggedDeductionsCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(rowAccessibilityLabel(entry))
+        // Extra verbs live in the rotor (WP3) — one combined element per
+        // row, actions reachable without hunting for tiny buttons.
+        .accessibilityAction(named: entry.hasReceipt ? "Replace receipt" : "Attach receipt") {
+            onAttachReceipt(entry)
+        }
+        .accessibilityAction(named: "View receipt") {
+            if entry.hasReceipt { onViewReceipt(entry) }
+        }
+        .accessibilityAction(named: "Change type to \(alternateType(for: entry).rawValue.uppercased())") {
+            let target = alternateType(for: entry)
+            Task {
+                await onChangeType(entry, target)
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: "Changed \(entry.description) to \(fullTypeName(target))."
+                )
+            }
+        }
+        .accessibilityAction(named: "Remove") {
+            Task {
+                await onDelete(entry)
+                Haptics.success()
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: "Deleted \(entry.description) deduction."
+                )
+            }
+        }
     }
 
-    /// Phase 8b — render the bank-matching status. Three states:
-    /// matched, waiting (recent), waiting (stale → keep receipt).
+    /// WP3 — three states: Matched / Waiting for bank / Needs receipt.
     private func matchStatusLine(_ entry: SSIManualDeduction) -> String? {
-        // Only voice-logged entries auto-reconcile; manual UI
-        // entries don't promise a match because the user already
-        // typed the data deliberately.
-        guard entry.source == "user_voice" else { return nil }
-        if entry.linkedAt != nil {
-            return "Matched to bank transaction"
+        switch entry.resolvedMatchStatus {
+        case "matched": return "Matched to bank transaction"
+        case "waiting_for_bank":
+            return isOlderThanGracePeriod(entry)
+                ? "No bank charge matched yet — receipt attached"
+                : "Waiting for bank to confirm"
+        default: return "Needs receipt"
         }
-        if isOlderThanGracePeriod(entry) {
-            return "No matching bank charge yet — keep your receipt"
-        }
-        return "Waiting for bank to confirm"
     }
 
     private func matchStatusColor(_ entry: SSIManualDeduction) -> Color {
-        if entry.linkedTransactionId != nil { return .green }
-        if isOlderThanGracePeriod(entry) { return .orange }
-        return .secondary
+        switch entry.resolvedMatchStatus {
+        case "matched": return .green
+        case "waiting_for_bank": return .secondary
+        default: return .orange
+        }
+    }
+
+    /// "Worth up to $23.40 on your check. Estimate." — backend-computed,
+    /// capped at countable earned income; always labelled.
+    private func valueLine(_ entry: SSIManualDeduction) -> String? {
+        guard let impact = entry.estimatedCheckImpactCents, impact > 0 else { return nil }
+        return "Worth up to \(BudgetFormatter.cents(impact)) on your check. \(entry.estimateLabel ?? "Estimate")."
+    }
+
+    private func alternateType(for entry: SSIManualDeduction) -> SSIExclusionType {
+        switch entry.exclusionType {
+        case .bwe: return .irwe
+        case .irwe: return expenseType == .bwe ? .bwe : .burial
+        case .burial: return .irwe
+        }
+    }
+
+    private func fullTypeName(_ type: SSIExclusionType) -> String {
+        switch type {
+        case .bwe: return "Blind Work Expense"
+        case .irwe: return "Impairment-Related Work Expense"
+        case .burial: return "Burial-fund deposit"
+        }
     }
 
     /// 7 days is the unofficial Plaid settle SLA. After that, a
@@ -406,8 +477,14 @@ struct SSILoggedDeductionsCard: View {
             "\(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn)).",
             "\(sourceLabel).",
         ]
+        if let value = valueLine(entry) {
+            parts.append(value)
+        }
         if let status = matchStatusLine(entry) {
             parts.append("\(status).")
+        }
+        if entry.counselorQuestion == true {
+            parts.append("Flagged for your counselor.")
         }
         return parts.joined(separator: " ")
     }

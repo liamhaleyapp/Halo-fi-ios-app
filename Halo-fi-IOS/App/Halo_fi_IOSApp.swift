@@ -85,6 +85,14 @@ struct Halo_fi_IOSApp: App {
         .onOpenURL { url in
           // Handle Google Sign In callback
           if GIDSignIn.sharedInstance.handle(url) { return }
+          // WP3 — halofi://receipt?file=... from the HaloFiShare extension.
+          if SharedReceiptInbox.isReceiptURL(url) {
+            if let file = SharedReceiptInbox.fileURL(from: url),
+               let receipt = SharedReceiptInbox.consume(file) {
+              ReceiptHandoff.shared.offer(receipt)
+            }
+            return
+          }
           // Handles halofi://plaid-oauth?... redirect URLs from Plaid OAuth flow
           _ = plaidManager.handleRedirectURL(url)
         }

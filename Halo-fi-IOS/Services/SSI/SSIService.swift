@@ -41,6 +41,13 @@ protocol SSIServiceProtocol {
     /// Delete a manual deduction.
     func deleteManualDeduction(_ deductionId: String) async throws
 
+    /// WP3 — attach a receipt, change the type, flag a counselor question.
+    @discardableResult
+    func updateManualDeduction(_ deductionId: String, _ request: SSIUpdateManualDeductionRequest) async throws -> SSIManualDeduction
+
+    /// WP3 — entries flagged "Not sure this counts? Ask my counselor".
+    func fetchCounselorQuestions() async throws -> [SSIManualDeduction]
+
     /// Phase 9 — fetch the CSV export of SSI deductions for a
     /// period. ``month`` nil exports the full year. Returns raw
     /// CSV bytes the caller writes to disk for the share sheet.
@@ -81,11 +88,14 @@ struct SSIEmailDeductionsResponse: Codable {
 struct SSICreateExclusionRequest: Encodable, Equatable {
     let transactionId: String
     let exclusionType: SSIExclusionType
+    /// WP3: required — every logged expense carries a description.
+    let description: String
     let notes: String?
 
     enum CodingKeys: String, CodingKey {
         case transactionId = "transaction_id"
         case exclusionType = "exclusion_type"
+        case description
         case notes
     }
 }
@@ -176,6 +186,24 @@ struct SSIManualDeduction: Codable, Equatable, Identifiable {
     /// to confirm". Both non-nil = "Matched on <linkedAt>".
     let linkedTransactionId: String?
     let linkedAt: String?
+    // WP3 — receipt evidence + value line. Optional so older payloads decode.
+    let receiptAssetId: String?
+    let receiptPending: Bool?
+    let needsReceipt: Bool?
+    let vendor: String?
+    let counselorQuestion: Bool?
+    let estimatedCheckImpactCents: Int?
+    let estimateLabel: String?
+    /// "matched" | "waiting_for_bank" | "needs_receipt"
+    let matchStatus: String?
+
+    var hasReceipt: Bool { !(receiptAssetId ?? "").isEmpty }
+    var isMatched: Bool { linkedTransactionId != nil || matchStatus == "matched" }
+    var resolvedMatchStatus: String {
+        if let matchStatus { return matchStatus }
+        if linkedTransactionId != nil { return "matched" }
+        return hasReceipt ? "waiting_for_bank" : "needs_receipt"
+    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -187,6 +215,14 @@ struct SSIManualDeduction: Codable, Equatable, Identifiable {
         case createdAt = "created_at"
         case linkedTransactionId = "linked_transaction_id"
         case linkedAt = "linked_at"
+        case receiptAssetId = "receipt_asset_id"
+        case receiptPending = "receipt_pending"
+        case needsReceipt = "needs_receipt"
+        case vendor
+        case counselorQuestion = "counselor_question"
+        case estimatedCheckImpactCents = "estimated_check_impact_cents"
+        case estimateLabel = "estimate_label"
+        case matchStatus = "match_status"
     }
 }
 
@@ -209,6 +245,16 @@ struct SSICreateManualDeductionRequest: Encodable, Equatable {
     /// than 90 days ago — server returns 400 otherwise.
     let occurredOn: String?
     let notes: String?
+    // WP3 — receipt evidence (asset id from POST /ssi/receipts) or an
+    // explicit "add it later". OCR fields are what was read; the user
+    // confirmed or edited the visible amount/date/description.
+    var receiptAssetId: String? = nil
+    var receiptPending: Bool = false
+    var vendor: String? = nil
+    var extractedAmountCents: Int? = nil
+    var extractedDate: String? = nil
+    var extractionConfidence: Double? = nil
+    var counselorQuestion: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case exclusionType = "exclusion_type"
@@ -216,6 +262,49 @@ struct SSICreateManualDeductionRequest: Encodable, Equatable {
         case description
         case occurredOn = "occurred_on"
         case notes
+        case receiptAssetId = "receipt_asset_id"
+        case receiptPending = "receipt_pending"
+        case vendor
+        case extractedAmountCents = "extracted_amount_cents"
+        case extractedDate = "extracted_date"
+        case extractionConfidence = "extraction_confidence"
+        case counselorQuestion = "counselor_question"
+    }
+}
+
+/// PATCH /ssi/manual-deductions/{id}: only set fields are sent.
+struct SSIUpdateManualDeductionRequest: Encodable, Equatable {
+    var receiptAssetId: String? = nil
+    var exclusionType: SSIExclusionType? = nil
+    var description: String? = nil
+    var counselorQuestion: Bool? = nil
+    var receiptPending: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case receiptAssetId = "receipt_asset_id"
+        case exclusionType = "exclusion_type"
+        case description
+        case counselorQuestion = "counselor_question"
+        case receiptPending = "receipt_pending"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(receiptAssetId, forKey: .receiptAssetId)
+        try c.encodeIfPresent(exclusionType, forKey: .exclusionType)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(counselorQuestion, forKey: .counselorQuestion)
+        try c.encodeIfPresent(receiptPending, forKey: .receiptPending)
+    }
+}
+
+struct SSICounselorQuestionsResponse: Codable, Equatable {
+    let questions: [SSIManualDeduction]
+    let counselorFinderUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case questions
+        case counselorFinderUrl = "counselor_finder_url"
     }
 }
 
@@ -306,6 +395,27 @@ final class SSIService: SSIServiceProtocol {
             body: nil,
             responseType: EmptyResponse.self
         )
+    }
+
+    @discardableResult
+    func updateManualDeduction(_ deductionId: String, _ request: SSIUpdateManualDeductionRequest) async throws -> SSIManualDeduction {
+        let body = try JSONEncoder().encode(request)
+        return try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.updateManualDeduction(deductionId),
+            method: .PATCH,
+            body: body,
+            responseType: SSIManualDeduction.self
+        )
+    }
+
+    func fetchCounselorQuestions() async throws -> [SSIManualDeduction] {
+        let resp: SSICounselorQuestionsResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.counselorQuestions,
+            method: .GET,
+            body: nil,
+            responseType: SSICounselorQuestionsResponse.self
+        )
+        return resp.questions
     }
 
     func exportDeductionsCSV(year: Int, month: Int?) async throws -> Data {

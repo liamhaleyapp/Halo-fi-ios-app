@@ -35,6 +35,13 @@ struct BudgetView: View {
     /// button on the Logged Deductions card still uses the typed
     /// SSILogManualDeductionView path (showingManualDeductionSheet).
     @State private var showingVoiceDeductionLog = false
+    /// WP3 — a row's "Needs receipt" / rotor "Attach receipt" target.
+    @State private var receiptAttachTarget: SSIManualDeduction?
+    /// WP3 — receipt handed off from the share extension; opens the
+    /// log form with it already attached.
+    @State private var handoffReceipt: CapturedReceipt?
+    @State private var receiptActionStatus: String?
+    @Environment(\.openURL) private var openURL
     /// Phase 11 Track A — last announcement we already spoke, used
     /// to avoid re-announcing the same digest on every redraw.
     @State private var lastAnnouncedSummary: String?
@@ -124,22 +131,35 @@ struct BudgetView: View {
             .fullScreenCover(isPresented: $showingVoiceDeductionLog) {
                 ConversationView(customGreetingId: "deduction_intake")
             }
-            .sheet(isPresented: $showingManualDeductionSheet) {
+            .sheet(isPresented: $showingManualDeductionSheet, onDismiss: { handoffReceipt = nil }) {
                 SSILogManualDeductionView(
                     capabilities: userManager.capabilities,
-                    onSave: { type, cents, description, occurredOn, notes in
+                    initialReceipt: handoffReceipt,
+                    onSave: { draft in
                         let formatter = DateFormatter()
+                        formatter.locale = Locale(identifier: "en_US_POSIX")
                         formatter.dateFormat = "yyyy-MM-dd"
                         try await dataManager.logManualDeduction(
-                            type: type,
-                            amountCents: cents,
-                            description: description,
-                            occurredOn: formatter.string(from: occurredOn),
-                            notes: notes
+                            type: draft.type,
+                            amountCents: draft.amountCents,
+                            description: draft.description,
+                            occurredOn: formatter.string(from: draft.occurredOn),
+                            notes: draft.notes,
+                            receipt: draft.receipt
                         )
                     }
                 )
             }
+            // WP3 — attach a receipt to an existing entry.
+            .sheet(item: $receiptAttachTarget) { entry in
+                ReceiptCaptureView { captured in
+                    Task { await attachReceipt(captured, to: entry) }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
+                takeHandoffReceiptIfAny()
+            }
+            .onAppear { takeHandoffReceiptIfAny() }
         }
     }
 
@@ -149,6 +169,27 @@ struct BudgetView: View {
     /// the data isn't loaded yet OR the announcement is identical
     /// to the prior one — re-entering the tab without new data
     /// stays silent so the user isn't barraged.
+    // MARK: - WP3 receipts
+
+    private func takeHandoffReceiptIfAny() {
+        guard let receipt = ReceiptHandoff.shared.take() else { return }
+        handoffReceipt = receipt
+        showingManualDeductionSheet = true
+        UIAccessibility.post(notification: .announcement, argument: "Receipt received. Opening the work expense form.")
+    }
+
+    private func attachReceipt(_ captured: CapturedReceipt, to entry: SSIManualDeduction) async {
+        do {
+            let uploaded = try await ReceiptService.shared.upload(captured)
+            try await dataManager.attachReceipt(to: entry.id, assetId: uploaded.assetId)
+            Haptics.success()
+            UIAccessibility.post(notification: .announcement, argument: "Receipt attached to \(entry.description).")
+        } catch {
+            Haptics.error()
+            UIAccessibility.post(notification: .announcement, argument: "Couldn't attach the receipt. \(error.localizedDescription)")
+        }
+    }
+
     private func announceBudgetSummaryIfNeeded() {
         let unmatched = dataManager.ssiManualDeductions
             .filter { $0.source == "user_voice" && $0.linkedTransactionId == nil }
@@ -446,6 +487,27 @@ struct BudgetView: View {
                                 try await dataManager.deleteManualDeduction(entry.id)
                             } catch {
                                 // Soft-fail; data manager already logged.
+                            }
+                        },
+                        onAttachReceipt: { entry in receiptAttachTarget = entry },
+                        onChangeType: { entry, type in
+                            do {
+                                try await dataManager.updateDeductionType(entry.id, to: type)
+                            } catch {
+                                UIAccessibility.post(
+                                    notification: .announcement,
+                                    argument: "Couldn't change the type. \(error.localizedDescription)"
+                                )
+                            }
+                        },
+                        onViewReceipt: { entry in
+                            guard let assetId = entry.receiptAssetId else { return }
+                            Task {
+                                if let url = try? await ReceiptService.shared.viewURL(assetId: assetId) {
+                                    openURL(url)
+                                } else {
+                                    UIAccessibility.post(notification: .announcement, argument: "Couldn't open the receipt right now.")
+                                }
                             }
                         },
                         onExport: {

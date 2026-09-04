@@ -66,6 +66,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
@@ -76,6 +77,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
+				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 			);
 			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;

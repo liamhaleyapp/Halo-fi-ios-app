@@ -212,6 +212,27 @@ enum APIEndpoints {
             "/ssi/manual-deductions/\(deductionId)"
         }
 
+        /// PATCH — attach a receipt / change type / flag a counselor question.
+        static func updateManualDeduction(_ deductionId: String) -> String {
+            "/ssi/manual-deductions/\(deductionId)"
+        }
+
+        /// POST (multipart, field "file") — upload a receipt; returns asset_id.
+        static let uploadReceipt = "/ssi/receipts"
+
+        /// POST — server-side extraction fallback (Claude vision). Never saves.
+        static func extractReceipt(_ assetId: String) -> String {
+            "/ssi/receipts/\(assetId)/extract"
+        }
+
+        /// GET — short-lived signed URL to view a receipt.
+        static func receiptURL(_ assetId: String) -> String {
+            "/ssi/receipts/\(assetId)/url"
+        }
+
+        /// GET — expenses flagged "Not sure this counts? Ask my counselor".
+        static let counselorQuestions = "/ssi/counselor-questions"
+
         /// GET — CSV export of SSI deductions for a period.
         /// Query: ?year=YYYY[&month=MM]. Omitting month exports the
         /// full year. Response is text/csv.

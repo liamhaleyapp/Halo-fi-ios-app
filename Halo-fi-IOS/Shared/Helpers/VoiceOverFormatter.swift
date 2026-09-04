@@ -33,6 +33,22 @@ enum VoiceOverFormatter {
         return "\(number) dollars"
     }
 
+    /// Exact speech form for receipts and value lines: "23 dollars and 40
+    /// cents". Whole amounts drop the cents clause.
+    static func dollarsAndCents(_ cents: Int) -> String {
+        let safe = max(0, cents)
+        let whole = safe / 100
+        let rest = safe % 100
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        let number = formatter.string(from: NSNumber(value: whole)) ?? "\(whole)"
+        let dollarsPart = whole == 1 ? "1 dollar" : "\(number) dollars"
+        if rest == 0 { return dollarsPart }
+        let centsPart = rest == 1 ? "1 cent" : "\(rest) cents"
+        return whole == 0 ? centsPart : "\(dollarsPart) and \(centsPart)"
+    }
+
     /// "1 deduction" / "3 deductions" — generic singular/plural.
     static func count(_ n: Int, singular: String, plural: String) -> String {
         n == 1 ? "\(n) \(singular)" : "\(n) \(plural)"

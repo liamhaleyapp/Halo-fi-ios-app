@@ -202,6 +202,7 @@ final class BudgetDataManager {
         let request = SSICreateExclusionRequest(
             transactionId: candidate.transactionId,
             exclusionType: type,
+            description: candidate.description.isEmpty ? "Bank transaction" : candidate.description,
             notes: notes
         )
         do {
@@ -216,24 +217,61 @@ final class BudgetDataManager {
     /// Log a manual deduction (Phase 8 — voice or UI entry). After
     /// success, refreshes the whole overview so projected SSI math
     /// reflects the new deduction.
+    @discardableResult
     func logManualDeduction(
         type: SSIExclusionType,
         amountCents: Int,
         description: String,
         occurredOn: String? = nil,
-        notes: String? = nil
-    ) async throws {
-        let request = SSICreateManualDeductionRequest(
+        notes: String? = nil,
+        receipt: ManualDeductionReceiptFields = ManualDeductionReceiptFields()
+    ) async throws -> SSIManualDeduction {
+        var request = SSICreateManualDeductionRequest(
             exclusionType: type,
             amountCents: amountCents,
             description: description,
             occurredOn: occurredOn,
             notes: notes
         )
+        request.receiptAssetId = receipt.assetId
+        request.receiptPending = receipt.pending
+        request.vendor = receipt.vendor
+        request.extractedAmountCents = receipt.extractedAmountCents
+        request.extractedDate = receipt.extractedDate
+        request.extractionConfidence = receipt.extractionConfidence
+        request.counselorQuestion = receipt.counselorQuestion
+        let row: SSIManualDeduction
         do {
-            _ = try await ssiService.createManualDeduction(request)
+            row = try await ssiService.createManualDeduction(request)
         } catch {
             Logger.error("BudgetDataManager: log manual deduction failed: \(error)")
+            throw error
+        }
+        await refresh()
+        return row
+    }
+
+    /// WP3 — attach an uploaded receipt to an existing entry.
+    func attachReceipt(to deductionId: String, assetId: String) async throws {
+        do {
+            _ = try await ssiService.updateManualDeduction(
+                deductionId, SSIUpdateManualDeductionRequest(receiptAssetId: assetId, receiptPending: false)
+            )
+        } catch {
+            Logger.error("BudgetDataManager: attach receipt failed: \(error)")
+            throw error
+        }
+        await refresh()
+    }
+
+    /// WP3 — rotor "Change type".
+    func updateDeductionType(_ deductionId: String, to type: SSIExclusionType) async throws {
+        do {
+            _ = try await ssiService.updateManualDeduction(
+                deductionId, SSIUpdateManualDeductionRequest(exclusionType: type)
+            )
+        } catch {
+            Logger.error("BudgetDataManager: change deduction type failed: \(error)")
             throw error
         }
         await refresh()
@@ -299,6 +337,17 @@ final class BudgetDataManager {
 }
 
 // MARK: - Errors
+
+/// WP3 — receipt-related fields carried alongside a manual deduction.
+struct ManualDeductionReceiptFields: Equatable {
+    var assetId: String? = nil
+    var pending: Bool = false
+    var vendor: String? = nil
+    var extractedAmountCents: Int? = nil
+    var extractedDate: String? = nil
+    var extractionConfidence: Double? = nil
+    var counselorQuestion: Bool = false
+}
 
 struct BudgetError: Error, LocalizedError {
     let underlying: Error

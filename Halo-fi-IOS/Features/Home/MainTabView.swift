@@ -124,6 +124,12 @@ struct MainTabView: View {
             }
             selectedTab = 0
         }
+        // WP3 — a receipt arrived from the share extension: land on the
+        // Budget tab, which opens the log form with it attached.
+        .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
+            guard currentRoute == .main else { return }
+            selectedTab = 2
+        }
         // Posted by HomeView when ConversationView closes. Restore the
         // originating tab if we recorded one (otherwise stay on Agent
         // — the user opened the agent directly).

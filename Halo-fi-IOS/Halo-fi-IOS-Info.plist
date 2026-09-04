@@ -4,6 +4,10 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>HaloFi uses the camera to photograph receipts for your work-expense records. Photos are stored privately in your account.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>HaloFi lets you pick a photo of a receipt from your library to attach to a work expense.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>HaloFi uses Face ID so you can sign in quickly without typing your password.</string>
 	<key>CFBundleSpokenName</key>
