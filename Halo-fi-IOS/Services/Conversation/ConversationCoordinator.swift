@@ -173,6 +173,11 @@ final class ConversationCoordinator {
     private let bargeInTranscriptWindow: TimeInterval = 1.5
     private let bargeInFallbackFrames: Int = 10
 
+    /// Set by pause/stop paths that stop the player deliberately. The
+    /// player's "finished" callback arrives one tick later; without this it
+    /// would restart the microphone after the session was already ended.
+    private var suppressNextAutoResume = false
+
     /// Set by `bargeIn()` immediately before stopping the player so
     /// `handleSpeakingFinished` can skip its 400ms settling delay —
     /// a barge-in needs to flip to listening instantly.
@@ -482,6 +487,7 @@ final class ConversationCoordinator {
         // disconnect and resurrect playback after the user has left
         // the conversation. resumeAcceptingChunks() runs on the next
         // sendTextInternal so a fresh conversation starts clean.
+        suppressNextAutoResume = true
         streamingAudioPlayer?.stopAndDiscardPending()
         transcriptStore?.discardDraft()
 
@@ -1239,6 +1245,16 @@ final class ConversationCoordinator {
     private func handleSpeakingFinished() {
         Logger.debug("ConversationCoordinator: handleSpeakingFinished state=\(state) mode=\(conversationMode.rawValue) muted=\(isMicMuted) ack=\(isPlayingAcknowledgment)")
 
+        // The player stopped because the session ended (X, Stop, phone
+        // call) or the socket is gone: settle to idle, never restart the mic.
+        if suppressNextAutoResume || sessionId == nil || !agentWebSocket.isConnected {
+            suppressNextAutoResume = false
+            isPlayingAcknowledgment = false
+            bargeInRequested = false
+            if state == .speaking || state == .connecting { setState(.idle) }
+            return
+        }
+
         // Mark the TTS-end timestamp so startListening can decide
         // whether the pre-roll ring is fresh enough to flush (Halo's
         // voice may have bled into it within the last couple seconds)
@@ -1253,15 +1269,18 @@ final class ConversationCoordinator {
         // input button doesn't flicker to "Tap to talk".
         if isPlayingAcknowledgment {
             isPlayingAcknowledgment = false
-            if state == .speaking {
+            // Only when the ack ended on its own while we were still
+            // speaking. A barge-in or Stop during the ack must fall through
+            // to the auto-resume below, or hands-free strands in .processing.
+            if state == .speaking && !bargeInRequested {
                 setState(.processing)
                 // Resume the thinking-pulse — the audio_chunk
                 // handler stopped it when the ack chunks landed,
                 // and now we're back to genuine waiting until
                 // the response chunks start arriving.
                 audioFeedback.feedbackForStateChange(.processing)
+                return
             }
-            return
         }
 
         // In hands-free, the playback-finished signal is deterministic:
@@ -1315,18 +1334,28 @@ final class ConversationCoordinator {
     private func handleAgentEvent(_ event: AgentEvent) {
         // WP7 — anything for a cancelled or superseded turn is dropped
         // before it can touch the player or the transcript.
+        // turn_cancelled is the server confirming OUR cancel, so it carries
+        // the cancelled id and must be handled before the stale filter.
+        if case .turnCancelled(let payload) = event {
+            audioFeedback.stopProcessingPulse()
+            isPlayingAcknowledgment = false
+            // Only settle if nothing newer replaced the turn.
+            if state == .processing, currentTurnId == nil || currentTurnId == payload.turnId {
+                currentTurnId = nil
+                setState(.idle)
+                if conversationMode == .handsFree && !isMicMuted && isConnected {
+                    Task { [weak self] in await self?.startListening() }
+                }
+            }
+            return
+        }
         if isStaleTurn(event.turnId) {
             Logger.debug("ConversationCoordinator: dropping stale event for turn \(event.turnId ?? "?")")
             return
         }
         switch event {
-        case .turnCancelled(let payload):
-            audioFeedback.stopProcessingPulse()
-            // Only settle to idle if nothing newer replaced the turn.
-            if state == .processing, currentTurnId == nil || currentTurnId == payload.turnId {
-                currentTurnId = nil
-                setState(.idle)
-            }
+        case .turnCancelled:
+            break
 
         case .connectionAck(let ack):
             if let serverSessionId = ack.sessionId ?? ack.connectionId {
@@ -1396,6 +1425,11 @@ final class ConversationCoordinator {
                 return (raw as? Bool) ?? false
             }()
             Logger.debug("ConversationCoordinator: audio_complete isAck=\(isAck), isPartial=\(isPartial), bodyLen=\(body.count), state=\(state)")
+
+            // Response audio (partial or final) means the ack is over, even
+            // if its buffer is still draining: the player runs straight
+            // into the queued response without a "finished" callback.
+            if !isAck { isPlayingAcknowledgment = false }
 
             // Only emit the final transcript on the LAST audio_complete.
             // Intermediate events have an empty body anyway, but this
@@ -1743,6 +1777,9 @@ final class ConversationCoordinator {
         }
 
         if state == .speaking {
+            // We do NOT auto-restart the mic after an interruption.
+            suppressNextAutoResume = true
+            cancelCurrentTurn()
             streamingAudioPlayer?.stop()
         }
 

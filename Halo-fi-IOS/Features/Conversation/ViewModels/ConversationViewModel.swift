@@ -132,7 +132,13 @@ final class ConversationViewModel {
             UIAccessibility.post(notification: .announcement, argument: "Conversation stopped.")
         } else {
             await onAppear(skipGreeting: true)
-            await coordinator.startListening()
+            // connect() returns before connection_ack; listening needs .idle.
+            for _ in 0..<60 where coordinator.state == .connecting {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            if coordinator.state == .idle {
+                await coordinator.startListening()
+            }
         }
     }
 
@@ -150,14 +156,13 @@ final class ConversationViewModel {
                 switch state {
                 case .speaking:
                     coordinator.stopSpeaking()
-                case .listening, .idle:
+                case .listening:
                     coordinator.setMicMuted(!coordinator.isMicMuted)
-                    if !coordinator.isMicMuted && state == .idle {
-                        // Manual unmute from idle resumes listening
-                        // explicitly — the auto-resume path only fires
-                        // after Halo finishes speaking.
-                        await coordinator.startListening()
-                    }
+                case .idle:
+                    // The button reads "Start listening" here, so do that:
+                    // unmute if needed and listen (it used to mute instead).
+                    if coordinator.isMicMuted { coordinator.setMicMuted(false) }
+                    await coordinator.startListening()
                 default:
                     break
                 }
