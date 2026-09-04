@@ -862,7 +862,6 @@ final class BankDataManager {
         // 2. Check persisted cache
         if !forceRefresh, let persistence = transactionPersistence {
             let persisted = await persistence.loadAllTransactions(for: userId, itemId: itemId)
-            let needsFullSync = await persistence.needsFullSync(for: userId, itemId: itemId)
 
             // Only trust a NON-EMPTY persisted list. An empty one is
             // indistinguishable from a wiped cache (a skipped sync used to
