@@ -196,7 +196,19 @@ struct MoneyHomeView: View {
         do {
             try await bankDataManager.fetchTransactions(limit: Self.transactionPageSize, forceRefresh: forceRefresh)
         } catch {
-            Logger.warning("MoneyHomeView: transactions fetch failed: \(error)")
+            // Backends without GET /bank/transactions (older deploys): merge
+            // the per-institution lists instead so the page is never empty.
+            Logger.warning("MoneyHomeView: all-accounts fetch failed, merging per item: \(error)")
+            var merged: [Transaction] = []
+            for item in bankDataManager.linkedItems ?? [] {
+                if let txns = try? await bankDataManager.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh) {
+                    merged.append(contentsOf: txns)
+                }
+            }
+            bankDataManager.transactions = merged
+                .sorted { $0.transactionDate > $1.transactionDate }
+                .prefix(Self.transactionPageSize)
+                .map { $0 }
         }
     }
 
@@ -402,7 +414,17 @@ struct AllTransactionsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             isLoading = true
-            try? await bankDataManager.fetchTransactions(limit: 200, forceRefresh: true)
+            do {
+                try await bankDataManager.fetchTransactions(limit: 200, forceRefresh: true)
+            } catch {
+                var merged: [Transaction] = []
+                for item in bankDataManager.linkedItems ?? [] {
+                    if let txns = try? await bankDataManager.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: true) {
+                        merged.append(contentsOf: txns)
+                    }
+                }
+                bankDataManager.transactions = merged.sorted { $0.transactionDate > $1.transactionDate }
+            }
             isLoading = false
         }
     }
