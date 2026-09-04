@@ -136,18 +136,17 @@ struct MoneyHomeView: View {
     }
 
     private var header: some View {
-        ScreenReaderSummaryHeader(
-            verdict: summary.verdict,
-            detail: summary.detail,
-            isEstimate: summary.isEstimate,
-            tone: summary.tone
+        BalanceHeroCard(
+            summary: summary,
+            snapshot: snapshot,
+            showsResources: userManager.capabilities.showsResourceCounter
         )
     }
 
     // MARK: - b. Budget row
 
     private var budgetRow: some View {
-        row(title: "Budget", icon: "chart.pie.fill", line: TabSummaries.budgetRow(snapshot),
+        row(title: "Budget", icon: "chart.pie.fill", tint: .blue, line: TabSummaries.budgetRow(snapshot),
             hint: "Opens your budget.", route: .budget)
     }
 
@@ -168,7 +167,7 @@ struct MoneyHomeView: View {
             line += "."
             if attention > 0 { line += " \(VoiceOverFormatter.count(attention, singular: "connection needs", plural: "connections need")) attention." }
         }
-        return row(title: "Accounts", icon: "building.columns.fill", line: line,
+        return row(title: "Accounts", icon: "building.columns.fill", tint: .green, line: line,
                    hint: "Opens each institution, then each account and its transactions.", route: .accounts)
     }
 
@@ -186,7 +185,7 @@ struct MoneyHomeView: View {
                 line += " Newest: \(newest.merchantName ?? newest.name), \(VoiceOverFormatter.dollarsAndCents(Int((abs(newest.amount) * 100).rounded()))) on \(Self.spokenDate(newest.transactionDate))."
             }
         }
-        return row(title: "Recent transactions", icon: "list.bullet.rectangle.fill", line: line,
+        return row(title: "Recent transactions", icon: "list.bullet.rectangle.fill", tint: .orange, line: line,
                    hint: "Opens every transaction, newest first. Each row can be marked as a work expense.", route: .allTransactions)
     }
 
@@ -227,10 +226,16 @@ struct MoneyHomeView: View {
 
     // MARK: - Row builder
 
-    private func row(title: String, icon: String, line: String, hint: String, route: MoneyRoute) -> some View {
+    private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
         NavigationLink(value: route) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.title2).foregroundColor(.blue).frame(width: 36).accessibilityHidden(true)
+                Image(systemName: icon)
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(tint)
+                    .frame(width: 42, height: 42)
+                    .background(tint.opacity(0.16))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
