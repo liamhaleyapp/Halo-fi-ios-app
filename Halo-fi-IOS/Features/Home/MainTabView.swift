@@ -134,6 +134,10 @@ struct MainTabView: View {
             guard currentRoute == .main else { return }
             selectedTab = MainTab.benefits.rawValue
         }
+        // WP5 — server said accounts changed: refresh the bank store now.
+        .onReceive(NotificationCenter.default.publisher(for: .bankDataDidMutate)) { _ in
+            Task { await bankDataManager.forceRefresh() }
+        }
         // WP4 — "Mark as work expense" from the Money tab lands on Benefits.
         .onReceive(NotificationCenter.default.publisher(for: .workExpenseDraftRequested)) { _ in
             guard currentRoute == .main else { return }

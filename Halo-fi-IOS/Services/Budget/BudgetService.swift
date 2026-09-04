@@ -19,6 +19,52 @@ protocol BudgetServiceProtocol {
     /// Update a single budget category's monthly limit (in dollars).
     /// View should refresh from /budget/overview after.
     func updateCategoryLimit(categoryId: String, limitAmount: Double) async throws
+
+    // WP5
+    func fetchSuggestion() async throws -> BudgetSuggestion?
+    func applySuggestion() async throws
+    func addCategory(code: String, limitAmount: Double) async throws
+    func deleteCategory(categoryId: String) async throws
+}
+
+/// WP5 — GET /budget/suggestions payload.
+struct BudgetSuggestion: Codable, Equatable {
+    let id: String
+    let generatedAt: String?
+    let windowDays: Int
+    let totalIncomeCents: Int
+    let totalLimitCents: Int
+    let proposal: [String: Int]
+    let medians: [String: Int]
+    let source: String
+    let appliedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case generatedAt = "generated_at"
+        case windowDays = "window_days"
+        case totalIncomeCents = "total_income_cents"
+        case totalLimitCents = "total_limit_cents"
+        case proposal, medians, source
+        case appliedAt = "applied_at"
+    }
+
+    struct Row: Identifiable, Equatable {
+        let category: String
+        let limitCents: Int
+        let medianCents: Int?
+        var id: String { category }
+    }
+
+    var rows: [Row] {
+        proposal
+            .sorted { $0.value > $1.value }
+            .map { Row(category: $0.key, limitCents: $0.value, medianCents: medians[$0.key]) }
+    }
+}
+
+private struct BudgetSuggestionEnvelope: Codable {
+    let suggestion: BudgetSuggestion?
 }
 
 /// Mirrors the subset of the backend UserUpdateRequest that the Budget
@@ -84,6 +130,37 @@ final class BudgetService: BudgetServiceProtocol {
             endpoint: APIEndpoints.User.me,
             method: .PATCH,
             body: body,
+            responseType: EmptyResponse.self
+        )
+    }
+
+    func fetchSuggestion() async throws -> BudgetSuggestion? {
+        let env: BudgetSuggestionEnvelope = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.suggestions, method: .GET, body: nil,
+            responseType: BudgetSuggestionEnvelope.self
+        )
+        return env.suggestion
+    }
+
+    func applySuggestion() async throws {
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.applySuggestions, method: .POST, body: nil,
+            responseType: EmptyResponse.self
+        )
+    }
+
+    func addCategory(code: String, limitAmount: Double) async throws {
+        struct Body: Encodable { let category: String; let limit_amount: Double }
+        let body = try JSONEncoder().encode(Body(category: code, limit_amount: limitAmount))
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.categories, method: .POST, body: body,
+            responseType: EmptyResponse.self
+        )
+    }
+
+    func deleteCategory(categoryId: String) async throws {
+        let _: EmptyResponse = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.category(categoryId), method: .DELETE, body: nil,
             responseType: EmptyResponse.self
         )
     }

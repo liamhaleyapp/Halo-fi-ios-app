@@ -1090,11 +1090,14 @@ final class ConversationCoordinator {
         onEvent?(event)
     }
 
-    /// Coarse: posts on every agent reply, not just mutating ones.
-    /// Trades one extra GET on non-mutating turns for never missing
-    /// a real mutation.
-    private func postBudgetMutationNotificationIfNeeded() {
-        NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil)
+    /// WP5 — the server names what changed; the stores invalidate by scope.
+    /// Replaces the old "any agent reply → refresh" heuristic.
+    private func handleDataMutated(_ payload: DataMutatedPayload) {
+        let info: [String: Any] = ["scope": payload.scope]
+        NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil, userInfo: info)
+        if payload.scope == "accounts" {
+            NotificationCenter.default.post(name: .bankDataDidMutate, object: nil, userInfo: info)
+        }
     }
 
     private func handleSpeakingFinished() {
@@ -1218,7 +1221,6 @@ final class ConversationCoordinator {
             }
             currentAgentResponseId = nil
             backfillRecordingAgentResponse(response.message)
-            postBudgetMutationNotificationIfNeeded()
 
         case .audioChunk(let chunk):
             audioFeedback.stopProcessingPulse()
@@ -1252,7 +1254,6 @@ final class ConversationCoordinator {
                     emitEvent(.agentFinal(body, id: responseId))
                     currentAgentResponseId = nil
                     backfillRecordingAgentResponse(body)
-                    postBudgetMutationNotificationIfNeeded()
                 }
             }
             // Voice-speed override may arrive on any audio_complete; honor it.
@@ -1302,6 +1303,9 @@ final class ConversationCoordinator {
         case .permanentDisconnect:
             setState(.disconnected)
             emitEvent(.errorEvent("Connection lost. Please go back and try again."))
+
+        case .dataMutated(let payload):
+            handleDataMutated(payload)
         }
     }
 

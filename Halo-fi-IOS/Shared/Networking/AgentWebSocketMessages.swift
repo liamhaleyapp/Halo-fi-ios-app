@@ -166,9 +166,16 @@ struct VoiceStatusPayload: Codable, Sendable {
 
 // MARK: - Agent Events (emitted via AsyncStream)
 
+/// WP5 — server-side write happened: `{"type":"data_mutated","scope":"budget|income|accounts"}`.
+struct DataMutatedPayload: Codable, Sendable {
+    let type: String
+    let scope: String
+}
+
 /// Events emitted by AgentWebSocketManager.
 /// ConversationCoordinator consumes these via `for await event in manager.events`.
 enum AgentEvent: Sendable {
+    case dataMutated(DataMutatedPayload)
     case connectionAck(ConnectionAckPayload)
     case streamChunk(StreamChunkPayload)
     case agentResponse(AgentResponsePayload)
@@ -191,6 +198,7 @@ enum AgentIncomingMessage: Codable, Sendable {
     case audioChunk(AudioChunkPayload)
     case audioComplete(AudioCompletePayload)
     case voiceStatus(VoiceStatusPayload)
+    case dataMutated(DataMutatedPayload)
     case unknown(String)
 
     enum CodingKeys: String, CodingKey {
@@ -232,6 +240,9 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "voice_status":
             let payload = try VoiceStatusPayload(from: decoder)
             self = .voiceStatus(payload)
+        case "data_mutated":
+            let payload = try DataMutatedPayload(from: decoder)
+            self = .dataMutated(payload)
         default:
             self = .unknown(type)
         }
@@ -254,6 +265,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .audioComplete(let payload):
             try payload.encode(to: encoder)
         case .voiceStatus(let payload):
+            try payload.encode(to: encoder)
+        case .dataMutated(let payload):
             try payload.encode(to: encoder)
         case .unknown:
             break

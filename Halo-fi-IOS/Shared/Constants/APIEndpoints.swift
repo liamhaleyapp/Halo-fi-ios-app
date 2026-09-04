@@ -82,10 +82,17 @@ enum APIEndpoints {
         /// GET - Aggregated budget view (spending, income, SSI, alerts).
         static let overview = "/budget/overview"
 
-        /// PATCH - Update a single category's monthly limit.
+        /// PATCH / DELETE - a single category (monthly limit / remove).
         static func category(_ categoryId: String) -> String {
             "/budget/categories/\(categoryId)"
         }
+
+        /// POST - Add a category to the active budget.
+        static let categories = "/budget/categories"
+
+        /// GET - Smart suggestion (90-day medians). POST …/apply creates the budget.
+        static let suggestions = "/budget/suggestions"
+        static let applySuggestions = "/budget/suggestions/apply"
     }
 
     // MARK: - Banking

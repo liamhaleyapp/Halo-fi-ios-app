@@ -60,33 +60,90 @@ final class BudgetDataManager {
             forName: .budgetDataDidMutate,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            // queue:.main is main-thread but not MainActor-isolated.
+        ) { [weak self] note in
+            // WP5 — scoped: the server says WHAT changed. The overview
+            // depends on all three scopes (income block, SSI resources from
+            // accounts, the budget itself), so any of them refreshes it;
+            // the debounce collapses bursts. No more refresh-on-every-reply.
+            let scope = (note.userInfo?["scope"] as? String) ?? "budget"
             Task { @MainActor [weak self] in
-                // Refresh, not just invalidate: markStale alone only takes
-                // effect on the tab's next .task, so a Budget tab already on
-                // screen behind the conversation overlay kept showing the
-                // pre-voice-edit numbers. Debounced — the notification fires
-                // on every agent reply, and refresh() already coalesces
-                // concurrent calls.
+                Logger.info("BudgetDataManager: data mutated scope=\(scope)")
                 self?.markStale()
                 self?.scheduleDebouncedRefresh()
             }
         }
     }
 
-    /// Debounce voice-driven refreshes: agent replies can arrive in bursts
-    /// (ack + partials + final), so wait for a quiet moment before hitting
-    /// the API once.
+    /// Debounce: several writes can land in one turn (income + budget), so
+    /// wait for a quiet moment before hitting the API once.
     private var pendingMutationRefresh: Task<Void, Never>?
 
     private func scheduleDebouncedRefresh() {
         pendingMutationRefresh?.cancel()
         pendingMutationRefresh = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled else { return }
             await self?.refresh()
+            await self?.fetchSuggestion()
         }
+    }
+
+    // MARK: - WP5 suggestions + category editing
+
+    /// Latest smart suggestion; nil until fetched or when there isn't
+    /// enough history.
+    var suggestion: BudgetSuggestion?
+
+    func fetchSuggestion() async {
+        if UITestArchetype.isActive { return }
+        do {
+            suggestion = try await service.fetchSuggestion()
+        } catch {
+            Logger.warning("BudgetDataManager: fetch suggestion failed: \(error)")
+        }
+    }
+
+    func applySuggestion() async throws {
+        do {
+            try await service.applySuggestion()
+        } catch {
+            Logger.error("BudgetDataManager: apply suggestion failed: \(error)")
+            throw error
+        }
+        await refresh()
+        await fetchSuggestion()
+        announceMonthlyTotal(prefix: "Budget created.")
+    }
+
+    func addCategory(code: String, limitAmount: Double) async throws {
+        do {
+            try await service.addCategory(code: code, limitAmount: limitAmount)
+        } catch {
+            Logger.error("BudgetDataManager: add category failed: \(error)")
+            throw error
+        }
+        await refresh()
+        announceMonthlyTotal(prefix: "Added \(BudgetFormatter.displayName(forCategory: code)).")
+    }
+
+    func deleteCategory(_ category: BudgetStatusCategory) async throws {
+        guard let id = category.categoryId else { throw BudgetError(underlying: URLError(.badURL)) }
+        do {
+            try await service.deleteCategory(categoryId: id)
+        } catch {
+            Logger.error("BudgetDataManager: delete category failed: \(error)")
+            throw error
+        }
+        await refresh()
+        announceMonthlyTotal(prefix: "Removed \(BudgetFormatter.displayName(forCategory: category.category)).")
+    }
+
+    /// Every budget change ends with the new monthly total, spoken.
+    func announceMonthlyTotal(prefix: String) {
+        guard let total = overview?.budgetStatus.total else { return }
+        let text = "\(prefix) New monthly total: \(VoiceOverFormatter.dollars(total.limitCents))."
+        Haptics.engine.play(.tapLight)
+        UIAccessibility.post(notification: .announcement, argument: text)
     }
 
     deinit {
@@ -139,7 +196,8 @@ final class BudgetDataManager {
     /// Update a single category's monthly limit, then refresh the overview
     /// so the new value flows through the budget-status pipeline (totals,
     /// pace classification, etc.) on the next view read.
-    func saveCategoryLimit(categoryId: String, limitAmount: Double) async throws {
+    func saveCategoryLimit(categoryId: String, limitAmount: Double, announce: Bool = false) async throws {
+        defer { if announce { announceMonthlyTotal(prefix: "Limit updated.") } }
         do {
             try await service.updateCategoryLimit(
                 categoryId: categoryId,

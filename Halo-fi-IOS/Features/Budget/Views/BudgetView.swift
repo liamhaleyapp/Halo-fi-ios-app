@@ -56,6 +56,7 @@ struct BudgetView: View {
                             if let alertText = topCategoryAlert(overview) {
                                 categoryAlertRow(alertText)
                             }
+                            suggestedBudgetCard(overview)
                             breakdownByCategoryButton(overview)
                             BudgetQuickActionDrawer(
                                 onLogExpense: {
@@ -104,6 +105,9 @@ struct BudgetView: View {
                 if dataManager.shouldRefresh {
                     await dataManager.refresh()
                 }
+                if dataManager.suggestion == nil {
+                    await dataManager.fetchSuggestion()
+                }
                 announceBudgetSummaryIfNeeded()
             }
             .onChange(of: dataManager.lastFetched) { _, _ in
@@ -131,6 +135,25 @@ struct BudgetView: View {
     /// the data isn't loaded yet OR the announcement is identical
     /// to the prior one — re-entering the tab without new data
     /// stays silent so the user isn't barraged.
+    // MARK: - WP5 suggested budget
+
+    @ViewBuilder
+    private func suggestedBudgetCard(_ overview: BudgetOverview) -> some View {
+        if let suggestion = dataManager.suggestion, suggestion.appliedAt == nil, !suggestion.proposal.isEmpty {
+            SuggestedBudgetCard(
+                suggestion: suggestion,
+                hasBudget: overview.budgetStatus.hasBudget,
+                onApply: {
+                    do {
+                        try await dataManager.applySuggestion()
+                    } catch {
+                        UIAccessibility.post(notification: .announcement, argument: "Couldn't apply the suggested budget. \(error.localizedDescription)")
+                    }
+                }
+            )
+        }
+    }
+
     private func announceBudgetSummaryIfNeeded() {
         let unmatched = dataManager.ssiManualDeductions
             .filter { $0.source == "user_voice" && $0.linkedTransactionId == nil }

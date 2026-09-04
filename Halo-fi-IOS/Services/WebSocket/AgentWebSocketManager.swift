@@ -427,6 +427,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         case .voiceStatus(let payload):
             Logger.info("Voice status: \(payload.text)")
             eventContinuation?.yield(.voiceStatus(payload))
+        case .dataMutated(let payload):
+            Logger.info("Data mutated: scope=\(payload.scope)")
+            eventContinuation?.yield(.dataMutated(payload))
         case .unknown(let type):
             Logger.warning("AgentWebSocket: Unknown message type: \(type)")
         }

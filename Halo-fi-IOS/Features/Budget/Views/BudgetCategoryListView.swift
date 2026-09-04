@@ -17,6 +17,11 @@ struct BudgetCategoryListView: View {
     // Scales with Dynamic Type (App Store Guideline 4).
     @ScaledMetric(relativeTo: .largeTitle) private var emptyIconSize: CGFloat = 40
     @Environment(BudgetDataManager.self) private var dataManager
+    // WP5 — inline editing
+    @State private var editingCategory: BudgetStatusCategory?
+    @State private var editLimitText: String = ""
+    @State private var showingAddCategory = false
+    @State private var editError: String?
 
     var body: some View {
         ZStack {
@@ -42,6 +47,31 @@ struct BudgetCategoryListView: View {
             .refreshable { await dataManager.refresh() }
         }
         .navigationTitle("Breakdown")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if dataManager.overview?.budgetStatus.hasBudget == true {
+                    Button { showingAddCategory = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add category")
+                        .accessibilityHint("Adds a category with a monthly limit to your budget.")
+                }
+            }
+        }
+        .alert("Edit limit", isPresented: Binding(get: { editingCategory != nil }, set: { if !$0 { editingCategory = nil } })) {
+            TextField("Monthly limit in dollars", text: $editLimitText)
+                .keyboardType(.decimalPad)
+            Button("Save") { commitEdit() }
+            Button("Cancel", role: .cancel) { editingCategory = nil }
+        } message: {
+            if let cat = editingCategory {
+                Text("\(BudgetFormatter.displayName(forCategory: cat.category)) — currently \(cat.formatted["limit"] ?? "")")
+            }
+        }
+        .sheet(isPresented: $showingAddCategory) {
+            AddCategorySheet(
+                existing: Set((dataManager.overview?.budgetStatus.categories ?? []).map { $0.category }),
+                onAdd: { code, amount in try await dataManager.addCategory(code: code, limitAmount: amount) }
+            )
+        }
         .navigationBarTitleDisplayMode(.large)
     }
 
@@ -100,10 +130,52 @@ struct BudgetCategoryListView: View {
                             BudgetCategoryRow(category: cat)
                         }
                         .buttonStyle(HapticPlainButtonStyle())
+                        // WP5 — the extra verbs live in the rotor and the
+                        // context menu; the row stays one element.
+                        .accessibilityAction(named: "Edit limit") { beginEdit(cat) }
+                        .accessibilityAction(named: "Remove category") { remove(cat) }
+                        .contextMenu {
+                            Button { beginEdit(cat) } label: { Label("Edit limit", systemImage: "pencil") }
+                            Button(role: .destructive) { remove(cat) } label: { Label("Remove category", systemImage: "trash") }
+                        }
                     }
                 } header: {
                     sectionHeader(group.title, count: rows.count)
                 }
+            }
+        }
+    }
+
+    // MARK: - WP5 editing
+
+    private func beginEdit(_ cat: BudgetStatusCategory) {
+        editLimitText = String(format: "%.2f", Double(cat.limitCents) / 100.0)
+        editingCategory = cat
+    }
+
+    private func commitEdit() {
+        guard let cat = editingCategory, let id = cat.categoryId, let dollars = Double(editLimitText), dollars >= 0 else {
+            editingCategory = nil
+            return
+        }
+        editingCategory = nil
+        Task {
+            do {
+                try await dataManager.saveCategoryLimit(categoryId: id, limitAmount: dollars, announce: true)
+            } catch {
+                Haptics.error()
+                UIAccessibility.post(notification: .announcement, argument: "Couldn't update the limit. \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func remove(_ cat: BudgetStatusCategory) {
+        Task {
+            do {
+                try await dataManager.deleteCategory(cat)
+            } catch {
+                Haptics.error()
+                UIAccessibility.post(notification: .announcement, argument: "Couldn't remove the category. \(error.localizedDescription)")
             }
         }
     }

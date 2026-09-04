@@ -6,8 +6,10 @@
 import Foundation
 
 extension Notification.Name {
-    /// Posted when out-of-band activity may have mutated server-side
-    /// budget state — typically an agent reply. Coarse on purpose:
-    /// fires on every reply, not just mutating ones.
+    /// WP5 — posted when the server says budget / income / accounts data
+    /// changed (`data_mutated` on the agent WebSocket). userInfo["scope"]
+    /// is "budget" | "income" | "accounts". No longer fires on every reply.
     static let budgetDataDidMutate = Notification.Name("BudgetDataDidMutate")
+    /// WP5 — posted for scope "accounts" so BankDataManager refreshes too.
+    static let bankDataDidMutate = Notification.Name("BankDataDidMutate")
 }
