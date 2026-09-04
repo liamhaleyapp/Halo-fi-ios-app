@@ -84,7 +84,9 @@ final class TabHeaderUITests: XCTestCase {
     func testBenefitsHeader_nonBenefitUser() {
         let app = launch("none")
         openTab(app, "Benefits")
-        XCTAssertTrue(header(in: app).label.hasPrefix("Work expenses."))
+        XCTAssertTrue(header(in: app).label.hasPrefix("No benefits set up."))
+        XCTAssertFalse(app.staticTexts["Work expenses"].exists)
+        XCTAssertFalse(app.staticTexts["Monthly package"].exists)
     }
 
     func testAgentHeader() {

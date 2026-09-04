@@ -386,7 +386,31 @@ struct AccountsListView: View {
 
 // MARK: - All transactions
 
+/// "Mark as work expense" (context menu + rotor action) only for users in a
+/// benefits lane; everyone else never hears about work expenses.
+struct WorkExpenseRowAction: ViewModifier {
+    let enabled: Bool
+    let transaction: Transaction
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .contextMenu {
+                    Button { WorkExpenseHandoff.shared.offer(transaction: transaction) } label: {
+                        Label("Mark as work expense", systemImage: "briefcase")
+                    }
+                }
+                .accessibilityAction(named: "Mark as work expense") {
+                    WorkExpenseHandoff.shared.offer(transaction: transaction)
+                }
+        } else {
+            content
+        }
+    }
+}
+
 struct AllTransactionsView: View {
+    @Environment(UserManager.self) private var userManager
     @Environment(BankDataManager.self) private var bankDataManager
     @State private var isLoading = false
 
@@ -401,14 +425,7 @@ struct AllTransactionsView: View {
                 }
                 ForEach(transactions, id: \.idTransaction) { txn in
                     TransactionRow(transaction: txn)
-                        .contextMenu {
-                            Button { WorkExpenseHandoff.shared.offer(transaction: txn) } label: {
-                                Label("Mark as work expense", systemImage: "briefcase")
-                            }
-                        }
-                        .accessibilityAction(named: "Mark as work expense") {
-                            WorkExpenseHandoff.shared.offer(transaction: txn)
-                        }
+                        .modifier(WorkExpenseRowAction(enabled: userManager.capabilities.showsBenefitsLane, transaction: txn))
                 }
             } header: {
                 Text("\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")), newest first")

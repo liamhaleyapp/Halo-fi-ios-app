@@ -29,7 +29,10 @@ struct HomeView: View {
                         onCopyEntry: viewModel.copyEntry,
                         isProcessing: viewModel.state == .processing
                     )
-                    QuickActionStack(collapsible: !viewModel.entries.isEmpty) { chip in send(chip.prompt) }
+                    QuickActionStack(
+                        chips: QuickActionChip.v1.filter { $0.id != "log-expense" || userManager.capabilities.showsBenefitsLane },
+                        collapsible: !viewModel.entries.isEmpty
+                    ) { chip in send(chip.prompt) }
                     TextInputArea(
                         text: $viewModel.textInput,
                         state: viewModel.state,

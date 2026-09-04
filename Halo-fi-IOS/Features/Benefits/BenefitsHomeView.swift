@@ -30,7 +30,10 @@ struct BenefitsHomeView: View {
         case monthlyPackage(String?)
         case monthEndReview(String)
         case learn
+        case benefitsProfile
     }
+
+    private var lane: UserCapabilities.Lane { userManager.capabilities.lane }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -39,19 +42,28 @@ struct BenefitsHomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         header
-                        if userManager.capabilities.showsResourceCounter {
+                        switch lane {
+                        case .ssi:
                             resourceMonitorRow
-                        }
-                        workExpensesRow
-                        monthlyPackageRow
-                        if userManager.capabilities.bweLocked {
-                            lockedBWERow
-                        }
-                        if userManager.capabilities.showsSSDILane && !userManager.capabilities.showsResourceCounter {
+                            workExpensesRow
+                            monthlyPackageRow
+                            if userManager.capabilities.bweLocked {
+                                lockedBWERow
+                            }
+                            if userManager.capabilities.showsSSDILane {
+                                ssdiLaneRow
+                            }
+                            learnRow
+                            counselorButton
+                        case .ssdi:
+                            workExpensesRow
+                            monthlyPackageRow
                             ssdiLaneRow
+                            learnRow
+                            counselorButton
+                        case .none:
+                            benefitsProfileRow
                         }
-                        learnRow
-                        counselorButton
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -68,7 +80,8 @@ struct BenefitsHomeView: View {
                 case .workExpenses: WorkExpensesView()
                 case .monthlyPackage(let month): MonthlyPackageView(initialMonth: month)
                 case .monthEndReview(let month): MonthEndReviewView(month: month)
-                case .learn: LearnListView()
+                case .learn: LearnListView(lane: lane)
+                case .benefitsProfile: BenefitsProfileView()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetBenefitsNavigation)) { _ in
@@ -103,7 +116,23 @@ struct BenefitsHomeView: View {
     }
 
     private func openWorkExpenses() {
+        guard lane != .none else { return }
         if navigationPath.isEmpty { navigationPath.append(Route.workExpenses) }
+    }
+
+    // MARK: - No benefits: the only row is the way to change the answer
+
+    private var benefitsProfileRow: some View {
+        row(
+            title: "Benefits profile",
+            icon: "heart.text.square.fill",
+            tone: .neutral,
+            line: userManager.capabilities.benefitsUnanswered
+                ? "Do you receive SSI or SSDI? Answer here."
+                : "You said no SSI or SSDI. Change your answers here.",
+            estimate: false,
+            route: .benefitsProfile
+        )
     }
 
     // MARK: - a. Header
@@ -227,11 +256,12 @@ struct BenefitsHomeView: View {
     // MARK: - d. Learn (one row; the cards live on their own screen)
 
     private var learnRow: some View {
-        row(
+        let cards = LearnCard.cards(for: lane)
+        return row(
             title: "Learn",
             icon: "book.fill",
             tone: .neutral,
-            line: "\(VoiceOverFormatter.count(LearnCard.v1.count, singular: "short explainer", plural: "short explainers")): the resource limit, BWE and IRWE, reporting wages, free counseling.",
+            line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")): " + cards.map { $0.title.lowercased() }.joined(separator: ", ") + ".",
             estimate: false,
             route: .learn
         )
@@ -292,9 +322,16 @@ struct BenefitsHomeView: View {
     // MARK: - Row builder
 
     private func row(title: String, icon: String, tone: ScreenReaderSummaryHeader.Tone, line: String, estimate: Bool, route: Route) -> some View {
-        NavigationLink(value: route) {
+        let tint: Color = tone == .neutral ? .blue : tone.color
+        return NavigationLink(value: route) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.title2).foregroundColor(tone.color).frame(width: 36).accessibilityHidden(true)
+                Image(systemName: icon)
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(tint)
+                    .frame(width: 42, height: 42)
+                    .background(tint.opacity(0.16))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
@@ -333,6 +370,13 @@ struct LearnCard: Identifiable {
     let title: String
     let summary: String
     let body: [String]
+    /// Which lanes may see this card. SSI-only content never reaches an
+    /// SSDI user and vice versa.
+    var lanes: Set<UserCapabilities.Lane> = [.ssi]
+
+    static func cards(for lane: UserCapabilities.Lane) -> [LearnCard] {
+        v1.filter { $0.lanes.contains(lane) }
+    }
 
     static let v1: [LearnCard] = [
         LearnCard(
@@ -356,13 +400,25 @@ struct LearnCard: Identifiable {
             ]
         ),
         LearnCard(
+            id: "irwe", icon: "briefcase.fill",
+            title: "IRWE and your SSDI",
+            summary: "Work expenses that lower what counts toward the earnings limit.",
+            body: [
+                "An Impairment-Related Work Expense, IRWE, is something you pay for because of your disability so you can work: medication, a device, therapy, a service animal, assistive technology, rides you need because of your condition.",
+                "For SSDI, IRWE come off your gross earnings before Social Security compares them to the substantial-gainful-activity limit. Logging them can keep a month under that line.",
+                "Keep every receipt. Social Security asks for proof.",
+            ],
+            lanes: [.ssdi]
+        ),
+        LearnCard(
             id: "reporting", icon: "calendar",
             title: "Reporting wages",
             summary: "By the 6th, every month.",
             body: [
-                "Report wages for the previous month by the 6th. Wage reports through SSA's app or phone line cannot include BWE or IRWE, so the expense package HaloFi prepares goes to your field office separately.",
+                "Report wages for the previous month by the 6th. Wage reports through SSA's app or phone line cannot include work expenses, so the expense package HaloFi prepares goes to your field office separately.",
                 "HaloFi never sends anything to Social Security. You file; the app prepares, reminds, and logs.",
-            ]
+            ],
+            lanes: [.ssi, .ssdi]
         ),
         LearnCard(
             id: "counselor", icon: "person.wave.2",
@@ -371,23 +427,27 @@ struct LearnCard: Identifiable {
             body: [
                 "Work Incentives Planning and Assistance, WIPA, is a free Social Security program. A counselor can look at your exact record and answer deeming, trust, overpayment and \"should I\" questions.",
                 "Find one at choosework.ssa.gov/findhelp, or call the Ticket to Work help line at 1-866-968-7842.",
-            ]
+            ],
+            lanes: [.ssi, .ssdi]
         ),
     ]
 }
 
 struct LearnListView: View {
+    var lane: UserCapabilities.Lane = .ssi
     @Environment(\.openURL) private var openURL
+
+    private var cards: [LearnCard] { LearnCard.cards(for: lane) }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 ScreenReaderSummaryHeader(
                     verdict: "Learn",
-                    detail: "\(VoiceOverFormatter.count(LearnCard.v1.count, singular: "short explainer", plural: "short explainers")). Each one is a few paragraphs.",
+                    detail: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")). Each one is a few paragraphs.",
                     tone: .neutral
                 )
-                ForEach(LearnCard.v1) { card in
+                ForEach(cards) { card in
                     NavigationLink {
                         LearnCardView(card: card)
                     } label: {

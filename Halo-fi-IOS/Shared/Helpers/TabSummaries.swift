@@ -110,10 +110,14 @@ enum TabSummaries {
                 tone: .neutral
             )
         }
+        // No SSI, no SSDI (or not answered yet): nothing about either
+        // program is shown; the only thing here is the way to change it.
         return TabSummary(
-            verdict: "Work expenses",
-            detail: expensesLine(expensesThisMonth, expensesTotalCents, 0),
-            isEstimate: expensesImpactCents > 0,
+            verdict: "No benefits set up",
+            detail: capabilities.benefitsUnanswered
+                ? "You haven't told us about Social Security benefits yet. Answer three quick questions and this tab fills in."
+                : "You told us you don't receive SSI or SSDI, so there's nothing to track here. Change that anytime in your benefits profile.",
+            isEstimate: false,
             tone: .neutral
         )
     }

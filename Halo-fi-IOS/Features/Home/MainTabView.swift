@@ -38,7 +38,7 @@ struct MainTabView: View {
     @Environment(BankDataManager.self) private var bankDataManager
     @Environment(BudgetDataManager.self) private var budgetDataManager
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab = 0
+    @State private var selectedTab = UITestArchetype.initialTabIndex ?? 0
     @State private var feedbackService = AudioFeedbackService()
     /// Tab the user was on when a cross-tab conversation was launched.
     /// Restored when the conversation dismisses so the user lands back

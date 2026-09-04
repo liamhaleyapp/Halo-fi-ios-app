@@ -96,6 +96,24 @@ struct UserCapabilities: Codable, Equatable {
         blindStatus = try c.decodeIfPresent(String.self, forKey: .blindStatus)
     }
 
+    /// Which benefits lane the Benefits tab renders. Nothing outside the
+    /// user's lane is ever shown: SSI users never see SSDI copy, SSDI users
+    /// never see the resource limit or BWE, and someone who answered "no"
+    /// (or has not answered) sees neither.
+    enum Lane { case ssi, ssdi, none }
+
+    var lane: Lane {
+        if showsResourceCounter { return .ssi }
+        if showsSSDILane { return .ssdi }
+        return .none
+    }
+
+    /// True when the profile question has simply not been answered yet
+    /// (as opposed to an explicit "no").
+    var benefitsUnanswered: Bool {
+        benefitType == nil || benefitType == "unsure"
+    }
+
     /// Human wording for the statutory-blindness verification state.
     var blindStatusTitle: String {
         switch blindStatus {

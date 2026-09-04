@@ -26,6 +26,23 @@ enum UITestArchetype: String, CaseIterable {
         return nil
     }()
 
+    /// `--ui-test-tab=<money|benefits|agent|settings>` — the tab to land on
+    /// at launch (screenshot runs and UI tests that start off Money).
+    static let tabArgumentPrefix = "--ui-test-tab="
+
+    static let initialTabIndex: Int? = {
+        for arg in ProcessInfo.processInfo.arguments where arg.hasPrefix(tabArgumentPrefix) {
+            switch String(arg.dropFirst(tabArgumentPrefix.count)) {
+            case "money": return 0
+            case "benefits": return 1
+            case "agent": return 2
+            case "settings": return 3
+            default: return nil
+            }
+        }
+        return nil
+    }()
+
     static var isActive: Bool { current != nil }
 
     var capabilities: UserCapabilities {
