@@ -31,6 +31,8 @@ struct BenefitsQuestionnaireView: View {
     @State private var showingDetails = false
     @State private var showingLeave = false
     @State private var isSavingAnswers = false
+    @State private var saveError: String?
+    @State private var saveErrorThenSummary = true
     /// Answers collected during the questions; saved on completion or
     /// "Save answers", discarded on "Don't save".
     @State private var collected: BenefitsProfilePatch = .none
@@ -70,6 +72,13 @@ struct BenefitsQuestionnaireView: View {
                     Text(collected.isEmpty ? "Nothing has been saved yet." : "Your answers so far can be saved now and finished later in Settings.")
                 }
                 .overlay { if isSavingAnswers { ProgressView("Saving…").padding().background(.thinMaterial).cornerRadius(12) } }
+                .alert("Couldn't save your answers", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                    Button("Try again") { Task { await saveCollected(thenShowSummary: saveErrorThenSummary) } }
+                    Button("Leave without saving", role: .destructive) { collected = .none; onFinished() }
+                    Button("Keep going", role: .cancel) {}
+                } message: {
+                    Text(saveError ?? "")
+                }
             case .summary:
                 BenefitsProfileView(onDone: {
                     Task {
@@ -92,6 +101,9 @@ struct BenefitsQuestionnaireView: View {
                 try await userManager.updateBenefitsProfile(collected)
                 collected = .none
             } catch {
+                // Keep `collected` so Try again re-sends the same answers.
+                saveErrorThenSummary = thenShowSummary
+                saveError = error.localizedDescription
                 UIAccessibility.post(notification: .announcement, argument: "Couldn't save your answers. \(error.localizedDescription)")
                 return
             }

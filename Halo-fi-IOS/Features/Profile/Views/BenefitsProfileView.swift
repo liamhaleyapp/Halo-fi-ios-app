@@ -2,10 +2,12 @@
 //  BenefitsProfileView.swift
 //  Halo-fi-IOS
 //
-//  Settings → Benefits profile. Edits the same answers as the onboarding
-//  step (ProfileQuestions.v1), one question per screen, plus the state
-//  picker (Q8) that onboarding defers here. The statutory-blind row shows
-//  the verification state and the BPQY walkthrough.
+//  Settings → Benefits profile, and the summary at the end of the
+//  questionnaire. Shows what the user told us (only the answered
+//  questions, each tappable to change), one button for whatever is still
+//  unanswered, the statutory-blind verification state with the BPQY
+//  walkthrough, and the state picker (Q8) that onboarding defers here.
+//  It is a summary, not the eight-question list.
 //
 //  Every benefits screen ends with "Talk to a free benefits counselor"
 //  (hard product rule 6).
@@ -22,93 +24,179 @@ struct BenefitsProfileView: View {
     var onDone: (() -> Void)? = nil
 
     @State private var editing: ProfileQuestionSpec?
+    @State private var finishingRemaining = false
     @State private var showingBPQY = false
     @State private var stateCode: String = ""
     @State private var stateSaveError: String?
 
-    private var overviewLine: String {
-        let caps = userManager.capabilities
-        switch caps.lane {
-        case .ssi:
-            var parts = [caps.showsSSDILane ? "SSI and SSDI" : "SSI"]
-            parts.append(caps.blindStatus == "yes" ? "statutory blindness verified" : "Blind Work Expenses locked until verified")
-            if let work = userManager.benefitsProfile.workStatus {
-                parts.append(work == "working" ? "working now" : work == "starting_soon" ? "starting work soon" : "not working right now")
-            }
-            return parts.joined(separator: " · ") + "."
-        case .ssdi:
-            return "SSDI. Work expenses count as IRWE."
-        case .none:
-            return caps.benefitsUnanswered
-                ? "Not set up yet. The questionnaire takes about a minute."
-                : "No SSI or SSDI. The Benefits tab stays quiet unless this changes."
+    // MARK: - Derived
+
+    private var profile: BenefitsProfile { userManager.benefitsProfile }
+    private var caps: UserCapabilities { userManager.capabilities }
+
+    /// Answers-so-far keyed by question id, the shape `showIf` reads.
+    private var answersById: [String: String] {
+        var out: [String: String] = [:]
+        for spec in ProfileQuestions.v1 {
+            if let stored = profile.answer(for: spec.field) { out[spec.id] = stored }
+        }
+        return out
+    }
+
+    /// Questions with a stored answer, one per field.
+    private var answered: [ProfileQuestionSpec] {
+        ProfileQuestions.settingsRows.filter { profile.answer(for: $0.field) != nil }
+    }
+
+    /// Questions still relevant (their `showIf` holds for the answers so
+    /// far) and not answered yet — what "Answer N more" walks through.
+    private var remaining: [ProfileQuestionSpec] {
+        let answers = answersById
+        var seen = Set<String>()
+        return ProfileQuestions.v1.filter { spec in
+            guard spec.field != "promise_accepted_at" else { return false }
+            guard profile.answer(for: spec.field) == nil else { return false }
+            guard spec.showIf(answers) else { return false }
+            return seen.insert(spec.field).inserted
         }
     }
+
+    private var laneTitle: String {
+        switch caps.lane {
+        case .ssi: return caps.showsSSDILane ? "SSI and SSDI" : "SSI"
+        case .ssdi: return "SSDI"
+        case .none: return caps.benefitsUnanswered ? "Not set up yet" : "No SSI or SSDI"
+        }
+    }
+
+    private var laneIcon: String {
+        switch caps.lane {
+        case .ssi: return "checkmark.shield.fill"
+        case .ssdi: return "briefcase.fill"
+        case .none: return caps.benefitsUnanswered ? "questionmark.circle.fill" : "minus.circle.fill"
+        }
+    }
+
+    private var laneTint: Color {
+        switch caps.lane {
+        case .ssi: return .green
+        case .ssdi: return .blue
+        case .none: return .gray
+        }
+    }
+
+    private var overviewLine: String {
+        switch caps.lane {
+        case .ssi:
+            var parts = [caps.blindStatus == "yes" ? "Statutory blindness verified" : "Blind Work Expenses locked until verified"]
+            if let work = profile.workStatus {
+                parts.append(work == "working" ? "working now" : work == "starting_soon" ? "starting work soon" : "not working right now")
+            }
+            return parts.joined(separator: ", ") + "."
+        case .ssdi:
+            return "Work expenses count as IRWE."
+        case .none:
+            return caps.benefitsUnanswered
+                ? "A few one-tap questions decide what the Benefits tab shows."
+                : "The Benefits tab stays quiet unless this changes."
+        }
+    }
+
+    // MARK: - Body
 
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(onDone != nil ? "Here's your benefits profile" : "Your benefits")
-                        .font(.headline)
-                    Text(overviewLine)
-                        .font(.subheadline)
-                        .foregroundColor(.haloTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
+                laneCard
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+            }
+
+            if answered.isEmpty {
                 if onDone == nil {
-                    NavigationLink {
-                        BenefitsQuestionnaireView(onFinished: { editing = nil })
-                    } label: {
-                        Label(userManager.capabilities.benefitsUnanswered ? "Start the questionnaire" : "Redo the questionnaire", systemImage: "list.bullet.clipboard")
-                            .frame(minHeight: 44)
+                    Section {
+                        NavigationLink {
+                            BenefitsQuestionnaireView(onFinished: { editing = nil })
+                        } label: {
+                            Label("Start the questionnaire", systemImage: "list.bullet.clipboard")
+                                .font(.headline)
+                                .frame(minHeight: 44)
+                        }
+                        .accessibilityHint("About a minute. One question per screen, every one skippable.")
+                    } footer: {
+                        Text("Nothing here is sent to Social Security.")
                     }
-                    .accessibilityHint("Walks through every question again, one per screen.")
+                }
+            } else {
+                Section {
+                    ForEach(answered) { spec in
+                        Button {
+                            editing = spec
+                        } label: {
+                            answerRow(spec)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("What you told us")
+                } footer: {
+                    Text("Tap an answer to change it. Halo uses these to decide which screens and estimates to show. Nothing here is sent to Social Security.")
+                }
+
+                if !remaining.isEmpty {
+                    Section {
+                        Button {
+                            finishingRemaining = true
+                        } label: {
+                            Label(remainingTitle, systemImage: "arrow.right.circle.fill")
+                                .font(.headline)
+                                .frame(minHeight: 44)
+                        }
+                        .accessibilityHint("Asks only the questions you have not answered yet.")
+                    } footer: {
+                        Text("Skipped earlier. Each one is a single tap.")
+                    }
+                }
+
+                if onDone == nil {
+                    Section {
+                        NavigationLink {
+                            BenefitsQuestionnaireView(onFinished: { editing = nil })
+                        } label: {
+                            Label("Redo the questionnaire", systemImage: "arrow.counterclockwise")
+                                .frame(minHeight: 44)
+                        }
+                        .accessibilityHint("Walks through every question again, one per screen.")
+                    }
                 }
             }
 
-            Section {
-                ForEach(ProfileQuestions.settingsRows) { spec in
-                    Button {
-                        editing = spec
-                    } label: {
-                        row(spec)
+            if caps.lane == .ssi || profile.blindStatus != nil {
+                Section {
+                    HStack {
+                        Text("Statutory blindness")
+                        Spacer()
+                        Text(caps.blindStatusTitle)
+                            .foregroundColor(.haloTextSecondary)
+                            .multilineTextAlignment(.trailing)
                     }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("Your answers")
-            } footer: {
-                Text("Halo uses these to decide which screens and estimates to show. Nothing here is sent to Social Security.")
-            }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Statutory blindness. \(caps.blindStatusTitle)")
 
-            Section {
-                HStack {
-                    Text("Statutory blindness")
-                    Spacer()
-                    Text(userManager.capabilities.blindStatusTitle)
-                        .foregroundColor(.haloTextSecondary)
-                        .multilineTextAlignment(.trailing)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Statutory blindness. \(userManager.capabilities.blindStatusTitle)")
-
-                if userManager.capabilities.bweLocked {
-                    Button {
-                        showingBPQY = true
-                    } label: {
-                        Label("How to check with Social Security", systemImage: "doc.text.magnifyingglass")
+                    if caps.bweLocked {
+                        Button {
+                            showingBPQY = true
+                        } label: {
+                            Label("How to check with Social Security", systemImage: "doc.text.magnifyingglass")
+                        }
+                        .accessibilityHint("Explains how to get a Benefits Planning Query. Blind Work Expense features unlock once Social Security's record confirms statutory blindness.")
                     }
-                    .accessibilityHint("Explains how to get a Benefits Planning Query. Blind Work Expense features unlock once Social Security's record confirms statutory blindness.")
-                }
-            } header: {
-                Text("Verification")
-            } footer: {
-                if userManager.capabilities.bweLocked {
-                    Text("Blind Work Expenses are locked until Social Security's record confirms statutory blindness. You can still log Impairment-Related Work Expenses.")
+                } header: {
+                    Text("Verification")
+                } footer: {
+                    if caps.bweLocked {
+                        Text("Blind Work Expenses are locked until Social Security's record confirms statutory blindness. You can still log Impairment-Related Work Expenses.")
+                    }
                 }
             }
 
@@ -163,7 +251,7 @@ struct BenefitsProfileView: View {
         .navigationBarTitleDisplayMode(onDone == nil ? .large : .inline)
         .navigationBarBackButtonHidden(onDone != nil)
         .onAppear {
-            stateCode = userManager.benefitsProfile.stateCode ?? ""
+            stateCode = profile.stateCode ?? ""
             Task { await userManager.refreshCapabilities() }
         }
         .navigationDestination(item: $editing) { spec in
@@ -177,20 +265,85 @@ struct BenefitsProfileView: View {
                 }
             )
         }
+        .navigationDestination(isPresented: $finishingRemaining) {
+            ProfileQuestionsView(
+                questions: remaining,
+                embeddedInOnboarding: false,
+                onComplete: {
+                    finishingRemaining = false
+                    Task { await userManager.refreshCapabilities() }
+                }
+            )
+            .navigationTitle("A few more questions")
+            .navigationBarTitleDisplayMode(.inline)
+        }
         .sheet(isPresented: $showingBPQY) {
             ProfileExplainerSheet(explainer: .bpqyWalkthrough) { showingBPQY = false }
         }
     }
 
-    private func row(_ spec: ProfileQuestionSpec) -> some View {
+    // MARK: - Pieces
+
+    private var remainingTitle: String {
+        let n = remaining.count
+        return n == 1 ? "Answer 1 more question" : "Answer \(n) more questions"
+    }
+
+    /// The tinted summary at the top: which lane, in words, plus one line
+    /// of what that means. Read as a single header by VoiceOver.
+    private var laneCard: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: laneIcon)
+                .font(.title2.weight(.semibold))
+                .foregroundColor(laneTint)
+                .frame(width: 44, height: 44)
+                .background(laneTint.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(onDone != nil ? "Here's your benefits profile" : "Your benefits")
+                    .font(.subheadline)
+                    .foregroundColor(.haloTextSecondary)
+                Text(laneTitle)
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(.haloTextPrimary)
+                Text(overviewLine)
+                    .font(.subheadline)
+                    .foregroundColor(.haloTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(laneTint.opacity(0.35), lineWidth: 1))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Your benefits: \(laneTitle). \(overviewLine)")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// One stored answer: the question as a small caption, the answer as
+    /// the main line, a chevron because it opens the question to change it.
+    private func answerRow(_ spec: ProfileQuestionSpec) -> some View {
         let answer = currentAnswerTitle(for: spec)
-        return HStack {
-            Text(spec.shortTitle)
-                .foregroundColor(.haloTextPrimary)
+        return HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(spec.shortTitle)
+                    .font(.caption)
+                    .foregroundColor(.haloTextSecondary)
+                Text(answer)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.haloTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer()
-            Text(answer)
-                .foregroundColor(.haloTextSecondary)
-                .multilineTextAlignment(.trailing)
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(.haloTextTertiary)
@@ -198,14 +351,14 @@ struct BenefitsProfileView: View {
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(spec.shortTitle). \(answer)")
-        .accessibilityHint("Opens the question so you can change your answer.")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(spec.shortTitle): \(answer)")
+        .accessibilityHint("Changes this answer.")
         .accessibilityAddTraits(.isButton)
     }
 
     private func currentAnswerTitle(for spec: ProfileQuestionSpec) -> String {
-        guard let stored = userManager.benefitsProfile.answer(for: spec.field) else {
+        guard let stored = profile.answer(for: spec.field) else {
             return "Not answered"
         }
         return spec.options.first(where: { $0.id == stored })?.title ?? stored
@@ -213,7 +366,7 @@ struct BenefitsProfileView: View {
 
     private func saveState(_ code: String) {
         stateSaveError = nil
-        guard code != (userManager.benefitsProfile.stateCode ?? "") else { return }
+        guard code != (profile.stateCode ?? "") else { return }
         guard !code.isEmpty else { return }
         Task {
             do {

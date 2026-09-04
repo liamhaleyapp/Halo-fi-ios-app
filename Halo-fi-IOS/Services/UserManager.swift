@@ -868,8 +868,30 @@ final class UserManager {
         }
     }
 
+    /// Like `refreshCapabilities()` but surfaces the failure. Used right
+    /// after a profile write, where a silent miss would let the app carry
+    /// on as if the answers had been stored.
+    func refreshCapabilitiesOrThrow() async throws {
+        let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.User.capabilities,
+            method: .GET,
+            body: nil,
+            responseType: CapabilitiesResponse.self
+        )
+        capabilities = response.capabilities
+        if let profile = response.benefitsProfile {
+            benefitsProfile = profile
+        }
+    }
+
     /// PATCH /users/me with one or more benefits-profile answers, then
-    /// re-fetch capabilities. Idempotent — safe to call per question.
+    /// re-fetch capabilities and CHECK the answers came back. Idempotent —
+    /// safe to call per question.
+    ///
+    /// A backend that predates the benefits profile answers the PATCH with
+    /// 200 and drops the fields (2026-09-04: a full questionnaire vanished
+    /// this way). So a 200 alone is not "saved": the read-back has to show
+    /// the values, or this throws and the caller keeps the answers.
     func updateBenefitsProfile(_ patch: BenefitsProfilePatch) async throws {
         let body = try JSONEncoder().encode(patch)
         let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
@@ -878,7 +900,16 @@ final class UserManager {
             body: body,
             responseType: EmptyResponse.self
         )
-        await refreshCapabilities()
+        do {
+            try await refreshCapabilitiesOrThrow()
+        } catch {
+            Logger.warning("UserManager: benefits profile read-back failed: \(error)")
+            throw BenefitsProfileError.serverUnavailable
+        }
+        guard benefitsProfile.reflects(patch) else {
+            Logger.warning("UserManager: benefits profile PATCH accepted but not stored")
+            throw BenefitsProfileError.notSaved
+        }
     }
 
     private func formatTokenDuration(_ seconds: Int) -> String {

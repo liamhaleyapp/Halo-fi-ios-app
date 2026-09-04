@@ -297,3 +297,45 @@ struct CapabilitiesResponse: Codable {
         case benefitsProfile = "benefits_profile"
     }
 }
+
+
+/// Why a benefits-profile save did not stick. Both are user-facing.
+enum BenefitsProfileError: LocalizedError {
+    /// The read-back endpoint is missing or failing (typically a backend
+    /// that has not been updated yet).
+    case serverUnavailable
+    /// The server accepted the write but the answers did not come back.
+    case notSaved
+
+    var errorDescription: String? {
+        switch self {
+        case .serverUnavailable:
+            return "HaloFi's server can't store benefits answers right now. Your answers were not saved. Please try again later."
+        case .notSaved:
+            return "Your answers were not saved. Please try again."
+        }
+    }
+}
+
+extension BenefitsProfile {
+    /// True when every field the patch set is now stored with that value.
+    func reflects(_ patch: BenefitsProfilePatch) -> Bool {
+        if let v = patch.getsSsaPayment, getsSsaPayment != v { return false }
+        if let v = patch.benefitType, benefitType != v { return false }
+        if let v = patch.blindStatus, blindStatus != v { return false }
+        if let v = patch.householdType, householdType != v { return false }
+        if let v = patch.householdSize {
+            guard let stored = householdSize else { return false }
+            if v >= 4 ? stored < 4 : stored != v { return false }
+        }
+        if let v = patch.workStatus, workStatus != v { return false }
+        if let v = patch.hasAbleAccount, hasAbleAccount != v { return false }
+        if let v = patch.stateCode, stateCode != v { return false }
+        if let v = patch.ssiEligibleCouple, ssiEligibleCouple != v { return false }
+        if let v = patch.accessMode, accessMode != v { return false }
+        if patch.promiseAcceptedAt != nil, promiseAcceptedAt == nil { return false }
+        if let v = patch.fieldOfficeChannel, fieldOfficeChannel != v { return false }
+        if let v = patch.fieldOfficeNotes, fieldOfficeNotes != v { return false }
+        return true
+    }
+}
