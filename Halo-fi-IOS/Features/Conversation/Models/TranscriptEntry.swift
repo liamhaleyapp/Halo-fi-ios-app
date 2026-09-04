@@ -11,7 +11,7 @@
 import Foundation
 
 /// Renderable transcript entry for UI display
-struct TranscriptEntry: Identifiable, Equatable {
+struct TranscriptEntry: Identifiable, Equatable, Codable {
     let id: UUID
     let speaker: Speaker
     var text: String
@@ -19,7 +19,7 @@ struct TranscriptEntry: Identifiable, Equatable {
     var isStreaming: Bool
 
     /// Speaker type for transcript entries
-    enum Speaker: Equatable {
+    enum Speaker: String, Equatable, Codable {
         case user
         case userDraft  // Live transcription while speaking (tentative styling)
         case agent

@@ -75,7 +75,7 @@ final class ElevenLabsSTTService {
     private var webSocketTask: URLSessionWebSocketTask?
     private var currentToken: STTTokenResponse?
     private var listeningTask: Task<Void, Never>?
-    private var isSessionReady = false  // Wait for session_started before sending audio
+    private(set) var isSessionReady = false  // Wait for session_started before sending audio
 
     // Throttle updates to prevent UI jitter
     private var lastUpdateTime: Date = .distantPast
@@ -173,6 +173,29 @@ final class ElevenLabsSTTService {
 
         Logger.info("ElevenLabsSTT: Disconnected")
         onDisconnected?()
+    }
+
+    /// WP7 — flush the current segment WITHOUT closing the socket. Hands-free
+    /// keeps one Scribe session open for the whole conversation so the next
+    /// turn never loses its opening syllables to a reconnect.
+    func commit() async {
+        guard isConnected, let task = webSocketTask else { return }
+        let sampleRate = currentToken?.config.sampleRate ?? 16000
+        let commitMessage: [String: Any] = [
+            "message_type": "input_audio_chunk",
+            "audio_base_64": "",
+            "commit": true,
+            "sample_rate": sampleRate
+        ]
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: commitMessage)
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                try await task.send(.string(jsonString))
+                Logger.debug("ElevenLabsSTT: commit (session kept open)")
+            }
+        } catch {
+            Logger.warning("ElevenLabsSTT: commit failed: \(error)")
+        }
     }
 
     /// Send a commit signal to flush any buffered transcript, then disconnect.

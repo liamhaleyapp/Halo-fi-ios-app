@@ -14,20 +14,29 @@ struct ClientMessagePayload: Codable, Sendable {
     let context: [String: AnyCodable]?
     let sessionId: String?
     let streamAudio: Bool?
+    /// WP7 — control frame type ("cancel"); nil for a normal turn.
+    let type: String?
+    /// WP7 — client-generated turn id, echoed on every server event.
+    let turnId: String?
 
     enum CodingKeys: String, CodingKey {
         case message
         case context
+        case type
         case sessionId = "session_id"
         case streamAudio = "stream_audio"
+        case turnId = "turn_id"
     }
 
     init(message: String, context: [String: AnyCodable]? = nil,
-         sessionId: String? = nil, streamAudio: Bool? = nil) {
+         sessionId: String? = nil, streamAudio: Bool? = nil,
+         type: String? = nil, turnId: String? = nil) {
         self.message = message
         self.context = context
         self.sessionId = sessionId
         self.streamAudio = streamAudio
+        self.type = type
+        self.turnId = turnId
     }
 }
 
@@ -41,6 +50,8 @@ struct AgentResponsePayload: Codable, Sendable {
     let timestamp: String?
     let error: String?   // Server includes this field
 
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type
         case message
@@ -48,6 +59,7 @@ struct AgentResponsePayload: Codable, Sendable {
         case status
         case timestamp
         case error
+        case turnId = "turn_id"
     }
 }
 
@@ -57,11 +69,14 @@ struct StreamChunkPayload: Codable, Sendable {
     let complete: Bool?
     let timestamp: String?
     
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type
         case chunk
         case complete
         case timestamp
+        case turnId = "turn_id"
     }
 }
 
@@ -72,12 +87,15 @@ struct ErrorPayload: Codable, Sendable {
     let details: [String: AnyCodable]?
     let timestamp: String?
     
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type
         case error
         case code
         case details
         case timestamp
+        case turnId = "turn_id"
     }
 }
 
@@ -104,8 +122,11 @@ struct AcknowledgmentPayload: Codable, Sendable {
     let text: String?
     let data: [String: AnyCodable]?
 
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type, text, data
+        case turnId = "turn_id"
     }
 }
 
@@ -114,8 +135,11 @@ struct AudioChunkPayload: Codable, Sendable {
     let audio: String
     let timestamp: String?
 
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type, audio, timestamp
+        case turnId = "turn_id"
     }
 }
 
@@ -132,9 +156,12 @@ struct AudioCompletePayload: Codable, Sendable {
     /// break `(data["is_acknowledgment"]?.value as? Bool)`.
     let isAcknowledgment: Bool?
 
+    let turnId: String?
+
     enum CodingKeys: String, CodingKey {
         case type, message, text, data, timestamp
         case isAcknowledgment = "is_acknowledgment"
+        case turnId = "turn_id"
     }
 
     /// The response text — server may use either "message" or "text"
@@ -174,7 +201,20 @@ struct DataMutatedPayload: Codable, Sendable {
 
 /// Events emitted by AgentWebSocketManager.
 /// ConversationCoordinator consumes these via `for await event in manager.events`.
+/// WP7 — the server confirms a turn was cancelled; nothing more arrives for it.
+struct TurnCancelledPayload: Codable, Sendable {
+    let type: String
+    let turnId: String?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, reason
+        case turnId = "turn_id"
+    }
+}
+
 enum AgentEvent: Sendable {
+    case turnCancelled(TurnCancelledPayload)
     case dataMutated(DataMutatedPayload)
     case connectionAck(ConnectionAckPayload)
     case streamChunk(StreamChunkPayload)
@@ -185,6 +225,21 @@ enum AgentEvent: Sendable {
     case voiceStatus(VoiceStatusPayload)
     case error(ErrorPayload)
     case permanentDisconnect
+
+    /// WP7 — the turn this event belongs to (nil for session-level events
+    /// such as the greeting, connection_ack, data_mutated).
+    var turnId: String? {
+        switch self {
+        case .streamChunk(let p): return p.turnId
+        case .agentResponse(let p): return p.turnId
+        case .audioChunk(let p): return p.turnId
+        case .audioComplete(let p): return p.turnId
+        case .acknowledgment(let p): return p.turnId
+        case .error(let p): return p.turnId
+        case .turnCancelled(let p): return p.turnId
+        default: return nil
+        }
+    }
 }
 
 // MARK: - Union Types for WebSocket
@@ -199,6 +254,7 @@ enum AgentIncomingMessage: Codable, Sendable {
     case audioComplete(AudioCompletePayload)
     case voiceStatus(VoiceStatusPayload)
     case dataMutated(DataMutatedPayload)
+    case turnCancelled(TurnCancelledPayload)
     case unknown(String)
 
     enum CodingKeys: String, CodingKey {
@@ -243,6 +299,9 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "data_mutated":
             let payload = try DataMutatedPayload(from: decoder)
             self = .dataMutated(payload)
+        case "turn_cancelled":
+            let payload = try TurnCancelledPayload(from: decoder)
+            self = .turnCancelled(payload)
         default:
             self = .unknown(type)
         }
@@ -267,6 +326,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .voiceStatus(let payload):
             try payload.encode(to: encoder)
         case .dataMutated(let payload):
+            try payload.encode(to: encoder)
+        case .turnCancelled(let payload):
             try payload.encode(to: encoder)
         case .unknown:
             break

@@ -49,7 +49,8 @@ final class ConversationViewModel {
         store: ConversationTranscriptStore? = nil
     ) {
         self.coordinator = coordinator ?? ConversationCoordinator.shared
-        self.store = store ?? ConversationTranscriptStore()
+        // WP7 — one thread for the chat tab and the voice modal.
+        self.store = store ?? ConversationTranscriptStore.shared
 
         // Wire coordinator events to store
         let transcriptStore = self.store
@@ -69,7 +70,9 @@ final class ConversationViewModel {
         // read from @AppStorage directly via UserDefaults rather than
         // instantiating a property here so the value picks up changes
         // made between conversations without view-lifecycle plumbing.
-        let raw = UserDefaults.standard.string(forKey: "conversationMode")
+        // WP7 — hands-free is the default inside the voice modal; push-to-
+        // talk remains a choice in Settings → Preferences.
+        let raw = UserDefaults.standard.string(forKey: "conversationMode") ?? "hands_free"
         coordinator.setConversationMode(ConversationMode.from(raw))
 
         // Configure services
@@ -101,7 +104,36 @@ final class ConversationViewModel {
 
     func onDisappear() {
         coordinator.disconnect()
-        store.reset()
+        // WP7 — the thread persists; only the live draft is dropped.
+        store.discardDraft()
+    }
+
+    // MARK: - WP7 — chat thread + Start/Stop
+
+    /// Connect silently (no greeting) so a typed message can go out from
+    /// the Agent tab without opening the voice modal.
+    func connectForText() async {
+        guard !coordinator.isConnected else { return }
+        let raw = UserDefaults.standard.string(forKey: "conversationMode") ?? "hands_free"
+        coordinator.setConversationMode(ConversationMode.from(raw))
+        let player = StreamingAudioPlayer()
+        player.observeVoiceOverStatus()
+        coordinator.configure(streamingAudioPlayer: player, audioFeedback: audioFeedback, transcriptStore: store)
+        await coordinator.connect(skipGreeting: true)
+    }
+
+    var isSessionActive: Bool { coordinator.isConnected }
+
+    /// The voice modal's primary control: Stop ends the session (mic and
+    /// speech off); Start reconnects and listens.
+    func toggleSession() async {
+        if isSessionActive {
+            coordinator.endConversation()
+            UIAccessibility.post(notification: .announcement, argument: "Conversation stopped.")
+        } else {
+            await onAppear(skipGreeting: true)
+            await coordinator.startListening()
+        }
     }
 
     // MARK: - Actions

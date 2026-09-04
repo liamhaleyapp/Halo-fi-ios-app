@@ -62,6 +62,12 @@ final class ConversationCoordinator {
     // MARK: - Private State
 
     private var currentAgentResponseId: UUID?
+
+    // MARK: - WP7 turn correlation
+    /// Client-generated id for the turn in flight. Every server event for
+    /// it carries the same id; anything else is stale and dropped.
+    private(set) var currentTurnId: String?
+    private var cancelledTurnIds: [String] = []
     private var pendingRetryMessage: String?
     private var isVoiceSessionActive = false
     private var agentEventTask: Task<Void, Never>?
@@ -115,7 +121,14 @@ final class ConversationCoordinator {
     /// If users start reporting cut-offs mid-sentence, nudge back up
     /// to 0.7s — we previously sat there but it felt sluggish in
     /// hands-free testing.
-    private let silenceCommitInterval: TimeInterval = 0.5
+    /// WP7 — the SERVER (Scribe VAD, 0.8 s) ends the turn; this timer is
+    /// only the fallback when its commit never arrives, so it sits at 1.2 s.
+    private let silenceCommitInterval: TimeInterval = 1.2
+
+    /// WP7 — commits shorter than this are treated as noise (a cough, a
+    /// door) and the turn keeps listening.
+    private let minSpeechDuration: TimeInterval = 0.2
+    private var speechSecondsInCurrentListen: TimeInterval = 0
 
     // MARK: - Hands-free barge-in
     //
@@ -143,6 +156,13 @@ final class ConversationCoordinator {
     /// like they need to project to interrupt.
     private let bargeInRequiredFrames: Int = 3
     private var bargeInConsecutiveFrames: Int = 0
+
+    /// WP7 — barge-in needs RMS AND a fresh partial transcript. Loud frames
+    /// only open a candidate window; the STT partial closes it. When no STT
+    /// session is open (push-to-talk), a longer RMS streak is the fallback.
+    private var bargeInCandidateAt: Date?
+    private let bargeInTranscriptWindow: TimeInterval = 1.5
+    private let bargeInFallbackFrames: Int = 10
 
     /// Set by `bargeIn()` immediately before stopping the player so
     /// `handleSpeakingFinished` can skip its 400ms settling delay —
@@ -294,6 +314,18 @@ final class ConversationCoordinator {
         self.audioFeedback = audioFeedback
         self.transcriptStore = transcriptStore
 
+        // WP7 — .speaking only once the player has accepted a buffer.
+        streamingAudioPlayer.onPlaybackStarted = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                switch self.state {
+                case .processing, .idle, .connecting:
+                    self.setState(.speaking)
+                default:
+                    break
+                }
+            }
+        }
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in
                 self?.handleSpeakingFinished()
@@ -412,6 +444,9 @@ final class ConversationCoordinator {
         listenStartedAt = nil
         bargeInConsecutiveFrames = 0
         bargeInRequested = false
+        bargeInCandidateAt = nil
+        speechSecondsInCurrentListen = 0
+        currentTurnId = nil
         // Drop any captured audio for the next conversation. Note we
         // do not reset recordingTurnNumber here — it's bound to the
         // session and we get a new sessionId on the next connect, so
@@ -482,6 +517,14 @@ final class ConversationCoordinator {
             return
         }
 
+        // WP7 — hands-free keeps ONE Scribe session open for the whole
+        // conversation. If it is still ready, the next turn starts without
+        // a token fetch + handshake (which used to drop opening syllables).
+        if sttService.isConnected && sttService.isSessionReady {
+            await beginListenTurn()
+            return
+        }
+
         // Show connecting state while establishing STT connection
         setState(.connecting)
 
@@ -490,58 +533,67 @@ final class ConversationCoordinator {
             sttService.onSessionReady = { [weak self] in
                 guard let self = self else { return }
                 Task { @MainActor in
-                    do {
-                        // Wire audio buffers — single closure that routes
-                        // every frame based on the current conversation
-                        // state. Hands-free keeps voiceService recording
-                        // across listen / process / speak so we can detect
-                        // barge-in (user interrupting Halo mid-response).
-                        self.voiceService.onAudioBuffer = { [weak self] buffer in
-                            guard let self = self else { return }
-                            if self.isMicMuted { return }
-                            Task { @MainActor [weak self] in
-                                self?.routeAudioBuffer(buffer)
-                            }
-                        }
-
-                        // Reset silence-detection state for this turn so
-                        // residual values from a prior listen can't trigger
-                        // a phantom commit on the new one.
-                        self.hasDetectedSpeechInCurrentListen = false
-                        self.lastVoiceActivityAt = nil
-                        self.listenStartedAt = Date()
-
-                        // Conditionally discard the pre-roll ring. Pre-roll
-                        // gives ~700 ms of head-start so the user's
-                        // opening syllables aren't clipped — keep that
-                        // win when it's safe. We ONLY drop the ring
-                        // when Halo just spoke (within the last
-                        // prerollContaminationWindow seconds), since
-                        // the speaker→mic bleed during/just-after TTS
-                        // can otherwise prepend Halo's last words to
-                        // the user's transcript even with .voiceChat
-                        // AEC. After the window, the ring has cycled
-                        // past anything Halo said and contains only
-                        // ambient — safe to flush.
-                        if let endedAt = self.lastSpeakingEndedAt,
-                           Date().timeIntervalSince(endedAt) < self.prerollContaminationWindow {
-                            self.voiceService.discardPreroll()
-                        }
-
-                        // Start recording first, then signal the user
-                        try await self.voiceService.startRecording()
-                        self.setState(.listening)
-                        self.audioFeedback.feedbackForStateChange(.listening)
-                        self.isVoiceSessionActive = true
-                    } catch {
-                        self.handleVoiceSetupError(error)
-                    }
+                    await self.beginListenTurn()
                 }
             }
 
             // Connect to ElevenLabs STT (fetches fresh token each time)
             try await connectWithTimeout()
 
+        } catch {
+            handleVoiceSetupError(error)
+        }
+    }
+
+    /// One listen turn on an open STT session: wire the buffer router,
+    /// reset per-turn detection state, start the mic, announce.
+    private func beginListenTurn() async {
+        do {
+            // Wire audio buffers — single closure that routes
+            // every frame based on the current conversation
+            // state. Hands-free keeps voiceService recording
+            // across listen / process / speak so we can detect
+            // barge-in (user interrupting Halo mid-response).
+            voiceService.onAudioBuffer = { [weak self] buffer in
+                guard let self = self else { return }
+                if self.isMicMuted { return }
+                Task { @MainActor [weak self] in
+                    self?.routeAudioBuffer(buffer)
+                }
+            }
+
+            // Reset silence-detection state for this turn so
+            // residual values from a prior listen can't trigger
+            // a phantom commit on the new one.
+            hasDetectedSpeechInCurrentListen = false
+            lastVoiceActivityAt = nil
+            listenStartedAt = Date()
+            lastServerCommitAt = nil
+            speechSecondsInCurrentListen = 0
+            bargeInCandidateAt = nil
+
+            // Conditionally discard the pre-roll ring. Pre-roll
+            // gives ~700 ms of head-start so the user's
+            // opening syllables aren't clipped — keep that
+            // win when it's safe. We ONLY drop the ring
+            // when Halo just spoke (within the last
+            // prerollContaminationWindow seconds), since
+            // the speaker→mic bleed during/just-after TTS
+            // can otherwise prepend Halo's last words to
+            // the user's transcript even with .voiceChat
+            // AEC. After the window, the ring has cycled
+            // past anything Halo said and contains only
+            // ambient — safe to flush.
+            if let endedAt = lastSpeakingEndedAt,
+               Date().timeIntervalSince(endedAt) < prerollContaminationWindow {
+                voiceService.discardPreroll()
+            }
+
+            // Start recording first, then signal the user
+            try await voiceService.startRecording()
+            setState(.listening)
+            audioFeedback.feedbackForStateChange(.listening)
+            isVoiceSessionActive = true
         } catch {
             handleVoiceSetupError(error)
         }
@@ -671,6 +723,12 @@ final class ConversationCoordinator {
             // while Halo is mid-response, and interrupt if so.
             if conversationMode == .handsFree {
                 processAudioBufferForBargeIn(buffer)
+                // WP7 — once loud frames opened a candidate window, feed
+                // the open STT session so a partial transcript can
+                // confirm it is speech (not a cough or the TV).
+                if bargeInCandidateAt != nil, sttService.isSessionReady {
+                    Task { await sttService.sendAudioBuffer(buffer) }
+                }
             }
 
         default:
@@ -699,9 +757,22 @@ final class ConversationCoordinator {
 
         bargeInConsecutiveFrames += 1
         Logger.debug("Barge-in: candidate frame \(bargeInConsecutiveFrames)/\(bargeInRequiredFrames) (RMS=\(String(format: "%.4f", rms)))")
-        if bargeInConsecutiveFrames >= bargeInRequiredFrames {
+        if sttService.isConnected && sttService.isSessionReady {
+            // WP7 — transcript-gated: RMS opens (or refreshes) the window;
+            // the STT partial handler fires the actual barge-in.
+            if bargeInConsecutiveFrames >= bargeInRequiredFrames {
+                if bargeInCandidateAt == nil {
+                    Logger.info("Hands-free: barge-in candidate (RMS=\(String(format: "%.4f", rms))) — waiting for a partial transcript")
+                }
+                bargeInCandidateAt = Date()
+            }
+            return
+        }
+        // No STT session to confirm with (push-to-talk): a longer streak
+        // is the fallback so a single cough can't cut Halo off.
+        if bargeInConsecutiveFrames >= bargeInFallbackFrames {
             bargeInConsecutiveFrames = 0
-            Logger.info("Hands-free: barge-in detected (RMS=\(String(format: "%.4f", rms))) — interrupting Halo")
+            Logger.info("Hands-free: barge-in detected by RMS fallback (RMS=\(String(format: "%.4f", rms))) — interrupting Halo")
             bargeIn()
         }
     }
@@ -713,6 +784,11 @@ final class ConversationCoordinator {
     private func bargeIn() {
         guard state == .speaking else { return }
         bargeInRequested = true
+        bargeInCandidateAt = nil
+        bargeInConsecutiveFrames = 0
+        // WP7 — tell the server to stop generating / speaking this turn;
+        // late chunks for it are dropped by turn_id on the way in.
+        cancelCurrentTurn()
         // stopAndDiscardPending: stop local playback AND drop any
         // chunks the server is still streaming for the abandoned
         // response. Otherwise late-arriving chunks refill the player's
@@ -780,6 +856,11 @@ final class ConversationCoordinator {
             }
             hasDetectedSpeechInCurrentListen = true
             lastVoiceActivityAt = now
+            // WP7 — accumulate how much actual speech this listen has
+            // heard; sub-200 ms commits are treated as noise.
+            if buffer.format.sampleRate > 0 {
+                speechSecondsInCurrentListen += Double(buffer.frameLength) / buffer.format.sampleRate
+            }
             return
         }
 
@@ -824,15 +905,15 @@ final class ConversationCoordinator {
         listenStartedAt = nil
         bargeInConsecutiveFrames = 0
 
-        // STT always disconnects between turns; we'll reconnect when
-        // the next listen starts. In hands-free we keep voiceService
-        // recording so the audio engine doesn't churn through a
-        // teardown / re-init cycle on every turn — and so the buffer
-        // router can detect barge-in during .speaking without
-        // re-installing a tap. Push-to-talk keeps the original
-        // teardown so the existing test surface is untouched.
-        sttService.disconnect()
-        if conversationMode == .pushToTalk {
+        // WP7 — hands-free keeps the Scribe session open across turns
+        // (flush only); push-to-talk keeps the original teardown so its
+        // test surface is untouched. In hands-free we also keep
+        // voiceService recording so the audio engine doesn't churn and
+        // the buffer router can detect barge-in during .speaking.
+        if conversationMode == .handsFree {
+            Task { [weak self] in await self?.sttService.commit() }
+        } else {
+            sttService.disconnect()
             voiceService.stopRecording()
             voiceService.onAudioBuffer = nil
         }
@@ -914,8 +995,10 @@ final class ConversationCoordinator {
         lastUserSendAt = nil
     }
 
-    /// Send a text message (from text input)
-    func sendText(_ message: String) async {
+    /// Send a text message (from text input).
+    /// WP7 — `spoken: false` asks for a text-only reply (the chat thread);
+    /// sending while Halo is thinking or talking interrupts that turn.
+    func sendText(_ message: String, spoken: Bool = true) async {
         let trimmed = message.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
@@ -925,10 +1008,23 @@ final class ConversationCoordinator {
         // connection_ack handler.
         if state == .connecting {
             pendingInitialMessage = message
+            pendingInitialSpoken = spoken
             return
         }
 
-        guard state == .idle || state == .listening else { return }
+        switch state {
+        case .idle, .listening:
+            break
+        case .processing, .speaking:
+            // Interrupt the reply in flight: cancel server-side, drop
+            // any audio still arriving for it.
+            cancelCurrentTurn()
+            streamingAudioPlayer?.stopAndDiscardPending()
+            isPlayingAcknowledgment = false
+            audioFeedback.stopProcessingPulse()
+        default:
+            return
+        }
 
         // Stop listening if active (without discarding - stopListening handles that)
         if state == .listening {
@@ -948,13 +1044,39 @@ final class ConversationCoordinator {
         // every 3s) so the user knows the agent is working. Stops
         // when the first audio chunk lands.
         audioFeedback.feedbackForStateChange(.processing)
-        await sendTextInternal(message)
+        await sendTextInternal(message, spoken: spoken)
+    }
+
+    private var pendingInitialSpoken: Bool = true
+
+    /// WP7 — cancel the turn in flight (barge-in, Stop, a new message).
+    /// The server answers with turn_cancelled; anything still arriving
+    /// for this id is dropped by handleAgentEvent.
+    func cancelCurrentTurn() {
+        guard let turnId = currentTurnId else { return }
+        cancelledTurnIds.append(turnId)
+        if cancelledTurnIds.count > 20 { cancelledTurnIds.removeFirst(cancelledTurnIds.count - 20) }
+        currentTurnId = nil
+        streamingAudioPlayer?.stopAndDiscardPending()
+        Task { [weak self] in
+            guard let self else { return }
+            try? await self.agentWebSocket.sendCancel(turnId: turnId)
+        }
+    }
+
+    private func isStaleTurn(_ turnId: String?) -> Bool {
+        guard let turnId else { return false }
+        if cancelledTurnIds.contains(turnId) { return true }
+        if let current = currentTurnId, current != turnId { return true }
+        return false
     }
 
     /// Internal: Send text to agent (used by both text input and voice finalization)
-    private func sendTextInternal(_ message: String) async {
+    private func sendTextInternal(_ message: String, spoken: Bool = true) async {
         do {
             currentAgentResponseId = UUID()
+            let turnId = UUID().uuidString
+            currentTurnId = turnId
 
             // We're starting a fresh turn — re-open the audio player's
             // chunk gate. If the previous turn ended via barge-in, the
@@ -971,7 +1093,7 @@ final class ConversationCoordinator {
                 "timezone": AnyCodable(TimeZone.current.identifier),
             ]
 
-            try await agentWebSocket.sendMessage(message, context: context)
+            try await agentWebSocket.sendMessage(message, context: context, turnId: turnId, streamAudio: spoken)
 
             // Delay to let the listening_stop sound finish before playing typing sound
             try? await Task.sleep(nanoseconds: 400_000_000) // 400ms
@@ -992,6 +1114,7 @@ final class ConversationCoordinator {
 
         // Stop speaking immediately if muted
         if muted && state == .speaking {
+            cancelCurrentTurn()
             streamingAudioPlayer?.stop()
             setState(.idle)
         }
@@ -1035,6 +1158,7 @@ final class ConversationCoordinator {
     /// Stop current TTS without affecting mute state (skip this message)
     func stopSpeaking() {
         guard state == .speaking else { return }
+        cancelCurrentTurn()
         streamingAudioPlayer?.stop()
         setState(.idle)
     }
@@ -1177,7 +1301,21 @@ final class ConversationCoordinator {
     /// Handles all events from the AgentWebSocketManager event stream.
     /// Replaces the previous 7 separate callback closures with a single sequential handler.
     private func handleAgentEvent(_ event: AgentEvent) {
+        // WP7 — anything for a cancelled or superseded turn is dropped
+        // before it can touch the player or the transcript.
+        if isStaleTurn(event.turnId) {
+            Logger.debug("ConversationCoordinator: dropping stale event for turn \(event.turnId ?? "?")")
+            return
+        }
         switch event {
+        case .turnCancelled(let payload):
+            audioFeedback.stopProcessingPulse()
+            // Only settle to idle if nothing newer replaced the turn.
+            if state == .processing, currentTurnId == nil || currentTurnId == payload.turnId {
+                currentTurnId = nil
+                setState(.idle)
+            }
+
         case .connectionAck(let ack):
             if let serverSessionId = ack.sessionId ?? ack.connectionId {
                 sessionId = serverSessionId
@@ -1199,8 +1337,10 @@ final class ConversationCoordinator {
             // buttons take.
             if let pending = pendingInitialMessage {
                 pendingInitialMessage = nil
+                let spoken = pendingInitialSpoken
+                pendingInitialSpoken = true
                 Task { [weak self] in
-                    await self?.sendText(pending)
+                    await self?.sendText(pending, spoken: spoken)
                 }
             }
 
@@ -1216,7 +1356,9 @@ final class ConversationCoordinator {
             audioFeedback.stopProcessingPulse()
             let responseId = currentAgentResponseId ?? UUID()
             emitEvent(.agentFinal(response.message, id: responseId))
-            if streamingAudioPlayer?.isPlaying != true && streamingAudioPlayer?.isBuffering != true {
+            // WP7 — never touch state while the mic is live.
+            if state != .listening,
+               streamingAudioPlayer?.isPlaying != true && streamingAudioPlayer?.isBuffering != true {
                 setState(.idle)
             }
             currentAgentResponseId = nil
@@ -1315,7 +1457,32 @@ final class ConversationCoordinator {
         // Handle transcription updates (partial and committed)
         sttService.onTranscription = { [weak self] text, isFinal in
             guard let self = self else { return }
-            guard self.isVoiceSessionActive else { return }
+
+            // WP7 — a partial while Halo is speaking, inside the RMS
+            // candidate window, is the barge-in confirmation.
+            if !self.isVoiceSessionActive {
+                if self.state == .speaking, !isFinal,
+                   let candidate = self.bargeInCandidateAt,
+                   Date().timeIntervalSince(candidate) < self.bargeInTranscriptWindow,
+                   !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Logger.info("Hands-free: barge-in confirmed by transcript — interrupting Halo")
+                    self.transcriptStore?.updateDraft(text)
+                    self.bargeIn()
+                }
+                return
+            }
+
+            // WP7 — a commit with almost no speech behind it is noise
+            // (cough, door); keep listening instead of ending the turn.
+            if isFinal, self.conversationMode == .handsFree, self.state == .listening,
+               self.speechSecondsInCurrentListen < self.minSpeechDuration,
+               text.split(separator: " ").count <= 2 {
+                Logger.info("Hands-free: ignoring sub-200ms commit (\(text.count) chars)")
+                self.transcriptStore?.discardDraft()
+                self.hasDetectedSpeechInCurrentListen = false
+                self.lastVoiceActivityAt = nil
+                return
+            }
 
             if isFinal {
                 // Server committed a segment. Fold it into the accumulated
@@ -1382,10 +1549,9 @@ final class ConversationCoordinator {
     }
 
     private func handleAgentResponseComplete(id: UUID) {
-        // Response is complete, transition to speaking if we have text
-        if !isPrivacyMode {
-            setState(.speaking)
-        } else {
+        // WP7 — text completion never flips to .speaking; the player's
+        // onPlaybackStarted does, once a buffer is actually playing.
+        if isPrivacyMode, state != .listening {
             setState(.idle)
         }
     }
@@ -1397,12 +1563,8 @@ final class ConversationCoordinator {
             return
         }
 
-        // Move to .speaking on the first buffer that flips us out of
-        // .processing — subsequent intermediate audio_completes during
-        // sentence-streaming should not bounce state back and forth.
-        if state != .speaking {
-            setState(.speaking)
-        }
+        // WP7 — .speaking is set by onPlaybackStarted after the player
+        // accepts the buffer, not here.
         streamingAudioPlayer?.playAccumulatedAudio(isFinal: isFinal)
     }
 

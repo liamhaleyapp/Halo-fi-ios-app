@@ -427,6 +427,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         case .voiceStatus(let payload):
             Logger.info("Voice status: \(payload.text)")
             eventContinuation?.yield(.voiceStatus(payload))
+        case .turnCancelled(let payload):
+            eventContinuation?.yield(.turnCancelled(payload))
         case .dataMutated(let payload):
             Logger.info("Data mutated: scope=\(payload.scope)")
             eventContinuation?.yield(.dataMutated(payload))
@@ -531,7 +533,12 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     // MARK: - Sending Messages
 
-    func sendMessage(_ message: String, context: [String: AnyCodable]? = nil) async throws {
+    func sendMessage(
+        _ message: String,
+        context: [String: AnyCodable]? = nil,
+        turnId: String? = nil,
+        streamAudio: Bool = true
+    ) async throws {
         guard let connection = webSocketConnection else {
             Logger.error("AgentWebSocket: Cannot send - not connected")
             throw AgentWebSocketError.disconnected
@@ -546,7 +553,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             message: message,
             context: context,
             sessionId: currentSessionId ?? sessionId,
-            streamAudio: true
+            streamAudio: streamAudio,
+            turnId: turnId
         )
 
         Logger.sensitive("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")
@@ -554,6 +562,20 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         try await connection.send(payload)
 
         Logger.info("AgentWebSocket: Message sent successfully")
+    }
+
+    /// WP7 — ask the server to stop generating / speaking `turnId`
+    /// (barge-in, Stop, or a new message interrupting the reply).
+    func sendCancel(turnId: String) async throws {
+        guard let connection = webSocketConnection else { return }
+        let payload = ClientMessagePayload(
+            message: "cancel",
+            sessionId: currentSessionId ?? sessionId,
+            type: "cancel",
+            turnId: turnId
+        )
+        try await connection.send(payload)
+        Logger.info("AgentWebSocket: cancel sent for turn \(turnId)")
     }
 }
 

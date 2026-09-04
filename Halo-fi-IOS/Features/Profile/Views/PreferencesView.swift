@@ -17,7 +17,7 @@ struct PreferencesView: View {
     @AppStorage("voiceSpeed") private var voiceSpeed = "Normal"
     /// "push_to_talk" or "hands_free". Phase 1 just persists the
     /// choice; ConversationCoordinator branches on it in Phase 2.
-    @AppStorage("conversationMode") private var conversationMode = "push_to_talk"
+    @AppStorage("conversationMode") private var conversationMode = "hands_free"
     /// What Halo's own speech does while VoiceOver is running:
     /// duck (default) / mute / normal. Device-local — VoiceOver is a
     /// per-device setting — so it is not pushed to the backend.
@@ -61,8 +61,8 @@ struct PreferencesView: View {
     ]
 
     private let conversationModeOptions: [SelectionOption] = [
+        .init(id: "hands_free", title: "Hands-Free"),
         .init(id: "push_to_talk", title: "Push to Talk"),
-        .init(id: "hands_free", title: "Hands-Free (Beta)"),
     ]
 
     private let voiceOverBehaviorOptions: [SelectionOption] =

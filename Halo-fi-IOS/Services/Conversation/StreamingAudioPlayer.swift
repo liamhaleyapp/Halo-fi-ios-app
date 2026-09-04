@@ -38,6 +38,11 @@ final class StreamingAudioPlayer: NSObject {
     // MARK: - Callbacks
 
     var onPlaybackFinished: (() -> Void)?
+    /// WP7 — fires when a buffer is actually accepted and playing after
+    /// the player was idle. The coordinator flips to `.speaking` HERE, not
+    /// when text arrives, so state never claims Halo is talking while the
+    /// mic is still the active surface.
+    var onPlaybackStarted: (() -> Void)?
 
     /// Playback rate (0.5–2.0). Applied via AVAudioPlayer.rate when
     /// playback starts; changing it mid-playback is honored on the
@@ -284,9 +289,11 @@ final class StreamingAudioPlayer: NSObject {
                 playNextBuffer()
                 return
             }
+            let wasIdle = !self.isPlaying
             self.audioPlayer = player
             self.isPlaying = true
             Logger.info("StreamingAudioPlayer: Playback started (\(player.duration)s, rate=\(playbackRate))")
+            if wasIdle { onPlaybackStarted?() }
         } catch {
             Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")
             playNextBuffer()

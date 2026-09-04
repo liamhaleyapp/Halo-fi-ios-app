@@ -66,6 +66,7 @@ final class ConversationTranscriptStore {
     func append(_ event: ConversationEvent) {
         events.append(event)
         processEvent(event)
+        persistIfNeeded()
     }
 
     /// Reset all state (e.g., on new session)
@@ -79,6 +80,46 @@ final class ConversationTranscriptStore {
         draftEntryId = nil
         draftText = ""
         committedText = ""
+        persistence?.clear()
+    }
+
+    // MARK: - WP7 — one thread, shared by the chat tab and the voice modal
+
+    /// The app-wide transcript. Voice and text share it; it survives app
+    /// launches through `TranscriptPersistence` once `bind(userId:)` runs.
+    static let shared = ConversationTranscriptStore()
+
+    private var persistence: TranscriptPersistence?
+    private var persistTask: Task<Void, Never>?
+
+    /// Scope persistence to the signed-in user and restore their thread.
+    /// Safe to call repeatedly; switching users swaps the thread.
+    func bind(userId: String?) {
+        guard let userId, !userId.isEmpty else {
+            persistence = nil
+            return
+        }
+        if persistence?.userId == userId { return }
+        persistence = TranscriptPersistence(userId: userId)
+        if entries.isEmpty, let saved = persistence?.load(), !saved.isEmpty {
+            entries = saved
+        }
+    }
+
+    /// Remove the saved thread (Clear conversation).
+    func clearPersisted() {
+        persistence?.clear()
+    }
+
+    private func persistIfNeeded() {
+        guard let persistence else { return }
+        persistTask?.cancel()
+        let snapshot = entries.filter { !$0.isStreaming && $0.speaker != .userDraft }
+        persistTask = Task { [snapshot] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            persistence.save(snapshot)
+        }
     }
 
     // MARK: - Draft Management (ElevenLabs STT)
@@ -131,6 +172,7 @@ final class ConversationTranscriptStore {
     /// segments plus the live remainder, not just the last segment.
     @discardableResult
     func finalizeDraft() -> String? {
+        defer { persistIfNeeded() }
         guard let id = draftEntryId,
               let index = entries.firstIndex(where: { $0.id == id }) else {
             return nil
