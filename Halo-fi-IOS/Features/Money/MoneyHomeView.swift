@@ -81,7 +81,6 @@ struct MoneyHomeView: View {
                 }
                 .refreshable {
                     await bankDataManager.forceRefresh()
-                    try? await bankDataManager.fetchAccounts(forceRefresh: true)
                     await budgetDataManager.refresh()
                     await loadTransactions(forceRefresh: true)
                 }
@@ -113,10 +112,12 @@ struct MoneyHomeView: View {
                 guard !hasAppeared else { return }
                 hasAppeared = true
                 await bankDataManager.refreshIfStale()
-                // The header sums the flat accounts list, which loads with
-                // the tab (accountsByItemId only fills when an institution
-                // is opened — that is why the old header said "$0").
-                try? await bankDataManager.fetchAccounts()
+                // The header sums the per-institution accounts — the same
+                // source the Accounts page shows — so the figure never shifts
+                // as caches fill. First launch: load them if nothing is cached.
+                if bankDataManager.accountsByItemId.isEmpty, !(bankDataManager.linkedItems ?? []).isEmpty {
+                    await bankDataManager.forceRefresh()
+                }
                 if budgetDataManager.shouldRefresh { await budgetDataManager.refresh() }
                 await loadTransactions(forceRefresh: false)
             }
@@ -289,6 +290,9 @@ extension MoneySnapshot {
         var cash = 0.0
         var owed = 0.0
         var count = 0
+        // Single source: the per-institution accounts (what the Accounts page
+        // lists). The flat /bank/accounts list is only a stopgap before the
+        // first per-item load completes.
         let perItem = bank.accountsByItemId.values.flatMap { $0 }
         let source = perItem.isEmpty ? (bank.accounts ?? []) : perItem
         for account in source where account.isActive {

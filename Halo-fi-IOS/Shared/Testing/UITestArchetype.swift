@@ -20,9 +20,13 @@ enum UITestArchetype: String, CaseIterable {
     static let argumentPrefix = "--ui-test-archetype="
 
     static let current: UITestArchetype? = {
+        // Debug builds only: a TestFlight / App Store build must never be
+        // able to seed fixture data on top of a real account.
+        #if DEBUG
         for arg in ProcessInfo.processInfo.arguments where arg.hasPrefix(argumentPrefix) {
             return UITestArchetype(rawValue: String(arg.dropFirst(argumentPrefix.count)))
         }
+        #endif
         return nil
     }()
 
@@ -31,6 +35,7 @@ enum UITestArchetype: String, CaseIterable {
     static let tabArgumentPrefix = "--ui-test-tab="
 
     static let initialTabIndex: Int? = {
+        #if DEBUG
         for arg in ProcessInfo.processInfo.arguments where arg.hasPrefix(tabArgumentPrefix) {
             switch String(arg.dropFirst(tabArgumentPrefix.count)) {
             case "money": return 0
@@ -40,6 +45,7 @@ enum UITestArchetype: String, CaseIterable {
             default: return nil
             }
         }
+        #endif
         return nil
     }()
 
