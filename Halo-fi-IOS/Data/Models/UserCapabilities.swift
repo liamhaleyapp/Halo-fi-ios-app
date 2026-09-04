@@ -232,6 +232,25 @@ struct BenefitsProfilePatch: Encodable, Equatable {
 
     var isEmpty: Bool { self == .none }
 
+    /// Later answers win; nil fields in `other` leave this patch alone.
+    func merging(_ other: BenefitsProfilePatch) -> BenefitsProfilePatch {
+        var out = self
+        if let v = other.getsSsaPayment { out.getsSsaPayment = v }
+        if let v = other.benefitType { out.benefitType = v }
+        if let v = other.blindStatus { out.blindStatus = v }
+        if let v = other.householdType { out.householdType = v }
+        if let v = other.householdSize { out.householdSize = v }
+        if let v = other.workStatus { out.workStatus = v }
+        if let v = other.hasAbleAccount { out.hasAbleAccount = v }
+        if let v = other.stateCode { out.stateCode = v }
+        if let v = other.ssiEligibleCouple { out.ssiEligibleCouple = v }
+        if let v = other.accessMode { out.accessMode = v }
+        if let v = other.promiseAcceptedAt { out.promiseAcceptedAt = v }
+        if let v = other.fieldOfficeChannel { out.fieldOfficeChannel = v }
+        if let v = other.fieldOfficeNotes { out.fieldOfficeNotes = v }
+        return out
+    }
+
     enum CodingKeys: String, CodingKey {
         case getsSsaPayment = "gets_ssa_payment"
         case benefitType = "benefit_type"

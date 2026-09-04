@@ -864,8 +864,10 @@ final class BankDataManager {
             let persisted = await persistence.loadAllTransactions(for: userId, itemId: itemId)
             let needsFullSync = await persistence.needsFullSync(for: userId, itemId: itemId)
 
-            // Return if we have transactions OR we've already synced (empty is a valid state)
-            if !persisted.isEmpty || !needsFullSync {
+            // Only trust a NON-EMPTY persisted list. An empty one is
+            // indistinguishable from a wiped cache (a skipped sync used to
+            // persist []), so it goes to the network instead.
+            if !persisted.isEmpty {
                 transactionsByItemId[itemId] = persisted
                 // Trigger background refresh if stale
                 if await persistence.needsRecentSync(for: userId, itemId: itemId) {
@@ -942,9 +944,12 @@ final class BankDataManager {
             } else {
                 var merged: [Transaction] = []
                 for item in self.linkedItems ?? [] {
-                    if let txns = try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh) {
-                        merged.append(contentsOf: txns)
+                    var txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh)) ?? []
+                    if txns.isEmpty && !forceRefresh {
+                        // Nothing cached for this bank: go to the network once.
+                        txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: true)) ?? []
                     }
+                    merged.append(contentsOf: txns)
                 }
                 var seen = Set<String>()
                 result = merged

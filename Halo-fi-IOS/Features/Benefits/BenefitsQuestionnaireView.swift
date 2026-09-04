@@ -28,6 +28,12 @@ struct BenefitsQuestionnaireView: View {
     @State private var phase: Phase = .intro
     @State private var isStarting = false
     @State private var startError: String?
+    @State private var showingDetails = false
+    @State private var showingLeave = false
+    @State private var isSavingAnswers = false
+    /// Answers collected during the questions; saved on completion or
+    /// "Save answers", discarded on "Don't save".
+    @State private var collected: BenefitsProfilePatch = .none
     @AccessibilityFocusState private var titleFocused: Bool
 
     private static let questions: [ProfileQuestionSpec] = ProfileQuestions.v1.filter { $0.field != "promise_accepted_at" }
@@ -41,16 +47,29 @@ struct BenefitsQuestionnaireView: View {
                 ProfileQuestionsView(
                     questions: Self.questions,
                     embeddedInOnboarding: false,
+                    onAnswer: { patch in collected = collected.merging(patch) },
                     onBack: { phase = .intro },
-                    onComplete: {
-                        Task {
-                            await userManager.refreshCapabilities()
-                            dataManager.markStale()
-                            phase = .summary
-                        }
-                    }
+                    onComplete: { Task { await saveCollected(thenShowSummary: true) } }
                 )
                 .navigationTitle("Benefits questionnaire")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { showingLeave = true } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .accessibilityLabel("Leave questionnaire")
+                        .accessibilityHint("Asks whether to save the answers so far.")
+                    }
+                }
+                .accessibilityAction(.escape) { showingLeave = true }
+                .confirmationDialog("Leave the questionnaire?", isPresented: $showingLeave, titleVisibility: .visible) {
+                    Button("Save answers so far") { Task { await saveCollected(thenShowSummary: false) } }
+                    Button("Don't save", role: .destructive) { collected = .none; onFinished() }
+                    Button("Keep going", role: .cancel) {}
+                } message: {
+                    Text(collected.isEmpty ? "Nothing has been saved yet." : "Your answers so far can be saved now and finished later in Settings.")
+                }
+                .overlay { if isSavingAnswers { ProgressView("Saving…").padding().background(.thinMaterial).cornerRadius(12) } }
             case .summary:
                 BenefitsProfileView(onDone: {
                     Task {
@@ -65,16 +84,38 @@ struct BenefitsQuestionnaireView: View {
         .navigationBarBackButtonHidden(phase == .questions)
     }
 
+    private func saveCollected(thenShowSummary: Bool) async {
+        isSavingAnswers = true
+        defer { isSavingAnswers = false }
+        if !collected.isEmpty {
+            do {
+                try await userManager.updateBenefitsProfile(collected)
+                collected = .none
+            } catch {
+                UIAccessibility.post(notification: .announcement, argument: "Couldn't save your answers. \(error.localizedDescription)")
+                return
+            }
+        }
+        await userManager.refreshCapabilities()
+        dataManager.markStale()
+        if thenShowSummary {
+            phase = .summary
+        } else {
+            await dataManager.refresh()
+            onFinished()
+        }
+    }
+
     // MARK: - 1. Before you start
 
     private var intro: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Image("HaloFiLogo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 72, height: 72)
-                    .padding(.top, 24)
+                    .frame(width: 64, height: 64)
+                    .padding(.top, 16)
                     .accessibilityHidden(true)
 
                 Text("Benefits questionnaire")
@@ -84,17 +125,40 @@ struct BenefitsQuestionnaireView: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($titleFocused)
 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("A few questions about your Social Security benefits. Your answers decide which screens, reminders and estimates HaloFi shows you. Each one is a single tap, and you can skip any of them.")
+                // One short block for VoiceOver: what it is, the two rules
+                // that matter, and that everything can change later.
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("A few one-tap questions about your Social Security benefits. They decide what HaloFi shows you.")
                         .foregroundColor(.haloTextPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    bullet("chart.bar.doc.horizontal", "Estimates only", "Every number HaloFi shows about your benefits is an estimate for education. Social Security makes every actual decision, and HaloFi is not a substitute for their determinations or for legal advice.")
-                    bullet("lock.shield", "Nothing goes to Social Security", "HaloFi never sends anything to Social Security. You report and hand in your own paperwork; the app prepares, reminds and keeps the log.")
-                    bullet("person.wave.2", "A free human when it matters", "For questions like deeming, trusts or overpayments, HaloFi points you to a free Work Incentives counselor instead of guessing.")
-                    bullet("pencil", "Change anything later", "Your answers live in Settings, Benefits profile. Nothing here is permanent.")
+                    Text("Everything is an estimate; Social Security decides. Nothing is ever sent to them. You can change any answer later.")
+                        .foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 24)
+                .accessibilityElement(children: .combine)
+
+                if showingDetails {
+                    VStack(alignment: .leading, spacing: 14) {
+                        bullet("chart.bar.doc.horizontal", "Estimates only", "Every benefits number HaloFi shows is an estimate for education, not a determination and not legal advice. Social Security makes every actual decision.")
+                        bullet("lock.shield", "Nothing goes to Social Security", "You report and hand in your own paperwork. HaloFi prepares, reminds and keeps the log.")
+                        bullet("person.wave.2", "A free human when it matters", "Deeming, trusts, overpayments: HaloFi points you to a free Work Incentives counselor instead of guessing.")
+                        bullet("pencil", "Change anything later", "Your answers live in Settings, Benefits profile. Skip any question you're unsure about.")
+                    }
+                    .padding(.horizontal, 24)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showingDetails.toggle() }
+                } label: {
+                    Text(showingDetails ? "Hide details" : "More about this")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                        .underline()
+                        .frame(minHeight: 44)
+                }
+                .accessibilityLabel(showingDetails ? "Hide details" : "More about this questionnaire")
 
                 if let startError {
                     Text(startError)

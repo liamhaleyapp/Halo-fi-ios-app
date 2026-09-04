@@ -30,6 +30,10 @@ struct ProfileQuestionsView: View {
     /// Settings edits one question on its own: its `showIf` must not hide
     /// it (the condition refers to OTHER questions' answers).
     let ignoreVisibility: Bool
+    /// When set, answers are NOT sent to the server here; each chosen
+    /// patch is handed to this callback and the owner saves (or discards)
+    /// them. The questionnaire uses it for "Save / Don't save" on exit.
+    let onAnswer: ((BenefitsProfilePatch) -> Void)?
 
     @State private var answers: [String: String] = [:]
     @State private var index: Int = 0
@@ -48,12 +52,14 @@ struct ProfileQuestionsView: View {
         questions: [ProfileQuestionSpec] = ProfileQuestions.v1,
         embeddedInOnboarding: Bool = true,
         ignoreVisibility: Bool = false,
+        onAnswer: ((BenefitsProfilePatch) -> Void)? = nil,
         onBack: (() -> Void)? = nil,
         onComplete: @escaping () -> Void
     ) {
         self.questions = questions
         self.embeddedInOnboarding = embeddedInOnboarding
         self.ignoreVisibility = ignoreVisibility
+        self.onAnswer = onAnswer
         self.onBack = onBack
         self.onComplete = onComplete
     }
@@ -240,6 +246,11 @@ struct ProfileQuestionsView: View {
     private func commit(_ option: ProfileOption, for spec: ProfileQuestionSpec) {
         answers[spec.id] = option.id
         guard !option.patch.isEmpty else {
+            advance(recording: option.id, for: spec)
+            return
+        }
+        if let onAnswer {
+            onAnswer(option.patch)
             advance(recording: option.id, for: spec)
             return
         }

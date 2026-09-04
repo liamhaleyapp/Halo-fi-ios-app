@@ -278,7 +278,10 @@ extension MoneySnapshot {
         // first per-item load completes.
         let perItem = bank.accountsByItemId.values.flatMap { $0 }
         let source = perItem.isEmpty ? (bank.accounts ?? []) : perItem
-        for account in source where account.isActive {
+        // Dedupe by account id: three feeds write accountsByItemId and a
+        // stale or doubled entry must never change the headline number.
+        var seenIds = Set<String>()
+        for account in source where account.isActive && seenIds.insert(account.idAccount).inserted {
             count += 1
             let balance = account.currentBalance ?? 0
             if account.type.lowercased() == "credit" || account.type.lowercased() == "loan" {
