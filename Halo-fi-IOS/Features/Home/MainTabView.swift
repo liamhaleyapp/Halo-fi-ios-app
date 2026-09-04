@@ -27,10 +27,16 @@ extension Notification.Name {
     static let resetSettingsNavigation = Notification.Name("resetSettingsNavigation")
 }
 
+/// WP4 tab order (Liam, 2026-09-03): Money · Benefits · Agent · Settings.
+enum MainTab: Int {
+    case money = 0, benefits = 1, agent = 2, settings = 3
+}
+
 struct MainTabView: View {
     @Environment(UserManager.self) private var userManager
     @Environment(SubscriptionService.self) private var subscriptionService
     @Environment(BankDataManager.self) private var bankDataManager
+    @Environment(BudgetDataManager.self) private var budgetDataManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     @State private var feedbackService = AudioFeedbackService()
@@ -54,6 +60,10 @@ struct MainTabView: View {
 
     private var currentRoute: AppRoute {
         _ = consentRefreshToken
+        // WP4 UI-test seam: fixtures stand in for auth + network.
+        if UITestArchetype.isActive {
+            return .main
+        }
         if !userManager.isAuthenticated {
             return .loggedOut
         } else if userManager.isResolvingDestination {
@@ -94,24 +104,18 @@ struct MainTabView: View {
                 let progress = Double(newTab) / Double(max(totalTabs - 1, 1))
                 Haptics.engine.play(.tickAscending(progress: progress))
             }
-            // Leaving the Accounts tab resets its nested navigation
-            // so the user always re-enters at the institutions list,
-            // not whichever account/transaction detail they were
-            // viewing previously.
-            if oldTab == 1 && newTab != 1 {
-                NotificationCenter.default.post(
-                    name: .resetAccountsNavigation,
-                    object: nil
-                )
+            // WP4 tab order: 0 Money · 1 Benefits · 2 Agent · 3 Settings.
+            // Leaving a tab resets its nested navigation so the user
+            // always re-enters at that tab's root list.
+            if oldTab == MainTab.money.rawValue && newTab != MainTab.money.rawValue {
+                NotificationCenter.default.post(name: .resetMoneyNavigation, object: nil)
+                NotificationCenter.default.post(name: .resetAccountsNavigation, object: nil)
             }
-            // Same treatment for the Settings tab — re-entering
-            // should always land on the root list, not a nested
-            // Profile / About / Preferences view.
-            if oldTab == 3 && newTab != 3 {
-                NotificationCenter.default.post(
-                    name: .resetSettingsNavigation,
-                    object: nil
-                )
+            if oldTab == MainTab.benefits.rawValue && newTab != MainTab.benefits.rawValue {
+                NotificationCenter.default.post(name: .resetBenefitsNavigation, object: nil)
+            }
+            if oldTab == MainTab.settings.rawValue && newTab != MainTab.settings.rawValue {
+                NotificationCenter.default.post(name: .resetSettingsNavigation, object: nil)
             }
         }
         // Phase 11 Track B — quick-action "Ask Halo" deep-link.
@@ -119,16 +123,21 @@ struct MainTabView: View {
         // back there when the conversation dismisses.
         .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { _ in
             guard currentRoute == .main else { return }
-            if selectedTab != 0 {
+            if selectedTab != MainTab.agent.rawValue {
                 conversationOriginTab = selectedTab
             }
-            selectedTab = 0
+            selectedTab = MainTab.agent.rawValue
         }
         // WP3 — a receipt arrived from the share extension: land on the
         // Budget tab, which opens the log form with it attached.
         .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
             guard currentRoute == .main else { return }
-            selectedTab = 2
+            selectedTab = MainTab.benefits.rawValue
+        }
+        // WP4 — "Mark as work expense" from the Money tab lands on Benefits.
+        .onReceive(NotificationCenter.default.publisher(for: .workExpenseDraftRequested)) { _ in
+            guard currentRoute == .main else { return }
+            selectedTab = MainTab.benefits.rawValue
         }
         // Posted by HomeView when ConversationView closes. Restore the
         // originating tab if we recorded one (otherwise stay on Agent
@@ -190,47 +199,84 @@ struct MainTabView: View {
 
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
+            MoneyHomeView()
+                .tabItem {
+                    Label("Money", systemImage: "banknote.fill")
+                        .accessibilityHint("Accounts, budget, and recent transactions")
+                }
+                .tag(MainTab.money.rawValue)
+
+            BenefitsHomeView()
+                .tabItem {
+                    Label("Benefits", systemImage: "heart.text.square.fill")
+                        .accessibilityHint("SSI resource monitor, work expenses, and education")
+                }
+                .tag(MainTab.benefits.rawValue)
+
             HomeView()
                 .tabItem {
                     Label("Agent", systemImage: "mic.circle.fill")
-                        .accessibilityHint("Voice assistant and home screen")
+                        .accessibilityHint("Talk to Halo")
                 }
-                .tag(0)
-
-            AccountsOverviewView()
-                .tabItem {
-                    Label("Account", systemImage: "creditcard.fill")
-                        .accessibilityHint("View and manage your financial accounts")
-                }
-                .tag(1)
-
-            BudgetView()
-                .tabItem {
-                    Label("Budget", systemImage: "chart.pie.fill")
-                        .accessibilityHint("Monthly spending, income, and SSI status")
-                }
-                .tag(2)
+                .tag(MainTab.agent.rawValue)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                         .accessibilityHint("App settings and preferences")
                 }
-                .tag(3)
+                .tag(MainTab.settings.rawValue)
         }
         .accentColor(.blue)
-        // Horizontal swipe between tabs. simultaneousGesture so it
-        // coexists with horizontal scroll views inside individual
-        // tabs (the conversation transcript, settings rows, etc.).
-        // VoiceOver intercepts touches before this fires, so blind
-        // users keep using the tab bar buttons — no accessibility
-        // regression. Swipe is a sighted-user convenience only.
         .simultaneousGesture(swipeBetweenTabs)
+        // WP4 — Magic Tap anywhere: the Money header, resource status, and
+        // the next due task, in one breath.
+        .accessibilityAction(.magicTap) {
+            UIAccessibility.post(notification: .announcement, argument: magicTapText())
+        }
+        .task {
+            seedUITestFixturesIfNeeded()
+        }
     }
 
-    /// Drag threshold below which a swipe is treated as scrolling
-    /// content rather than a tab switch. 50pt feels deliberate
-    /// without being awkward.
+    // MARK: - WP4 helpers
+
+    private func magicTapText() -> String {
+        let money = TabSummaries.money(
+            MoneySnapshot.make(bank: bankDataManager, budget: budgetDataManager),
+            capabilities: userManager.capabilities
+        )
+        let deductions = budgetDataManager.ssiManualDeductions
+        let benefits: TabSummary? = userManager.capabilities.showsBenefitsLane
+            ? TabSummaries.benefits(
+                capabilities: userManager.capabilities,
+                ssi: budgetDataManager.overview?.ssiStatus,
+                expensesThisMonth: deductions.count,
+                expensesTotalCents: deductions.reduce(0) { $0 + $1.amountCents },
+                expensesImpactCents: deductions.reduce(0) { $0 + ($1.estimatedCheckImpactCents ?? 0) }
+            )
+            : nil
+        var nextTask: String?
+        let needsReceipt = deductions.filter { $0.resolvedMatchStatus == "needs_receipt" }.count
+        if needsReceipt > 0 {
+            nextTask = "Next: add a receipt to \(VoiceOverFormatter.count(needsReceipt, singular: "expense", plural: "expenses"))."
+        } else if !budgetDataManager.ssiCandidates.isEmpty {
+            nextTask = "Next: confirm \(VoiceOverFormatter.count(budgetDataManager.ssiCandidates.count, singular: "possible work expense", plural: "possible work expenses"))."
+        } else if (bankDataManager.linkedItems ?? []).contains(where: { !$0.isActive }) {
+            nextTask = "Next: reconnect a bank that needs attention."
+        }
+        return TabSummaries.magicTap(money: money, benefits: benefits, nextTask: nextTask)
+    }
+
+    private func seedUITestFixturesIfNeeded() {
+        guard let archetype = UITestArchetype.current else { return }
+        userManager.capabilities = archetype.capabilities
+        bankDataManager.configureForUser(userId: "uitest")
+        bankDataManager.setLinkedItems(archetype.linkedItems)
+        bankDataManager.accountsByItemId = archetype.accountsByItemId
+        budgetDataManager.overview = archetype.overview
+    }
+
     private var swipeBetweenTabs: some Gesture {
         DragGesture(minimumDistance: 24)
             .onEnded { value in
@@ -240,7 +286,7 @@ struct MainTabView: View {
                 // a scroll, not a tab swipe.
                 guard abs(dx) > abs(dy) * 1.5 else { return }
                 let threshold: CGFloat = 50
-                if dx < -threshold && selectedTab < 3 {
+                if dx < -threshold && selectedTab < MainTab.settings.rawValue {
                     withAnimation(.easeOut(duration: 0.25)) {
                         selectedTab += 1
                     }

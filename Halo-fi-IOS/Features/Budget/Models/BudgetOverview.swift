@@ -247,6 +247,8 @@ struct SSIStatus: Codable, Equatable {
     /// VoiceOver summary announcement so blind users hear the
     /// status the second the tab loads.
     let voiceSummary: String?
+    /// WP4 — "Estimate for education only…" from the backend.
+    let disclaimer: String?
 
     enum CodingKeys: String, CodingKey {
         case hasSsi = "has_ssi"
@@ -258,6 +260,7 @@ struct SSIStatus: Codable, Equatable {
         case overpaymentReason = "overpayment_reason"
         case month
         case engineVersion = "engine_version"
+        case disclaimer
         case voiceSummary = "voice_summary"
     }
 }
@@ -275,7 +278,17 @@ struct SSIResources: Codable, Equatable {
     let excludedCents: Int?       // ABLE + burial-fund exclusions
     let ableBalanceCents: Int?
     let burialFundCents: Int?
-    let v2Status: String?         // "over" | "critical" | "warning" | "ok"
+    let v2Status: String?
+    // WP4 — resource monitor v2 (policy-derived). All optional so older
+    // backends still decode.
+    let bandStatus: String?
+    let escalated: Bool?
+    let pctOfLimit: Double?
+    let daysUntilMeasurement: Int?
+    let measurementDateIso: String?
+    // WP5 — month-end inversion amount.
+    let spendOrMoveCents: Int?
+    let spendOrMoveFormatted: String?         // "over" | "critical" | "warning" | "ok"
 
     enum CodingKeys: String, CodingKey {
         case currentCents = "current_cents"
@@ -287,6 +300,13 @@ struct SSIResources: Codable, Equatable {
         case ableBalanceCents = "able_balance_cents"
         case burialFundCents = "burial_fund_cents"
         case v2Status = "v2_status"
+        case bandStatus = "band_status"
+        case escalated
+        case pctOfLimit = "pct_of_limit"
+        case daysUntilMeasurement = "days_until_measurement"
+        case measurementDateIso = "measurement_date_iso"
+        case spendOrMoveCents = "spend_or_move_cents"
+        case spendOrMoveFormatted = "spend_or_move_formatted"
     }
 }
 

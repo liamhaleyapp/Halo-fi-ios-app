@@ -133,11 +133,17 @@ final class HapticEngine {
     /// are no-ops here — call startContinuous instead.
     func play(_ pattern: HapticPattern) {
         guard !pattern.isContinuous else { return }
+        // WP4 — Settings → Accessibility → Haptic intensity. 0 = off.
+        let scale = Float(AccessibilityPrefs.hapticIntensity)
+        guard scale > 0 else { return }
 
         if isCoreHapticsAvailable, let engine = engine {
             do {
                 let events = makeTransientEvents(for: pattern)
-                let pattern = try CHHapticPattern(events: events, parameters: [])
+                let control = CHHapticDynamicParameter(
+                    parameterID: .hapticIntensityControl, value: min(scale, 1.5), relativeTime: 0
+                )
+                let pattern = try CHHapticPattern(events: events, parameters: [control])
                 let player = try engine.makePlayer(with: pattern)
                 try player.start(atTime: CHHapticTimeImmediate)
                 return

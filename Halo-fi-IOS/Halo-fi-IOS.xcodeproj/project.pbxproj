@@ -70,6 +70,7 @@
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
+				"Halo-fi-IOSUITests/TabHeaderUITests.swift",
 			);
 			target = 0C39AAAE2E4EBF9A00CF16A0 /* Halo-fi-IOS */;
 		};
@@ -87,6 +88,7 @@
 			membershipExceptions = (
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
+				"Halo-fi-IOSUITests/TabHeaderUITests.swift",
 			);
 			target = 0C39AAC82E4EBF9C00CF16A0 /* Halo-fi-IOSUITests */;
 		};

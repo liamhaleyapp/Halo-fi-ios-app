@@ -32,6 +32,9 @@ struct SSILogManualDeductionView: View {
     /// A receipt that arrived before the form opened (share extension, or
     /// "Attach receipt" on a row that opened the capture first).
     let initialReceipt: CapturedReceipt?
+    /// "Mark as work expense" from a transaction: amount, description and
+    /// date arrive prefilled; the user confirms or edits.
+    let initialDraft: WorkExpenseDraft?
     let onSave: (ManualDeductionDraft) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -62,12 +65,19 @@ struct SSILogManualDeductionView: View {
     init(
         capabilities: UserCapabilities,
         initialReceipt: CapturedReceipt? = nil,
+        initialDraft: WorkExpenseDraft? = nil,
         onSave: @escaping (ManualDeductionDraft) async throws -> Void
     ) {
         self.capabilities = capabilities
         self.initialReceipt = initialReceipt
+        self.initialDraft = initialDraft
         self.onSave = onSave
         _selectedType = State(initialValue: capabilities.expenseType == .bwe ? .bwe : .irwe)
+        if let draft = initialDraft {
+            _amountText = State(initialValue: String(format: "%.2f", Double(draft.amountCents) / 100.0))
+            _description = State(initialValue: draft.description)
+            _occurredOn = State(initialValue: min(draft.occurredOn, Date()))
+        }
     }
 
     private var bweLocked: Bool { capabilities.bweLocked }

@@ -11,6 +11,8 @@ struct AccountDetailView: View {
   let account: FinancialAccount
 
   @Environment(BankDataManager.self) private var bankDataManager
+  @Environment(UserManager.self) private var userManager
+  @Environment(BudgetDataManager.self) private var budgetDataManager
   @State private var transactions: [Transaction] = []
   @State private var isLoadingInitial = false  // Only for first load with no cache
   @State private var transactionError: String?
@@ -94,6 +96,18 @@ struct AccountDetailView: View {
     }
   }
   
+  /// "Counted toward your SSI limit: yes / no", or the ABLE exclusion.
+  private var ssiCountedLine: String {
+    let kind = String(describing: account.type).lowercased()
+    if kind.contains("credit") || kind.contains("loan") {
+      return "Counted toward your SSI limit: no — this is money you owe. Estimate."
+    }
+    if account.name.lowercased().contains("able") || account.nickname.lowercased().contains("able") {
+      return "ABLE account — excluded from your SSI limit up to 100,000 dollars. Estimate."
+    }
+    return "Counted toward your SSI limit: yes. Estimate."
+  }
+
   // MARK: - Account Header View
   private var accountHeaderView: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -141,6 +155,16 @@ struct AccountDetailView: View {
           Text(account.isSynced ? "Synced" : "Not Synced")
             .font(.caption)
             .foregroundColor(Color.haloTextSecondary)
+        }
+
+        // WP4 — SSI profiles hear whether this balance counts toward the
+        // resource limit, and ABLE's exclusion, right under the balance.
+        if userManager.capabilities.showsResourceCounter {
+          Text(ssiCountedLine)
+            .font(.caption)
+            .foregroundColor(Color.haloTextSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel(ssiCountedLine)
         }
       }
     }

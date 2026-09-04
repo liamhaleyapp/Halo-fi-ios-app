@@ -69,9 +69,12 @@ enum BudgetAccessibilitySummary {
             sentences.append(budgetHeadline(overview))
         }
 
-        return sentences
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let kept = sentences.filter { !$0.isEmpty }
+        // Settings → Accessibility → Speech: Brief keeps the headline only.
+        if AccessibilityPrefs.isBriefSpeech, kept.count > 2 {
+            return Array(kept.prefix(2)).joined(separator: " ")
+        }
+        return kept.joined(separator: " ")
     }
 
     // MARK: - SSI fallback (when voice_summary is missing)

@@ -17,6 +17,16 @@ struct HomeView: View {
                 Color(.systemBackground).ignoresSafeArea()
 
                 VStack(spacing: 10) {
+                    // WP4 — first element on every tab is a header with the
+                    // screen's verdict in words. (WP7 rebuilds this tab.)
+                    ScreenReaderSummaryHeader(
+                        verdict: "Halo",
+                        detail: "Your assistant. Tap to talk, or use a quick action below.",
+                        tone: .neutral
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+
                     // Voice conversation button - opens unified ConversationView
                     VoiceConversationButton {
                         initialPrompt = nil

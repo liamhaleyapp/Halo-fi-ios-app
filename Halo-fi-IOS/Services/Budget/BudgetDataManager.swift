@@ -109,6 +109,7 @@ final class BudgetDataManager {
     /// Pull the latest overview. Coalesces concurrent calls so hitting
     /// refresh three times in a row doesn't fire three requests.
     func refresh(userTz: String? = TimeZone.current.identifier) async {
+        if UITestArchetype.isActive { return }
         if let existing = refreshTask {
             await existing.value
             return

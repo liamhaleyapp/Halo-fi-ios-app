@@ -321,6 +321,7 @@ final class BankDataManager {
     // MARK: - Force Refresh
 
     func forceRefresh() async {
+        if UITestArchetype.isActive { return }
         guard let userId = currentUserId else {
             Logger.debug("BankDataManager: forceRefresh - no user")
             return
@@ -345,6 +346,7 @@ final class BankDataManager {
     // MARK: - Auto-Refresh on Launch
 
     func refreshIfStale() async {
+        if UITestArchetype.isActive { return }
         guard let userId = currentUserId else {
             Logger.debug("BankDataManager: refreshIfStale - waiting for auth")
             return

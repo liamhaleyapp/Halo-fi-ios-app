@@ -29,19 +29,11 @@ struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(UserManager.self) private var userManager
     @State private var showingIncomeEditor = false
-    @State private var showingManualDeductionSheet = false
     /// Top-of-Budget "Log expense" quick-action drives this — opens
     /// the voice intake conversation directly. The bottom "Add"
     /// button on the Logged Deductions card still uses the typed
     /// SSILogManualDeductionView path (showingManualDeductionSheet).
     @State private var showingVoiceDeductionLog = false
-    /// WP3 — a row's "Needs receipt" / rotor "Attach receipt" target.
-    @State private var receiptAttachTarget: SSIManualDeduction?
-    /// WP3 — receipt handed off from the share extension; opens the
-    /// log form with it already attached.
-    @State private var handoffReceipt: CapturedReceipt?
-    @State private var receiptActionStatus: String?
-    @Environment(\.openURL) private var openURL
     /// Phase 11 Track A — last announcement we already spoke, used
     /// to avoid re-announcing the same digest on every redraw.
     @State private var lastAnnouncedSummary: String?
@@ -90,8 +82,7 @@ struct BudgetView: View {
                                 }
                             )
                             monthlyIncomeSection(overview)
-                            ssiSection(overview.ssiStatus)
-                            alertsSection(overview.alerts)
+                                            alertsSection(overview.alerts)
                         } else if dataManager.isLoading {
                             ProgressView()
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -131,35 +122,6 @@ struct BudgetView: View {
             .fullScreenCover(isPresented: $showingVoiceDeductionLog) {
                 ConversationView(customGreetingId: "deduction_intake")
             }
-            .sheet(isPresented: $showingManualDeductionSheet, onDismiss: { handoffReceipt = nil }) {
-                SSILogManualDeductionView(
-                    capabilities: userManager.capabilities,
-                    initialReceipt: handoffReceipt,
-                    onSave: { draft in
-                        let formatter = DateFormatter()
-                        formatter.locale = Locale(identifier: "en_US_POSIX")
-                        formatter.dateFormat = "yyyy-MM-dd"
-                        try await dataManager.logManualDeduction(
-                            type: draft.type,
-                            amountCents: draft.amountCents,
-                            description: draft.description,
-                            occurredOn: formatter.string(from: draft.occurredOn),
-                            notes: draft.notes,
-                            receipt: draft.receipt
-                        )
-                    }
-                )
-            }
-            // WP3 — attach a receipt to an existing entry.
-            .sheet(item: $receiptAttachTarget) { entry in
-                ReceiptCaptureView { captured in
-                    Task { await attachReceipt(captured, to: entry) }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
-                takeHandoffReceiptIfAny()
-            }
-            .onAppear { takeHandoffReceiptIfAny() }
         }
     }
 
@@ -169,27 +131,6 @@ struct BudgetView: View {
     /// the data isn't loaded yet OR the announcement is identical
     /// to the prior one — re-entering the tab without new data
     /// stays silent so the user isn't barraged.
-    // MARK: - WP3 receipts
-
-    private func takeHandoffReceiptIfAny() {
-        guard let receipt = ReceiptHandoff.shared.take() else { return }
-        handoffReceipt = receipt
-        showingManualDeductionSheet = true
-        UIAccessibility.post(notification: .announcement, argument: "Receipt received. Opening the work expense form.")
-    }
-
-    private func attachReceipt(_ captured: CapturedReceipt, to entry: SSIManualDeduction) async {
-        do {
-            let uploaded = try await ReceiptService.shared.upload(captured)
-            try await dataManager.attachReceipt(to: entry.id, assetId: uploaded.assetId)
-            Haptics.success()
-            UIAccessibility.post(notification: .announcement, argument: "Receipt attached to \(entry.description).")
-        } catch {
-            Haptics.error()
-            UIAccessibility.post(notification: .announcement, argument: "Couldn't attach the receipt. \(error.localizedDescription)")
-        }
-    }
-
     private func announceBudgetSummaryIfNeeded() {
         let unmatched = dataManager.ssiManualDeductions
             .filter { $0.source == "user_voice" && $0.linkedTransactionId == nil }
@@ -406,143 +347,6 @@ struct BudgetView: View {
 
     // MARK: - SSI
 
-    @ViewBuilder
-    private func ssiSection(_ ssi: SSIStatus) -> some View {
-        // Gate on the server-computed capabilities object, not the raw
-        // has_ssi boolean: the same object drives every benefits screen.
-        if userManager.capabilities.showsResourceCounter {
-            Section {
-                VStack(spacing: 12) {
-                    if let resources = ssi.resources {
-                        SSIResourceHeroCard(resources: resources)
-                    }
-                    // Hidden when over the resource limit — the income
-                    // projection is meaningless while the check is suspended
-                    // for resources; the spend-down banner below tells that
-                    // story instead (avoids a "$0 check" card whose subtitle
-                    // still shows FBR-minus-countable income math).
-                    if let income = ssi.income,
-                       income.paymentSuspendedOverResources != true {
-                        SSIIncomeHeroCard(income: income)
-                    }
-                    if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
-                        ForEach(alerts) { entry in
-                            SSIAlertBanner(entry: entry)
-                        }
-                    }
-                    // Phase 7 — dedicated earn-room card. Only renders
-                    // when v2 fields are populated AND the user has a
-                    // positive projected SSI check (otherwise the
-                    // §1619(b) banner takes over).
-                    if let income = ssi.income,
-                       income.projectedPaymentCents != nil,
-                       income.eligibleForCash == true,
-                       let earnRoom = income.earnRoomGrossCents {
-                        SSIEarnRoomHeroCard(earnRoomCents: earnRoom)
-                    }
-                    // §1619(b) Medicaid continuation banner. Surfaces when
-                    // projected SSI = $0 because of INCOME — NOT when the
-                    // check is suspended for being over the resource limit
-                    // (that's a resource problem, not an earnings one, and
-                    // has its own spend-down card below).
-                    if let income = ssi.income,
-                       income.eligibleForCash == false,
-                       income.paymentSuspendedOverResources != true {
-                        SSIMedicaidContinuationBanner()
-                    }
-                    // Resource-limit suspension: this month's check is $0
-                    // because countable resources exceed the limit. Show
-                    // spend-down guidance instead of income framing.
-                    if let income = ssi.income,
-                       income.paymentSuspendedOverResources == true {
-                        SSISpendDownBanner(spendDownFormatted: income.spendDownFormatted)
-                    }
-                    if let next = ssi.nextSsaDeposit {
-                        SSINextDepositCard(next: next)
-                    }
-                    if ssi.overpaymentFlag == true, let reason = ssi.overpaymentReason {
-                        SSIOverpaymentBanner(reason: reason)
-                    }
-                    if !dataManager.ssiCandidates.isEmpty {
-                        SSIDeductionCandidatesCard(
-                            candidates: dataManager.ssiCandidates,
-                            onConfirm: { candidate, type in
-                                // Let failures propagate to the confirm
-                                // sheet so it surfaces the error and stays
-                                // open — never a silent success on a write
-                                // that would leave the SSI total wrong.
-                                try await dataManager.confirmSSIDeduction(
-                                    candidate: candidate, as: type
-                                )
-                            }
-                        )
-                    }
-                    SSILoggedDeductionsCard(
-                        deductions: dataManager.ssiManualDeductions,
-                        totalsCents: dataManager.ssiManualTotalsCents,
-                        expenseType: userManager.capabilities.expenseType,
-                        onAdd: { showingManualDeductionSheet = true },
-                        onDelete: { entry in
-                            do {
-                                try await dataManager.deleteManualDeduction(entry.id)
-                            } catch {
-                                // Soft-fail; data manager already logged.
-                            }
-                        },
-                        onAttachReceipt: { entry in receiptAttachTarget = entry },
-                        onChangeType: { entry, type in
-                            do {
-                                try await dataManager.updateDeductionType(entry.id, to: type)
-                            } catch {
-                                UIAccessibility.post(
-                                    notification: .announcement,
-                                    argument: "Couldn't change the type. \(error.localizedDescription)"
-                                )
-                            }
-                        },
-                        onViewReceipt: { entry in
-                            guard let assetId = entry.receiptAssetId else { return }
-                            Task {
-                                if let url = try? await ReceiptService.shared.viewURL(assetId: assetId) {
-                                    openURL(url)
-                                } else {
-                                    UIAccessibility.post(notification: .announcement, argument: "Couldn't open the receipt right now.")
-                                }
-                            }
-                        },
-                        onExport: {
-                            let now = Date()
-                            let cal = Calendar.current
-                            return try await dataManager.exportDeductionsCSVToTempFile(
-                                year: cal.component(.year, from: now),
-                                month: cal.component(.month, from: now)
-                            )
-                        },
-                        onEmailExport: { recipient in
-                            let now = Date()
-                            let cal = Calendar.current
-                            return try await dataManager.emailDeductionsCSV(
-                                year: cal.component(.year, from: now),
-                                month: cal.component(.month, from: now),
-                                to: recipient
-                            )
-                        },
-                        accountEmail: userManager.currentUser?.email
-                    )
-                }
-            } header: {
-                sectionHeader("SSI Monitor", count: ssiSectionCount(ssi))
-            }
-        }
-    }
-
-    private func ssiSectionCount(_ ssi: SSIStatus) -> Int {
-        var n = 0
-        if ssi.resources != nil { n += 1 }
-        if ssi.income != nil { n += 1 }
-        if ssi.nextSsaDeposit != nil { n += 1 }
-        return n
-    }
 
     // MARK: - Alerts
 
@@ -781,7 +585,7 @@ private let ssiHeroGradient = LinearGradient(
     endPoint: .bottomTrailing
 )
 
-private struct SSIResourceHeroCard: View {
+struct SSIResourceHeroCard: View {
     let resources: SSIResources
 
     var body: some View {
@@ -855,7 +659,7 @@ private struct SSIResourceHeroCard: View {
     }
 }
 
-private struct SSIIncomeHeroCard: View {
+struct SSIIncomeHeroCard: View {
     let income: SSIIncome
 
     var body: some View {
@@ -1001,7 +805,7 @@ private struct SSIIncomeHeroCard: View {
     }
 }
 
-private struct SSINextDepositCard: View {
+struct SSINextDepositCard: View {
     let next: SSANextDeposit
 
     var body: some View {
@@ -1039,7 +843,7 @@ private struct SSINextDepositCard: View {
     }
 }
 
-private struct SSIOverpaymentBanner: View {
+struct SSIOverpaymentBanner: View {
     let reason: String
 
     var body: some View {
@@ -1067,7 +871,7 @@ private struct SSIOverpaymentBanner: View {
 ///           cost $0.50 of SSI per dollar earned
 /// Hidden entirely when the projected check is $0 — the §1619(b)
 /// banner takes over in that case.
-private struct SSIEarnRoomHeroCard: View {
+struct SSIEarnRoomHeroCard: View {
     let earnRoomCents: Int
 
     var body: some View {
@@ -1149,7 +953,7 @@ private struct SSIEarnRoomHeroCard: View {
 /// (eligibleForCash == false). Many users assume losing the cash
 /// means losing Medicaid too — §8.2 of the rules engine notes this
 /// is the highest-impact thing to communicate when projected = $0.
-private struct SSISpendDownBanner: View {
+struct SSISpendDownBanner: View {
     let spendDownFormatted: String?
 
     private var spendDownPhrase: String {
@@ -1185,7 +989,7 @@ private struct SSISpendDownBanner: View {
     }
 }
 
-private struct SSIMedicaidContinuationBanner: View {
+struct SSIMedicaidContinuationBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "cross.case.fill")
@@ -1218,7 +1022,7 @@ private struct SSIMedicaidContinuationBanner: View {
 /// transactions as possible Blind Work Expenses or Impairment-
 /// Related Work Expenses. Each row opens a confirmation sheet that
 /// lets the user accept, switch buckets, or dismiss without writing.
-private struct SSIDeductionCandidatesCard: View {
+struct SSIDeductionCandidatesCard: View {
     let candidates: [SSIDeductionCandidate]
     let onConfirm: (SSIDeductionCandidate, SSIExclusionType) async throws -> Void
 
@@ -1304,7 +1108,7 @@ private struct SSIDeductionCandidatesCard: View {
 
 // MARK: - Shared SSI pieces
 
-private struct SSIStatusChip: View {
+struct SSIStatusChip: View {
     let status: String
 
     var body: some View {
@@ -1345,7 +1149,7 @@ private struct SSIStatusChip: View {
     }
 }
 
-private struct SSIProgressBar: View {
+struct SSIProgressBar: View {
     let pctUsed: Double
     let status: String
 

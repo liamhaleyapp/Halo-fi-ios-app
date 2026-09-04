@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, benefitsProfile, counselorQuestions, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
+  case profile, preferences, accessibility, benefitsProfile, counselorQuestions, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -49,6 +49,11 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.preferences) {
               SettingsOptionLabel(icon: "hexagon.fill", title: "Preferences")
+            }
+
+            // WP4 — haptic intensity, speech verbosity, VoiceOver ducking.
+            NavigationLink(value: SettingsDestination.accessibility) {
+              SettingsOptionLabel(icon: "figure.walk.motion", title: "Accessibility")
             }
 
             // Benefits profile (Sep-2026): the answers that drive every
@@ -166,6 +171,9 @@ struct SettingsView: View {
 
         case .preferences:
           PreferencesView()
+
+        case .accessibility:
+          AccessibilitySettingsView()
 
         case .benefitsProfile:
           BenefitsProfileView()
