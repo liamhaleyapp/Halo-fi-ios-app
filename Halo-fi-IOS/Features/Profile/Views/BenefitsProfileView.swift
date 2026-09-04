@@ -17,13 +17,59 @@ struct BenefitsProfileView: View {
     @Environment(UserManager.self) private var userManager
     @Environment(\.openURL) private var openURL
 
+    /// When set, this is the summary at the END of the questionnaire: a
+    /// Done button appears and "Redo the questionnaire" is hidden.
+    var onDone: (() -> Void)? = nil
+
     @State private var editing: ProfileQuestionSpec?
     @State private var showingBPQY = false
     @State private var stateCode: String = ""
     @State private var stateSaveError: String?
 
+    private var overviewLine: String {
+        let caps = userManager.capabilities
+        switch caps.lane {
+        case .ssi:
+            var parts = [caps.showsSSDILane ? "SSI and SSDI" : "SSI"]
+            parts.append(caps.blindStatus == "yes" ? "statutory blindness verified" : "Blind Work Expenses locked until verified")
+            if let work = userManager.benefitsProfile.workStatus {
+                parts.append(work == "working" ? "working now" : work == "starting_soon" ? "starting work soon" : "not working right now")
+            }
+            return parts.joined(separator: " · ") + "."
+        case .ssdi:
+            return "SSDI. Work expenses count as IRWE."
+        case .none:
+            return caps.benefitsUnanswered
+                ? "Not set up yet. The questionnaire takes about a minute."
+                : "No SSI or SSDI. The Benefits tab stays quiet unless this changes."
+        }
+    }
+
     var body: some View {
         List {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(onDone != nil ? "Here's your benefits profile" : "Your benefits")
+                        .font(.headline)
+                    Text(overviewLine)
+                        .font(.subheadline)
+                        .foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                if onDone == nil {
+                    NavigationLink {
+                        BenefitsQuestionnaireView(onFinished: { editing = nil })
+                    } label: {
+                        Label(userManager.capabilities.benefitsUnanswered ? "Start the questionnaire" : "Redo the questionnaire", systemImage: "list.bullet.clipboard")
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityHint("Walks through every question again, one per screen.")
+                }
+            }
+
             Section {
                 ForEach(ProfileQuestions.settingsRows) { spec in
                     Button {
@@ -95,9 +141,27 @@ struct BenefitsProfileView: View {
             } footer: {
                 Text("Estimate for education only — Social Security makes all actual decisions.")
             }
+
+            if let onDone {
+                Section {
+                    Button(action: onDone) {
+                        Text("Done")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .background(Color.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .accessibilityHint("Finishes the questionnaire and opens the Benefits tab built from these answers.")
+                }
+            }
         }
         .navigationTitle("Benefits profile")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(onDone == nil ? .large : .inline)
+        .navigationBarBackButtonHidden(onDone != nil)
         .onAppear {
             stateCode = userManager.benefitsProfile.stateCode ?? ""
             Task { await userManager.refreshCapabilities() }
@@ -106,7 +170,11 @@ struct BenefitsProfileView: View {
             ProfileQuestionsView(
                 questions: [spec],
                 embeddedInOnboarding: false,
-                onComplete: { editing = nil }
+                ignoreVisibility: true,
+                onComplete: {
+                    editing = nil
+                    Task { await userManager.refreshCapabilities() }
+                }
             )
         }
         .sheet(isPresented: $showingBPQY) {

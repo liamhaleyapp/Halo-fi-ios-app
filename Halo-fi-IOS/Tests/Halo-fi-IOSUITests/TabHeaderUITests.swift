@@ -89,6 +89,16 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Monthly package"].exists)
     }
 
+    func testBenefitsQuestionnaireOpensFromEmptyTab() {
+        let app = launch("none")
+        openTab(app, "Benefits")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Start the benefits questionnaire'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "questionnaire row missing")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Benefits questionnaire"].waitForExistence(timeout: 10), "intro did not open")
+        XCTAssertTrue(app.buttons["I understand, start"].exists)
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

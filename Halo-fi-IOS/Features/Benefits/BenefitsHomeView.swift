@@ -31,6 +31,7 @@ struct BenefitsHomeView: View {
         case monthEndReview(String)
         case learn
         case benefitsProfile
+        case questionnaire
     }
 
     private var lane: UserCapabilities.Lane { userManager.capabilities.lane }
@@ -82,6 +83,10 @@ struct BenefitsHomeView: View {
                 case .monthEndReview(let month): MonthEndReviewView(month: month)
                 case .learn: LearnListView(lane: lane)
                 case .benefitsProfile: BenefitsProfileView()
+                case .questionnaire:
+                    BenefitsQuestionnaireView(onFinished: {
+                        if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+                    })
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetBenefitsNavigation)) { _ in
@@ -124,14 +129,14 @@ struct BenefitsHomeView: View {
 
     private var benefitsProfileRow: some View {
         row(
-            title: "Benefits profile",
-            icon: "heart.text.square.fill",
+            title: userManager.capabilities.benefitsUnanswered ? "Start the benefits questionnaire" : "Benefits questionnaire",
+            icon: "list.bullet.clipboard.fill",
             tone: .neutral,
             line: userManager.capabilities.benefitsUnanswered
-                ? "Do you receive SSI or SSDI? Answer here."
-                : "You said no SSI or SSDI. Change your answers here.",
+                ? "About a minute, one tap per answer. This tab is built from what you tell us."
+                : "You said no SSI or SSDI. Redo the questionnaire if that changes.",
             estimate: false,
-            route: .benefitsProfile
+            route: .questionnaire
         )
     }
 

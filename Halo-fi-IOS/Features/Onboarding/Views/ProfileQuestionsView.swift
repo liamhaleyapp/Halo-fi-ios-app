@@ -27,6 +27,9 @@ struct ProfileQuestionsView: View {
     let onBack: (() -> Void)?
     /// Onboarding shows the step header above; Settings uses a nav title.
     let embeddedInOnboarding: Bool
+    /// Settings edits one question on its own: its `showIf` must not hide
+    /// it (the condition refers to OTHER questions' answers).
+    let ignoreVisibility: Bool
 
     @State private var answers: [String: String] = [:]
     @State private var index: Int = 0
@@ -44,11 +47,13 @@ struct ProfileQuestionsView: View {
     init(
         questions: [ProfileQuestionSpec] = ProfileQuestions.v1,
         embeddedInOnboarding: Bool = true,
+        ignoreVisibility: Bool = false,
         onBack: (() -> Void)? = nil,
         onComplete: @escaping () -> Void
     ) {
         self.questions = questions
         self.embeddedInOnboarding = embeddedInOnboarding
+        self.ignoreVisibility = ignoreVisibility
         self.onBack = onBack
         self.onComplete = onComplete
     }
@@ -56,7 +61,7 @@ struct ProfileQuestionsView: View {
     // MARK: - Derived
 
     private var visibleQuestions: [ProfileQuestionSpec] {
-        questions.filter { $0.showIf(answers) }
+        ignoreVisibility ? questions : questions.filter { $0.showIf(answers) }
     }
 
     private var current: ProfileQuestionSpec? {
@@ -73,10 +78,11 @@ struct ProfileQuestionsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let spec = current {
+                    // No "question n of m": the total changes as branches
+                    // resolve. A thin bar shows progress without a number.
                     if visibleQuestions.count > 1 {
-                        Text("Question \(index + 1) of \(visibleQuestions.count)")
-                            .font(.subheadline)
-                            .foregroundColor(.haloTextSecondary)
+                        ProgressView(value: Double(index + 1), total: Double(visibleQuestions.count))
+                            .tint(.indigo)
                             .accessibilityHidden(true)
                     }
 
@@ -85,11 +91,7 @@ struct ProfileQuestionsView: View {
                         .foregroundColor(.haloTextPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
-                        .accessibilityLabel(
-                            visibleQuestions.count > 1
-                                ? "Question \(index + 1) of \(visibleQuestions.count). \(spec.question)"
-                                : spec.question
-                        )
+                        .accessibilityLabel(spec.question)
                         .accessibilityFocused($focus, equals: .question)
 
                     if let help = spec.helpText {
@@ -201,8 +203,10 @@ struct ProfileQuestionsView: View {
     private func seedFromProfile() {
         // Pre-select what the server already has so re-entering (Settings,
         // or a resumed onboarding) shows the current answer.
+        // Seed from the WHOLE tree, not only the questions on screen: a
+        // single question's showIf reads other questions' answers.
         let profile = userManager.benefitsProfile
-        for spec in questions where answers[spec.id] == nil {
+        for spec in ProfileQuestions.v1 where answers[spec.id] == nil {
             if let stored = profile.answer(for: spec.field) {
                 answers[spec.id] = stored
             }

@@ -115,8 +115,8 @@ enum TabSummaries {
         return TabSummary(
             verdict: "No benefits set up",
             detail: capabilities.benefitsUnanswered
-                ? "You haven't told us about Social Security benefits yet. Answer three quick questions and this tab fills in."
-                : "You told us you don't receive SSI or SSDI, so there's nothing to track here. Change that anytime in your benefits profile.",
+                ? "You haven't told us about your Social Security benefits yet. A short questionnaire sets this tab up for you."
+                : "You told us you don't receive SSI or SSDI, so there's nothing to track here. Redo the questionnaire anytime if that changes.",
             isEstimate: false,
             tone: .neutral
         )
