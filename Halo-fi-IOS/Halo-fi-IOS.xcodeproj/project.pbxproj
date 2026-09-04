@@ -118,9 +118,8 @@
 		9EAF5A112F8A0001000F1A01 /* Exceptions for "HaloFiShare" folder in "HaloFiShare" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				HaloFiShare.entitlements,
-				Info.plist,
-				SETUP.md,
+				"HaloFiShare.entitlements",
+				"Info.plist",
 			);
 			target = 9EAF5A012F8A0001000F1A01 /* HaloFiShare */;
 		};
