@@ -82,6 +82,7 @@ struct ConversationView: View {
         }
         .background(Color(.systemBackground))
         .onAppear {
+            viewModel.coordinator.setVoiceModalPresented(true)
             Task {
                 // Three entry modes:
                 //  1. customGreetingId set  → backend sends a fixed
@@ -104,8 +105,10 @@ struct ConversationView: View {
             }
         }
         .onDisappear {
+            viewModel.coordinator.setVoiceModalPresented(false)
             viewModel.onDisappear()
         }
+        .accessibilityAction(.escape) { dismiss() }
         .sheet(isPresented: $viewModel.showingMoreMenu) {
             ConversationMoreMenu(
                 isPrivacyMode: viewModel.isPrivacyMode,

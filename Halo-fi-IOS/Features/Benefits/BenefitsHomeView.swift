@@ -29,6 +29,7 @@ struct BenefitsHomeView: View {
         /// WP6 — nil month = the previous month.
         case monthlyPackage(String?)
         case monthEndReview(String)
+        case learn
     }
 
     var body: some View {
@@ -49,7 +50,7 @@ struct BenefitsHomeView: View {
                         if userManager.capabilities.showsSSDILane && !userManager.capabilities.showsResourceCounter {
                             ssdiLaneRow
                         }
-                        learnCards
+                        learnRow
                         counselorButton
                     }
                     .padding(.horizontal, 20)
@@ -67,6 +68,7 @@ struct BenefitsHomeView: View {
                 case .workExpenses: WorkExpensesView()
                 case .monthlyPackage(let month): MonthlyPackageView(initialMonth: month)
                 case .monthEndReview(let month): MonthEndReviewView(month: month)
+                case .learn: LearnListView()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetBenefitsNavigation)) { _ in
@@ -222,7 +224,18 @@ struct BenefitsHomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - d. Learn cards
+    // MARK: - d. Learn (one row; the cards live on their own screen)
+
+    private var learnRow: some View {
+        row(
+            title: "Learn",
+            icon: "book.fill",
+            tone: .neutral,
+            line: "\(VoiceOverFormatter.count(LearnCard.v1.count, singular: "short explainer", plural: "short explainers")): the resource limit, BWE and IRWE, reporting wages, free counseling.",
+            estimate: false,
+            route: .learn
+        )
+    }
 
     private var learnCards: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -363,8 +376,61 @@ struct LearnCard: Identifiable {
     ]
 }
 
+struct LearnListView: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ScreenReaderSummaryHeader(
+                    verdict: "Learn",
+                    detail: "\(VoiceOverFormatter.count(LearnCard.v1.count, singular: "short explainer", plural: "short explainers")). Each one is a few paragraphs.",
+                    tone: .neutral
+                )
+                ForEach(LearnCard.v1) { card in
+                    NavigationLink {
+                        LearnCardView(card: card)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: card.icon).foregroundColor(.blue).frame(width: 36).accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(card.title).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                                Text(card.summary).font(.caption).foregroundColor(.haloTextSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                        }
+                        .padding(12)
+                        .frame(minHeight: 56)
+                        .background(Color.haloSecondaryBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(HapticPlainButtonStyle())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(card.title). \(card.summary)")
+                    .accessibilityHint("Opens a short explainer.")
+                }
+                Button { openURL(ProfileExplainer.wipaURL) } label: {
+                    Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 8)
+            }
+            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 100)
+            .readableContentWidth()
+        }
+        .background(Color.haloBackground.ignoresSafeArea())
+        .navigationTitle("Learn")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 struct LearnCardView: View {
     let card: LearnCard
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -381,6 +447,13 @@ struct LearnCardView: View {
                 Text(ScreenReaderSummaryHeader.disclaimer)
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
+                Button { openURL(ProfileExplainer.wipaURL) } label: {
+                    Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 8)
             }
             .padding(20)
         }

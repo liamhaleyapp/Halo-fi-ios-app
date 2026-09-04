@@ -68,6 +68,15 @@ final class ConversationCoordinator {
     /// it carries the same id; anything else is stale and dropped.
     private(set) var currentTurnId: String?
     private var cancelledTurnIds: [String] = []
+
+    /// True while the full-screen voice modal is on screen (from any tab).
+    /// The chat thread uses it to stay silent: a VoiceOver announcement of
+    /// Halo's reply during a voice session would be picked up by the mic.
+    private(set) var isVoiceModalPresented = false
+
+    func setVoiceModalPresented(_ presented: Bool) {
+        isVoiceModalPresented = presented
+    }
     private var pendingRetryMessage: String?
     private var isVoiceSessionActive = false
     private var agentEventTask: Task<Void, Never>?
@@ -1093,7 +1102,10 @@ final class ConversationCoordinator {
                 "timezone": AnyCodable(TimeZone.current.identifier),
             ]
 
-            try await agentWebSocket.sendMessage(message, context: context, turnId: turnId, streamAudio: spoken)
+            try await agentWebSocket.sendMessage(
+                message, context: context, turnId: turnId,
+                streamAudio: spoken, streamText: !spoken
+            )
 
             // Delay to let the listening_stop sound finish before playing typing sound
             try? await Task.sleep(nanoseconds: 400_000_000) // 400ms

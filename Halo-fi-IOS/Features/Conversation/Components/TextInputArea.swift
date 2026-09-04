@@ -21,6 +21,9 @@ struct TextInputArea: View {
     let onSend: () -> Void
     let onSwitchToVoice: () -> Void
     var onStopSpeaking: (() -> Void)?
+    /// Raise the keyboard on appear. The voice modal's text mode wants it;
+    /// the Agent tab must not (VoiceOver has to land on the header first).
+    var autoFocus: Bool = true
 
     @FocusState private var isTextFieldFocused: Bool
 
@@ -59,6 +62,7 @@ struct TextInputArea: View {
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .onAppear {
+            guard autoFocus else { return }
             // Auto-focus when appearing
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isTextFieldFocused = true

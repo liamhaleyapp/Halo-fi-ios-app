@@ -58,7 +58,7 @@ enum TabSummaries {
                 detail += " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
             }
         } else {
-            verdict = s.accountCount == 0 ? "No accounts linked" : "Money"
+            verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
             let accounts = VoiceOverFormatter.count(s.accountCount, singular: "account", plural: "accounts")
             detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)) across \(accounts). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
             tone = s.owedCents > s.cashCents ? .watch : .positive

@@ -18,6 +18,8 @@ struct ClientMessagePayload: Codable, Sendable {
     let type: String?
     /// WP7 — client-generated turn id, echoed on every server event.
     let turnId: String?
+    /// Chat thread — stream the text reply sentence by sentence (no TTS).
+    let streamText: Bool?
 
     enum CodingKeys: String, CodingKey {
         case message
@@ -26,17 +28,19 @@ struct ClientMessagePayload: Codable, Sendable {
         case sessionId = "session_id"
         case streamAudio = "stream_audio"
         case turnId = "turn_id"
+        case streamText = "stream_text"
     }
 
     init(message: String, context: [String: AnyCodable]? = nil,
          sessionId: String? = nil, streamAudio: Bool? = nil,
-         type: String? = nil, turnId: String? = nil) {
+         type: String? = nil, turnId: String? = nil, streamText: Bool? = nil) {
         self.message = message
         self.context = context
         self.sessionId = sessionId
         self.streamAudio = streamAudio
         self.type = type
         self.turnId = turnId
+        self.streamText = streamText
     }
 }
 

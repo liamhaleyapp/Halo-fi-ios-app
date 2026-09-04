@@ -29,21 +29,22 @@ struct HomeView: View {
                         onCopyEntry: viewModel.copyEntry,
                         isProcessing: viewModel.state == .processing
                     )
-                    QuickActionChips { chip in send(chip.prompt) }
+                    QuickActionStack(collapsible: !viewModel.entries.isEmpty) { chip in send(chip.prompt) }
                     TextInputArea(
                         text: $viewModel.textInput,
                         state: viewModel.state,
                         isEnabled: true,
                         onSend: { send(viewModel.textInput) },
                         onSwitchToVoice: { openVoice(prompt: nil) },
-                        onStopSpeaking: { viewModel.coordinator.stopSpeaking() }
+                        onStopSpeaking: { viewModel.coordinator.stopSpeaking() },
+                        autoFocus: false
                     )
                 }
                 .readableContentWidth()
 
                 micButton
                     .padding(.trailing, 20)
-                    .padding(.bottom, 128)
+                    .padding(.bottom, viewModel.entries.isEmpty ? 300 : 148)
             }
             .background(Color(.systemBackground).ignoresSafeArea())
             .navigationBarHidden(true)
@@ -74,7 +75,12 @@ struct HomeView: View {
             // Read Halo's reply aloud through VoiceOver when it lands in
             // the thread (the voice modal covers this with TTS itself).
             .onChange(of: viewModel.entries) { old, new in
-                guard !showingVoice, let last = new.last, last.speaker == .agent, !last.isStreaming else { return }
+                // Never announce while ANY voice session is on screen (the
+                // Budget and Benefits tabs open the modal too): VoiceOver's
+                // voice would go straight into the hot mic.
+                guard !showingVoice, !viewModel.coordinator.isVoiceModalPresented,
+                      UIAccessibility.isVoiceOverRunning,
+                      let last = new.last, last.speaker == .agent, !last.isStreaming else { return }
                 let wasFinished = old.last?.id == last.id && old.last?.isStreaming == false
                 if !wasFinished {
                     UIAccessibility.post(notification: .announcement, argument: "Halo said: \(last.text)")

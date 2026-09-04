@@ -46,7 +46,7 @@ final class TabHeaderUITests: XCTestCase {
         let app = launch("none")
         openTab(app, "Money")
         let label = header(in: app).label
-        XCTAssertTrue(label.hasPrefix("Money."), label)
+        XCTAssertTrue(label.hasPrefix("Balance."), label)
         XCTAssertTrue(label.contains("Cash 1,214 dollars"), label)
         XCTAssertTrue(label.contains("Owed 1,870 dollars"), label)
     }

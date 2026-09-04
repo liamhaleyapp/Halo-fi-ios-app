@@ -537,7 +537,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         _ message: String,
         context: [String: AnyCodable]? = nil,
         turnId: String? = nil,
-        streamAudio: Bool = true
+        streamAudio: Bool = true,
+        streamText: Bool = false
     ) async throws {
         guard let connection = webSocketConnection else {
             Logger.error("AgentWebSocket: Cannot send - not connected")
@@ -554,7 +555,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             context: context,
             sessionId: currentSessionId ?? sessionId,
             streamAudio: streamAudio,
-            turnId: turnId
+            turnId: turnId,
+            streamText: streamText
         )
 
         Logger.sensitive("AgentWebSocket: Sending message: '\(message)' with sessionId: \(payload.sessionId ?? "nil")")

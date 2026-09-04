@@ -85,7 +85,8 @@ protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
     ///   - context: Optional context data
     ///   - turnId: WP7 — client-generated turn correlation id
     ///   - streamAudio: WP7 — false asks for a text-only reply
-    func sendMessage(_ message: String, context: [String: AnyCodable]?, turnId: String?, streamAudio: Bool) async throws
+    ///   - streamText: text-only reply streamed as `stream` chunks
+    func sendMessage(_ message: String, context: [String: AnyCodable]?, turnId: String?, streamAudio: Bool, streamText: Bool) async throws
 
     /// WP7 — cancel the turn in flight (barge-in / Stop).
     func sendCancel(turnId: String) async throws
@@ -94,7 +95,7 @@ protocol AgentWebSocketManagerProtocol: WebSocketManagerProtocol {
 extension AgentWebSocketManagerProtocol {
     /// Pre-WP7 shape: spoken reply, no turn id.
     func sendMessage(_ message: String, context: [String: AnyCodable]?) async throws {
-        try await sendMessage(message, context: context, turnId: nil, streamAudio: true)
+        try await sendMessage(message, context: context, turnId: nil, streamAudio: true, streamText: false)
     }
 
     /// Convenience overload — keeps existing zero-arg call sites
