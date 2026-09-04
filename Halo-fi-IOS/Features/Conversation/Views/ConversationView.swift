@@ -121,27 +121,6 @@ struct ConversationView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
-    // MARK: - WP7 — Start / Stop conversation (hands-free primary control)
-
-    private var sessionButton: some View {
-        let active = viewModel.isSessionActive
-        return Button {
-            Task { await viewModel.toggleSession() }
-        } label: {
-            Label(active ? "Stop conversation" : "Start conversation",
-                  systemImage: active ? "stop.circle.fill" : "play.circle.fill")
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 56)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(active ? Color.haloNegative : Color.accentColor)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .accessibilityHint(active
-            ? "Ends the voice session. Your transcript stays."
-            : "Reconnects and starts listening.")
-    }
-
     // MARK: - Input Area
 
     @ViewBuilder
@@ -154,20 +133,15 @@ struct ConversationView: View {
             // dedicated End button needed.
             let handsFree: VoiceModeInputArea.HandsFreeOptions? =
                 viewModel.isHandsFree
-                    ? .init(isMicMuted: viewModel.isMicMuted)
+                    ? .init(isMicMuted: viewModel.isMicMuted, isSessionActive: viewModel.isSessionActive)
                     : nil
-            VStack(spacing: 0) {
-                if viewModel.isHandsFree {
-                    sessionButton
-                }
-                VoiceModeInputArea(
-                    state: viewModel.state,
-                    isEnabled: viewModel.isMicEnabled,
-                    onMicTap: viewModel.toggleMicButton,
-                    onSwitchToText: viewModel.switchToTextMode,
-                    handsFree: handsFree
-                )
-            }
+            VoiceModeInputArea(
+                state: viewModel.state,
+                isEnabled: viewModel.isMicEnabled || (viewModel.isHandsFree && !viewModel.isSessionActive),
+                onMicTap: viewModel.toggleMicButton,
+                onSwitchToText: viewModel.switchToTextMode,
+                handsFree: handsFree
+            )
             .background(Color(.systemBackground))
 
         case .text:

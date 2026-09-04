@@ -158,9 +158,12 @@ final class ConversationViewModel {
                     coordinator.stopSpeaking()
                 case .listening:
                     coordinator.setMicMuted(!coordinator.isMicMuted)
-                case .idle:
-                    // The button reads "Start listening" here, so do that:
-                    // unmute if needed and listen (it used to mute instead).
+                case .idle, .disconnected:
+                    // No live session: the big button IS "Start conversation".
+                    if !isSessionActive {
+                        await toggleSession()
+                        return
+                    }
                     if coordinator.isMicMuted { coordinator.setMicMuted(false) }
                     await coordinator.startListening()
                 default:

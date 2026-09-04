@@ -88,21 +88,29 @@ struct HomeView: View {
 
     // MARK: - Pieces
 
-    private var headerDetail: String {
+    private var isOnline: Bool {
         switch viewModel.state {
-        case .processing: return "Halo is thinking."
-        case .speaking: return "Halo is speaking."
-        case .connecting: return "Connecting."
+        case .disconnected, .error, .permissionNeeded: return false
+        default: return true
+        }
+    }
+
+    private var headerDetail: String {
+        let status = isOnline ? "Online." : "Offline. Check your connection."
+        switch viewModel.state {
+        case .processing: return "\(status) Halo is thinking."
+        case .speaking: return "\(status) Halo is speaking."
+        case .connecting: return "\(status) Connecting."
         default:
             return viewModel.entries.isEmpty
-                ? "Type below, open Shortcuts, or tap the microphone to talk."
-                : "\(VoiceOverFormatter.count(viewModel.entries.count, singular: "message", plural: "messages")) in this conversation. Type below or tap the microphone."
+                ? "\(status) Type below, open Shortcuts, or tap the microphone to talk."
+                : "\(status) \(VoiceOverFormatter.count(viewModel.entries.count, singular: "message", plural: "messages")) in this conversation. Type below or tap the microphone."
         }
     }
 
     private var headerRow: some View {
         HStack(alignment: .top, spacing: 8) {
-            ScreenReaderSummaryHeader(verdict: "Halo", detail: headerDetail, tone: .neutral)
+            ScreenReaderSummaryHeader(verdict: "Halo Assistant", detail: headerDetail, tone: isOnline ? .positive : .act)
             Menu {
                 Button { showingHistory = true } label: {
                     Label("Previous conversations", systemImage: "clock.arrow.circlepath")

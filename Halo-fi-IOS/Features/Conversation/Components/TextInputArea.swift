@@ -135,6 +135,7 @@ struct VoiceModeInputArea: View {
 
     struct HandsFreeOptions {
         let isMicMuted: Bool
+        var isSessionActive: Bool = true
     }
 
     var body: some View {
@@ -143,11 +144,12 @@ struct VoiceModeInputArea: View {
                 state: state,
                 isEnabled: isEnabled,
                 onTap: onMicTap,
+                sessionInactive: handsFree?.isSessionActive == false,
                 appearMuted: handsFree?.isMicMuted ?? false
             )
 
             if let handsFree {
-                Text(handsFree.isMicMuted ? "Mic muted — tap mic to unmute" : "Listening — tap mic to mute")
+                Text(!handsFree.isSessionActive ? "Tap the microphone to start" : handsFree.isMicMuted ? "Mic muted — tap mic to unmute" : "Listening — tap mic to mute")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .accessibilityHidden(true)

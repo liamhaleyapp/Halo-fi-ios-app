@@ -941,14 +941,24 @@ final class BankDataManager {
             if let fetched = try? await self.bankService.getTransactions(accountId: nil, limit: limit, offset: nil), !fetched.isEmpty {
                 result = fetched
             } else {
-                var merged: [Transaction] = []
-                for item in self.linkedItems ?? [] {
-                    var txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh)) ?? []
-                    if txns.isEmpty && !forceRefresh {
-                        // Nothing cached for this bank: go to the network once.
-                        txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: true)) ?? []
+                // One bank's sync used to wait for the previous one; a slow
+                // institution made pull-to-refresh take the sum of all three.
+                let items = self.linkedItems ?? []
+                let merged: [Transaction] = await withTaskGroup(of: [Transaction].self) { group in
+                    for item in items {
+                        group.addTask { [weak self] in
+                            guard let self else { return [] }
+                            var txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh)) ?? []
+                            if txns.isEmpty && !forceRefresh {
+                                // Nothing cached for this bank: go to the network once.
+                                txns = (try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: true)) ?? []
+                            }
+                            return txns
+                        }
                     }
-                    merged.append(contentsOf: txns)
+                    var all: [Transaction] = []
+                    for await part in group { all.append(contentsOf: part) }
+                    return all
                 }
                 var seen = Set<String>()
                 result = merged

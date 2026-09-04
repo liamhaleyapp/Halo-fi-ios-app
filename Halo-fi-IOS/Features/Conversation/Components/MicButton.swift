@@ -17,6 +17,8 @@ struct MicButton: View {
     let state: ConversationState
     let isEnabled: Bool
     let onTap: () -> Void
+    /// Hands-free with no live session: the button reads "Start conversation".
+    var sessionInactive: Bool = false
     /// Hands-free only — when true the button renders as an obvious
     /// mute toggle (mic.slash icon, gray gradient, no pulse) instead
     /// of the state-driven appearance. Lets the user tell at a glance
@@ -198,12 +200,13 @@ struct MicButton: View {
         case .speaking:
             return "Stop speaking"
         default:
-            return "Start listening"
+            return sessionInactive ? "Start conversation" : "Start listening"
         }
     }
 
     private var accessibilityHint: String {
         if appearMuted { return "Double tap to unmute your microphone" }
+        if sessionInactive && state != .listening && state != .speaking { return "Double tap to connect and start listening." }
         switch state {
         case .listening:
             return "Double tap to stop recording"

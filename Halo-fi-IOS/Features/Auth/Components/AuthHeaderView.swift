@@ -26,6 +26,8 @@ struct AuthHeaderView: View {
         }
         .accessibilityLabel("Back")
         .accessibilityHint("Tap to go back")
+        // Reading order: page title, then Back, then the rest.
+        .accessibilitySortPriority(2)
         
         Spacer()
       }
@@ -40,7 +42,7 @@ struct AuthHeaderView: View {
         .foregroundColor(.haloTextPrimary)
         .multilineTextAlignment(.center)
         .accessibilityAddTraits(.isHeader)
-        .accessibilitySortPriority(2)
+        .accessibilitySortPriority(3)
       
       Text(subtitle)
         .font(.body)

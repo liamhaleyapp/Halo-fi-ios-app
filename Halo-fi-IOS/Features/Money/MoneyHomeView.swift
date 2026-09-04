@@ -83,8 +83,11 @@ struct MoneyHomeView: View {
                     .readableContentWidth()
                 }
                 .refreshable {
-                    await bankDataManager.forceRefresh()
-                    await budgetDataManager.refresh()
+                    // Bank + budget in parallel; transactions after the bank
+                    // (they need the linked items).
+                    async let bank: () = bankDataManager.forceRefresh()
+                    async let budget: () = budgetDataManager.refresh()
+                    _ = await (bank, budget)
                     await loadTransactions(forceRefresh: true)
                 }
             }

@@ -231,23 +231,27 @@ final class BudgetDataManager {
             self.error = BudgetError(underlying: error)
         }
 
-        // SSI deduction candidates — separate endpoint so a candidates
-        // failure doesn't tank the whole Budget view. Non-SSI users
-        // get an empty list back from the server, no error.
-        do {
-            let response = try await ssiService.fetchCandidates(userTz: userTz)
-            ssiCandidates = response.candidates
-        } catch {
+        // SSI candidates + manual deductions in parallel — independent
+        // endpoints, failures isolated (a candidates failure must not tank
+        // the Budget view).
+        let ssi = ssiService
+        async let candidatesResult: Result<SSICandidatesResponse, Error> = {
+            do { return .success(try await ssi.fetchCandidates(userTz: userTz)) } catch { return .failure(error) }
+        }()
+        async let manualResult: Result<SSIManualDeductionsResponse, Error> = {
+            do { return .success(try await ssi.fetchManualDeductions(userTz: userTz)) } catch { return .failure(error) }
+        }()
+        switch await candidatesResult {
+        case .success(let response): ssiCandidates = response.candidates
+        case .failure(let error):
             Logger.error("BudgetDataManager: fetch SSI candidates failed: \(error)")
             ssiCandidates = []
         }
-
-        // Manual deductions — Phase 8.
-        do {
-            let response = try await ssiService.fetchManualDeductions(userTz: userTz)
+        switch await manualResult {
+        case .success(let response):
             ssiManualDeductions = response.deductions
             ssiManualTotalsCents = response.totalsCents
-        } catch {
+        case .failure(let error):
             Logger.error("BudgetDataManager: fetch manual deductions failed: \(error)")
             ssiManualDeductions = []
             ssiManualTotalsCents = [:]

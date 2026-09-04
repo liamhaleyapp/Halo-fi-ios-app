@@ -80,6 +80,7 @@ struct LinkAccountChooserView: View {
           .font(.title2)
           .foregroundColor(iconTint)
           .frame(width: 36, height: 36)
+          .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(title)
@@ -99,6 +100,7 @@ struct LinkAccountChooserView: View {
         Image(systemName: "chevron.right")
           .foregroundColor(Color.haloTextSecondary)
           .font(.caption)
+          .accessibilityHidden(true)
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 16)
@@ -106,6 +108,8 @@ struct LinkAccountChooserView: View {
       .cornerRadius(16)
     }
     .buttonStyle(.plain)
+    .accessibilityElement(children: .ignore)
+    .accessibilityAddTraits(.isButton)
     .accessibilityLabel(title)
     .accessibilityHint(subtitle)
   }

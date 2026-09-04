@@ -102,6 +102,17 @@ final class TabHeaderUITests: XCTestCase {
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")
-        XCTAssertTrue(header(in: app).label.hasPrefix("Halo."))
+        XCTAssertTrue(header(in: app).label.hasPrefix("Halo Assistant."))
+    }
+
+    func testBudgetOpensFromMoney() {
+        let app = launch("ssi_blind")
+        openTab(app, "Money")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "budget row missing")
+        row.tap()
+        // The pushed Budget screen must render (it used to be a blank screen).
+        XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 10), "Budget screen did not open")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Spent'")).firstMatch.waitForExistence(timeout: 10), "budget content missing")
     }
 }

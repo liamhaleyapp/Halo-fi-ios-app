@@ -39,8 +39,9 @@ struct BudgetView: View {
         // NavigationLink(value:) with closure-based pushes confuses
         // SwiftUI's stack reconciliation — the user saw category drill-
         // downs flash and immediately bounce back to the list.
-        NavigationStack {
-            ZStack {
+        // Pushed from the Money tab: no NavigationStack of its own (a nested
+        // stack inside a pushed view rendered a blank screen).
+        ZStack {
                 Color.haloBackground.ignoresSafeArea()
 
                 ScrollView {
@@ -88,7 +89,6 @@ struct BudgetView: View {
             .sheet(isPresented: $showingIncomeEditor) {
                 IncomeEditorView()
             }
-        }
     }
 
     // MARK: - Accessibility (Phase 11 Track A)
