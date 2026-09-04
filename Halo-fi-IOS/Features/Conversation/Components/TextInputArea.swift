@@ -24,6 +24,8 @@ struct TextInputArea: View {
     /// Raise the keyboard on appear. The voice modal's text mode wants it;
     /// the Agent tab must not (VoiceOver has to land on the header first).
     var autoFocus: Bool = true
+    /// Agent tab: the mic is the primary voice entry (purple, larger).
+    var prominentVoice: Bool = false
 
     @FocusState private var isTextFieldFocused: Bool
 
@@ -39,7 +41,8 @@ struct TextInputArea: View {
                     } else {
                         onSwitchToVoice()
                     }
-                }
+                },
+                prominent: prominentVoice
             )
 
             // Text field

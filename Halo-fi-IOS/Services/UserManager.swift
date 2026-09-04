@@ -323,7 +323,7 @@ final class UserManager {
         // Clear bank data first (before clearing user)
         bankDataManager?.clearAllData()
         // WP7 — the chat thread can carry balances; it leaves with the user.
-        ConversationTranscriptStore.shared.reset()
+        ConversationTranscriptStore.shared.clearAllSessions()
 
         tokenStorage.clearTokens()
         // Intentionally NOT clearing biometricCredentialStore — Face ID is

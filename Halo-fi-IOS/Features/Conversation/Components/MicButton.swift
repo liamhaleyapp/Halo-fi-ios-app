@@ -229,6 +229,8 @@ struct MicButtonCompact: View {
     let state: ConversationState
     let isEnabled: Bool
     let onTap: () -> Void
+    /// The Agent tab's ONLY voice entry: purple, larger, labelled "Talk to Halo".
+    var prominent: Bool = false
 
     private var iconName: String {
         switch state {
@@ -257,7 +259,7 @@ struct MicButtonCompact: View {
         case .speaking:
             return "Stop speaking"
         default:
-            return "Switch to voice"
+            return prominent ? "Talk to Halo" : "Switch to voice"
         }
     }
 
@@ -272,12 +274,21 @@ struct MicButtonCompact: View {
 
     var body: some View {
         Button(action: onTap) {
-            Image(systemName: iconName)
-                .font(.title2)
-                .foregroundColor(iconColor)
-                .frame(width: 44, height: 44)
-                .background(Color(.systemGray5))
-                .clipShape(Circle())
+            if prominent && state != .listening && state != .speaking {
+                Image(systemName: iconName)
+                    .font(.title2.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 48, height: 48)
+                    .background(LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: iconName)
+                    .font(.title2)
+                    .foregroundColor(iconColor)
+                    .frame(width: prominent ? 48 : 44, height: prominent ? 48 : 44)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
         }
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1.0 : 0.3)

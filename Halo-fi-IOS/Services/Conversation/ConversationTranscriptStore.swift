@@ -80,20 +80,21 @@ final class ConversationTranscriptStore {
         draftEntryId = nil
         draftText = ""
         committedText = ""
-        persistence?.clear()
     }
 
-    // MARK: - WP7 — one thread, shared by the chat tab and the voice modal
+    // MARK: - One thread, shared by the chat tab and the voice modal
 
-    /// The app-wide transcript. Voice and text share it; it survives app
-    /// launches through `TranscriptPersistence` once `bind(userId:)` runs.
+    /// The app-wide transcript. Voice and text share it. Every launch starts
+    /// a fresh session; earlier sessions stay in "Previous conversations".
     static let shared = ConversationTranscriptStore()
 
     private var persistence: TranscriptPersistence?
     private var persistTask: Task<Void, Never>?
+    private(set) var currentSessionId = UUID()
+    private var currentSessionStartedAt = Date()
 
-    /// Scope persistence to the signed-in user and restore their thread.
-    /// Safe to call repeatedly; switching users swaps the thread.
+    /// Scope history to the signed-in user. Does NOT restore a thread: the
+    /// current session is always new.
     func bind(userId: String?) {
         guard let userId, !userId.isEmpty else {
             persistence = nil
@@ -101,24 +102,65 @@ final class ConversationTranscriptStore {
         }
         if persistence?.userId == userId { return }
         persistence = TranscriptPersistence(userId: userId)
-        if entries.isEmpty, let saved = persistence?.load(), !saved.isEmpty {
-            entries = saved
-        }
     }
 
-    /// Remove the saved thread (Clear conversation).
-    func clearPersisted() {
+    /// Saved sessions, newest first (excludes the live one).
+    func previousSessions() -> [ConversationSession] {
+        (persistence?.loadSessions() ?? []).filter { $0.id != currentSessionId }
+    }
+
+    /// Archive the live thread (if it has anything) and start empty.
+    func startNewSession() {
+        persistTask?.cancel()
+        flushCurrentSession()
+        reset()
+        currentSessionId = UUID()
+        currentSessionStartedAt = Date()
+    }
+
+    /// Bring a saved session back into the thread and keep appending to it.
+    func resume(_ session: ConversationSession) {
+        persistTask?.cancel()
+        flushCurrentSession()
+        reset()
+        currentSessionId = session.id
+        currentSessionStartedAt = session.startedAt
+        entries = session.entries
+    }
+
+    func deleteSession(id: UUID) {
+        persistence?.delete(id: id)
+    }
+
+    /// Sign-out: forget every session.
+    func clearAllSessions() {
+        persistTask?.cancel()
         persistence?.clear()
+        reset()
+        currentSessionId = UUID()
+        currentSessionStartedAt = Date()
+    }
+
+    private var finishedEntries: [TranscriptEntry] {
+        entries.filter { !$0.isStreaming && $0.speaker != .userDraft }
+    }
+
+    private func flushCurrentSession() {
+        let snapshot = finishedEntries
+        guard let persistence, !snapshot.isEmpty else { return }
+        persistence.upsert(ConversationSession(id: currentSessionId, startedAt: currentSessionStartedAt, updatedAt: Date(), entries: snapshot))
     }
 
     private func persistIfNeeded() {
         guard let persistence else { return }
         persistTask?.cancel()
-        let snapshot = entries.filter { !$0.isStreaming && $0.speaker != .userDraft }
-        persistTask = Task { [snapshot] in
+        let snapshot = finishedEntries
+        guard !snapshot.isEmpty else { return }
+        let session = ConversationSession(id: currentSessionId, startedAt: currentSessionStartedAt, updatedAt: Date(), entries: snapshot)
+        persistTask = Task { [session] in
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
-            persistence.save(snapshot)
+            persistence.upsert(session)
         }
     }
 

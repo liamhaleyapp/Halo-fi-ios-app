@@ -17,38 +17,31 @@ struct HomeView: View {
     @State private var viewModel = ConversationViewModel()
     @State private var showingVoice = false
     @State private var voicePrompt: String? = nil
-    @State private var showingClearConfirm = false
+    @State private var showingShortcuts = false
+    @State private var showingHistory = false
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 0) {
-                    headerRow
-                    TranscriptView(
-                        entries: viewModel.entries,
-                        onCopyEntry: viewModel.copyEntry,
-                        isProcessing: viewModel.state == .processing
-                    )
-                    QuickActionStack(
-                        chips: QuickActionChip.v1.filter { $0.id != "log-expense" || userManager.capabilities.showsBenefitsLane },
-                        collapsible: !viewModel.entries.isEmpty
-                    ) { chip in send(chip.prompt) }
-                    TextInputArea(
-                        text: $viewModel.textInput,
-                        state: viewModel.state,
-                        isEnabled: true,
-                        onSend: { send(viewModel.textInput) },
-                        onSwitchToVoice: { openVoice(prompt: nil) },
-                        onStopSpeaking: { viewModel.coordinator.stopSpeaking() },
-                        autoFocus: false
-                    )
-                }
-                .readableContentWidth()
-
-                micButton
-                    .padding(.trailing, 20)
-                    .padding(.bottom, viewModel.entries.isEmpty ? 300 : 148)
+            VStack(spacing: 0) {
+                headerRow
+                TranscriptView(
+                    entries: viewModel.entries,
+                    onCopyEntry: viewModel.copyEntry,
+                    isProcessing: viewModel.state == .processing
+                )
+                ShortcutsButton { showingShortcuts = true }
+                TextInputArea(
+                    text: $viewModel.textInput,
+                    state: viewModel.state,
+                    isEnabled: true,
+                    onSend: { send(viewModel.textInput) },
+                    onSwitchToVoice: { openVoice(prompt: nil) },
+                    onStopSpeaking: { viewModel.coordinator.stopSpeaking() },
+                    autoFocus: false,
+                    prominentVoice: true
+                )
             }
+            .readableContentWidth()
             .background(Color(.systemBackground).ignoresSafeArea())
             .navigationBarHidden(true)
             .fullScreenCover(isPresented: $showingVoice, onDismiss: {
@@ -57,14 +50,15 @@ struct HomeView: View {
             }) {
                 ConversationView(initialPrompt: voicePrompt)
             }
-            .confirmationDialog("Clear this conversation?", isPresented: $showingClearConfirm, titleVisibility: .visible) {
-                Button("Clear conversation", role: .destructive) {
-                    viewModel.store.reset()
-                    UIAccessibility.post(notification: .announcement, argument: "Conversation cleared.")
+            .sheet(isPresented: $showingShortcuts) {
+                ShortcutsSheet(chips: QuickActionChip.available(benefitsLane: userManager.capabilities.showsBenefitsLane)) { chip in
+                    send(chip.prompt)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Removes the thread from this phone. Halo's memory of your accounts is not affected.")
+            }
+            .sheet(isPresented: $showingHistory) {
+                PreviousConversationsView(store: viewModel.store) {
+                    UIAccessibility.post(notification: .announcement, argument: "Conversation loaded. Keep going below.")
+                }
             }
             // Phase 12 — cross-tab quick actions. A prompt is sent as text;
             // no prompt means the user asked for the microphone.
@@ -101,8 +95,8 @@ struct HomeView: View {
         case .connecting: return "Connecting."
         default:
             return viewModel.entries.isEmpty
-                ? "Type below, pick a quick action, or tap the microphone to talk."
-                : "\(VoiceOverFormatter.count(viewModel.entries.count, singular: "message", plural: "messages")) in this thread. Type below or tap the microphone."
+                ? "Type below, open Shortcuts, or tap the microphone to talk."
+                : "\(VoiceOverFormatter.count(viewModel.entries.count, singular: "message", plural: "messages")) in this conversation. Type below or tap the microphone."
         }
     }
 
@@ -110,8 +104,14 @@ struct HomeView: View {
         HStack(alignment: .top, spacing: 8) {
             ScreenReaderSummaryHeader(verdict: "Halo", detail: headerDetail, tone: .neutral)
             Menu {
-                Button(role: .destructive) { showingClearConfirm = true } label: {
-                    Label("Clear conversation", systemImage: "trash")
+                Button { showingHistory = true } label: {
+                    Label("Previous conversations", systemImage: "clock.arrow.circlepath")
+                }
+                Button {
+                    viewModel.store.startNewSession()
+                    UIAccessibility.post(notification: .announcement, argument: "New conversation. The last one is saved under Previous conversations.")
+                } label: {
+                    Label("New conversation", systemImage: "plus.bubble")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -124,22 +124,6 @@ struct HomeView: View {
         .padding(.top, 8)
     }
 
-    private var micButton: some View {
-        Button { openVoice(prompt: nil) } label: {
-            Image(systemName: "mic.fill")
-                .font(.title2.weight(.semibold))
-                .foregroundColor(.white)
-                .frame(width: 64, height: 64)
-                .background(
-                    LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-                .clipShape(Circle())
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-        }
-        .buttonStyle(HapticPlainButtonStyle())
-        .accessibilityLabel("Talk to Halo")
-        .accessibilityHint("Opens the voice conversation. Hands-free by default; the big button mutes your microphone.")
-    }
 
     // MARK: - Actions
 
