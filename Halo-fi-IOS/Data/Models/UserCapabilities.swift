@@ -40,6 +40,11 @@ struct UserCapabilities: Codable, Equatable {
     /// Echoed by the backend so the UI can explain WHY something is locked.
     var benefitType: String?
     var blindStatus: String?
+    /// Backend's verdict on whether the questionnaire has been answered at
+    /// all. Answering "No" to the Social Security payment question leaves
+    /// `benefitType` empty, so that field alone cannot tell.
+    var profileAnswered: Bool = false
+    var getsSsaPayment: String? = nil
 
     /// Safe default before the profile has loaded: nothing benefit-specific
     /// is shown, nothing is computed.
@@ -94,6 +99,8 @@ struct UserCapabilities: Codable, Equatable {
         showsWorkIncentives = try c.decodeIfPresent(Bool.self, forKey: .showsWorkIncentives) ?? false
         benefitType = try c.decodeIfPresent(String.self, forKey: .benefitType)
         blindStatus = try c.decodeIfPresent(String.self, forKey: .blindStatus)
+        profileAnswered = try c.decodeIfPresent(Bool.self, forKey: .profileAnswered) ?? false
+        getsSsaPayment = try c.decodeIfPresent(String.self, forKey: .getsSsaPayment)
     }
 
     /// Which benefits lane the Benefits tab renders. Nothing outside the
@@ -111,7 +118,10 @@ struct UserCapabilities: Codable, Equatable {
     /// True when the profile question has simply not been answered yet
     /// (as opposed to an explicit "no").
     var benefitsUnanswered: Bool {
-        benefitType == nil || benefitType == "unsure"
+        if profileAnswered { return false }
+        // Older backends do not send profileAnswered; fall back to the
+        // benefit type alone.
+        return benefitType == nil || benefitType == "unsure"
     }
 
     /// Human wording for the statutory-blindness verification state.
