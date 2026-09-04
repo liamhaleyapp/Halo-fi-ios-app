@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, accessibility, benefitsProfile, counselorQuestions, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
+  case profile, preferences, accessibility, benefitsProfile, counselorQuestions, fieldOffice, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -66,6 +66,11 @@ struct SettingsView: View {
             // WP3 — expenses flagged "Not sure this counts? Ask my counselor".
             NavigationLink(value: SettingsDestination.counselorQuestions) {
               SettingsOptionLabel(icon: "questionmark.bubble.fill", title: "Questions for my counselor")
+            }
+
+            // WP6 — how the field office receives the monthly package.
+            NavigationLink(value: SettingsDestination.fieldOffice) {
+              SettingsOptionLabel(icon: "building.columns.fill", title: "My field office")
             }
 
             // Drives BWE/IRWE classifier accuracy. Shown for everyone;
@@ -180,6 +185,9 @@ struct SettingsView: View {
 
         case .counselorQuestions:
           CounselorQuestionsView()
+
+        case .fieldOffice:
+          FieldOfficeView()
 
         case .workProfile:
           WorkProfileView()

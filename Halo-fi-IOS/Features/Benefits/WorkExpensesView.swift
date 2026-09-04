@@ -20,6 +20,8 @@ struct WorkExpensesView: View {
     @State private var handoffReceipt: CapturedReceipt?
     @State private var handoffDraft: WorkExpenseDraft?
     @State private var receiptAttachTarget: SSIManualDeduction?
+    /// WP6 — attach a receipt from a reminder (manual entry or bank charge).
+    @State private var reminderAttachTarget: SSIReminder?
 
     private var monthName: String {
         DateFormatter().monthSymbols[Calendar.current.component(.month, from: Date()) - 1]
@@ -30,6 +32,12 @@ struct WorkExpensesView: View {
             LazyVStack(spacing: 12) {
                 header
                 logButtons
+                if !receiptReminders.isEmpty {
+                    ReceiptRemindersCard(reminders: receiptReminders) { reminder in
+                        reminderAttachTarget = reminder
+                    }
+                }
+                reviewButton
                 if !dataManager.ssiCandidates.isEmpty {
                     SSIDeductionCandidatesCard(
                         candidates: dataManager.ssiCandidates,
@@ -116,6 +124,9 @@ struct WorkExpensesView: View {
         .sheet(item: $receiptAttachTarget) { entry in
             ReceiptCaptureView { captured in Task { await attachReceipt(captured, to: entry) } }
         }
+        .sheet(item: $reminderAttachTarget) { reminder in
+            ReceiptCaptureView { captured in Task { await attachReceipt(captured, for: reminder) } }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in takeHandoffs() }
         .onReceive(NotificationCenter.default.publisher(for: .workExpenseDraftRequested)) { _ in takeHandoffs() }
         .onAppear { takeHandoffs() }
@@ -137,6 +148,22 @@ struct WorkExpensesView: View {
             isEstimate: impact > 0,
             tone: needs > 0 ? .watch : .neutral
         )
+    }
+
+    private var receiptReminders: [SSIReminder] {
+        dataManager.ssiReminders.filter(\.isReceiptReminder)
+    }
+
+    private var reviewButton: some View {
+        let month = MonthKey.current
+        let reviewDue = dataManager.ssiReminders.contains { $0.kind == "month_end_review" }
+        return NavigationLink(value: BenefitsHomeView.Route.monthEndReview(month)) {
+            Label(reviewDue ? "Review this month's expenses (due now)" : "Review this month's expenses", systemImage: "checklist")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 56)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Goes through each expense one at a time. Keep or remove; the running total is read after every step.")
     }
 
     private var logButtons: some View {
@@ -167,6 +194,22 @@ struct WorkExpensesView: View {
             handoffDraft = draft
             showingLogSheet = true
             UIAccessibility.post(notification: .announcement, argument: "Logging \(draft.description) as a work expense. Confirm or edit.")
+        }
+    }
+
+    private func attachReceipt(_ captured: CapturedReceipt, for reminder: SSIReminder) async {
+        do {
+            let uploaded = try await ReceiptService.shared.upload(captured)
+            if let deductionId = reminder.deductionId {
+                try await dataManager.attachReceipt(to: deductionId, assetId: uploaded.assetId)
+            } else if let exclusionId = reminder.exclusionId {
+                try await dataManager.attachReceipt(toExclusion: exclusionId, assetId: uploaded.assetId)
+            }
+            Haptics.success()
+            UIAccessibility.post(notification: .announcement, argument: "Receipt attached for \(reminder.vendor ?? "the expense").")
+        } catch {
+            Haptics.error()
+            UIAccessibility.post(notification: .announcement, argument: "Couldn't attach the receipt. \(error.localizedDescription)")
         }
     }
 

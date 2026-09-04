@@ -143,6 +143,11 @@ struct MainTabView: View {
             guard currentRoute == .main else { return }
             selectedTab = MainTab.benefits.rawValue
         }
+        // WP6 — a tapped reminder notification lands on Benefits.
+        .onReceive(NotificationCenter.default.publisher(for: .ssiReminderOpened)) { _ in
+            guard currentRoute == .main else { return }
+            selectedTab = MainTab.benefits.rawValue
+        }
         // Posted by HomeView when ConversationView closes. Restore the
         // originating tab if we recorded one (otherwise stay on Agent
         // — the user opened the agent directly).

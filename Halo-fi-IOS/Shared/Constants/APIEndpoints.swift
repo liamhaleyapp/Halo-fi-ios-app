@@ -260,6 +260,31 @@ enum APIEndpoints {
             }
             return "/ssi/deductions/email?year=\(year)"
         }
+
+        // MARK: WP6 — reminders, monthly package, submission log
+
+        /// GET — work-expense reminders + field-office guidance.
+        static let reminders = "/ssi/reminders"
+
+        /// GET — manual deductions / exclusions for an explicit month.
+        static func manualDeductions(month: String) -> String { "/ssi/manual-deductions?month=\(month)" }
+        static func exclusions(month: String) -> String { "/ssi/exclusions?month=\(month)" }
+
+        /// PATCH — attach a receipt to a confirmed bank charge.
+        static func updateExclusion(_ exclusionId: String) -> String { "/ssi/exclusions/\(exclusionId)" }
+
+        /// GET — contents checklist + per-page text (no PDF render).
+        static func packetSummary(month: String) -> String { "/ssi/packet/summary?month=\(month)" }
+        /// GET — the SSA-795 package PDF bytes.
+        static func packet(month: String) -> String { "/ssi/packet?month=\(month)" }
+        /// POST — email the package to the user (never to SSA).
+        static func emailPacket(month: String) -> String { "/ssi/packet/email?month=\(month)" }
+
+        /// GET — submission history.
+        static let submissions = "/ssi/submissions"
+        /// POST — the user logs that they handed a month in / undoes it.
+        static func markSubmitted(month: String) -> String { "/ssi/submissions/\(month)/mark" }
+        static func unmarkSubmitted(month: String) -> String { "/ssi/submissions/\(month)/unmark" }
     }
 
     // MARK: - WebSocket

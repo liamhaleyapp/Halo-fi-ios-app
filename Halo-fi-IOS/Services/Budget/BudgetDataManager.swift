@@ -33,6 +33,12 @@ final class BudgetDataManager {
     var ssiManualDeductions: [SSIManualDeduction] = []
     var ssiManualTotalsCents: [String: Int] = [:]
 
+    /// WP6 — reminders (hand in last month, receipts overdue, attach a
+    /// receipt to a confirmed charge, month-end review) + the field-office
+    /// guidance that rides along with them.
+    var ssiReminders: [SSIReminder] = []
+    var fieldOffice: FieldOfficeGuidance?
+
     // MARK: - Dependencies
 
     private let service: BudgetServiceProtocol
@@ -246,6 +252,18 @@ final class BudgetDataManager {
             ssiManualDeductions = []
             ssiManualTotalsCents = [:]
         }
+
+        // WP6 — reminders. Non-benefit users get an empty list. Local
+        // notifications are scheduled from here (deduped by reminder id).
+        do {
+            let response = try await ssiService.fetchReminders(userTz: userTz)
+            ssiReminders = response.reminders
+            fieldOffice = response.fieldOffice
+            await ReminderNotificationScheduler.shared.sync(response.reminders)
+        } catch {
+            Logger.error("BudgetDataManager: fetch reminders failed: \(error)")
+            ssiReminders = []
+        }
     }
 
     // MARK: - SSI deductions (Phase 3)
@@ -370,6 +388,54 @@ final class BudgetDataManager {
             .appendingPathComponent(filename)
         try data.write(to: tempURL, options: .atomic)
         return tempURL
+    }
+
+    // MARK: - WP6 — receipts on bank charges, monthly package, submission log
+
+    /// Attach an uploaded receipt to a confirmed bank charge (exclusion).
+    func attachReceipt(toExclusion exclusionId: String, assetId: String) async throws {
+        do {
+            try await ssiService.updateExclusion(exclusionId, SSIUpdateExclusionRequest(receiptAssetId: assetId))
+        } catch {
+            Logger.error("BudgetDataManager: attach receipt to exclusion failed: \(error)")
+            throw error
+        }
+        markStale()
+        await refresh()
+    }
+
+    /// Download the month's SSA-795 package to a temp file for share / print.
+    func packetToTempFile(month: String, filename: String) async throws -> URL {
+        let data = try await ssiService.downloadPacket(month: month)
+        let safeName = filename.isEmpty ? "HaloFi_SSA795_\(month).pdf" : filename
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    func emailPacket(month: String, to: String? = nil) async throws -> SSIEmailPacketResponse {
+        do {
+            return try await ssiService.emailPacket(month: month, to: to)
+        } catch {
+            Logger.error("BudgetDataManager: email packet failed: \(error)")
+            throw error
+        }
+    }
+
+    @discardableResult
+    func markSubmitted(month: String, channel: String?, notes: String?) async throws -> SSISubmission {
+        let row = try await ssiService.markSubmitted(month: month, channel: channel, notes: notes)
+        markStale()
+        await refresh()
+        return row
+    }
+
+    @discardableResult
+    func unmarkSubmitted(month: String) async throws -> SSISubmission {
+        let row = try await ssiService.unmarkSubmitted(month: month)
+        markStale()
+        await refresh()
+        return row
     }
 
     /// Phase 9b — server-side email export. The backend builds the

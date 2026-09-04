@@ -121,6 +121,9 @@ struct BenefitsProfile: Codable, Equatable {
     var ssiEligibleCouple: Bool?
     var accessMode: String?
     var promiseAcceptedAt: String?
+    /// WP6 — how the field office likes to receive the monthly package.
+    var fieldOfficeChannel: String?
+    var fieldOfficeNotes: String?
 
     static let empty = BenefitsProfile()
 
@@ -135,7 +138,9 @@ struct BenefitsProfile: Codable, Equatable {
         stateCode: String? = nil,
         ssiEligibleCouple: Bool? = nil,
         accessMode: String? = nil,
-        promiseAcceptedAt: String? = nil
+        promiseAcceptedAt: String? = nil,
+        fieldOfficeChannel: String? = nil,
+        fieldOfficeNotes: String? = nil
     ) {
         self.getsSsaPayment = getsSsaPayment
         self.benefitType = benefitType
@@ -148,6 +153,8 @@ struct BenefitsProfile: Codable, Equatable {
         self.ssiEligibleCouple = ssiEligibleCouple
         self.accessMode = accessMode
         self.promiseAcceptedAt = promiseAcceptedAt
+        self.fieldOfficeChannel = fieldOfficeChannel
+        self.fieldOfficeNotes = fieldOfficeNotes
     }
 
     enum CodingKeys: String, CodingKey {
@@ -162,6 +169,8 @@ struct BenefitsProfile: Codable, Equatable {
         case ssiEligibleCouple = "ssi_eligible_couple"
         case accessMode = "access_mode"
         case promiseAcceptedAt = "promise_accepted_at"
+        case fieldOfficeChannel = "field_office_channel"
+        case fieldOfficeNotes = "field_office_notes"
     }
 
     /// The answer currently stored for a profile field, as the option id
@@ -198,6 +207,8 @@ struct BenefitsProfilePatch: Encodable, Equatable {
     var ssiEligibleCouple: Bool?
     var accessMode: String?
     var promiseAcceptedAt: Date?
+    var fieldOfficeChannel: String?
+    var fieldOfficeNotes: String?
 
     static let none = BenefitsProfilePatch()
 
@@ -215,6 +226,8 @@ struct BenefitsProfilePatch: Encodable, Equatable {
         case ssiEligibleCouple = "ssi_eligible_couple"
         case accessMode = "access_mode"
         case promiseAcceptedAt = "promise_accepted_at"
+        case fieldOfficeChannel = "field_office_channel"
+        case fieldOfficeNotes = "field_office_notes"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -232,6 +245,8 @@ struct BenefitsProfilePatch: Encodable, Equatable {
         if let when = promiseAcceptedAt {
             try c.encode(ISO8601DateFormatter().string(from: when), forKey: .promiseAcceptedAt)
         }
+        try c.encodeIfPresent(fieldOfficeChannel, forKey: .fieldOfficeChannel)
+        try c.encodeIfPresent(fieldOfficeNotes, forKey: .fieldOfficeNotes)
     }
 }
 

@@ -63,6 +63,193 @@ protocol SSIServiceProtocol {
         month: Int?,
         to: String?
     ) async throws -> SSIEmailDeductionsResponse
+
+    // MARK: - WP6 — reminders, monthly package, submission log
+
+    func fetchReminders(userTz: String?) async throws -> SSIRemindersResponse
+    func fetchManualDeductions(userTz: String?, month: String) async throws -> SSIManualDeductionsResponse
+    func fetchExclusions(userTz: String?, month: String) async throws -> SSIExclusionsResponse
+    @discardableResult
+    func updateExclusion(_ exclusionId: String, _ request: SSIUpdateExclusionRequest) async throws -> SSIExclusion
+    func fetchPacketSummary(month: String) async throws -> SSIPacketSummary
+    func downloadPacket(month: String) async throws -> Data
+    func emailPacket(month: String, to: String?) async throws -> SSIEmailPacketResponse
+    func fetchSubmissions() async throws -> SSISubmissionsResponse
+    @discardableResult
+    func markSubmitted(month: String, channel: String?, notes: String?) async throws -> SSISubmission
+    @discardableResult
+    func unmarkSubmitted(month: String) async throws -> SSISubmission
+}
+
+// MARK: - WP6 models
+
+struct SSIReminder: Codable, Equatable, Identifiable {
+    let id: String
+    /// submit_package | receipt_overdue | attach_receipt | month_end_review
+    let kind: String
+    let title: String
+    let body: String
+    let dueOn: String?
+    let deductionId: String?
+    let exclusionId: String?
+    let transactionId: String?
+    let amountCents: Int?
+    let occurredOn: String?
+    let month: String?
+    let vendor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, title, body, month, vendor
+        case dueOn = "due_on"
+        case deductionId = "deduction_id"
+        case exclusionId = "exclusion_id"
+        case transactionId = "transaction_id"
+        case amountCents = "amount_cents"
+        case occurredOn = "occurred_on"
+    }
+
+    var isReceiptReminder: Bool { kind == "attach_receipt" || kind == "receipt_overdue" }
+}
+
+struct FieldOfficeGuidance: Codable, Equatable {
+    let channel: String
+    let isSet: Bool
+    let title: String
+    let short: String
+    let steps: [String]
+    let envelopeNote: String
+    let keepPaper: Bool
+    let notes: String?
+    let neverSends: String
+
+    enum CodingKeys: String, CodingKey {
+        case channel, title, short, steps, notes
+        case isSet = "is_set"
+        case envelopeNote = "envelope_note"
+        case keepPaper = "keep_paper"
+        case neverSends = "never_sends"
+    }
+}
+
+struct SSIRemindersResponse: Codable, Equatable {
+    let today: String
+    let reminders: [SSIReminder]
+    let fieldOffice: FieldOfficeGuidance
+    let counselorFinderUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case today, reminders
+        case fieldOffice = "field_office"
+        case counselorFinderUrl = "counselor_finder_url"
+    }
+}
+
+struct SSISubmission: Codable, Equatable, Identifiable {
+    let month: String
+    let monthLabel: String
+    let submittedAt: String?
+    let channel: String?
+    let packetAssetId: String?
+    let packetGeneratedAt: String?
+    let emailedAt: String?
+    let emailedTo: String?
+    let nudgedAt: String?
+    let notes: String?
+    let isSubmitted: Bool
+
+    var id: String { month }
+
+    enum CodingKeys: String, CodingKey {
+        case month, channel, notes
+        case monthLabel = "month_label"
+        case submittedAt = "submitted_at"
+        case packetAssetId = "packet_asset_id"
+        case packetGeneratedAt = "packet_generated_at"
+        case emailedAt = "emailed_at"
+        case emailedTo = "emailed_to"
+        case nudgedAt = "nudged_at"
+        case isSubmitted = "is_submitted"
+    }
+}
+
+struct SSISubmissionsResponse: Codable, Equatable {
+    let currentMonth: String
+    let previousMonth: String
+    let submissions: [SSISubmission]
+
+    enum CodingKeys: String, CodingKey {
+        case submissions
+        case currentMonth = "current_month"
+        case previousMonth = "previous_month"
+    }
+}
+
+struct SSIPacketSummary: Codable, Equatable {
+    let month: String
+    let monthLabel: String
+    let filename: String
+    let expenseKind: String
+    let rowCount: Int
+    let matchedCount: Int
+    let receiptCount: Int
+    let receiptsMissing: Int
+    let totalCents: Int
+    let totalsCents: [String: Int]
+    let pageSummaries: [String]
+    let estimateLabel: String
+    let disclaimer: String
+    let submission: SSISubmission?
+    let fieldOffice: FieldOfficeGuidance
+    let counselorFinderUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case month, filename, submission, disclaimer
+        case monthLabel = "month_label"
+        case expenseKind = "expense_kind"
+        case rowCount = "row_count"
+        case matchedCount = "matched_count"
+        case receiptCount = "receipt_count"
+        case receiptsMissing = "receipts_missing"
+        case totalCents = "total_cents"
+        case totalsCents = "totals_cents"
+        case pageSummaries = "page_summaries"
+        case estimateLabel = "estimate_label"
+        case fieldOffice = "field_office"
+        case counselorFinderUrl = "counselor_finder_url"
+    }
+}
+
+struct SSIEmailPacketResponse: Codable, Equatable {
+    let success: Bool
+    let sentTo: String
+    let period: String
+    let filename: String
+    let rowCount: Int
+    let receiptCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case success, period, filename
+        case sentTo = "sent_to"
+        case rowCount = "row_count"
+        case receiptCount = "receipt_count"
+    }
+}
+
+struct SSIUpdateExclusionRequest: Encodable {
+    var receiptAssetId: String? = nil
+    var description: String? = nil
+    var counselorQuestion: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case description
+        case receiptAssetId = "receipt_asset_id"
+        case counselorQuestion = "counselor_question"
+    }
+}
+
+private struct SSIMarkSubmittedBody: Encodable {
+    let channel: String?
+    let notes: String?
 }
 
 private struct SSIEmailDeductionsBody: Encodable {
@@ -148,14 +335,22 @@ struct SSIExclusion: Codable, Equatable, Identifiable {
     let source: String
     let confirmedAt: String
     let notes: String?
+    // WP3/WP6 — optional so older payloads still decode.
+    var description: String? = nil
+    var receiptAssetId: String? = nil
+    var needsReceipt: Bool? = nil
+    var counselorQuestion: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case id, description
         case transactionId = "transaction_id"
         case exclusionType = "exclusion_type"
         case source
         case confirmedAt = "confirmed_at"
         case notes
+        case receiptAssetId = "receipt_asset_id"
+        case needsReceipt = "needs_receipt"
+        case counselorQuestion = "counselor_question"
     }
 }
 
@@ -445,6 +640,77 @@ final class SSIService: SSIServiceProtocol {
             body: body,
             responseType: SSIEmailDeductionsResponse.self
         )
+    }
+
+    // MARK: - WP6
+
+    func fetchReminders(userTz: String? = nil) async throws -> SSIRemindersResponse {
+        try await networkService.authenticatedRequest(
+            endpoint: SSIService.appendingTz(APIEndpoints.SSI.reminders, userTz: userTz),
+            method: .GET, body: nil, responseType: SSIRemindersResponse.self)
+    }
+
+    func fetchManualDeductions(userTz: String?, month: String) async throws -> SSIManualDeductionsResponse {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.manualDeductions(month: month),
+            method: .GET, body: nil, responseType: SSIManualDeductionsResponse.self)
+    }
+
+    func fetchExclusions(userTz: String?, month: String) async throws -> SSIExclusionsResponse {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.exclusions(month: month),
+            method: .GET, body: nil, responseType: SSIExclusionsResponse.self)
+    }
+
+    @discardableResult
+    func updateExclusion(_ exclusionId: String, _ request: SSIUpdateExclusionRequest) async throws -> SSIExclusion {
+        let body = try JSONEncoder().encode(request)
+        return try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.updateExclusion(exclusionId),
+            method: .PATCH, body: body, responseType: SSIExclusion.self)
+    }
+
+    func fetchPacketSummary(month: String) async throws -> SSIPacketSummary {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.packetSummary(month: month),
+            method: .GET, body: nil, responseType: SSIPacketSummary.self)
+    }
+
+    func downloadPacket(month: String) async throws -> Data {
+        try await networkService.authenticatedRawDataRequest(endpoint: APIEndpoints.SSI.packet(month: month))
+    }
+
+    func emailPacket(month: String, to: String?) async throws -> SSIEmailPacketResponse {
+        let body: Data?
+        if let to, !to.isEmpty {
+            body = try? JSONEncoder().encode(SSIEmailDeductionsBody(to: to))
+        } else {
+            body = nil
+        }
+        return try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.emailPacket(month: month),
+            method: .POST, body: body, responseType: SSIEmailPacketResponse.self)
+    }
+
+    func fetchSubmissions() async throws -> SSISubmissionsResponse {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.submissions,
+            method: .GET, body: nil, responseType: SSISubmissionsResponse.self)
+    }
+
+    @discardableResult
+    func markSubmitted(month: String, channel: String?, notes: String?) async throws -> SSISubmission {
+        let body = try JSONEncoder().encode(SSIMarkSubmittedBody(channel: channel, notes: notes))
+        return try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.markSubmitted(month: month),
+            method: .POST, body: body, responseType: SSISubmission.self)
+    }
+
+    @discardableResult
+    func unmarkSubmitted(month: String) async throws -> SSISubmission {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.SSI.unmarkSubmitted(month: month),
+            method: .POST, body: nil, responseType: SSISubmission.self)
     }
 
     private static func appendingTz(_ endpoint: String, userTz: String?) -> String {

@@ -24,7 +24,12 @@ struct BenefitsHomeView: View {
     @State private var navigationPath = NavigationPath()
     @State private var hasAppeared = false
 
-    enum Route: Hashable { case resourceMonitor, workExpenses }
+    enum Route: Hashable {
+        case resourceMonitor, workExpenses
+        /// WP6 — nil month = the previous month.
+        case monthlyPackage(String?)
+        case monthEndReview(String)
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -37,6 +42,7 @@ struct BenefitsHomeView: View {
                             resourceMonitorRow
                         }
                         workExpensesRow
+                        monthlyPackageRow
                         if userManager.capabilities.bweLocked {
                             lockedBWERow
                         }
@@ -59,6 +65,8 @@ struct BenefitsHomeView: View {
                 switch route {
                 case .resourceMonitor: ResourceMonitorView()
                 case .workExpenses: WorkExpensesView()
+                case .monthlyPackage(let month): MonthlyPackageView(initialMonth: month)
+                case .monthEndReview(let month): MonthEndReviewView(month: month)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetBenefitsNavigation)) { _ in
@@ -69,6 +77,17 @@ struct BenefitsHomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
                 openWorkExpenses()
+            }
+            // WP6 — a tapped reminder notification lands on the right screen.
+            .onReceive(NotificationCenter.default.publisher(for: .ssiReminderOpened)) { note in
+                let kind = note.userInfo?["kind"] as? String ?? ""
+                let month = note.userInfo?["month"] as? String ?? ""
+                if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+                switch kind {
+                case "submit_package": navigationPath.append(Route.monthlyPackage(month.isEmpty ? nil : month))
+                case "month_end_review": navigationPath.append(Route.monthEndReview(month.isEmpty ? MonthKey.current : month))
+                default: navigationPath.append(Route.workExpenses)
+                }
             }
             .task {
                 guard !hasAppeared else { return }
@@ -92,13 +111,19 @@ struct BenefitsHomeView: View {
     }
 
     private var summary: TabSummary {
-        TabSummaries.benefits(
+        let base = TabSummaries.benefits(
             capabilities: userManager.capabilities,
             ssi: dataManager.overview?.ssiStatus,
             expensesThisMonth: dataManager.ssiManualDeductions.count,
             expensesTotalCents: dataManager.ssiManualDeductions.reduce(0) { $0 + $1.amountCents },
             expensesImpactCents: expensesImpact
         )
+        // WP6 — reminders ride on the header so the first swipe says it.
+        let count = dataManager.ssiReminders.count
+        guard count > 0 else { return base }
+        let line = " " + VoiceOverFormatter.count(count, singular: "reminder", plural: "reminders") + "."
+        return TabSummary(verdict: base.verdict, detail: base.detail + line, isEstimate: base.isEstimate,
+                          tone: base.tone == .neutral ? .watch : base.tone)
     }
 
     private var header: some View {
@@ -146,6 +171,22 @@ struct BenefitsHomeView: View {
             ),
             estimate: expensesImpact > 0,
             route: .workExpenses
+        )
+    }
+
+    // MARK: - c2. Monthly package row (WP6)
+
+    private var monthlyPackageRow: some View {
+        let submit = dataManager.ssiReminders.first { $0.kind == "submit_package" }
+        let line = submit.map { "\($0.title). \($0.body)" }
+            ?? "Last month's SSA-795 package: cover, ledger and receipts. Share, print, or send it to yourself."
+        return row(
+            title: "Monthly package",
+            icon: "doc.text.fill",
+            tone: submit == nil ? .neutral : .watch,
+            line: line,
+            estimate: true,
+            route: .monthlyPackage(submit?.month)
         )
     }
 

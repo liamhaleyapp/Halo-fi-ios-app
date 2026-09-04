@@ -53,6 +53,9 @@ struct Halo_fi_IOSApp: App {
         accountPersistence: accountPersistence
     ))
 
+    // WP6 — local reminder notifications (taps route to the Benefits tab).
+    ReminderNotificationScheduler.shared.install()
+
     // Configure RevenueCat
     Purchases.logLevel = .error
     Purchases.configure(withAPIKey: "appl_cztDsZUjXdUpTlHKrQCxvbRdFKn")
