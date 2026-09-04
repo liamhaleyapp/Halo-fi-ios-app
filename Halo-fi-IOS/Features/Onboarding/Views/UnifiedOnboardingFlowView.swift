@@ -6,8 +6,10 @@
 //
 //  Unified onboarding flow that guides users through:
 //  1. Sign Up - Create account
-//  2. Subscription - Choose a plan
-//  3. Plaid - Connect bank accounts
+//  2. AI Consent - Apple 5.1.1(i) gate
+//  3. Profile - Benefits profile questions (Sep-2026)
+//  4. Subscription - Choose a plan
+//  5. Plaid - Connect bank accounts
 //
 //  ## Design Principles
 //  - View handles layout and wiring; coordinator handles state and logic
@@ -85,6 +87,13 @@ struct UnifiedOnboardingFlowView: View {
       )
       .viewTransition(.fade)
 
+    case .profile:
+      ProfileQuestionsView(
+        embeddedInOnboarding: true,
+        onComplete: handleProfileComplete
+      )
+      .viewTransition(.slideForward)
+
     case .subscription:
       SubscriptionOnboardingStep(
         coordinator: coordinator,
@@ -160,7 +169,7 @@ struct UnifiedOnboardingFlowView: View {
     // social sign-in to an existing account), skip straight to the
     // subscription step.
     if userManager.aiConsentGranted {
-      coordinator.goToStep(.subscription)
+      coordinator.goToStep(coordinator.profileCompleted ? .subscription : .profile)
     } else {
       coordinator.goToStep(.aiConsent)
     }
@@ -168,6 +177,11 @@ struct UnifiedOnboardingFlowView: View {
 
   private func handleAIConsentAccept() {
     coordinator.markStepCompleted(.aiConsent)
+    coordinator.goToStep(coordinator.profileCompleted ? .subscription : .profile)
+  }
+
+  private func handleProfileComplete() {
+    coordinator.markStepCompleted(.profile)
     coordinator.goToStep(.subscription)
   }
 

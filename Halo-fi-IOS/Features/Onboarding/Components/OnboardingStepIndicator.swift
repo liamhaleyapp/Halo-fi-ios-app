@@ -32,6 +32,9 @@ struct OnboardingStepIndicator: View {
       return signUpCompleted
     case .aiConsent:
       return signUpCompleted
+    case .profile:
+      // Profile precedes the paywall; once the user is past it, it's done.
+      return currentStep.rawValue > OnboardingStep.profile.rawValue
     case .subscription:
       return subscriptionCompleted
     case .plaid:

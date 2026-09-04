@@ -6,14 +6,16 @@
 //  path goes through the agent's add_ssi_deduction tool instead).
 //  Mirrors SSIDeductionConfirmView's structure for visual parity.
 //
-//  Type defaulting follows the rules engine §4.1: blind users get
-//  BWE by default, non-blind get IRWE. The user can override.
+//  Type defaulting comes from the capabilities object: BWE only when
+//  Social Security's record confirms statutory blindness, IRWE
+//  otherwise. When `bweLocked`, the BWE choice is visible but disabled
+//  and the footer explains the BPQY unlock path (hard rule 4).
 //
 
 import SwiftUI
 
 struct SSILogManualDeductionView: View {
-    let isBlind: Bool
+    let capabilities: UserCapabilities
 
     /// Called with the values the user submitted. Caller writes to
     /// the API, refreshes the budget data, and dismisses on
@@ -30,15 +32,17 @@ struct SSILogManualDeductionView: View {
     @State private var errorMessage: String?
 
     init(
-        isBlind: Bool,
+        capabilities: UserCapabilities,
         onSave: @escaping (SSIExclusionType, Int, String, Date, String?) async throws -> Void
     ) {
-        self.isBlind = isBlind
+        self.capabilities = capabilities
         self.onSave = onSave
         _selectedType = State(
-            initialValue: isBlind ? .bwe : .irwe
+            initialValue: capabilities.expenseType == .bwe ? .bwe : .irwe
         )
     }
+
+    private var bweLocked: Bool { capabilities.bweLocked }
 
     var body: some View {
         NavigationStack {
@@ -66,10 +70,23 @@ struct SSILogManualDeductionView: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityHint(typeHint)
+                    .onChange(of: selectedType) { _, newValue in
+                        // Visible but locked: never compute BWE for an
+                        // unverified user. Snap back and say why.
+                        if newValue == .bwe && bweLocked {
+                            selectedType = .irwe
+                            UIAccessibility.post(
+                                notification: .announcement,
+                                argument: "Blind Work Expenses are locked until Social Security's record confirms statutory blindness. Logged as an Impairment-Related Work Expense instead."
+                            )
+                        }
+                    }
                 } header: {
                     Text("Type").textCase(nil)
                 } footer: {
-                    Text(typeFooter)
+                    Text(bweLocked
+                         ? "Blind Work Expenses — locked until Social Security's record confirms statutory blindness. Check your award letter or BPQY, then update Settings, Benefits profile. Until then this is logged as IRWE."
+                         : typeFooter)
                 }
 
                 Section {
@@ -149,8 +166,11 @@ struct SSILogManualDeductionView: View {
     }
 
     private var typeHint: String {
-        if isBlind {
-            return "Default for blind users is BWE (worth twice as much per dollar as IRWE). Switch to IRWE for medical expenses unrelated to enabling work."
+        if capabilities.expenseType == .bwe {
+            return "Default for statutorily blind users is BWE (worth twice as much per dollar as IRWE). Switch to IRWE for medical expenses unrelated to enabling work."
+        }
+        if bweLocked {
+            return "BWE is locked until Social Security confirms statutory blindness. Default is IRWE. Burial covers designated burial-fund deposits."
         }
         return "Default is IRWE. Burial covers designated burial-fund deposits."
     }

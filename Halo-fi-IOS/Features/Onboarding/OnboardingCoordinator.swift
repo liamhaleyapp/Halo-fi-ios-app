@@ -12,8 +12,12 @@ import SwiftUI
 enum OnboardingStep: Int, CaseIterable {
   case signUp = 0
   case aiConsent = 1
-  case subscription = 2
-  case plaid = 3
+  /// Benefits profile questions (Sep-2026). Sits AFTER AI consent (consent
+  /// must precede any AI feature) and before the paywall so gating is
+  /// known before the first screen renders.
+  case profile = 2
+  case subscription = 3
+  case plaid = 4
 
   var title: String {
     switch self {
@@ -21,6 +25,8 @@ enum OnboardingStep: Int, CaseIterable {
       return "Create Account"
     case .aiConsent:
       return "Voice AI Consent"
+    case .profile:
+      return "About Your Benefits"
     case .subscription:
       return "Choose Plan"
     case .plaid:
@@ -34,6 +40,8 @@ enum OnboardingStep: Int, CaseIterable {
       return "Sign up to get started"
     case .aiConsent:
       return "Review how Halo Fi processes your voice"
+    case .profile:
+      return "A few quick questions so Halo shows the right things"
     case .subscription:
       return "Select your subscription"
     case .plaid:
@@ -98,6 +106,12 @@ class OnboardingCoordinator {
       persistence.subscriptionCompleted = subscriptionCompleted
     }
   }
+
+  var profileCompleted: Bool {
+    didSet {
+      persistence.profileCompleted = profileCompleted
+    }
+  }
   
   var plaidCompleted = false
   
@@ -110,6 +124,7 @@ class OnboardingCoordinator {
     self.currentStep = persistence.savedStep ?? .signUp
     self.signUpCompleted = persistence.signUpCompleted
     self.subscriptionCompleted = persistence.subscriptionCompleted
+    self.profileCompleted = persistence.profileCompleted
   }
   
   // MARK: - Starting Step Logic
@@ -135,6 +150,12 @@ class OnboardingCoordinator {
     // was never granted (or was withdrawn).
     if !aiConsentGranted {
       return .aiConsent
+    }
+
+    // Benefits profile comes right after consent; it is skippable question
+    // by question, but the step itself runs once per install.
+    guard profileCompleted else {
+      return .profile
     }
 
     // No persisted state = user just signed up (fresh onboarding)
@@ -215,6 +236,8 @@ class OnboardingCoordinator {
       // and mirrored to UserDefaults. No coordinator-local flag needed —
       // userManager.aiConsentGranted is the source of truth.
       break
+    case .profile:
+      profileCompleted = true
     case .subscription:
       subscriptionCompleted = true
     case .plaid:
@@ -237,6 +260,7 @@ class OnboardingCoordinator {
     currentStep = .signUp
     signUpCompleted = false
     subscriptionCompleted = false
+    profileCompleted = false
     plaidCompleted = false
     isCompleted = false
     isBootstrapping = true
@@ -246,7 +270,7 @@ class OnboardingCoordinator {
   // MARK: - Computed Properties
   
   var progress: Double {
-    let completedSteps = [signUpCompleted, subscriptionCompleted, plaidCompleted].filter { $0 }.count
+    let completedSteps = [signUpCompleted, profileCompleted, subscriptionCompleted, plaidCompleted].filter { $0 }.count
     return Double(completedSteps) / Double(OnboardingStep.allCases.count)
   }
   

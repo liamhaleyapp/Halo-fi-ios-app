@@ -126,7 +126,7 @@ struct BudgetView: View {
             }
             .sheet(isPresented: $showingManualDeductionSheet) {
                 SSILogManualDeductionView(
-                    isBlind: dataManager.overview?.ssiProfile?.isBlind ?? false,
+                    capabilities: userManager.capabilities,
                     onSave: { type, cents, description, occurredOn, notes in
                         let formatter = DateFormatter()
                         formatter.dateFormat = "yyyy-MM-dd"
@@ -155,6 +155,7 @@ struct BudgetView: View {
             .count
         guard let summary = BudgetAccessibilitySummary.make(
             overview: dataManager.overview,
+            capabilities: userManager.capabilities,
             candidatesCount: dataManager.ssiCandidates.count,
             manualDeductionsCount: dataManager.ssiManualDeductions.count,
             unmatchedManualCount: unmatched
@@ -366,7 +367,9 @@ struct BudgetView: View {
 
     @ViewBuilder
     private func ssiSection(_ ssi: SSIStatus) -> some View {
-        if ssi.hasSsi {
+        // Gate on the server-computed capabilities object, not the raw
+        // has_ssi boolean: the same object drives every benefits screen.
+        if userManager.capabilities.showsResourceCounter {
             Section {
                 VStack(spacing: 12) {
                     if let resources = ssi.resources {
@@ -436,7 +439,7 @@ struct BudgetView: View {
                     SSILoggedDeductionsCard(
                         deductions: dataManager.ssiManualDeductions,
                         totalsCents: dataManager.ssiManualTotalsCents,
-                        isBlind: dataManager.overview?.ssiProfile?.isBlind ?? false,
+                        expenseType: userManager.capabilities.expenseType,
                         onAdd: { showingManualDeductionSheet = true },
                         onDelete: { entry in
                             do {

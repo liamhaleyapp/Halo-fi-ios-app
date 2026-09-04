@@ -30,6 +30,7 @@ enum BudgetAccessibilitySummary {
     /// isn't ready yet (caller skips the announcement).
     static func make(
         overview: BudgetOverview?,
+        capabilities: UserCapabilities = .none,
         candidatesCount: Int,
         manualDeductionsCount: Int,
         unmatchedManualCount: Int
@@ -39,7 +40,7 @@ enum BudgetAccessibilitySummary {
         var sentences: [String] = []
         sentences.append("Budget for \(overview.month).")
 
-        if overview.ssiStatus.hasSsi {
+        if capabilities.showsResourceCounter || overview.ssiStatus.hasSsi {
             // SSI users — lead with the engine's pre-baked §10
             // narration when available (Phase 6). It already
             // covers resources + projected check + 1619(b) callout.

@@ -23,6 +23,15 @@ final class UserManager {
     /// While true, show a splash screen. When false, show main app or onboarding based on isOnboarded.
     var isResolvingDestination = false
 
+    /// Server-computed feature gating (Sep-2026). Views read THIS, never
+    /// raw `hasSsi` / `isBlind`. Loaded from /auth/me after login and
+    /// refreshed after every benefits-profile change. `.none` until then,
+    /// so nothing benefit-specific renders on a guess.
+    var capabilities: UserCapabilities = .none
+
+    /// The raw benefits-profile answers, for seeding the editor.
+    var benefitsProfile: BenefitsProfile = .empty
+
     private let userDefaults = UserDefaults.standard
     private let userKey = "currentUser"
     private let legacyOnboardingKey = "user_onboarding_completed"  // Legacy global key for migration
@@ -827,6 +836,47 @@ final class UserManager {
 
         currentUser = updatedUser
         saveUserToStorage()
+
+        if let caps = profileData.capabilities {
+            capabilities = caps
+        }
+        if let profile = profileData.benefitsProfile {
+            benefitsProfile = profile
+        }
+    }
+
+    // MARK: - Benefits profile + capabilities
+
+    /// GET /users/me/capabilities — call after any profile change so the
+    /// app re-gates immediately (also embedded in /auth/me).
+    func refreshCapabilities() async {
+        do {
+            let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
+                endpoint: APIEndpoints.User.capabilities,
+                method: .GET,
+                body: nil,
+                responseType: CapabilitiesResponse.self
+            )
+            capabilities = response.capabilities
+            if let profile = response.benefitsProfile {
+                benefitsProfile = profile
+            }
+        } catch {
+            Logger.warning("UserManager: could not refresh capabilities: \(error)")
+        }
+    }
+
+    /// PATCH /users/me with one or more benefits-profile answers, then
+    /// re-fetch capabilities. Idempotent — safe to call per question.
+    func updateBenefitsProfile(_ patch: BenefitsProfilePatch) async throws {
+        let body = try JSONEncoder().encode(patch)
+        let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.User.me,
+            method: .PATCH,
+            body: body,
+            responseType: EmptyResponse.self
+        )
+        await refreshCapabilities()
     }
 
     private func formatTokenDuration(_ seconds: Int) -> String {

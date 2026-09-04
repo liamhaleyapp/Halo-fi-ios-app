@@ -17,7 +17,10 @@ import SwiftUI
 struct SSILoggedDeductionsCard: View {
     let deductions: [SSIManualDeduction]
     let totalsCents: [String: Int]
-    let isBlind: Bool
+    /// From the capabilities object: which work-expense type this user
+    /// logs by default. `.bwe` only when Social Security's record
+    /// confirms statutory blindness.
+    let expenseType: ExpenseType
     let onAdd: () -> Void
     let onDelete: (SSIManualDeduction) async -> Void
     /// Phase 9 — closure that fetches the CSV bytes and returns a
@@ -109,7 +112,7 @@ struct SSILoggedDeductionsCard: View {
             }
 
             if deductions.isEmpty {
-                Text("Nothing logged this month yet. Tell Halo \"save \(isBlind ? "fifty dollars on Uber as a BWE" : "fifty dollars on copays as IRWE")\", or tap Add.")
+                Text("Nothing logged this month yet. Tell Halo \"save \(expenseType == .bwe ? "fifty dollars on Uber as a BWE" : "fifty dollars on copays as IRWE")\", or tap Add.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)

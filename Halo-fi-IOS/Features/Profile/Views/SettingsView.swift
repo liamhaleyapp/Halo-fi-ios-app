@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
+  case profile, preferences, benefitsProfile, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -49,6 +49,13 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.preferences) {
               SettingsOptionLabel(icon: "hexagon.fill", title: "Preferences")
+            }
+
+            // Benefits profile (Sep-2026): the answers that drive every
+            // benefit-specific screen. Shown for everyone so non-benefit
+            // users can opt in later.
+            NavigationLink(value: SettingsDestination.benefitsProfile) {
+              SettingsOptionLabel(icon: "heart.text.square.fill", title: "Benefits profile")
             }
 
             // Drives BWE/IRWE classifier accuracy. Shown for everyone;
@@ -154,6 +161,9 @@ struct SettingsView: View {
 
         case .preferences:
           PreferencesView()
+
+        case .benefitsProfile:
+          BenefitsProfileView()
 
         case .workProfile:
           WorkProfileView()

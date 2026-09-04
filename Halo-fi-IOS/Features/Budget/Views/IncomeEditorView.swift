@@ -3,14 +3,20 @@
 //  Halo-fi-IOS
 //
 //  Sheet presented from BudgetView for editing the user's monthly
-//  income sources (paycheck, SSI, SSDI). Only sends fields the user
-//  actually changed — the backend PATCH /users/me applies diffs.
+//  income sources (paycheck, SSI amount, SSDI amount) and the two SSI
+//  resource figures (ABLE balance, burial fund).
+//
+//  WHICH benefits the user receives, and whether they are statutorily
+//  blind, are no longer toggles here — they come from the benefits
+//  profile (Settings → Benefits profile), which is what the capabilities
+//  object is computed from. This sheet only edits amounts.
 //
 
 import SwiftUI
 
 struct IncomeEditorView: View {
     @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(UserManager.self) private var userManager
     @Environment(\.dismiss) private var dismiss
 
     // Paycheck
@@ -18,18 +24,11 @@ struct IncomeEditorView: View {
     @State private var payFrequency: String = "biweekly"
     @State private var paycheckName: String = ""
 
-    // SSI
-    @State private var receivesSSI: Bool = false
+    // Benefit amounts (shown per capabilities)
     @State private var ssiAmount: String = ""
-
-    // SSDI
-    @State private var receivesSSDI: Bool = false
     @State private var ssdiAmount: String = ""
 
-    // SSI rules-engine profile (Phase 4) — drives BWE branch and
-    // resource exclusions in the SSI engine.
-    @State private var isBlind: Bool = false
-    @State private var hasABLEAccount: Bool = false
+    // SSI resource figures
     @State private var ableBalanceDollars: String = ""
     @State private var burialFundDollars: String = ""
 
@@ -43,6 +42,10 @@ struct IncomeEditorView: View {
         ("monthly", "Monthly"),
         ("irregular", "Irregular"),
     ]
+
+    private var showsSSI: Bool { userManager.capabilities.showsResourceCounter }
+    private var showsSSDI: Bool { userManager.capabilities.showsSSDILane }
+    private var hasABLE: Bool { userManager.benefitsProfile.hasAbleAccount ?? false }
 
     var body: some View {
         NavigationStack {
@@ -66,53 +69,42 @@ struct IncomeEditorView: View {
                         .font(.caption)
                 }
 
-                Section {
-                    Toggle("I receive SSI", isOn: $receivesSSI)
-                        .accessibilityValue(receivesSSI ? "On" : "Off")
-                        .accessibilityHint("Unlocks the SSI monitor on the Budget tab — projected check, resource limit tracking, and BWE / IRWE deductions.")
-                    if receivesSSI {
-                        TextField("Monthly SSI amount", text: $ssiAmount)
-                            .keyboardType(.decimalPad)
-                            .accessibilityLabel("Monthly SSI amount")
+                if showsSSI || showsSSDI {
+                    Section {
+                        if showsSSI {
+                            TextField("Monthly SSI amount", text: $ssiAmount)
+                                .keyboardType(.decimalPad)
+                                .accessibilityLabel("Monthly SSI amount")
+                        }
+                        if showsSSDI {
+                            TextField("Monthly SSDI amount", text: $ssdiAmount)
+                                .keyboardType(.decimalPad)
+                                .accessibilityLabel("Monthly SSDI amount")
+                        }
+                    } header: {
+                        Text("Benefits")
+                    } footer: {
+                        Text("To change which benefits you receive, go to Settings, then Benefits profile.")
+                            .font(.caption)
                     }
-                } header: {
-                    Text("SSI")
-                } footer: {
-                    Text("Turning this on unlocks the SSI monitor on the Budget tab.")
-                        .font(.caption)
                 }
 
-                Section {
-                    Toggle("I receive SSDI", isOn: $receivesSSDI)
-                        .accessibilityValue(receivesSSDI ? "On" : "Off")
-                        .accessibilityHint("Lets us include your SSDI deposit in your monthly income totals.")
-                    if receivesSSDI {
-                        TextField("Monthly SSDI amount", text: $ssdiAmount)
+                if showsSSI {
+                    Section {
+                        if hasABLE {
+                            TextField("ABLE account balance", text: $ableBalanceDollars)
+                                .keyboardType(.decimalPad)
+                                .accessibilityLabel("ABLE account balance in dollars")
+                        }
+                        TextField("Designated burial fund (max $1,500)", text: $burialFundDollars)
                             .keyboardType(.decimalPad)
-                            .accessibilityLabel("Monthly SSDI amount")
+                            .accessibilityLabel("Designated burial fund balance in dollars, up to $1,500")
+                    } header: {
+                        Text("SSI resources")
+                    } footer: {
+                        Text("Estimate. ABLE balances above $100,000 and burial funds above $1,500 still count toward the resource limit. Whether you have an ABLE account is set in Settings, then Benefits profile.")
+                            .font(.caption)
                     }
-                } header: {
-                    Text("SSDI")
-                }
-
-                Section {
-                    Toggle("I am statutorily blind", isOn: $isBlind)
-                        .accessibilityHint("Unlocks Blind Work Expense deductions, which preserve $1 of SSI for every $1 spent on work-related expenses.")
-                    Toggle("I have an ABLE account", isOn: $hasABLEAccount)
-                        .accessibilityHint("ABLE accounts are excluded from SSI countable resources up to $100,000.")
-                    if hasABLEAccount {
-                        TextField("ABLE account balance", text: $ableBalanceDollars)
-                            .keyboardType(.decimalPad)
-                            .accessibilityLabel("ABLE account balance in dollars")
-                    }
-                    TextField("Designated burial fund (max $1,500)", text: $burialFundDollars)
-                        .keyboardType(.decimalPad)
-                        .accessibilityLabel("Designated burial fund balance in dollars, up to $1,500")
-                } header: {
-                    Text("SSI profile")
-                } footer: {
-                    Text("These settings drive your projected SSI math. ABLE balances above $100,000 and burial funds above $1,500 still count toward the resource limit.")
-                        .font(.caption)
                 }
 
                 if let err = saveError {
@@ -146,18 +138,14 @@ struct IncomeEditorView: View {
         if let freq = sources.paycheck.frequency { payFrequency = freq }
         if let name = sources.paycheck.name { paycheckName = name }
 
-        receivesSSI = sources.ssi.enabled
         if let cents = sources.ssi.amountCents, cents > 0 {
             ssiAmount = String(format: "%.2f", Double(cents) / 100.0)
         }
-        receivesSSDI = sources.ssdi.enabled
         if let cents = sources.ssdi.amountCents, cents > 0 {
             ssdiAmount = String(format: "%.2f", Double(cents) / 100.0)
         }
 
         if let profile = overview.ssiProfile {
-            isBlind = profile.isBlind
-            hasABLEAccount = profile.hasAbleAccount
             if let cents = profile.ableBalanceCents, cents > 0 {
                 ableBalanceDollars = String(format: "%.2f", Double(cents) / 100.0)
             }
@@ -188,16 +176,16 @@ struct IncomeEditorView: View {
         update.paycheckAmount = Double(paycheckAmount) ?? 0.0
         update.payFrequency = payFrequency
         update.paycheckName = paycheckName.isEmpty ? nil : paycheckName
-        update.receivesSsi = receivesSSI
-        update.receivesSsdi = receivesSSDI
-        update.ssiAmount = receivesSSI ? (Double(ssiAmount) ?? 0.0) : nil
-        update.ssdiAmount = receivesSSDI ? (Double(ssdiAmount) ?? 0.0) : nil
-        update.isBlind = isBlind
-        update.hasAbleAccount = hasABLEAccount
-        update.ableBalanceCents = hasABLEAccount
-            ? IncomeEditorView.dollarsToCents(ableBalanceDollars)
-            : 0
-        update.burialFundCents = IncomeEditorView.dollarsToCents(burialFundDollars)
+        if showsSSI {
+            update.ssiAmount = Double(ssiAmount) ?? 0.0
+            update.ableBalanceCents = hasABLE
+                ? IncomeEditorView.dollarsToCents(ableBalanceDollars)
+                : 0
+            update.burialFundCents = IncomeEditorView.dollarsToCents(burialFundDollars)
+        }
+        if showsSSDI {
+            update.ssdiAmount = Double(ssdiAmount) ?? 0.0
+        }
         return update
     }
 

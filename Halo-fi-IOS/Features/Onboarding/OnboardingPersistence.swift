@@ -21,6 +21,7 @@ struct OnboardingPersistence {
     static let currentStep = "onboarding_current_step"
     static let signUpCompleted = "onboarding_signup_completed"
     static let subscriptionCompleted = "onboarding_subscription_completed"
+    static let profileCompleted = "onboarding_profile_completed"
   }
   
   private let defaults: UserDefaults
@@ -64,6 +65,11 @@ struct OnboardingPersistence {
     get { defaults.bool(forKey: Keys.subscriptionCompleted) }
     nonmutating set { defaults.set(newValue, forKey: Keys.subscriptionCompleted) }
   }
+
+  var profileCompleted: Bool {
+    get { defaults.bool(forKey: Keys.profileCompleted) }
+    nonmutating set { defaults.set(newValue, forKey: Keys.profileCompleted) }
+  }
   
   // MARK: - Clear
   
@@ -73,5 +79,6 @@ struct OnboardingPersistence {
     defaults.removeObject(forKey: Keys.currentStep)
     defaults.removeObject(forKey: Keys.signUpCompleted)
     defaults.removeObject(forKey: Keys.subscriptionCompleted)
+    defaults.removeObject(forKey: Keys.profileCompleted)
   }
 }

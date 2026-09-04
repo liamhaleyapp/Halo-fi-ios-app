@@ -110,7 +110,10 @@ struct UserProfileData: Codable {
     let householdSize: Int?
     let emailConfirmed: Bool?
     let phoneConfirmed: Bool?
-    
+    /// Sep-2026: server-computed gating + raw benefits answers.
+    let capabilities: UserCapabilities?
+    let benefitsProfile: BenefitsProfile?
+
     enum CodingKeys: String, CodingKey {
         case id
         case email
@@ -129,6 +132,8 @@ struct UserProfileData: Codable {
         case householdSize = "household_size"
         case emailConfirmed = "email_confirmed"
         case phoneConfirmed = "phone_confirmed"
+        case capabilities
+        case benefitsProfile = "benefits_profile"
     }
 
     private enum AltKeys: String, CodingKey {
@@ -162,5 +167,8 @@ struct UserProfileData: Codable {
         self.householdSize = try c.decodeIfPresent(Int.self, forKey: .householdSize)
         self.emailConfirmed = try c.decodeIfPresent(Bool.self, forKey: .emailConfirmed)
         self.phoneConfirmed = try c.decodeIfPresent(Bool.self, forKey: .phoneConfirmed)
+        // Tolerant: an older backend without these keys still decodes.
+        self.capabilities = try? c.decodeIfPresent(UserCapabilities.self, forKey: .capabilities)
+        self.benefitsProfile = try? c.decodeIfPresent(BenefitsProfile.self, forKey: .benefitsProfile)
     }
 }
