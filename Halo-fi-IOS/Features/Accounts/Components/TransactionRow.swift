@@ -9,6 +9,8 @@ import SwiftUI
 
 struct TransactionRow: View {
   let transaction: Transaction
+  /// "TD Bank · Checking ••1234" when the list mixes accounts.
+  var accountLabel: String? = nil
 
   private var displayName: String {
     transaction.merchantName ?? transaction.name
@@ -48,6 +50,10 @@ struct TransactionRow: View {
     // Pending status
     if transaction.pending {
       label += ", Pending"
+    }
+
+    if let accountLabel {
+      label += ", from \(accountLabel)"
     }
 
     return label
@@ -100,6 +106,12 @@ struct TransactionRow: View {
               .font(.caption)
               .foregroundColor(.orange)
           }
+        }
+        if let accountLabel {
+          Text(accountLabel)
+            .font(.caption2)
+            .foregroundColor(Color.haloTextTertiary)
+            .lineLimit(1)
         }
       }
       

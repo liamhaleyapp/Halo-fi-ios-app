@@ -875,23 +875,26 @@ final class BankDataManager {
             }
         }
 
-        // 3. No cache: fetch from network (blocking)
+        // 3. Fetch from network. Overlapping calls for the same item share
+        // one request (two syncs in flight made the backend skip one with an
+        // empty list, which then wiped the cache).
+        if let inflight = inflightItemFetches[itemId] {
+            return try await inflight.value
+        }
         isLoadingTransactions = true
         transactionsError = nil
-        defer { isLoadingTransactions = false }
-
+        let task = Task<[Transaction], Error> { [weak self] in
+            guard let self else { return [] }
+            let fetched = try await self.bankService.getTransactionsForItem(itemId: itemId)
+            return await self.acceptItemTransactions(fetched, itemId: itemId, userId: userId, fullSync: true)
+        }
+        inflightItemFetches[itemId] = task
+        defer {
+            inflightItemFetches[itemId] = nil
+            isLoadingTransactions = false
+        }
         do {
-            let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
-            transactionsByItemId[itemId] = fetchedTransactions
-
-            // Persist for future instant display
-            if let persistence = transactionPersistence {
-                await persistence.saveTransactions(fetchedTransactions, for: userId, itemId: itemId)
-                await persistence.markFullSyncComplete(for: userId, itemId: itemId)
-            }
-
-            lastTransactionSyncAt = Date()
-            return fetchedTransactions
+            return try await task.value
         } catch let error as BankError {
             transactionsError = error
             throw error
@@ -900,6 +903,76 @@ final class BankDataManager {
             transactionsError = bankError
             throw bankError
         }
+    }
+
+    @ObservationIgnored private var inflightItemFetches: [String: Task<[Transaction], Error>] = [:]
+
+    /// Store a fetched per-item list. An EMPTY result never replaces a
+    /// non-empty cache (the backend returns [] when a sync is skipped, and
+    /// a bank with transactions does not lose them all in one sync).
+    private func acceptItemTransactions(_ fetched: [Transaction], itemId: String, userId: String, fullSync: Bool) async -> [Transaction] {
+        let existing = transactionsByItemId[itemId] ?? []
+        if fetched.isEmpty && !existing.isEmpty {
+            Logger.warning("BankDataManager: empty transaction list for item \(itemId) ignored; keeping \(existing.count) cached")
+            return existing
+        }
+        transactionsByItemId[itemId] = fetched
+        if let persistence = transactionPersistence {
+            await persistence.saveTransactions(fetched, for: userId, itemId: itemId)
+            if fullSync { await persistence.markFullSyncComplete(for: userId, itemId: itemId) }
+            await persistence.markRecentSyncComplete(for: userId, itemId: itemId)
+        }
+        lastTransactionSyncAt = Date()
+        return fetched
+    }
+
+    // MARK: - All accounts (Money tab)
+
+    /// Every account's transactions, newest first. Prefers the single
+    /// GET /bank/transactions read; on backends without it, merges the
+    /// per-institution lists (forceRefresh runs one sync per item first).
+    /// Never returns an empty list while a cached one exists.
+    func allTransactions(forceRefresh: Bool, limit: Int = 200) async -> [Transaction] {
+        if let inflight = inflightAllFetch { return await inflight.value }
+        let task = Task<[Transaction], Never> { [weak self] in
+            guard let self else { return [] }
+            var result: [Transaction] = []
+            if let fetched = try? await self.bankService.getTransactions(accountId: nil, limit: limit, offset: nil), !fetched.isEmpty {
+                result = fetched
+            } else {
+                var merged: [Transaction] = []
+                for item in self.linkedItems ?? [] {
+                    if let txns = try? await self.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh) {
+                        merged.append(contentsOf: txns)
+                    }
+                }
+                var seen = Set<String>()
+                result = merged
+                    .filter { seen.insert($0.idTransaction).inserted }
+                    .sorted { $0.transactionDate > $1.transactionDate }
+                    .prefix(limit)
+                    .map { $0 }
+            }
+            if result.isEmpty, let cached = self.transactions, !cached.isEmpty { return cached }
+            self.transactions = result
+            self.transactionsLastFetched = Date()
+            return result
+        }
+        inflightAllFetch = task
+        defer { inflightAllFetch = nil }
+        return await task.value
+    }
+
+    @ObservationIgnored private var inflightAllFetch: Task<[Transaction], Never>?
+
+    /// "TD Bank · Checking ••1234" for a transaction's account, if known.
+    func accountLabel(for accountId: String) -> String? {
+        for item in linkedItems ?? [] {
+            if let acct = accountsByItemId[item.itemId]?.first(where: { $0.idAccount == accountId }) {
+                return "\(item.institutionName) · \(acct.name) ••\(acct.mask)"
+            }
+        }
+        return nil
     }
 
     // MARK: - Background Refresh
@@ -916,13 +989,9 @@ final class BankDataManager {
         }
 
         do {
+            if inflightItemFetches[itemId] != nil { return }
             let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
-            transactionsByItemId[itemId] = fetchedTransactions
-
-            if let persistence = transactionPersistence {
-                await persistence.saveTransactions(fetchedTransactions, for: userId, itemId: itemId)
-                await persistence.markRecentSyncComplete(for: userId, itemId: itemId)
-            }
+            _ = await acceptItemTransactions(fetchedTransactions, itemId: itemId, userId: userId, fullSync: false)
 
             Logger.debug("BankDataManager: Background refresh completed for item \(itemId)")
         } catch {

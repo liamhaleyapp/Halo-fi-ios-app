@@ -59,6 +59,9 @@ struct MoneyHomeView: View {
     @State private var showingLinkChooser = false
     @State private var hasAppeared = false
     @State private var isLoadingTransactions = false
+    /// View-owned copy of the all-accounts list, so cache resets elsewhere
+    /// never blank the row once it has loaded.
+    @State private var recentTransactions: [Transaction] = []
 
     private static let transactionPageSize = 200
 
@@ -102,7 +105,7 @@ struct MoneyHomeView: View {
                 switch route {
                 case .budget: BudgetView()
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
-                case .allTransactions: AllTransactionsView()
+                case .allTransactions: AllTransactionsView(initial: recentTransactions)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetMoneyNavigation)) { _ in
@@ -175,41 +178,21 @@ struct MoneyHomeView: View {
     // MARK: - d. Recent transactions row
 
     private var transactionsRow: some View {
-        let txns = bankDataManager.transactions ?? []
-        var line: String
-        if txns.isEmpty {
-            line = isLoadingTransactions ? "Loading." : "Nothing yet."
+        let line: String
+        if let newest = recentTransactions.first {
+            line = "Newest: \(newest.merchantName ?? newest.name), \(Self.spokenDate(newest.transactionDate))."
         } else {
-            let newest = txns.first
-            line = "\(VoiceOverFormatter.count(txns.count, singular: "recent transaction", plural: "recent transactions")) across all accounts."
-            if let newest {
-                line += " Newest: \(newest.merchantName ?? newest.name), \(VoiceOverFormatter.dollarsAndCents(Int((abs(newest.amount) * 100).rounded()))) on \(Self.spokenDate(newest.transactionDate))."
-            }
+            line = isLoadingTransactions ? "Loading." : "Nothing yet. Pull down to refresh."
         }
         return row(title: "Recent transactions", icon: "list.bullet.rectangle.fill", tint: .orange, line: line,
-                   hint: "Opens every transaction, newest first. Each row can be marked as a work expense.", route: .allTransactions)
+                   hint: "Opens every transaction across your accounts, newest first.", route: .allTransactions)
     }
 
     private func loadTransactions(forceRefresh: Bool) async {
         isLoadingTransactions = true
         defer { isLoadingTransactions = false }
-        do {
-            try await bankDataManager.fetchTransactions(limit: Self.transactionPageSize, forceRefresh: forceRefresh)
-        } catch {
-            // Backends without GET /bank/transactions (older deploys): merge
-            // the per-institution lists instead so the page is never empty.
-            Logger.warning("MoneyHomeView: all-accounts fetch failed, merging per item: \(error)")
-            var merged: [Transaction] = []
-            for item in bankDataManager.linkedItems ?? [] {
-                if let txns = try? await bankDataManager.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: forceRefresh) {
-                    merged.append(contentsOf: txns)
-                }
-            }
-            bankDataManager.transactions = merged
-                .sorted { $0.transactionDate > $1.transactionDate }
-                .prefix(Self.transactionPageSize)
-                .map { $0 }
-        }
+        let loaded = await bankDataManager.allTransactions(forceRefresh: forceRefresh, limit: Self.transactionPageSize)
+        if !loaded.isEmpty || recentTransactions.isEmpty { recentTransactions = loaded }
     }
 
     // MARK: - e. Link
@@ -414,11 +397,13 @@ struct WorkExpenseRowAction: ViewModifier {
 }
 
 struct AllTransactionsView: View {
+    var initial: [Transaction] = []
+
     @Environment(UserManager.self) private var userManager
     @Environment(BankDataManager.self) private var bankDataManager
+    @State private var transactions: [Transaction] = []
     @State private var isLoading = false
-
-    private var transactions: [Transaction] { bankDataManager.transactions ?? [] }
+    @State private var hasLoaded = false
 
     var body: some View {
         List {
@@ -428,8 +413,12 @@ struct AllTransactionsView: View {
                         .foregroundColor(.haloTextSecondary)
                 }
                 ForEach(transactions, id: \.idTransaction) { txn in
-                    TransactionRow(transaction: txn)
-                        .modifier(WorkExpenseRowAction(enabled: userManager.capabilities.showsBenefitsLane, transaction: txn))
+                    NavigationLink {
+                        TransactionDetailView(transaction: txn)
+                    } label: {
+                        TransactionRow(transaction: txn, accountLabel: bankDataManager.accountLabel(for: txn.accountId))
+                    }
+                    .modifier(WorkExpenseRowAction(enabled: userManager.capabilities.showsBenefitsLane, transaction: txn))
                 }
             } header: {
                 Text("\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")), newest first")
@@ -438,20 +427,22 @@ struct AllTransactionsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Recent transactions")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            isLoading = true
-            do {
-                try await bankDataManager.fetchTransactions(limit: 200, forceRefresh: true)
-            } catch {
-                var merged: [Transaction] = []
-                for item in bankDataManager.linkedItems ?? [] {
-                    if let txns = try? await bankDataManager.fetchTransactionsForItem(itemId: item.itemId, forceRefresh: true) {
-                        merged.append(contentsOf: txns)
-                    }
-                }
-                bankDataManager.transactions = merged.sorted { $0.transactionDate > $1.transactionDate }
-            }
-            isLoading = false
+        .task {
+            guard !hasLoaded else { return }
+            hasLoaded = true
+            transactions = initial
+            await load(forceRefresh: false)
+        }
+        .refreshable { await load(forceRefresh: true) }
+    }
+
+    private func load(forceRefresh: Bool) async {
+        isLoading = true
+        defer { isLoading = false }
+        let loaded = await bankDataManager.allTransactions(forceRefresh: forceRefresh)
+        if !loaded.isEmpty || transactions.isEmpty { transactions = loaded }
+        if forceRefresh {
+            UIAccessibility.post(notification: .announcement, argument: "\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")) loaded.")
         }
     }
 }
