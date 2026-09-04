@@ -237,7 +237,9 @@ struct MainTabView: View {
                 .tag(MainTab.settings.rawValue)
         }
         .accentColor(.blue)
-        .simultaneousGesture(swipeBetweenTabs)
+        // No swipe-between-tabs gesture: it fought horizontal scrolls and
+        // VoiceOver swipes, and moved blind users to another tab by accident.
+        // The tab bar (and the three-finger VoiceOver swipe) is the only way.
         // WP4 — Magic Tap anywhere: the Money header, resource status, and
         // the next due task, in one breath.
         .accessibilityAction(.magicTap) {
@@ -286,26 +288,6 @@ struct MainTabView: View {
         budgetDataManager.overview = archetype.overview
     }
 
-    private var swipeBetweenTabs: some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onEnded { value in
-                let dx = value.translation.width
-                let dy = value.translation.height
-                // Reject if the gesture was mostly vertical — that's
-                // a scroll, not a tab swipe.
-                guard abs(dx) > abs(dy) * 1.5 else { return }
-                let threshold: CGFloat = 50
-                if dx < -threshold && selectedTab < MainTab.settings.rawValue {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        selectedTab += 1
-                    }
-                } else if dx > threshold && selectedTab > 0 {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        selectedTab -= 1
-                    }
-                }
-            }
-    }
 }
 
 #Preview {
