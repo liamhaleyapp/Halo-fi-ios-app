@@ -10,7 +10,7 @@
 import Foundation
 import PDFKit
 import UIKit
-import Vision
+@preconcurrency import Vision
 
 enum ReceiptTextRecognizer {
     /// Recognized text lines, in reading order.
@@ -21,28 +21,27 @@ enum ReceiptTextRecognizer {
 
     static func recognizeLines(in cgImage: CGImage, orientation: CGImagePropertyOrientation = .up) async throws -> [String] {
         try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
+            // Vision's request/handler types aren't Sendable, so they are
+            // created and used entirely on the background queue; only the
+            // continuation crosses the boundary.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                request.recognitionLanguages = ["en-US"]
+                let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
+                do {
+                    try handler.perform([request])
+                } catch {
                     continuation.resume(throwing: error)
                     return
                 }
-                let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
+                let observations = request.results ?? []
                 // Sort top-to-bottom (Vision's origin is bottom-left).
                 let lines = observations
                     .sorted { $0.boundingBox.midY > $1.boundingBox.midY }
                     .compactMap { $0.topCandidates(1).first?.string }
                 continuation.resume(returning: lines)
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["en-US"]
-            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    try handler.perform([request])
-                } catch {
-                    continuation.resume(throwing: error)
-                }
             }
         }
     }
