@@ -74,6 +74,7 @@ final class ConversationViewModel {
 
         // Configure services
         let streamingAudioPlayer = StreamingAudioPlayer()
+        streamingAudioPlayer.observeVoiceOverStatus()
         coordinator.configure(
             streamingAudioPlayer: streamingAudioPlayer,
             audioFeedback: audioFeedback,

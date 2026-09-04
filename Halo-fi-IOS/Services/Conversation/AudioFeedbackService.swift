@@ -67,7 +67,7 @@ final class AudioFeedbackService {
         guard let url else { return }
         do {
             let player = try AVAudioPlayer(contentsOf: url)
-            player.volume = volume
+            player.volume = VoiceOverPlaybackPolicy.earconGain(volume)
             activePlayer = player  // Keep strong reference until next sound
             player.play()
         } catch {

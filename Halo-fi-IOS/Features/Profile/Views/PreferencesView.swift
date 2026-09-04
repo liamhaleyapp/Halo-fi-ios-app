@@ -18,6 +18,11 @@ struct PreferencesView: View {
     /// "push_to_talk" or "hands_free". Phase 1 just persists the
     /// choice; ConversationCoordinator branches on it in Phase 2.
     @AppStorage("conversationMode") private var conversationMode = "push_to_talk"
+    /// What Halo's own speech does while VoiceOver is running:
+    /// duck (default) / mute / normal. Device-local — VoiceOver is a
+    /// per-device setting — so it is not pushed to the backend.
+    /// Read by StreamingAudioPlayer via VoiceOverPlaybackPolicy.
+    @AppStorage(VoiceOverPlaybackPolicy.storageKey) private var voiceOverHaloBehavior = VoiceOverHaloBehavior.duck.rawValue
 
     @State private var isSaving = false
     @State private var showingResult = false
@@ -59,6 +64,9 @@ struct PreferencesView: View {
         .init(id: "push_to_talk", title: "Push to Talk"),
         .init(id: "hands_free", title: "Hands-Free (Beta)"),
     ]
+
+    private let voiceOverBehaviorOptions: [SelectionOption] =
+        VoiceOverHaloBehavior.allCases.map { .init(id: $0.rawValue, title: $0.title) }
 
     private var speedValue: Float {
         switch voiceSpeed {
@@ -144,6 +152,18 @@ struct PreferencesView: View {
                     icon: "waveform",
                     options: conversationModeOptions,
                     selectedId: $conversationMode
+                )
+
+                // When VoiceOver is on — Halo's speech is the product for
+                // many blind users, so it is never disabled silently. The
+                // user picks: keep Halo quieter under VoiceOver (default),
+                // mute Halo and read the transcript, or leave it alone.
+                PreferenceDropdownSection(
+                    title: "When VoiceOver is on",
+                    subtitle: "Duck: Halo speaks more quietly so VoiceOver stays clear. Mute: Halo's voice is silent and VoiceOver reads the transcript. Normal: no change.",
+                    icon: "ear",
+                    options: voiceOverBehaviorOptions,
+                    selectedId: $voiceOverHaloBehavior
                 )
 
                 Spacer(minLength: 100)

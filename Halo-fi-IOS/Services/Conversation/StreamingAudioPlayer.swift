@@ -25,6 +25,7 @@
 //
 
 import AVFoundation
+import UIKit
 
 @MainActor
 final class StreamingAudioPlayer: NSObject {
@@ -273,12 +274,11 @@ final class StreamingAudioPlayer: NSObject {
             player.delegate = self
             player.enableRate = true
             player.rate = playbackRate
-            // Max gain at the player. AVAudioPlayer.volume is the per-
-            // player gain (0...1) multiplied with system volume; setting
-            // it to 1.0 is the default but we set it explicitly as
-            // protection against any future code path that lowers it
-            // (mute toggles, ducking experiments, etc.).
-            player.volume = 1.0
+            // Per-player gain (0...1) multiplied with system volume. Full
+            // gain unless VoiceOver is running AND the user chose to duck
+            // or mute Halo under it (VoiceOverPlaybackPolicy). Nothing
+            // else may lower this.
+            player.volume = VoiceOverPlaybackPolicy.speechGain
             guard player.prepareToPlay(), player.play() else {
                 Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer; skipping")
                 playNextBuffer()
@@ -311,6 +311,25 @@ final class StreamingAudioPlayer: NSObject {
     func setMuted(_ muted: Bool) {
         isMuted = muted
         if muted { stop() }
+    }
+
+    // MARK: - VoiceOver ducking
+
+    /// Start following VoiceOver on/off so an in-progress sentence
+    /// re-applies the user's duck/mute/normal choice immediately.
+    func observeVoiceOverStatus() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleVoiceOverStatusChange),
+            name: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleVoiceOverStatusChange() {
+        let gain = VoiceOverPlaybackPolicy.speechGain
+        audioPlayer?.volume = gain
+        Logger.info("StreamingAudioPlayer: VoiceOver \(VoiceOverPlaybackPolicy.isVoiceOverRunning ? "on" : "off") — speech gain \(gain)")
     }
 }
 

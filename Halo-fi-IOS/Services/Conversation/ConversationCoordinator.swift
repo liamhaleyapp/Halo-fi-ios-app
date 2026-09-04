@@ -247,9 +247,21 @@ final class ConversationCoordinator {
     /// Hard cap on a single listening turn. Even if silence detection
     /// never fires (always-on background noise above threshold) we
     /// commit after this so the conversation always progresses.
-    /// 12s comfortably covers a multi-sentence question; users rarely
-    /// monologue longer than that without pausing.
-    private let maxListenDuration: TimeInterval = 12.0
+    /// 45s: the old 12s cut off blind users mid-question (they often
+    /// describe a purchase or a month in one breath). The cap only
+    /// fires when the SERVER has gone quiet too — see
+    /// serverCommitGrace — so a long monologue the STT is keeping up
+    /// with is never chopped.
+    private let maxListenDuration: TimeInterval = 45.0
+
+    /// If the server committed a transcript segment this recently, the
+    /// hard cap defers: the STT is still delivering, so the turn is
+    /// alive and the server's own end-of-speech will close it.
+    private let serverCommitGrace: TimeInterval = 5.0
+
+    /// When the server last committed a transcript segment for the
+    /// current turn. Reset at the start of every listen.
+    private var lastServerCommitAt: Date?
 
     /// Hands-free safety net — if the user opens the conversation,
     /// hears the greeting, but never speaks, auto-commit anyway after
@@ -733,12 +745,19 @@ final class ConversationCoordinator {
 
         let now = Date()
 
-        // Hard cap — fires regardless of whether we detected speech.
+        // Hard cap — fires regardless of whether we detected speech,
+        // unless the server committed a segment in the last few
+        // seconds (it is keeping up; let its end-of-speech end the turn).
         if let started = listenStartedAt,
            now.timeIntervalSince(started) > maxListenDuration {
-            Logger.info("Hands-free: hard turn cap hit at \(String(format: "%.1f", now.timeIntervalSince(started)))s — committing")
-            stopListeningAndProcess()
-            return
+            if let commit = lastServerCommitAt,
+               now.timeIntervalSince(commit) < serverCommitGrace {
+                // Deferred; re-evaluated on the next buffer.
+            } else {
+                Logger.info("Hands-free: hard turn cap hit at \(String(format: "%.1f", now.timeIntervalSince(started)))s — committing")
+                stopListeningAndProcess()
+                return
+            }
         }
 
         // No-speech timeout — release STT if user is silent the
@@ -1298,6 +1317,7 @@ final class ConversationCoordinator {
                 // Server committed a segment. Fold it into the accumulated
                 // draft — the next partial carries ONLY the new segment's
                 // words, so this must never clear what came before.
+                self.lastServerCommitAt = Date()
                 self.transcriptStore?.commitSegment(text)
 
                 // A mid-speech commit is a SEGMENT BOUNDARY, not end of
@@ -1504,7 +1524,11 @@ final class ConversationCoordinator {
 
     /// Re-assert the loud-speaker route when the system clears our override.
     /// Only for reasons that indicate a config/override change — plugging in
-    /// headphones (.newDeviceAvailable) must NOT be fought.
+    /// headphones (.newDeviceAvailable) must NOT be fought. Unplugging them
+    /// (.oldDeviceUnavailable) and system reconfiguration
+    /// (.routeConfigurationChange) both land on the quiet earpiece unless
+    /// the override is re-applied, which is the "Halo went quiet after I
+    /// took my headphones off" report.
     @objc private func handleAudioRouteChange(_ notification: Notification) {
         guard
             let info = notification.userInfo,
@@ -1513,7 +1537,7 @@ final class ConversationCoordinator {
         else { return }
 
         switch reason {
-        case .categoryChange, .override:
+        case .categoryChange, .override, .oldDeviceUnavailable, .routeConfigurationChange:
             let session = AVAudioSession.sharedInstance()
             let isReceiver = session.currentRoute.outputs.contains {
                 $0.portType == .builtInReceiver

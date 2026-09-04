@@ -200,9 +200,11 @@ class PlaidOnboardingViewModel {
     // - We poll for accounts until they appear (backend already processed)
     Logger.info("PlaidOnboardingVM: Waiting for backend webhook processing...")
 
-    // Poll for accounts with retry logic
-    let maxRetries = 10
-    let retryDelayMs: UInt64 = 500_000_000 // 500ms
+    // Poll for accounts with retry logic. A full first sync often takes
+    // longer than the old ~5 s budget, which showed "No accounts were
+    // connected" to users whose bank WAS connected — and they re-linked.
+    let maxRetries = 30
+    let retryDelayMs: UInt64 = 1_000_000_000 // 1 s → ~30 s window
 
     var accountsFound = false
 
@@ -230,6 +232,23 @@ class PlaidOnboardingViewModel {
 
       if accountsFound {
         Logger.success("PlaidOnboardingVM: Accounts found, completing onboarding")
+        userManager.completeOnboarding()
+
+        if let onComplete = onComplete {
+          onComplete()
+        } else {
+          onDismiss?()
+        }
+      } else if bankDataManager.linkedItems?.isEmpty == false {
+        // The item row exists — the link succeeded; only the account/
+        // transaction sync is still running. Treat as success and say so,
+        // instead of telling the user nothing connected (which led to a
+        // duplicate re-link).
+        Logger.info("PlaidOnboardingVM: Linked item present but accounts not yet synced — completing with sync notice")
+        UIAccessibility.post(
+          notification: .announcement,
+          argument: "Bank connected. Still syncing transactions. Your accounts will appear shortly."
+        )
         userManager.completeOnboarding()
 
         if let onComplete = onComplete {
@@ -364,26 +383,30 @@ class PlaidOnboardingViewModel {
   func bootstrapIfNeeded(userManager: UserManager, bankDataManager: BankDataManager) async {
     guard !hasStartedFlow else { return }
 
-    do {
-      // Force a server fetch: a stale-empty 5-min cache here presents
-      // "link your bank" to a user whose accounts are already connected,
-      // which is how the duplicate-Amex re-link happened.
-      try await bankDataManager.fetchAccounts(forceRefresh: true)
-      let hasAccounts = bankDataManager.accounts?.isEmpty == false
+    // Force a server fetch of LINKED ITEMS (with their embedded accounts):
+    // a stale-empty 5-min cache — or an empty local persistence after a
+    // reinstall — presented "link your bank" to a user whose accounts
+    // were already connected, which is how the duplicate-Amex re-link
+    // happened. forceRefresh() is the path that populates linkedItems.
+    await bankDataManager.forceRefresh()
+    let hasLinkedItems = bankDataManager.linkedItems?.isEmpty == false
+    let hasAccounts = bankDataManager.accounts?.isEmpty == false
 
-      if hasAccounts {
-        userManager.completeOnboarding()
-        onComplete?() ?? onDismiss?()
-        return
-      }
-
-      // Don't auto-start Plaid - let user see intro and tap button
-    } catch {
-      // A failed fetch must NOT silently present the link flow as if
-      // nothing were connected — surface it so the user (VoiceOver-first)
-      // knows the linked state is unconfirmed, not absent.
-      linkedStateUnconfirmed = true
-      Logger.error("PlaidOnboarding: could not confirm linked accounts: \(error)")
+    if hasLinkedItems || hasAccounts {
+      userManager.completeOnboarding()
+      onComplete?() ?? onDismiss?()
+      return
     }
+
+    if bankDataManager.linkedItems == nil && bankDataManager.accounts == nil {
+      // Nothing came back at all — a failed fetch must NOT silently
+      // present the link flow as if nothing were connected. Surface it so
+      // the user (VoiceOver-first) knows the linked state is unconfirmed,
+      // not absent.
+      linkedStateUnconfirmed = true
+      Logger.error("PlaidOnboarding: could not confirm linked accounts (no items or accounts returned)")
+    }
+    // Otherwise: confirmed empty. Don't auto-start Plaid — let the user
+    // see the intro and tap the button.
   }
 }
