@@ -89,6 +89,7 @@ struct UnifiedOnboardingFlowView: View {
 
     case .profile:
       ProfileQuestionsView(
+        questions: ProfileQuestions.onboarding,
         embeddedInOnboarding: true,
         onComplete: handleProfileComplete
       )

@@ -66,6 +66,7 @@ struct MoneyHomeView: View {
     @State private var labelCard: AttentionCard?
     @State private var candidateCard: AttentionCard?
     @State private var billCard: AttentionCard?
+    @State private var suggestionCard: AttentionCard?
 
     private static let transactionPageSize = 200
 
@@ -145,6 +146,9 @@ struct MoneyHomeView: View {
             .sheet(item: $billCard) { card in
                 BillConfirmSheet(card: card)
             }
+            .sheet(item: $suggestionCard) { card in
+                BudgetSuggestionSheet(card: card)
+            }
             .sheet(item: $candidateCard) { card in
                 if let candidate = card.candidate {
                     SSIDeductionConfirmView(candidate: candidate) { type in
@@ -184,6 +188,9 @@ struct MoneyHomeView: View {
         switch card.actionType {
         case "label_deposit", "enter_gross": labelCard = card
         case "confirm_bill": billCard = card
+        case "apply_budget_suggestion": suggestionCard = card
+        case "open_budget": navigationPath.append(MoneyRoute.budget)
+        case "open_benefits_profile": navigationPath.append(BenefitsHomeView.Route.benefitsProfile)
         case "confirm_candidate": candidateCard = card
         case "open_resource_monitor": navigationPath.append(MoneyRoute.resourceMonitor)
         case "open_package": navigationPath.append(MoneyRoute.package(card.payload.month))

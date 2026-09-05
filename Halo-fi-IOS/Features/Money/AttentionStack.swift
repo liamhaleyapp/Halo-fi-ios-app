@@ -80,6 +80,10 @@ struct AttentionCardView: View {
         case "deposit_label": return "arrow.down.circle.fill"
         case "wage_gross": return "dollarsign.circle.fill"
         case "work_expense_candidate": return "briefcase.fill"
+        case "bill_confirm": return "calendar.badge.clock"
+        case "budget_suggestion": return "sparkles"
+        case "budget_over": return "chart.pie.fill"
+        case "profile_incomplete": return "person.text.rectangle.fill"
         default: return "bell.fill"
         }
     }
@@ -94,6 +98,10 @@ struct AttentionCardView: View {
         case "open_review": return "Opens the month-end review."
         case "open_work_expenses": return "Opens work expenses."
         case "open_accounts": return "Opens your accounts."
+        case "confirm_bill": return "Opens one question: is this a bill."
+        case "apply_budget_suggestion": return "Shows the proposed limits. One tap to use them, or keep what you have."
+        case "open_budget": return "Opens your budget."
+        case "open_benefits_profile": return "Opens your benefits profile to answer the rest."
         default: return "Opens it."
         }
     }

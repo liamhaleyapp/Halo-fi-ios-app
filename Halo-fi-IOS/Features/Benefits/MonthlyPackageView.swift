@@ -154,9 +154,13 @@ struct MonthlyPackageView: View {
     // MARK: - Sections
 
     private var header: some View {
-        let count = summary?.rowCount ?? 0
-        var detail = summary.map {
-            "\(VoiceOverFormatter.count($0.rowCount, singular: "expense", plural: "expenses")) totaling \(VoiceOverFormatter.dollars($0.totalCents)). Receipts \($0.receiptCount) of \($0.rowCount)."
+        let count = (summary?.rowCount ?? 0) + (summary?.wageCount ?? 0)
+        var detail = summary.map { s -> String in
+            var text = "\(VoiceOverFormatter.count(s.rowCount, singular: "expense", plural: "expenses")) totaling \(VoiceOverFormatter.dollars(s.totalCents)). Receipts \(s.receiptCount) of \(s.rowCount)."
+            if let wages = s.wageCount, wages > 0 {
+                text = "\(VoiceOverFormatter.count(wages, singular: "paycheck", plural: "paychecks")) reported, gross \(VoiceOverFormatter.dollars(s.wagesGrossCents ?? 0)). " + text
+            }
+            return text
         } ?? "Loading."
         var tone: ScreenReaderSummaryHeader.Tone = .neutral
         if let sub = submission, sub.isSubmitted {
@@ -189,6 +193,10 @@ struct MonthlyPackageView: View {
     private func checklist(_ s: SSIPacketSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("What's inside").font(.headline).accessibilityAddTraits(.isHeader)
+            if let wages = s.wageCount, wages > 0 {
+                checkRow(ok: true, title: "Wages",
+                         line: "\(VoiceOverFormatter.count(wages, singular: "paycheck", plural: "paychecks")) reported as gross wages, \(BudgetFormatter.cents(s.wagesGrossCents ?? 0)). Net deposits shown for reconciliation.")
+            }
             checkRow(ok: s.rowCount > 0, title: "SSA-795 cover, pre-filled",
                      line: s.rowCount > 0 ? "\(s.expenseKind == "irwe" ? "IRWE" : s.expenseKind == "mixed" ? "BWE and IRWE" : "BWE") statement for \(s.monthLabel). Social Security number and signature left blank for you." : "No expenses logged for \(s.monthLabel) yet.")
             checkRow(ok: s.rowCount > 0, title: "Ledger",

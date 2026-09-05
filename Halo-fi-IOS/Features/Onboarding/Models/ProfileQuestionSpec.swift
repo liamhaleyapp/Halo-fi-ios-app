@@ -260,6 +260,13 @@ enum ProfileQuestions {
         ),
     ]
 
+    /// Onboarding asks only what decides the lane (2026-09-06): the payment,
+    /// which benefit, statutory blindness, and the promise. Household, work
+    /// status and ABLE come later as a "Finish your benefits profile" card.
+    static var onboarding: [ProfileQuestionSpec] {
+        v1.filter { ["ssa_payment", "benefit_type", "blind_status", "promise"].contains($0.id) }
+    }
+
     /// The subset of `v1` that Settings → Benefits profile lists (the
     /// promise is shown once at onboarding; a duplicate household-size
     /// question is collapsed to one row).

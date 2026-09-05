@@ -201,10 +201,15 @@ struct SSIPacketSummary: Codable, Equatable {
     let submission: SSISubmission?
     let fieldOffice: FieldOfficeGuidance
     let counselorFinderUrl: String
+    /// 2026-09-06 — labeled paychecks reported as gross wages.
+    let wageCount: Int?
+    let wagesGrossCents: Int?
 
     enum CodingKeys: String, CodingKey {
         case month, filename, submission, disclaimer
         case monthLabel = "month_label"
+        case wageCount = "wage_count"
+        case wagesGrossCents = "wages_gross_cents"
         case expenseKind = "expense_kind"
         case rowCount = "row_count"
         case matchedCount = "matched_count"
