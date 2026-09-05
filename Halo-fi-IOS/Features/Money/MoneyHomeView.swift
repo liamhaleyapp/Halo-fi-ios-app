@@ -82,6 +82,7 @@ struct MoneyHomeView: View {
                         budgetRow
                         incomeRow
                         billsRow
+                        calendarRow
                         accountsRow
                         transactionsRow
                         linkSection
@@ -121,6 +122,7 @@ struct MoneyHomeView: View {
                 case .resourceMonitor: ResourceMonitorView()
                 case .income: IncomeView()
                 case .bills: BillsView()
+                case .calendar: CalendarView()
                 case .workExpenses: WorkExpensesView()
                 case .package(let month): MonthlyPackageView(initialMonth: month)
                 case .review(let month): MonthEndReviewView(month: month)
@@ -179,7 +181,7 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, workExpenses
+        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
         case package(String?)
         case review(String)
     }
@@ -310,6 +312,22 @@ struct MoneyHomeView: View {
         }()
         return row(title: "Bills and subscriptions", icon: "calendar.badge.clock", tint: .teal, line: line,
                    hint: "Opens your recurring charges to answer which are bills or subscriptions.", route: .bills)
+    }
+
+    // MARK: - b4. Calendar row (2026-09-05)
+
+    private var calendarRow: some View {
+        let cal = budgetDataManager.calendar(for: nil)
+        let line: String = {
+            guard let cal else { return "The month ahead, from what you confirmed." }
+            if let n = cal.next, let d = n.date {
+                let amount = n.cents > 0 ? ", \(VoiceOverFormatter.dollars(n.cents))" : ""
+                return "Next: \(n.label)\(amount), \(TabSummaries.spokenDate(d))."
+            }
+            return "Nothing confirmed for \(cal.monthLabel.split(separator: " ").first.map(String.init) ?? "this month") yet."
+        }()
+        return row(title: "Calendar", icon: "calendar", tint: .pink, line: line,
+                   hint: "Opens the month day by day: income, bills, subscriptions and deadlines you confirmed.", route: .calendar)
     }
 
     // MARK: - c. Accounts row

@@ -223,6 +223,19 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'link'")).firstMatch.waitForExistence(timeout: 10), "link chooser did not open")
     }
 
+    func testMoneyCalendar_ssiWatch_listsTheMonth() {
+        let app = launch("ssi_watch")
+        openTab(app, "Money")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Calendar.'")).firstMatch
+        XCTAssertTrue(scrollTo(row, in: app), "Calendar row missing")
+        XCTAssertTrue(row.label.contains("Next: Hand in August work expenses, September 6."), row.label)
+        row.tap()
+        XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(header(in: app).label.hasPrefix("September 2026."), header(in: app).label)
+        let paycheck = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Paycheck from Acme Payroll, $412.00, expected.")).firstMatch
+        XCTAssertTrue(scrollTo(paycheck, in: app), "paycheck item missing")
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

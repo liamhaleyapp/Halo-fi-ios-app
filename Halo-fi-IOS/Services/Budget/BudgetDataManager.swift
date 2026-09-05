@@ -42,6 +42,23 @@ final class BudgetDataManager {
     /// "Needs your attention" (2026-09-05): the top cards for the Money tab
     /// and how many more the server holds. Learn cards resolve through
     /// `labelDeposit` / `enterGross` / `confirmSSIDeduction`.
+    /// Calendar months by key ("2026-09"); the current month refreshes with
+    /// everything else, other months load on demand.
+    var calendars: [String: CalendarMonth] = [:]
+    var currentCalendarKey: String? = nil
+
+    func calendar(for month: String?) -> CalendarMonth? {
+        if let month { return calendars[month] }
+        if let key = currentCalendarKey { return calendars[key] }
+        return nil
+    }
+
+    func loadCalendar(month: String?) async throws {
+        let cal = try await CalendarService.shared.month(month)
+        calendars[cal.month] = cal
+        if month == nil { currentCalendarKey = cal.month }
+    }
+
     var attentionCards: [AttentionCard] = []
     var attentionQueue: [AttentionCard] = []
     var attentionMoreCount: Int = 0
@@ -296,6 +313,12 @@ final class BudgetDataManager {
 
         // Attention + income summary, in parallel, failures isolated: the
         // stack keeps its last cards when the fetch fails.
+        // Calendar: current month, failures isolated.
+        Task { [weak self] in
+            if let cal = try? await CalendarService.shared.month(nil) {
+                await MainActor.run { self?.calendars[cal.month] = cal; self?.currentCalendarKey = cal.month }
+            }
+        }
         let generationAtStart = attentionGeneration
         async let attentionResult: Result<AttentionResponse, Error> = {
             do { return .success(try await AttentionService.shared.fetch(userTz: userTz)) } catch { return .failure(error) }

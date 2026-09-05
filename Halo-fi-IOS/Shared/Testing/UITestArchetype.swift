@@ -112,6 +112,29 @@ enum UITestArchetype: String, CaseIterable {
     /// Attention cards for this archetype (2026-09-05): SSI users get a
     /// package deadline and a deposit question; a non-benefit user only a
     /// bank to reconnect; the unanswered user nothing.
+    /// The month ahead for this archetype (2026-09-05).
+    var calendar: CalendarMonth? {
+        guard self == .ssiWatch || self == .ssiBlind else { return nil }
+        let json = """
+        {"month": "2026-09", "month_label": "September 2026", "today": "2026-09-05",
+         "days": [
+           {"date": "2026-09-01", "is_today": false, "is_past": true, "items": [
+             {"kind": "deadline", "label": "Social Security measures resources", "cents": 0, "confidence": "n/a", "source": "rule", "status": "past"},
+             {"kind": "bill", "label": "XYZ Property", "cents": 85400, "confidence": "actual", "source": "matched", "status": "paid", "stream_id": "rent"}]},
+           {"date": "2026-09-06", "is_today": false, "is_past": false, "items": [
+             {"kind": "deadline", "label": "Hand in August work expenses", "cents": 0, "confidence": "n/a", "source": "reminder", "status": "due", "month": "2026-08"}]},
+           {"date": "2026-09-18", "is_today": false, "is_past": false, "items": [
+             {"kind": "income", "label": "Paycheck from Acme Payroll", "cents": 41200, "confidence": "medium", "source": "learned", "status": "expected"}]},
+           {"date": "2026-09-27", "is_today": false, "is_past": false, "items": [
+             {"kind": "subscription", "label": "Spotify", "cents": 1099, "confidence": "high", "source": "confirmed", "status": "expected", "stream_id": "spot"}]}
+         ],
+         "totals": {"expected_in_cents": 41200, "expected_out_cents": 1099},
+         "next": {"kind": "deadline", "label": "Hand in August work expenses", "cents": 0, "confidence": "n/a", "source": "reminder", "status": "due", "date": "2026-09-06"},
+         "spoken": "September: about $412 expected in, $11 going out. Next: Hand in August work expenses, September 6. Estimate."}
+        """
+        return try? JSONDecoder().decode(CalendarMonth.self, from: Data(json.utf8))
+    }
+
     var attentionCards: [AttentionCard] {
         let json: String
         switch self {
