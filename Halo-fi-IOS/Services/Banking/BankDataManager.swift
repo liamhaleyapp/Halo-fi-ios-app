@@ -673,6 +673,22 @@ final class BankDataManager {
     /// - Parameters:
     ///   - itemId: The item ID to fetch accounts for
     /// - Returns: ItemAccountsResponse containing accounts for that item
+    /// A one-line notice from the last link ("fewer accounts than you
+    /// picked"); the Accounts screen shows it once.
+    var lastLinkNotice: String? = nil
+
+    /// Sets a nickname and updates every cached copy of the account so rows
+    /// and the balance card speak it at once.
+    func setNickname(_ nickname: String, for account: BankAccount) async throws {
+        let updated = try await bankService.setAccountNickname(accountId: account.idAccount, nickname: nickname)
+        await MainActor.run {
+            for (itemId, list) in accountsByItemId {
+                accountsByItemId[itemId] = list.map { $0.idAccount == updated.idAccount ? updated : $0 }
+            }
+            if let all = accounts { accounts = all.map { $0.idAccount == updated.idAccount ? updated : $0 } }
+        }
+    }
+
     func fetchAccountsForItem(itemId: String) async throws -> ItemAccountsResponse {
         Logger.info("Fetching accounts for item \(itemId)")
 

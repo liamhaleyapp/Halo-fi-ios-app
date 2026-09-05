@@ -130,6 +130,10 @@ enum APIEndpoints {
 
         /// GET - Fetch accounts for a specific item.
         /// Usage: `Bank.accountsForItem(itemId)`
+        static func accountNickname(_ accountId: String) -> String {
+            "/bank/accounts/\(accountId)/nickname"
+        }
+
         static func accountsForItem(_ itemId: String) -> String {
             "/bank/\(itemId)/account"
         }

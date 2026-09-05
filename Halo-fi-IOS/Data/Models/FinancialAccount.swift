@@ -22,7 +22,7 @@ struct FinancialAccount: Identifiable {
         self.type = AccountType.from(bankAccount.type)
         self.name = bankAccount.name
         self.balance = bankAccount.currentBalance ?? 0
-        self.nickname = bankAccount.name
+        self.nickname = bankAccount.displayName
         self.isSynced = bankAccount.isActive
         self.plaidItemId = plaidItemId ?? bankAccount.plaidItemId
     }

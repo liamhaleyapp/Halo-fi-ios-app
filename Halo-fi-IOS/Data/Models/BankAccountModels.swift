@@ -22,7 +22,12 @@ struct BankAccount: Codable, Identifiable {
     let isActive: Bool
     let createdAt: String?
     let updatedAt: String?
-    
+    /// The user's own name for the account (2026-09-05); nil = the bank's name.
+    var nickname: String? = nil
+
+    /// What to show and speak: the nickname when set, else the bank's name.
+    var displayName: String { (nickname?.isEmpty == false) ? nickname! : name }
+
     var id: String {
         return idAccount
     }
@@ -41,5 +46,6 @@ struct BankAccount: Codable, Identifiable {
         case isActive = "is_active"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case nickname
     }
 }

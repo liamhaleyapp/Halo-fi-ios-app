@@ -232,6 +232,22 @@ class PlaidOnboardingViewModel {
 
       if accountsFound {
         Logger.success("PlaidOnboardingVM: Accounts found, completing onboarding")
+        // Compare what Plaid Link showed the user with what the backend
+        // stored. Andrew picked two Chase accounts and one arrived
+        // (2026-09-05); before this the app just said "connected".
+        let expected = linkSuccess.metadata.accounts.count
+        let institution = linkSuccess.metadata.institution.name
+        let stored = (bankDataManager.accounts ?? []).count
+        let items = bankDataManager.linkedItems ?? []
+        let institutionStored = items.contains { $0.institutionName.caseInsensitiveCompare(institution) == .orderedSame }
+        if expected > 0, !institutionStored || stored < expected {
+          let line = institutionStored
+            ? "HaloFi received fewer accounts from \(institution) than you picked. Open Accounts and link \(institution) again if one is missing."
+            : "\(institution) did not finish connecting. Please link it again."
+          Logger.warning("PlaidOnboardingVM: link shortfall — expected \(expected) from \(institution), stored \(stored), institution present: \(institutionStored)")
+          UIAccessibility.post(notification: .announcement, argument: line)
+          bankDataManager.lastLinkNotice = line
+        }
         userManager.completeOnboarding()
 
         if let onComplete = onComplete {

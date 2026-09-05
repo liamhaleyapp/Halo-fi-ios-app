@@ -68,6 +68,7 @@ protocol BankServiceProtocol {
     /// Maps link_session_id → user_id in Redis for webhook routing.
     /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
     func registerLinkSession(sessionId: String) async throws
+    func setAccountNickname(accountId: String, nickname: String) async throws -> BankAccount
 }
 
 // MARK: - Default Parameters Extension
@@ -87,6 +88,10 @@ extension BankServiceProtocol {
 #if DEBUG
 /// Mock banking service for unit tests and previews.
 actor MockBankService: BankServiceProtocol {
+    func setAccountNickname(accountId: String, nickname: String) async throws -> BankAccount {
+        throw BankError.multiConnectFailed("Mock: nickname not supported")
+    }
+
     var mockAccounts: [BankAccount] = []
     var mockTransactions: [Transaction] = []
     var shouldSucceed = true

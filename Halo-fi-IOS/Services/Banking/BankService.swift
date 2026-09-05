@@ -310,6 +310,17 @@ final class BankService: BankServiceProtocol {
     /// The backend maps link_session_id → user_id in Redis (30 min TTL)
     /// This allows webhooks to identify which user connected accounts
     /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
+    /// Names an account the user's way; an empty string clears it.
+    func setAccountNickname(accountId: String, nickname: String) async throws -> BankAccount {
+        struct Body: Encodable { let nickname: String? }
+        struct Out: Codable { let account: BankAccount }
+        let out: Out = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.Bank.accountNickname(accountId), method: .PATCH,
+            body: try JSONEncoder().encode(Body(nickname: nickname.isEmpty ? nil : nickname)), responseType: Out.self
+        )
+        return out.account
+    }
+
     func registerLinkSession(sessionId: String) async throws {
         let requestBody = ["link_session_id": sessionId]
         let bodyData = try JSONEncoder().encode(requestBody)

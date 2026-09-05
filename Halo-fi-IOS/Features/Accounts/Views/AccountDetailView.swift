@@ -9,6 +9,10 @@ import SwiftUI
 
 struct AccountDetailView: View {
   let account: FinancialAccount
+  /// The raw bank account when opened from a linked institution; enables
+  /// the Nickname button (manual accounts have their own editor).
+  var bankAccount: BankAccount? = nil
+  @State private var nicknameTarget: BankAccount?
 
   @Environment(BankDataManager.self) private var bankDataManager
   @Environment(UserManager.self) private var userManager
@@ -35,9 +39,21 @@ struct AccountDetailView: View {
     }
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      if bankAccount != nil {
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button { nicknameTarget = bankAccount } label: {
+            Image(systemName: "pencil").frame(width: 44, height: 44)
+          }
+          .accessibilityLabel("Nickname")
+          .accessibilityHint("Gives this account a name of your own.")
+        }
+      }
       ToolbarItem(placement: .navigationBarTrailing) {
         syncStatusIndicator
       }
+    }
+    .sheet(item: $nicknameTarget) { acct in
+      AccountNicknameSheet(account: acct)
     }
     .task {
       await loadTransactions(forceRefresh: false)
