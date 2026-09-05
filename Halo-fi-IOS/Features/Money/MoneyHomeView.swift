@@ -62,6 +62,9 @@ struct MoneyHomeView: View {
     /// View-owned copy of the all-accounts list, so cache resets elsewhere
     /// never blank the row once it has loaded.
     @State private var recentTransactions: [Transaction] = []
+    /// Attention learn cards resolve in sheets.
+    @State private var labelCard: AttentionCard?
+    @State private var candidateCard: AttentionCard?
 
     private static let transactionPageSize = 200
 
@@ -72,7 +75,14 @@ struct MoneyHomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         header
+                        AttentionStack(
+                            cards: budgetDataManager.attentionCards,
+                            moreCount: budgetDataManager.attentionMoreCount,
+                            onOpen: { open($0) },
+                            onNotNow: { card in Task { await budgetDataManager.dismissCard(card) } }
+                        )
                         budgetRow
+                        incomeRow
                         accountsRow
                         transactionsRow
                         linkSection
@@ -110,6 +120,36 @@ struct MoneyHomeView: View {
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
                 case .allTransactions: AllTransactionsView(initial: recentTransactions)
                 case .resourceMonitor: ResourceMonitorView()
+                case .income: IncomeView()
+                case .workExpenses: WorkExpensesView()
+                case .package(let month): MonthlyPackageView(initialMonth: month)
+                case .review(let month): MonthEndReviewView(month: month)
+                }
+            }
+            // Benefits screens pushed from an attention card link onward
+            // with their own routes; resolve them here too.
+            .navigationDestination(for: BenefitsHomeView.Route.self) { route in
+                switch route {
+                case .resourceMonitor: ResourceMonitorView()
+                case .workExpenses: WorkExpensesView()
+                case .monthlyPackage(let month): MonthlyPackageView(initialMonth: month)
+                case .monthEndReview(let month): MonthEndReviewView(month: month)
+                case .learn: LearnListView(lane: userManager.capabilities.lane)
+                case .benefitsProfile: BenefitsProfileView()
+                case .questionnaire:
+                    BenefitsQuestionnaireView(onFinished: {
+                        if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+                    })
+                }
+            }
+            .sheet(item: $labelCard) { card in
+                DepositLabelSheet(mode: Self.labelMode(for: card))
+            }
+            .sheet(item: $candidateCard) { card in
+                if let candidate = card.candidate {
+                    SSIDeductionConfirmView(candidate: candidate) { type in
+                        try await budgetDataManager.confirmSSIDeduction(candidate: candidate, as: type)
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetMoneyNavigation)) { _ in
@@ -131,7 +171,36 @@ struct MoneyHomeView: View {
         }
     }
 
-    enum MoneyRoute: Hashable { case budget, accounts, allTransactions, resourceMonitor }
+    enum MoneyRoute: Hashable {
+        case budget, accounts, allTransactions, resourceMonitor, income, workExpenses
+        case package(String?)
+        case review(String)
+    }
+
+    // MARK: - Attention actions
+
+    private func open(_ card: AttentionCard) {
+        switch card.actionType {
+        case "label_deposit", "enter_gross": labelCard = card
+        case "confirm_candidate": candidateCard = card
+        case "open_resource_monitor": navigationPath.append(MoneyRoute.resourceMonitor)
+        case "open_package": navigationPath.append(MoneyRoute.package(card.payload.month))
+        case "open_review": navigationPath.append(MoneyRoute.review(card.payload.month ?? MonthKey.current))
+        case "open_work_expenses": navigationPath.append(MoneyRoute.workExpenses)
+        case "open_accounts": navigationPath.append(MoneyRoute.accounts)
+        default: break
+        }
+    }
+
+    static func labelMode(for card: AttentionCard) -> DepositLabelSheet.Mode {
+        let p = card.payload
+        if card.actionType == "enter_gross", let labelId = p.labelId {
+            return .gross(labelId: labelId, employer: p.employer ?? p.source ?? "your employer", netCents: p.netCents ?? p.amountCents ?? 0,
+                          lastGrossCents: p.lastGrossCents, occurredOn: p.occurredOn ?? "")
+        }
+        return .label(transactionId: p.transactionId ?? "", source: p.source ?? "a deposit", amountCents: p.amountCents ?? 0,
+                      occurredOn: p.occurredOn ?? "")
+    }
 
     // MARK: - a. Header
 
@@ -168,6 +237,28 @@ struct MoneyHomeView: View {
     private var budgetRow: some View {
         row(title: "Budget", icon: "chart.pie.fill", tint: .blue, line: TabSummaries.budgetRow(snapshot),
             hint: "Opens your budget.", route: .budget)
+    }
+
+    // MARK: - b2. Income row (2026-09-05)
+
+    private var incomeRow: some View {
+        let s = budgetDataManager.incomeSummary
+        let line: String = {
+            guard let s else { return "What your deposits are, learned as they arrive." }
+            if let first = s.sources.first(where: { $0.kind == "work_income" }) {
+                var text = first.employer ?? first.sourceKey.capitalized
+                if let cadence = first.cadenceDays {
+                    text += cadence == 14 ? " every 2 weeks" : cadence == 7 ? " every week" : cadence >= 28 ? " monthly" : cadence == 15 ? " twice a month" : ""
+                }
+                if s.workIncomeGrossCents > 0 { text += ", \(BudgetFormatter.cents(s.workIncomeGrossCents)) gross this month" }
+                if s.paychecksNeedingGross > 0 { text += ", \(VoiceOverFormatter.count(s.paychecksNeedingGross, singular: "paystub gross", plural: "paystub grosses")) still needed" }
+                return text + "."
+            }
+            if !s.sources.isEmpty { return "\(VoiceOverFormatter.count(s.sources.count, singular: "payer", plural: "payers")) learned. No work income labeled yet." }
+            return "What your deposits are, learned as they arrive."
+        }()
+        return row(title: "Income", icon: "arrow.down.circle.fill", tint: .indigo, line: line,
+                   hint: "Opens where your money comes from, this month's work income, and the amounts you told HaloFi.", route: .income)
     }
 
     // MARK: - c. Accounts row

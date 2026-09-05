@@ -16,6 +16,7 @@ struct TransactionDetailView: View {
     @Environment(BankDataManager.self) private var bankDataManager
     @Environment(UserManager.self) private var userManager
     @Environment(\.dismiss) private var dismiss
+    @State private var labeling = false
 
     private var displayName: String { transaction.merchantName ?? transaction.name }
     private var amountText: String { transaction.amount.formatted(.currency(code: transaction.currency)) }
@@ -81,6 +82,16 @@ struct TransactionDetailView: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityHint("Opens the work expense form on the Benefits tab with this charge filled in.")
                 }
+
+                if !isSpend {
+                    Button { labeling = true } label: {
+                        Label("What is this deposit?", systemImage: "questionmark.circle.fill")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("One question: work income, a benefit, a transfer, a refund, or a gift. HaloFi remembers the payer.")
+                }
             }
             .padding(20)
             .readableContentWidth()
@@ -88,6 +99,12 @@ struct TransactionDetailView: View {
         .background(Color.haloBackground.ignoresSafeArea())
         .navigationTitle("Transaction")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $labeling) {
+            DepositLabelSheet(mode: .label(
+                transactionId: transaction.idTransaction, source: displayName,
+                amountCents: Int((abs(transaction.amount) * 100).rounded()), occurredOn: transaction.transactionDate
+            ))
+        }
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {

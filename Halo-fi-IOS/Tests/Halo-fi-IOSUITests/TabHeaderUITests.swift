@@ -27,6 +27,15 @@ final class TabHeaderUITests: XCTestCase {
         return element
     }
 
+    /// Lazy stacks only build what is on screen: swipe until the element exists.
+    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, tries: Int = 4) -> Bool {
+        for _ in 0..<tries {
+            if element.exists { return true }
+            app.swipeUp()
+        }
+        return element.exists
+    }
+
     private func openTab(_ app: XCUIApplication, _ name: String) {
         let tab = app.tabBars.buttons[name]
         XCTAssertTrue(tab.waitForExistence(timeout: 10), "tab \(name) missing")
@@ -143,6 +152,39 @@ final class TabHeaderUITests: XCTestCase {
         row.tap()
         XCTAssertTrue(app.staticTexts["Benefits questionnaire"].waitForExistence(timeout: 10), "intro did not open")
         XCTAssertTrue(app.buttons["I understand, start"].exists)
+    }
+
+    func testMoneyAttention_ssiBlind_readsAfterHeroAndOpensDepositQuestion() {
+        let app = launch("ssi_blind")
+        openTab(app, "Money")
+        XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention'")).firstMatch.waitForExistence(timeout: 10), "attention heading missing")
+        let package = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in August work expenses'")).firstMatch
+        XCTAssertTrue(package.exists, "deadline card missing")
+        let deposit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '$412.00 from ACME PAYROLL.'")).firstMatch
+        XCTAssertTrue(scrollTo(deposit, in: app), "deposit card missing")
+        deposit.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'What is this?'")).firstMatch.waitForExistence(timeout: 10), "deposit question did not open")
+        XCTAssertTrue(app.buttons["Work income"].exists)
+        XCTAssertTrue(app.buttons["A gift or help from someone"].exists)
+    }
+
+    func testMoneyAttention_unansweredUser_isQuiet() {
+        let app = launch("none")
+        openTab(app, "Money")
+        let empty = app.staticTexts["Nothing needs you right now."]
+        XCTAssertTrue(scrollTo(empty, in: app), "empty state missing")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in'")).firstMatch.exists)
+    }
+
+    func testMoneyAttention_noneAnswered_onlyBankCard() {
+        let app = launch("none_answered")
+        openTab(app, "Money")
+        let bank = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reconnect Chase.'")).firstMatch
+        XCTAssertTrue(scrollTo(bank, in: app), "bank card missing")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in'")).firstMatch.exists)
+        let income = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Income.'")).firstMatch
+        XCTAssertTrue(scrollTo(income, in: app), "Income row missing")
     }
 
     func testAgentHeader() {

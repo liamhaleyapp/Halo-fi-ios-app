@@ -76,6 +76,24 @@ enum APIEndpoints {
         static let workProfile = "/users/work-profile"
     }
 
+    // MARK: - Attention + Income (2026-09-05)
+
+    enum Attention {
+        /// GET — what needs the user, most urgent first. POST `/{id}/dismiss` = Not now.
+        static let me = "/me/attention"
+        static func dismiss(_ cardId: String) -> String { "/me/attention/\(cardId)/dismiss" }
+    }
+
+    enum Income {
+        /// GET — recent money-in with labels.
+        static let deposits = "/income/deposits"
+        /// POST — say what a deposit was. PATCH/DELETE `/{id}`.
+        static let labels = "/income/labels"
+        static func label(_ id: String) -> String { "/income/labels/\(id)" }
+        /// GET — learned sources + this month's work income.
+        static let summary = "/income/summary"
+    }
+
     // MARK: - Budget
 
     enum Budget {

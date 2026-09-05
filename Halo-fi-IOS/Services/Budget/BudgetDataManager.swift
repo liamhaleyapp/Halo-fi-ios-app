@@ -39,6 +39,15 @@ final class BudgetDataManager {
     var ssiReminders: [SSIReminder] = []
     var fieldOffice: FieldOfficeGuidance?
 
+    /// "Needs your attention" (2026-09-05): the top cards for the Money tab
+    /// and how many more the server holds. Learn cards resolve through
+    /// `labelDeposit` / `enterGross` / `confirmSSIDeduction`.
+    var attentionCards: [AttentionCard] = []
+    var attentionMoreCount: Int = 0
+
+    /// This month's learned income (sources, gross by employer).
+    var incomeSummary: IncomeSummary?
+
     // MARK: - Dependencies
 
     private let service: BudgetServiceProtocol
@@ -268,6 +277,64 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: fetch reminders failed: \(error)")
             ssiReminders = []
         }
+
+        // Attention + income summary, in parallel, failures isolated: the
+        // stack keeps its last cards when the fetch fails.
+        async let attentionResult: Result<AttentionResponse, Error> = {
+            do { return .success(try await AttentionService.shared.fetch(userTz: userTz)) } catch { return .failure(error) }
+        }()
+        async let incomeResult: Result<IncomeSummary, Error> = {
+            do { return .success(try await IncomeService.shared.summary(month: nil)) } catch { return .failure(error) }
+        }()
+        switch await attentionResult {
+        case .success(let response):
+            attentionCards = response.cards
+            attentionMoreCount = response.moreCount
+        case .failure(let error):
+            Logger.warning("BudgetDataManager: fetch attention failed: \(error)")
+        }
+        switch await incomeResult {
+        case .success(let summary): incomeSummary = summary
+        case .failure(let error): Logger.warning("BudgetDataManager: fetch income summary failed: \(error)")
+        }
+    }
+
+    // MARK: - Attention + income labels (2026-09-05)
+
+    /// "Not now": hide the card for a week, locally at once and on the server.
+    func dismissCard(_ card: AttentionCard, days: Int = 7) async {
+        attentionCards.removeAll { $0.id == card.id }
+        do { try await AttentionService.shared.dismiss(cardId: card.id, days: days) } catch {
+            Logger.warning("BudgetDataManager: dismiss failed: \(error)")
+        }
+        markStale()
+        await refresh()
+    }
+
+    /// Say what a deposit was. Work income may carry the paystub gross.
+    @discardableResult
+    func labelDeposit(transactionId: String, kind: IncomeKind, grossCents: Int?, employer: String?) async throws -> IncomeLabelView {
+        let label = try await IncomeService.shared.label(transactionId: transactionId, kind: kind, grossCents: grossCents, employer: employer)
+        attentionCards.removeAll { $0.payload.transactionId == transactionId && ($0.kind == "deposit_label" || $0.kind == "wage_gross") }
+        markStale()
+        await refresh()
+        return label
+    }
+
+    /// The paystub gross for a paycheck a rule already labeled.
+    @discardableResult
+    func enterGross(labelId: String, grossCents: Int) async throws -> IncomeLabelView {
+        let label = try await IncomeService.shared.updateLabel(id: labelId, grossCents: grossCents)
+        attentionCards.removeAll { $0.payload.labelId == labelId }
+        markStale()
+        await refresh()
+        return label
+    }
+
+    func forgetLabel(id: String) async throws {
+        try await IncomeService.shared.deleteLabel(id: id)
+        markStale()
+        await refresh()
     }
 
     // MARK: - SSI deductions (Phase 3)

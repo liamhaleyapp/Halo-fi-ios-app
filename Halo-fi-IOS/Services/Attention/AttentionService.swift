@@ -1,0 +1,113 @@
+//
+//  AttentionService.swift
+//  Halo-fi-IOS
+//
+//  "Needs your attention" (Liam, 2026-09-05): the server composes one
+//  list from resource alerts, package/receipt reminders, banks to
+//  reconnect, and learning questions (what a deposit was, the paystub
+//  gross, a likely work expense). The phone shows the top three.
+//
+
+import Foundation
+
+struct AttentionCard: Codable, Equatable, Identifiable {
+    struct Payload: Codable, Equatable {
+        var transactionId: String?
+        var amountCents: Int?
+        var source: String?
+        var occurredOn: String?
+        var month: String?
+        var itemId: String?
+        var labelId: String?
+        var netCents: Int?
+        var lastGrossCents: Int?
+        var employer: String?
+        var suggestedType: String?
+        var transactionDate: String?
+        var description: String?
+        var confidence: String?
+        var reason: String?
+        var matchedKeywords: [String]?
+        var count: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case source, month, employer, description, confidence, reason, count
+            case transactionId = "transaction_id"
+            case amountCents = "amount_cents"
+            case occurredOn = "occurred_on"
+            case itemId = "item_id"
+            case labelId = "label_id"
+            case netCents = "net_cents"
+            case lastGrossCents = "last_gross_cents"
+            case suggestedType = "suggested_type"
+            case transactionDate = "transaction_date"
+            case matchedKeywords = "matched_keywords"
+        }
+    }
+
+    let id: String
+    let kind: String
+    let priority: Int
+    let title: String
+    let line: String
+    let actionType: String
+    let payload: Payload
+    let learn: Bool
+    let tone: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, priority, title, line, payload, learn, tone
+        case actionType = "action_type"
+    }
+
+    /// The candidate the existing confirm sheet needs, when this is one.
+    var candidate: SSIDeductionCandidate? {
+        guard actionType == "confirm_candidate", let txn = payload.transactionId,
+              let type = SSIExclusionType(rawValue: payload.suggestedType ?? "irwe") else { return nil }
+        return SSIDeductionCandidate(
+            transactionId: txn, suggestedType: type, confidence: payload.confidence ?? "medium",
+            amountCents: payload.amountCents ?? 0, transactionDate: payload.transactionDate ?? "",
+            description: payload.description ?? "", matchedKeywords: payload.matchedKeywords ?? [], reason: payload.reason ?? ""
+        )
+    }
+}
+
+struct AttentionResponse: Codable, Equatable {
+    let today: String
+    let cards: [AttentionCard]
+    let moreCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case today, cards
+        case moreCount = "more_count"
+    }
+}
+
+protocol AttentionServiceProtocol {
+    func fetch(userTz: String?) async throws -> AttentionResponse
+    func dismiss(cardId: String, days: Int) async throws
+}
+
+final class AttentionService: AttentionServiceProtocol {
+    static let shared = AttentionService()
+
+    func fetch(userTz: String?) async throws -> AttentionResponse {
+        var endpoint = APIEndpoints.Attention.me
+        if let tz = userTz, let enc = tz.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            endpoint += "?user_tz=\(enc)"
+        }
+        return try await NetworkService.shared.authenticatedRequest(
+            endpoint: endpoint, method: .GET, body: nil, responseType: AttentionResponse.self
+        )
+    }
+
+    private struct DismissBody: Encodable { let days: Int }
+    private struct DismissOut: Codable { let card_id: String; let until: String }
+
+    func dismiss(cardId: String, days: Int) async throws {
+        let _: DismissOut = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.Attention.dismiss(cardId), method: .POST,
+            body: try JSONEncoder().encode(DismissBody(days: days)), responseType: DismissOut.self
+        )
+    }
+}

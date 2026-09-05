@@ -344,6 +344,7 @@ struct MainTabView: View {
         bankDataManager.setLinkedItems(archetype.linkedItems)
         bankDataManager.accountsByItemId = archetype.accountsByItemId
         budgetDataManager.overview = archetype.overview
+        budgetDataManager.attentionCards = archetype.attentionCards
     }
 
 }

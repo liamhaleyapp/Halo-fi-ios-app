@@ -92,6 +92,7 @@
 				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
+				"Halo-fi-IOSTests/AttentionTests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
 				"Halo-fi-IOSUITests/TabHeaderUITests.swift",
@@ -105,6 +106,7 @@
 				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
+				"Halo-fi-IOSTests/AttentionTests.swift",
 			);
 			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;
 		};

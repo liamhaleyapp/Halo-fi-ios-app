@@ -109,6 +109,41 @@ enum UITestArchetype: String, CaseIterable {
         ]
     }
 
+    /// Attention cards for this archetype (2026-09-05): SSI users get a
+    /// package deadline and a deposit question; a non-benefit user only a
+    /// bank to reconnect; the unanswered user nothing.
+    var attentionCards: [AttentionCard] {
+        let json: String
+        switch self {
+        case .ssiBlind, .ssiUnverified, .both, .ssiWatch:
+            json = """
+            [{"id": "submit:2026-08", "kind": "submit_package", "priority": 90, "title": "Hand in August work expenses",
+              "line": "Your August package is ready: 3 expenses. Field offices like to see it by September 6.",
+              "action_type": "open_package", "payload": {"month": "2026-08"}, "learn": false, "tone": "watch"},
+             {"id": "deposit:txn-dep-1", "kind": "deposit_label", "priority": 40, "title": "$412.00 from ACME PAYROLL",
+              "line": "Arrived September 3. What is this? Work income, a benefit, a transfer, a refund, or a gift.",
+              "action_type": "label_deposit", "payload": {"transaction_id": "txn-dep-1", "amount_cents": 41200, "source": "ACME PAYROLL", "occurred_on": "2026-09-03"},
+              "learn": true, "tone": "learn"}]
+            """
+        case .ssdi:
+            json = """
+            [{"id": "deposit:txn-dep-1", "kind": "deposit_label", "priority": 40, "title": "$412.00 from ACME PAYROLL",
+              "line": "Arrived September 3. What is this? Work income, a benefit, a transfer, a refund, or a gift.",
+              "action_type": "label_deposit", "payload": {"transaction_id": "txn-dep-1", "amount_cents": 41200, "source": "ACME PAYROLL", "occurred_on": "2026-09-03"},
+              "learn": true, "tone": "learn"}]
+            """
+        case .noneAnswered:
+            json = """
+            [{"id": "bank:item-1", "kind": "bank_reconnect", "priority": 85, "title": "Reconnect Chase",
+              "line": "Its connection needs a fresh sign-in. Until then balances and charges stop updating.",
+              "action_type": "open_accounts", "payload": {"item_id": "item-1"}, "learn": false, "tone": "watch"}]
+            """
+        case .none:
+            json = "[]"
+        }
+        return (try? JSONDecoder().decode([AttentionCard].self, from: Data(json.utf8))) ?? []
+    }
+
     /// A BudgetOverview for this archetype, decoded from JSON so it matches
     /// the wire shape exactly.
     var overview: BudgetOverview? {
