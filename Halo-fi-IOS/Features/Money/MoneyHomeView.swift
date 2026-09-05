@@ -240,15 +240,9 @@ struct MoneyHomeView: View {
         let cards = budgetDataManager.attentionCards
         let total = cards.count + budgetDataManager.attentionQueue.count
         let top = cards.first
-        let tint: Color = {
-            switch top?.tone {
-            case "act": return .haloNegative
-            case "watch": return .orange
-            case "learn": return .indigo
-            case .some: return .blue
-            case .none: return .gray
-            }
-        }()
+        // Always red when something is waiting (Liam, 2026-09-05): the row
+        // has to stand apart from the tone-colored balance card above it.
+        let tint: Color = top == nil ? .gray : .haloNegative
         let line: String = {
             guard let top else { return budgetDataManager.isLoading ? "Checking…" : "Nothing right now." }
             if total == 1 { return top.title + "." }
@@ -301,12 +295,16 @@ struct MoneyHomeView: View {
             if confirmed.isEmpty {
                 return unanswered > 0 ? "\(VoiceOverFormatter.count(unanswered, singular: "charge", plural: "charges")) waiting for a yes or no." : "No recurring charges spotted yet."
             }
-            var text = "\(VoiceOverFormatter.count(confirmed.count, singular: "bill", plural: "bills")), about \(VoiceOverFormatter.dollars(b.monthlyBillsCents)) a month."
+            let subs = confirmed.filter { $0.isSubscription }.count
+            let billsOnly = confirmed.count - subs
+            var text = subs == 0
+                ? "\(VoiceOverFormatter.count(billsOnly, singular: "bill", plural: "bills")), about \(VoiceOverFormatter.dollars(b.monthlyBillsCents)) a month."
+                : "\(VoiceOverFormatter.count(billsOnly, singular: "bill", plural: "bills")) and \(VoiceOverFormatter.count(subs, singular: "subscription", plural: "subscriptions")), about \(VoiceOverFormatter.dollars(b.monthlyBillsCents)) a month."
             if unanswered > 0 { text += " \(unanswered) to answer." }
             return text
         }()
-        return row(title: "Bills", icon: "calendar.badge.clock", tint: .teal, line: line,
-                   hint: "Opens your recurring charges to answer which are bills.", route: .bills)
+        return row(title: "Bills and subscriptions", icon: "calendar.badge.clock", tint: .teal, line: line,
+                   hint: "Opens your recurring charges to answer which are bills or subscriptions.", route: .bills)
     }
 
     // MARK: - c. Accounts row

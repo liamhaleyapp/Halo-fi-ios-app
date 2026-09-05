@@ -332,8 +332,8 @@ final class BudgetDataManager {
     }
 
     /// Answer "is this a bill?" — instantly on the card, then refresh.
-    func confirmBill(streamId: String, isBill: Bool, label: String? = nil) async throws {
-        _ = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label)
+    func confirmBill(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil) async throws {
+        _ = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind)
         if let card = (attentionCards + attentionQueue).first(where: { $0.kind == "bill_confirm" && $0.payload.streamId == streamId }) {
             resolveCard(card)
         } else {

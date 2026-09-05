@@ -15,6 +15,8 @@ struct BillsView: View {
 
     private var bills: RecurringResponse? { dataManager.bills }
     private var confirmed: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == true } ?? [] }
+    private var confirmedBills: [RecurringStream] { confirmed.filter { !$0.isSubscription } }
+    private var confirmedSubscriptions: [RecurringStream] { confirmed.filter { $0.isSubscription } }
     private var unanswered: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == nil } ?? [] }
     private var declined: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == false } ?? [] }
 
@@ -26,19 +28,26 @@ struct BillsView: View {
             if !unanswered.isEmpty {
                 Section {
                     ForEach(unanswered) { s in row(s, prompt: true) }
-                } header: { Text("Is this a bill?") } footer: { Text("Tap one to answer. Bills count in what is left by the 1st.") }
+                } header: { Text("Waiting for your answer") } footer: { Text("Tap one to say bill, subscription, or neither. Answers are remembered for that payee on every account.") }
             }
             Section {
-                if confirmed.isEmpty {
-                    Text(loaded ? "No bills confirmed yet." : "Loading…").foregroundColor(.haloTextSecondary)
+                if confirmedBills.isEmpty {
+                    Text(loaded ? "No bills yet." : "Loading…").foregroundColor(.haloTextSecondary)
                 } else {
-                    ForEach(confirmed) { s in row(s, prompt: false) }
+                    ForEach(confirmedBills) { s in row(s, prompt: false) }
                 }
-            } header: { Text("Your bills") }
+            } header: { Text("Bills") } footer: { Text("Rent, utilities, phone, insurance, loan payments.") }
+            Section {
+                if confirmedSubscriptions.isEmpty {
+                    Text(loaded ? "No subscriptions yet." : "Loading…").foregroundColor(.haloTextSecondary)
+                } else {
+                    ForEach(confirmedSubscriptions) { s in row(s, prompt: false) }
+                }
+            } header: { Text("Subscriptions") } footer: { Text("Streaming, software, memberships. Tap one to change its kind.") }
             if !declined.isEmpty {
                 Section {
                     ForEach(declined) { s in row(s, prompt: false) }
-                } header: { Text("Not bills") } footer: { Text("Tap to change an answer.") }
+                } header: { Text("Not bills or subscriptions") } footer: { Text("Tap to change an answer.") }
             }
             Section {
                 Text("Estimate for education only — Social Security makes all actual decisions.")
@@ -57,7 +66,8 @@ struct BillsView: View {
         }
         .sheet(item: $target) { s in
             BillConfirmSheet(streamId: s.streamId, merchant: s.merchant, amountCents: s.averageCents,
-                             frequencyLabel: s.frequencyLabel, nextExpected: s.nextExpected)
+                             frequencyLabel: s.frequencyLabel, nextExpected: s.nextExpected,
+                             suggestedKind: s.kind ?? "bill", amountVaries: s.amountVaries ?? false)
         }
     }
 
@@ -65,10 +75,12 @@ struct BillsView: View {
         let count = confirmed.count
         let monthly = bills?.monthlyBillsCents ?? 0
         let next = confirmed.compactMap { s in s.nextExpected.map { ($0, s) } }.min { $0.0 < $1.0 }
-        var detail = count == 0 ? "Nothing confirmed yet." : "\(VoiceOverFormatter.count(count, singular: "bill", plural: "bills")), about \(VoiceOverFormatter.dollars(monthly)) a month."
+        var detail = count == 0
+            ? "Nothing confirmed yet."
+            : "\(VoiceOverFormatter.count(confirmedBills.count, singular: "bill", plural: "bills")) and \(VoiceOverFormatter.count(confirmedSubscriptions.count, singular: "subscription", plural: "subscriptions")), about \(VoiceOverFormatter.dollars(monthly)) a month."
         if let next { detail += " Next: \(next.1.merchant), \(TabSummaries.spokenDate(next.0))." }
         if !unanswered.isEmpty { detail += " \(VoiceOverFormatter.count(unanswered.count, singular: "charge", plural: "charges")) waiting for a yes or no." }
-        return ScreenReaderSummaryHeader(verdict: "Bills", detail: detail, isEstimate: count > 0, tone: unanswered.isEmpty ? .neutral : .watch)
+        return ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: detail, isEstimate: count > 0, tone: unanswered.isEmpty ? .neutral : .watch)
     }
 
     private func row(_ s: RecurringStream, prompt: Bool) -> some View {
@@ -76,7 +88,7 @@ struct BillsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + (s.nextExpected.map { " · next \(TabSummaries.spokenDate($0))" } ?? ""))
+                    Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (s.nextExpected.map { " · next \(TabSummaries.spokenDate($0))" } ?? ""))
                         .font(.caption).foregroundColor(.haloTextSecondary)
                 }
                 Spacer()
@@ -89,8 +101,8 @@ struct BillsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.averageCents)) \(s.frequencyLabel)" + (s.nextExpected.map { ", next \(TabSummaries.spokenDate($0))" } ?? "") + (prompt ? ". Not answered." : (s.userConfirmed == true ? ". Counted as a bill." : ". Not a bill.")))
-        .accessibilityHint(prompt ? "Asks whether this is a bill." : "Changes the answer.")
+        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (s.nextExpected.map { ", next \(TabSummaries.spokenDate($0))" } ?? "") + (prompt ? ". Not answered." : (s.userConfirmed == true ? ". Counted as a \(s.kindWord)." : ". Not a bill or subscription.")))
+        .accessibilityHint(prompt ? "Asks whether this is a bill, a subscription, or neither." : "Changes the answer.")
         .accessibilityAddTraits(.isButton)
     }
 }

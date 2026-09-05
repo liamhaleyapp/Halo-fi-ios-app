@@ -207,8 +207,8 @@ final class TabHeaderUITests: XCTestCase {
         let bill = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Is XYZ Property a bill?'")).firstMatch
         XCTAssertTrue(bill.waitForExistence(timeout: 10), "bill card missing")
         bill.tap()
-        XCTAssertTrue(app.buttons["Yes, it's a bill"].waitForExistence(timeout: 10), "bill sheet did not open")
-        XCTAssertTrue(app.buttons["No, not a bill"].exists)
+        XCTAssertTrue(app.buttons["Yes, a bill"].waitForExistence(timeout: 10), "bill sheet did not open")
+        XCTAssertTrue(app.buttons["No, neither"].exists)
     }
 
     func testAgentHeader() {
