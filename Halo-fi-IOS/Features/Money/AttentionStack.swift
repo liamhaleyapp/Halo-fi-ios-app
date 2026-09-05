@@ -138,6 +138,7 @@ struct AttentionCardView: View {
         case "budget_suggestion": return "sparkles"
         case "budget_over": return "chart.pie.fill"
         case "profile_incomplete": return "person.text.rectangle.fill"
+        case "unlinked_card": return "creditcard.trianglebadge.exclamationmark"
         default: return "bell.fill"
         }
     }
@@ -156,6 +157,7 @@ struct AttentionCardView: View {
         case "apply_budget_suggestion": return "Shows the proposed limits. One tap to use them, or keep what you have."
         case "open_budget": return "Opens your budget."
         case "open_benefits_profile": return "Opens your benefits profile to answer the rest."
+        case "open_link_bank": return "Opens the bank link chooser to add those cards."
         default: return "Opens it."
         }
     }

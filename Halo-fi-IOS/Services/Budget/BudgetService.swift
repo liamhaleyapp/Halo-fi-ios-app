@@ -38,9 +38,11 @@ struct BudgetSuggestion: Codable, Equatable {
     let medians: [String: Int]
     let source: String
     let appliedAt: String?
+    /// "Includes about $X a month paid to credit cards HaloFi can't see…"
+    var note: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case id, note
         case generatedAt = "generated_at"
         case windowDays = "window_days"
         case totalIncomeCents = "total_income_cents"

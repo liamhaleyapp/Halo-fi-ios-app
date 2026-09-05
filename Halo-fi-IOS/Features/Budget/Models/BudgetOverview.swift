@@ -195,10 +195,15 @@ struct BudgetStatus: Codable, Equatable {
     let month: String?
     let total: BudgetStatusTotal?
     let categories: [BudgetStatusCategory]
+    /// Card payoffs no linked card explains (2026-09-05).
+    var unlinkedCards: [UnlinkedCard]? = nil
+    var unlinkedCardsMonthlyCents: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case hasBudget = "has_budget"
         case month, total, categories
+        case unlinkedCards = "unlinked_cards"
+        case unlinkedCardsMonthlyCents = "unlinked_cards_monthly_cents"
     }
 }
 
@@ -546,5 +551,22 @@ struct BudgetAlert: Codable, Equatable, Identifiable {
         case thresholdFormatted = "threshold_formatted"
         case comparison, enabled
         case createdAt = "created_at"
+    }
+}
+
+
+/// A credit card HaloFi pays but cannot see (2026-09-05).
+struct UnlinkedCard: Codable, Equatable, Identifiable {
+    let label: String
+    let count: Int
+    let totalCents: Int
+    let monthlyCents: Int
+    let lastOn: String?
+    var id: String { label }
+    enum CodingKeys: String, CodingKey {
+        case label, count
+        case totalCents = "total_cents"
+        case monthlyCents = "monthly_cents"
+        case lastOn = "last_on"
     }
 }

@@ -211,6 +211,18 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(app.buttons["No, neither"].exists)
     }
 
+    func testMoneyAttention_ssiWatch_unlinkedCardOpensLinkChooser() {
+        let app = launch("ssi_watch")
+        openTab(app, "Money")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(scrollTo(row, in: app), "attention row missing")
+        row.tap()
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Cards HaloFi can't see.")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "unlinked card missing")
+        card.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'link'")).firstMatch.waitForExistence(timeout: 10), "link chooser did not open")
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

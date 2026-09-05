@@ -29,6 +29,7 @@ struct BudgetView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(UserManager.self) private var userManager
     @State private var showingIncomeEditor = false
+    @State private var showingLinkChooser = false
     /// Phase 11 Track A — last announcement we already spoke, used
     /// to avoid re-announcing the same digest on every redraw.
     @State private var lastAnnouncedSummary: String?
@@ -49,6 +50,7 @@ struct BudgetView: View {
                         if let overview = dataManager.overview {
                             monthSubtitle(overview)
                             heroCard(overview)
+                            unlinkedCardsNote(overview)
                             fixedExpensesCard(overview)
                             if let alertText = topCategoryAlert(overview) {
                                 categoryAlertRow(alertText)
@@ -73,6 +75,7 @@ struct BudgetView: View {
             }
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
+            .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
             .task {
                 if dataManager.shouldRefresh {
                     await dataManager.refresh()
@@ -157,6 +160,36 @@ struct BudgetView: View {
             BudgetHeroCard(total: total)
         } else {
             NoBudgetHeroCard(spending: overview.spending)
+        }
+    }
+
+    // MARK: - Cards HaloFi can't see (2026-09-05)
+
+    @ViewBuilder
+    private func unlinkedCardsNote(_ overview: BudgetOverview) -> some View {
+        if let cards = overview.budgetStatus.unlinkedCards, !cards.isEmpty {
+            let monthly = overview.budgetStatus.unlinkedCardsMonthlyCents ?? cards.reduce(0) { $0 + $1.monthlyCents }
+            let names = cards.map(\.label).joined(separator: " and ")
+            let line = "About \(VoiceOverFormatter.dollars(monthly)) a month goes to \(names) cards that aren't linked, so that spending isn't in these categories."
+            Button { showingLinkChooser = true } label: {
+                HStack(spacing: 14) {
+                    HaloIconTile(icon: "creditcard.trianglebadge.exclamationmark", tint: .orange)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Cards HaloFi can't see").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
+                        Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                }
+                .padding(16)
+                .frame(minHeight: 72)
+                .haloCard(tint: .orange)
+            }
+            .buttonStyle(HapticPlainButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Cards HaloFi can't see. \(line)")
+            .accessibilityHint("Opens the bank link chooser to add those cards.")
         }
     }
 
@@ -367,6 +400,7 @@ struct BudgetView: View {
         case "twice_monthly": return "Twice a month"
         case "monthly":       return "Monthly"
         case "irregular":     return "Irregular"
+        case "credit_cards":  return "Credit cards not linked"
         default:              return raw.capitalized
         }
     }

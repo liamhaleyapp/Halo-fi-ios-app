@@ -35,6 +35,10 @@ struct SuggestedBudgetCard: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let note = suggestion.note {
+                Text(note).font(.caption).foregroundColor(.haloTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if expanded {
                 VStack(spacing: 6) {

@@ -26,6 +26,10 @@ struct BudgetSuggestionSheet: View {
                     .accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
                 Text("\(BudgetFormatter.cents(total)) a month across \(VoiceOverFormatter.count(count, singular: "category", plural: "categories")), from what you actually spent over the last \(card.payload.windowDays ?? 90) days.")
                     .font(.body).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                if let note = card.payload.note {
+                    Text(note).font(.subheadline).foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let suggestion = dataManager.suggestion, !suggestion.proposal.isEmpty {
                     let rows = suggestion.proposal.sorted { $0.value > $1.value }.prefix(8)
                     VStack(spacing: 6) {

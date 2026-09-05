@@ -202,6 +202,7 @@ struct MoneyHomeView: View {
         case "open_review": navigationPath.append(MoneyRoute.review(card.payload.month ?? MonthKey.current))
         case "open_work_expenses": navigationPath.append(MoneyRoute.workExpenses)
         case "open_accounts": navigationPath.append(MoneyRoute.accounts)
+        case "open_link_bank": showingLinkChooser = true
         default: break
         }
     }
