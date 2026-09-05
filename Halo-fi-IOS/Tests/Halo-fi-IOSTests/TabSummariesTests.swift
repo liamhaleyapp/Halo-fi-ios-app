@@ -126,6 +126,20 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(s.tone == .positive)
     }
 
+    @Test func projectionSentenceFollowsTheCountsLine() {
+        let json = """
+        {"current_cents": 180000, "limit_cents": 200000, "remaining_cents": 20000, "pct_used": 90.0, "status": "warning",
+         "formatted": {}, "note": "", "v2_status": "warning", "days_until_measurement": 27,
+         "projection": {"measurement_date_iso": "2026-10-01", "countable_now_cents": 180000, "projected_cents": 194000,
+                        "limit_cents": 200000, "band": "critical", "confidence": "medium", "inflow_cents": 99400, "outflow_cents": 85400,
+                        "inflows": [], "outflows": [], "unconfirmed_bill_count": 1}}
+        """
+        let res = try! JSONDecoder().decode(SSIResources.self, from: Data(json.utf8))
+        let s = TabSummaries.money(snapshot(res), capabilities: ssiCaps)
+        #expect(s.detail.contains("By October 1, about 1,940 dollars of 2,000 dollars, act now. 1 possible bill not counted yet."))
+        #expect(s.subline?.contains("By October 1") == true)
+    }
+
     @Test func watchBandCarriesMeasurementDateAndTone() {
         let s = TabSummaries.money(snapshot(resources(status: "warning", current: 180_000)), capabilities: ssiCaps)
         #expect(s.detail.contains("getting close. Social Security measures in 27 days."))

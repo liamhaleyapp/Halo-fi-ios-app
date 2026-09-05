@@ -115,7 +115,17 @@ enum UITestArchetype: String, CaseIterable {
     var attentionCards: [AttentionCard] {
         let json: String
         switch self {
-        case .ssiBlind, .ssiUnverified, .both, .ssiWatch:
+        case .ssiWatch:
+            json = """
+            [{"id": "resources:act", "kind": "resources", "priority": 95, "title": "Act now on your SSI resources",
+              "line": "1,800 dollars of 2,000 dollars. Social Security measures in 27 days.", "action_type": "open_resource_monitor",
+              "payload": {}, "learn": false, "tone": "act"},
+             {"id": "bill:rent", "kind": "bill_confirm", "priority": 35, "title": "Is XYZ Property a bill?",
+              "line": "About $854.00 monthly. Next one expected September 27. Bills count in what is left by the 1st.",
+              "action_type": "confirm_bill", "payload": {"stream_id": "rent", "merchant": "XYZ Property", "amount_cents": 85400,
+              "frequency": "MONTHLY", "frequency_label": "monthly", "next_expected": "2026-09-27"}, "learn": true, "tone": "learn"}]
+            """
+        case .ssiBlind, .ssiUnverified, .both:
             json = """
             [{"id": "submit:2026-08", "kind": "submit_package", "priority": 90, "title": "Hand in August work expenses",
               "line": "Your August package is ready: 3 expenses. Field offices like to see it by September 6.",
@@ -154,7 +164,12 @@ enum UITestArchetype: String, CaseIterable {
                "status": "warning", "formatted": {"current": "$1,800.00", "limit": "$2,000.00", "remaining": "$200.00"},
                "note": "", "excluded_cents": 0, "able_balance_cents": 0, "burial_fund_cents": 0, "v2_status": "warning",
                "band_status": "watch", "escalated": false, "pct_of_limit": 90.0, "days_until_measurement": 27,
-               "measurement_date_iso": "2026-10-01", "spend_or_move_cents": 30000, "spend_or_move_formatted": "$300.00"}
+               "measurement_date_iso": "2026-10-01", "spend_or_move_cents": 30000, "spend_or_move_formatted": "$300.00",
+               "projection": {"measurement_date_iso": "2026-10-01", "countable_now_cents": 180000, "projected_cents": 194000,
+                              "limit_cents": 200000, "band": "critical", "confidence": "medium", "inflow_cents": 99400, "outflow_cents": 85400,
+                              "inflows": [{"kind": "ssa", "label": "Social Security payment", "expected_date_iso": "2026-09-30", "cents": 99400, "confidence": "high"}],
+                              "outflows": [{"kind": "bill", "label": "Rent", "expected_date_iso": "2026-09-27", "cents": 85400, "confidence": "high"}],
+                              "unconfirmed_bill_count": 1}}
               """
             : """
               {"current_cents": 121400, "limit_cents": 200000, "remaining_cents": 78600, "pct_used": 60.7,

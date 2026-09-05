@@ -187,6 +187,19 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(scrollTo(income, in: app), "Income row missing")
     }
 
+    func testMoneyHero_ssiWatch_speaksProjectionAndBillCardOpens() {
+        let app = launch("ssi_watch")
+        openTab(app, "Money")
+        let label = header(in: app).label
+        XCTAssertTrue(label.contains("By October 1, about 1,940 dollars of 2,000 dollars, act now."), label)
+        XCTAssertTrue(label.contains("1 possible bill not counted yet"), label)
+        let bill = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Is XYZ Property a bill?'")).firstMatch
+        XCTAssertTrue(scrollTo(bill, in: app), "bill card missing")
+        bill.tap()
+        XCTAssertTrue(app.buttons["Yes, it's a bill"].waitForExistence(timeout: 10), "bill sheet did not open")
+        XCTAssertTrue(app.buttons["No, not a bill"].exists)
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

@@ -65,6 +65,7 @@ struct MoneyHomeView: View {
     /// Attention learn cards resolve in sheets.
     @State private var labelCard: AttentionCard?
     @State private var candidateCard: AttentionCard?
+    @State private var billCard: AttentionCard?
 
     private static let transactionPageSize = 200
 
@@ -84,6 +85,7 @@ struct MoneyHomeView: View {
                         )
                         budgetRow
                         incomeRow
+                        billsRow
                         accountsRow
                         transactionsRow
                         linkSection
@@ -115,6 +117,7 @@ struct MoneyHomeView: View {
                 case .allTransactions: AllTransactionsView(initial: recentTransactions)
                 case .resourceMonitor: ResourceMonitorView()
                 case .income: IncomeView()
+                case .bills: BillsView()
                 case .workExpenses: WorkExpensesView()
                 case .package(let month): MonthlyPackageView(initialMonth: month)
                 case .review(let month): MonthEndReviewView(month: month)
@@ -138,6 +141,9 @@ struct MoneyHomeView: View {
             }
             .sheet(item: $labelCard) { card in
                 DepositLabelSheet(card: card)
+            }
+            .sheet(item: $billCard) { card in
+                BillConfirmSheet(card: card)
             }
             .sheet(item: $candidateCard) { card in
                 if let candidate = card.candidate {
@@ -167,7 +173,7 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case budget, accounts, allTransactions, resourceMonitor, income, workExpenses
+        case budget, accounts, allTransactions, resourceMonitor, income, bills, workExpenses
         case package(String?)
         case review(String)
     }
@@ -177,6 +183,7 @@ struct MoneyHomeView: View {
     private func open(_ card: AttentionCard) {
         switch card.actionType {
         case "label_deposit", "enter_gross": labelCard = card
+        case "confirm_bill": billCard = card
         case "confirm_candidate": candidateCard = card
         case "open_resource_monitor": navigationPath.append(MoneyRoute.resourceMonitor)
         case "open_package": navigationPath.append(MoneyRoute.package(card.payload.month))
@@ -245,6 +252,28 @@ struct MoneyHomeView: View {
         }()
         return row(title: "Income", icon: "arrow.down.circle.fill", tint: .indigo, line: line,
                    hint: "Opens where your money comes from, this month's work income, and the amounts you told HaloFi.", route: .income)
+    }
+
+    // MARK: - b3. Bills row (2026-09-05)
+
+    private var billsRow: some View {
+        let b = budgetDataManager.bills
+        let confirmed = b?.streams.filter { $0.userConfirmed == true } ?? []
+        let unanswered = b?.streams.filter { $0.userConfirmed == nil }.count ?? 0
+        let line: String = {
+            guard let b else { return "Recurring charges Plaid sees, with your yes or no." }
+            if confirmed.isEmpty {
+                return unanswered > 0 ? "\(VoiceOverFormatter.count(unanswered, singular: "charge", plural: "charges")) waiting for a yes or no." : "No recurring charges spotted yet."
+            }
+            var text = "\(VoiceOverFormatter.count(confirmed.count, singular: "bill", plural: "bills")), about \(VoiceOverFormatter.dollars(b.monthlyBillsCents)) a month."
+            if let next = confirmed.compactMap({ s in s.nextExpected.map { ($0, s.merchant) } }).min(by: { $0.0 < $1.0 }) {
+                text += " Next: \(next.1), \(TabSummaries.spokenDate(next.0))."
+            }
+            if unanswered > 0 { text += " \(unanswered) to answer." }
+            return text
+        }()
+        return row(title: "Bills", icon: "calendar.badge.clock", tint: .teal, line: line,
+                   hint: "Opens your recurring charges: answer which are bills; they count in what is left by the 1st.", route: .bills)
     }
 
     // MARK: - c. Accounts row

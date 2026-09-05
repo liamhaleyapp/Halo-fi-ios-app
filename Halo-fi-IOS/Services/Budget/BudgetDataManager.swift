@@ -49,6 +49,9 @@ final class BudgetDataManager {
     /// This month's learned income (sources, gross by employer).
     var incomeSummary: IncomeSummary?
 
+    /// Bills (2026-09-05): recurring outflow streams with the user's answers.
+    var bills: RecurringResponse?
+
     // MARK: - Dependencies
 
     private let service: BudgetServiceProtocol
@@ -287,6 +290,9 @@ final class BudgetDataManager {
         async let incomeResult: Result<IncomeSummary, Error> = {
             do { return .success(try await IncomeService.shared.summary(month: nil)) } catch { return .failure(error) }
         }()
+        async let billsResult: Result<RecurringResponse, Error> = {
+            do { return .success(try await RecurringService.shared.bills()) } catch { return .failure(error) }
+        }()
         switch await attentionResult {
         case .success(let response):
             attentionCards = response.cards
@@ -298,6 +304,21 @@ final class BudgetDataManager {
         switch await incomeResult {
         case .success(let summary): incomeSummary = summary
         case .failure(let error): Logger.warning("BudgetDataManager: fetch income summary failed: \(error)")
+        }
+        switch await billsResult {
+        case .success(let response): bills = response
+        case .failure(let error): Logger.warning("BudgetDataManager: fetch bills failed: \(error)")
+        }
+    }
+
+    /// Answer "is this a bill?" — instantly on the card, then refresh.
+    func confirmBill(streamId: String, isBill: Bool, label: String? = nil) async throws {
+        _ = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label)
+        if let card = (attentionCards + attentionQueue).first(where: { $0.kind == "bill_confirm" && $0.payload.streamId == streamId }) {
+            resolveCard(card)
+        } else {
+            markStale()
+            Task { await refresh() }
         }
     }
 

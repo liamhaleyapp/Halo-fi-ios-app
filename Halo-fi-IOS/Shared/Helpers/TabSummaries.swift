@@ -73,6 +73,16 @@ enum TabSummaries {
             }
             detail += " " + line
             sublines.append(line)
+            // The forward number (2026-09-05): what the 1st looks like once
+            // the expected money lands and the confirmed bills go out.
+            if let proj = res.projection {
+                var forward = "By \(spokenDate(proj.measurementDateIso)), about \(VoiceOverFormatter.dollars(proj.projectedCents)) of \(VoiceOverFormatter.dollars(proj.limitCents)), \(proj.stateWords)."
+                if proj.unconfirmedBillCount > 0 {
+                    forward += " \(VoiceOverFormatter.count(proj.unconfirmedBillCount, singular: "possible bill", plural: "possible bills")) not counted yet."
+                }
+                detail += " " + forward
+                sublines.append(forward)
+            }
         }
         if s.connectionsNeedingAttention > 0 {
             let line = "\(VoiceOverFormatter.count(s.connectionsNeedingAttention, singular: "connection", plural: "connections")) need\(s.connectionsNeedingAttention == 1 ? "s" : "") attention."
@@ -178,6 +188,12 @@ enum TabSummaries {
             line += " Worth up to \(VoiceOverFormatter.dollars(impactCents)) on your check. Estimate."
         }
         return line
+    }
+
+    static func spokenDate(_ iso: String) -> String {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: String(iso.prefix(10))) else { return iso }
+        let out = DateFormatter(); out.dateFormat = "MMMM d"; return out.string(from: d)
     }
 
     // MARK: - Shared

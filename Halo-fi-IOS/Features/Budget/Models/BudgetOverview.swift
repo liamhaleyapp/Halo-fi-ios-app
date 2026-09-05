@@ -265,6 +265,54 @@ struct SSIStatus: Codable, Equatable {
     }
 }
 
+struct SSIProjection: Codable, Equatable {
+    struct Item: Codable, Equatable, Identifiable {
+        let kind: String            // ssa | work_income | benefit | bill
+        let label: String
+        let expectedDateIso: String
+        let cents: Int
+        let confidence: String
+        var id: String { "\(kind)-\(label)-\(expectedDateIso)" }
+        enum CodingKeys: String, CodingKey {
+            case kind, label, cents, confidence
+            case expectedDateIso = "expected_date_iso"
+        }
+    }
+
+    let measurementDateIso: String
+    let countableNowCents: Int
+    let projectedCents: Int
+    let limitCents: Int
+    let band: String                // over | critical | warning | ok
+    let confidence: String          // high | medium | low
+    let inflowCents: Int
+    let outflowCents: Int
+    let inflows: [Item]
+    let outflows: [Item]
+    let unconfirmedBillCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case band, confidence, inflows, outflows
+        case measurementDateIso = "measurement_date_iso"
+        case countableNowCents = "countable_now_cents"
+        case projectedCents = "projected_cents"
+        case limitCents = "limit_cents"
+        case inflowCents = "inflow_cents"
+        case outflowCents = "outflow_cents"
+        case unconfirmedBillCount = "unconfirmed_bill_count"
+    }
+
+    /// "on track" / "getting close" / "act now" / "over the limit".
+    var stateWords: String {
+        switch band {
+        case "over": return "over the limit"
+        case "critical": return "act now"
+        case "warning": return "getting close"
+        default: return "on track"
+        }
+    }
+}
+
 struct SSIResources: Codable, Equatable {
     let currentCents: Int
     let limitCents: Int
@@ -289,8 +337,11 @@ struct SSIResources: Codable, Equatable {
     // WP5 — month-end inversion amount.
     let spendOrMoveCents: Int?
     let spendOrMoveFormatted: String?         // "over" | "critical" | "warning" | "ok"
+    // 2026-09-05 — where countable resources land on the 1st.
+    let projection: SSIProjection?
 
     enum CodingKeys: String, CodingKey {
+        case projection
         case currentCents = "current_cents"
         case limitCents = "limit_cents"
         case remainingCents = "remaining_cents"

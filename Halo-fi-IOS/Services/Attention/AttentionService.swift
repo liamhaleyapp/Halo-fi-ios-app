@@ -33,9 +33,19 @@ struct AttentionCard: Codable, Equatable, Identifiable {
         var accountId: String?
         var sameSourceCount: Int?
         var pending: Bool?
+        var streamId: String?
+        var merchant: String?
+        var frequency: String?
+        var frequencyLabel: String?
+        var lastDate: String?
+        var nextExpected: String?
 
         enum CodingKeys: String, CodingKey {
-            case source, month, employer, description, confidence, reason, count, pending
+            case source, month, employer, description, confidence, reason, count, pending, merchant, frequency
+            case streamId = "stream_id"
+            case frequencyLabel = "frequency_label"
+            case lastDate = "last_date"
+            case nextExpected = "next_expected"
             case rawName = "raw_name"
             case accountId = "account_id"
             case sameSourceCount = "same_source_count"

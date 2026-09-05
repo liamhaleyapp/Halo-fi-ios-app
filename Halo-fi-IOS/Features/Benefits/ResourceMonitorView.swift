@@ -36,6 +36,9 @@ struct ResourceMonitorView: View {
                         if resources.effectiveStatus != "ok" {
                             actions(resources)
                         }
+                        if let proj = resources.projection {
+                            projectionSection(proj)
+                        }
                     }
                     if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
                         ForEach(alerts) { entry in SSIAlertBanner(entry: entry) }
@@ -104,6 +107,55 @@ struct ResourceMonitorView: View {
         .background(Color.haloSecondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Expected by the 1st (2026-09-05)
+
+    private func projectionSection(_ proj: SSIProjection) -> some View {
+        let date = TabSummaries.spokenDate(proj.measurementDateIso)
+        let tone: ScreenReaderSummaryHeader.Tone = proj.band == "over" || proj.band == "critical" ? .act : proj.band == "warning" ? .watch : .positive
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Expected by \(date)").font(.headline).foregroundColor(.haloTextSecondary).accessibilityAddTraits(.isHeader)
+            HStack(spacing: 8) {
+                Circle().fill(tone.color).frame(width: 10, height: 10).accessibilityHidden(true)
+                Text("About \(BudgetFormatter.cents(proj.projectedCents)) of \(BudgetFormatter.cents(proj.limitCents)), \(proj.stateWords).")
+                    .font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            ForEach(proj.inflows) { item in
+                projectionRow(item, sign: "+")
+            }
+            ForEach(proj.outflows) { item in
+                projectionRow(item, sign: "−")
+            }
+            if proj.inflows.isEmpty && proj.outflows.isEmpty {
+                Text("Nothing expected before then that HaloFi knows about.")
+                    .font(.subheadline).foregroundColor(.haloTextSecondary)
+            }
+            if proj.unconfirmedBillCount > 0 {
+                Text("\(VoiceOverFormatter.count(proj.unconfirmedBillCount, singular: "possible bill is", plural: "possible bills are")) waiting for a yes or no on the Money tab.")
+                    .font(.caption).foregroundColor(.haloTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Estimate. Confidence: \(proj.confidence).").font(.caption2).foregroundColor(.haloTextTertiary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.haloSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func projectionRow(_ item: SSIProjection.Item, sign: String) -> some View {
+        HStack {
+            Text(item.label).font(.subheadline).foregroundColor(.haloTextPrimary).lineLimit(1)
+            Spacer()
+            Text("\(sign)\(BudgetFormatter.cents(item.cents))").font(.subheadline.weight(.semibold)).foregroundColor(sign == "+" ? .haloPositive : .haloTextPrimary)
+            Text(TabSummaries.spokenDate(item.expectedDateIso)).font(.caption).foregroundColor(.haloTextSecondary)
+        }
+        .frame(minHeight: 32)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.label), \(sign == "+" ? "plus" : "minus") \(VoiceOverFormatter.dollars(item.cents)), \(TabSummaries.spokenDate(item.expectedDateIso)).")
     }
 
     // MARK: - Actions (Watch / Act)
