@@ -125,6 +125,9 @@ struct MainTabView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
+            selectedTab = .money
+        }
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()

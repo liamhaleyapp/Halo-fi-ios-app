@@ -289,7 +289,6 @@ final class BudgetDataManager {
             let response = try await ssiService.fetchReminders(userTz: userTz)
             ssiReminders = response.reminders
             fieldOffice = response.fieldOffice
-            await ReminderNotificationScheduler.shared.sync(response.reminders)
         } catch {
             Logger.error("BudgetDataManager: fetch reminders failed: \(error)")
             ssiReminders = []
@@ -313,6 +312,8 @@ final class BudgetDataManager {
                 attentionCards = response.cards
                 attentionQueue = response.queue
                 attentionMoreCount = response.moreCount
+                // One calm notification a day at most, planned from what is open.
+                await ReminderNotificationScheduler.shared.plan(cards: response.cards + response.queue)
             } else {
                 // Something was resolved while this was in flight: keep the
                 // local state and fetch once more when this refresh ends.

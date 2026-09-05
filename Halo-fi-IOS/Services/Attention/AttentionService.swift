@@ -50,10 +50,12 @@ struct AttentionCard: Codable, Equatable, Identifiable {
         var nextExpected: String?
         var kind: String?
         var amountVaries: Bool?
+        var dueOn: String?
 
         enum CodingKeys: String, CodingKey {
             case source, month, employer, description, confidence, reason, count, pending, merchant, frequency, category, remaining, kind
             case amountVaries = "amount_varies"
+            case dueOn = "due_on"
             case suggestionId = "suggestion_id"
             case totalLimitCents = "total_limit_cents"
             case categoryCount = "category_count"

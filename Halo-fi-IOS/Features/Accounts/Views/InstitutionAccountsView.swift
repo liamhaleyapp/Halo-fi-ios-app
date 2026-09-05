@@ -70,9 +70,6 @@ struct InstitutionAccountsView: View {
             BankAccountRow(account: account)
           }
           .buttonStyle(HapticPlainButtonStyle())
-          .contextMenu {
-            Button { nicknameTarget = account } label: { Label("Nickname", systemImage: "pencil") }
-          }
           .accessibilityAction(named: "Add a nickname") { nicknameTarget = account }
         }
       }
@@ -277,7 +274,7 @@ struct BankAccountRow: View {
     .cornerRadius(16)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
-    .accessibilityHint("Opens this account's transactions. Actions: add a nickname.")
+    .accessibilityHint("Opens this account: balance, transactions, and its nickname.")
   }
 
   private func accountIcon(for type: String) -> String {

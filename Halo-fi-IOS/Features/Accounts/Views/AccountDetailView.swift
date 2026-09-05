@@ -39,15 +39,6 @@ struct AccountDetailView: View {
     }
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      if bankAccount != nil {
-        ToolbarItem(placement: .navigationBarTrailing) {
-          Button { nicknameTarget = bankAccount } label: {
-            Image(systemName: "pencil").frame(width: 44, height: 44)
-          }
-          .accessibilityLabel("Nickname")
-          .accessibilityHint("Gives this account a name of your own.")
-        }
-      }
       ToolbarItem(placement: .navigationBarTrailing) {
         syncStatusIndicator
       }
@@ -141,12 +132,26 @@ struct AccountDetailView: View {
             .fontWeight(.bold)
             .foregroundColor(Color.haloTextPrimary)
           
-          Text(account.name)
-            .font(.subheadline)
-            .foregroundColor(Color.haloTextSecondary)
+          if account.nickname != account.name {
+            Text(account.name)
+              .font(.subheadline)
+              .foregroundColor(Color.haloTextSecondary)
+          }
         }
         
         Spacer()
+      }
+      .accessibilityElement(children: .combine)
+
+      if let bankAccount {
+        // Visible, not hidden behind a long press (Liam, 2026-09-05).
+        Button { nicknameTarget = bankAccount } label: {
+          Label(bankAccount.nickname?.isEmpty == false ? "Change nickname" : "Add a nickname", systemImage: "pencil")
+            .font(.subheadline.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Opens a field to name this account your way.")
       }
       
       Divider()

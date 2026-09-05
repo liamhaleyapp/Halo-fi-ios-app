@@ -101,6 +101,10 @@ struct MoneyHomeView: View {
                     UIAccessibility.post(notification: .announcement, argument: "Updated. \(summary.verdict). \(summary.subline ?? "")")
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
+                if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+                navigationPath.append(MoneyRoute.attention)
+            }
             .navigationTitle("Money")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
