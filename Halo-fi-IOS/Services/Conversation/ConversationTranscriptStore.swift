@@ -90,6 +90,9 @@ final class ConversationTranscriptStore {
 
     private var persistence: TranscriptPersistence?
     private var persistTask: Task<Void, Never>?
+    /// Server copy (per user). Local UserDefaults is the cache.
+    private var sync: ConversationSyncService?
+    private var syncTask: Task<Void, Never>?
     private(set) var currentSessionId = UUID()
     private var currentSessionStartedAt = Date()
 
@@ -102,11 +105,30 @@ final class ConversationTranscriptStore {
         }
         if persistence?.userId == userId { return }
         persistence = TranscriptPersistence(userId: userId)
+        sync = ConversationSyncService()
     }
 
-    /// Saved sessions, newest first (excludes the live one).
+    /// Saved sessions from the local cache, newest first (excludes the
+    /// live one). `refreshPreviousSessions()` is the server-backed read.
     func previousSessions() -> [ConversationSession] {
         (persistence?.loadSessions() ?? []).filter { $0.id != currentSessionId }
+    }
+
+    /// Pull the user's conversations from the server, refresh the local
+    /// cache with them, and return them newest first (excluding the live
+    /// one). Falls back to the cache when offline.
+    func refreshPreviousSessions() async -> [ConversationSession] {
+        guard let sync, let persistence else { return previousSessions() }
+        do {
+            let remote = try await sync.list()
+            for session in remote { persistence.upsert(session) }
+            return remote
+                .filter { $0.id != currentSessionId }
+                .sorted { $0.updatedAt > $1.updatedAt }
+        } catch {
+            Logger.warning("ConversationTranscriptStore: server history unavailable: \(error)")
+            return previousSessions()
+        }
     }
 
     /// Archive the live thread (if it has anything) and start empty.
@@ -130,6 +152,9 @@ final class ConversationTranscriptStore {
 
     func deleteSession(id: UUID) {
         persistence?.delete(id: id)
+        if let sync {
+            Task { try? await sync.delete(id: id) }
+        }
     }
 
     /// Sign-out: forget every session.
@@ -148,12 +173,18 @@ final class ConversationTranscriptStore {
     private func flushCurrentSession() {
         let snapshot = finishedEntries
         guard let persistence, !snapshot.isEmpty else { return }
-        persistence.upsert(ConversationSession(id: currentSessionId, startedAt: currentSessionStartedAt, updatedAt: Date(), entries: snapshot))
+        let session = ConversationSession(id: currentSessionId, startedAt: currentSessionStartedAt, updatedAt: Date(), entries: snapshot)
+        persistence.upsert(session)
+        syncTask?.cancel()
+        if let sync {
+            Task { try? await sync.upsert(session) }
+        }
     }
 
     private func persistIfNeeded() {
         guard let persistence else { return }
         persistTask?.cancel()
+        syncTask?.cancel()
         let snapshot = finishedEntries
         guard !snapshot.isEmpty else { return }
         let session = ConversationSession(id: currentSessionId, startedAt: currentSessionStartedAt, updatedAt: Date(), entries: snapshot)
@@ -161,6 +192,15 @@ final class ConversationTranscriptStore {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             persistence.upsert(session)
+        }
+        // The server copy lags a little further so a streaming reply is
+        // one upsert, not one per chunk. Last write wins server-side.
+        if let sync {
+            syncTask = Task { [session] in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                guard !Task.isCancelled else { return }
+                try? await sync.upsert(session)
+            }
         }
     }
 

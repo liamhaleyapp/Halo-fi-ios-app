@@ -170,6 +170,10 @@ enum APIEndpoints {
         /// POST - Get ElevenLabs STT token for voice transcription.
         static let sttToken = "/agent/stt/token"
 
+        /// GET list · PUT/GET/DELETE `/{id}` — the Agent tab's saved
+        /// conversations, stored per user on the server.
+        static let conversations = "/agent/conversations"
+
         /// POST — admin-only. Clears the Redis voice-minute counter
         /// for the authenticated user. Used by the temporary
         /// "Reset Voice Minutes" debug button in Settings.

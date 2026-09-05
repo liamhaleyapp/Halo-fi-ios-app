@@ -15,12 +15,15 @@ struct PreviousConversationsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var sessions: [ConversationSession] = []
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
             List {
                 if sessions.isEmpty {
-                    Text("No previous conversations yet. Each time you open the app, a fresh conversation starts and the last one is saved here.")
+                    Text(isLoading
+                         ? "Loading your conversations…"
+                         : "No previous conversations yet. Each time you open the app, a fresh conversation starts and the last one is saved here.")
                         .foregroundColor(.haloTextSecondary)
                 }
                 ForEach(sessions) { session in
@@ -44,11 +47,30 @@ struct PreviousConversationsView: View {
                 }
                 .onDelete { offsets in offsets.map { sessions[$0] }.forEach(delete) }
             }
-            .navigationTitle("Previous conversations")
+            // Short title: "Previous conversations" broke across two lines
+            // with a hyphen at larger text sizes.
+            .navigationTitle("Conversations")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    // An icon, not a word: "Close"/"Cancel" truncated to
+                    // "C…" at accessibility text sizes.
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Close")
+                    .accessibilityHint("Goes back to the conversation.")
+                }
+            }
             .accessibilityAction(.escape) { dismiss() }
-            .onAppear { sessions = store.previousSessions() }
+            .task {
+                // Cache first so the list is never blank, then the server.
+                sessions = store.previousSessions()
+                sessions = await store.refreshPreviousSessions()
+                isLoading = false
+            }
         }
     }
 
