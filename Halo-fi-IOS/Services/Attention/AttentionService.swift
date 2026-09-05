@@ -75,11 +75,22 @@ struct AttentionCard: Codable, Equatable, Identifiable {
 struct AttentionResponse: Codable, Equatable {
     let today: String
     let cards: [AttentionCard]
+    /// Learning questions behind the stack, in order: the sheet walks them
+    /// one after another without waiting on the server.
+    let queue: [AttentionCard]
     let moreCount: Int
 
     enum CodingKeys: String, CodingKey {
-        case today, cards
+        case today, cards, queue
         case moreCount = "more_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        today = try c.decode(String.self, forKey: .today)
+        cards = try c.decode([AttentionCard].self, forKey: .cards)
+        queue = try c.decodeIfPresent([AttentionCard].self, forKey: .queue) ?? []
+        moreCount = try c.decodeIfPresent(Int.self, forKey: .moreCount) ?? 0
     }
 }
 

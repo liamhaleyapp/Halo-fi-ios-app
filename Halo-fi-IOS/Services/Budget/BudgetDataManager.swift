@@ -43,6 +43,7 @@ final class BudgetDataManager {
     /// and how many more the server holds. Learn cards resolve through
     /// `labelDeposit` / `enterGross` / `confirmSSIDeduction`.
     var attentionCards: [AttentionCard] = []
+    var attentionQueue: [AttentionCard] = []
     var attentionMoreCount: Int = 0
 
     /// This month's learned income (sources, gross by employer).
@@ -289,6 +290,7 @@ final class BudgetDataManager {
         switch await attentionResult {
         case .success(let response):
             attentionCards = response.cards
+            attentionQueue = response.queue
             attentionMoreCount = response.moreCount
         case .failure(let error):
             Logger.warning("BudgetDataManager: fetch attention failed: \(error)")
@@ -311,13 +313,43 @@ final class BudgetDataManager {
         await refresh()
     }
 
+    /// A card was resolved: drop it now, promote the next learning question
+    /// from the queue so the stack never blanks, and refresh in the
+    /// background (the full refresh recomputes the overview and takes
+    /// seconds — nothing on screen waits for it).
+    func resolveCard(_ card: AttentionCard) {
+        attentionCards.removeAll { $0.id == card.id }
+        attentionQueue.removeAll { $0.id == card.id }
+        // Same payer answered → its other deposits are labeled server-side.
+        if card.kind == "deposit_label", let source = card.payload.source {
+            attentionQueue.removeAll { $0.kind == "deposit_label" && $0.payload.source == source }
+        }
+        if attentionCards.count < 3, let next = attentionQueue.first(where: { q in !attentionCards.contains { $0.kind == q.kind } }) {
+            attentionQueue.removeAll { $0.id == next.id }
+            attentionCards.append(next)
+        }
+        markStale()
+        Task { await refresh() }
+    }
+
+    /// The next learning question after `card`, for the sheet to continue
+    /// with: gross questions first, then deposits.
+    func nextLearnCard(after card: AttentionCard) -> AttentionCard? {
+        let pool = (attentionQueue + attentionCards).filter { $0.id != card.id && ($0.kind == "deposit_label" || $0.kind == "wage_gross") }
+        return pool.first { $0.kind == "wage_gross" } ?? pool.first
+    }
+
     /// Say what a deposit was. Work income may carry the paystub gross.
+    /// Returns as soon as the server has it; the refresh runs behind.
     @discardableResult
     func labelDeposit(transactionId: String, kind: IncomeKind, grossCents: Int?, employer: String?) async throws -> IncomeLabelView {
         let label = try await IncomeService.shared.label(transactionId: transactionId, kind: kind, grossCents: grossCents, employer: employer)
-        attentionCards.removeAll { $0.payload.transactionId == transactionId && ($0.kind == "deposit_label" || $0.kind == "wage_gross") }
-        markStale()
-        await refresh()
+        if let card = (attentionCards + attentionQueue).first(where: { $0.payload.transactionId == transactionId }) {
+            resolveCard(card)
+        } else {
+            markStale()
+            Task { await refresh() }
+        }
         return label
     }
 
@@ -325,9 +357,12 @@ final class BudgetDataManager {
     @discardableResult
     func enterGross(labelId: String, grossCents: Int) async throws -> IncomeLabelView {
         let label = try await IncomeService.shared.updateLabel(id: labelId, grossCents: grossCents)
-        attentionCards.removeAll { $0.payload.labelId == labelId }
-        markStale()
-        await refresh()
+        if let card = (attentionCards + attentionQueue).first(where: { $0.payload.labelId == labelId }) {
+            resolveCard(card)
+        } else {
+            markStale()
+            Task { await refresh() }
+        }
         return label
     }
 

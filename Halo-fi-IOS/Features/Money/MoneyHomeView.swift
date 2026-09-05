@@ -78,6 +78,7 @@ struct MoneyHomeView: View {
                         AttentionStack(
                             cards: budgetDataManager.attentionCards,
                             moreCount: budgetDataManager.attentionMoreCount,
+                            isRefreshing: budgetDataManager.isLoading,
                             onOpen: { open($0) },
                             onNotNow: { card in Task { await budgetDataManager.dismissCard(card) } }
                         )
@@ -143,12 +144,13 @@ struct MoneyHomeView: View {
                 }
             }
             .sheet(item: $labelCard) { card in
-                DepositLabelSheet(mode: Self.labelMode(for: card))
+                DepositLabelSheet(card: card)
             }
             .sheet(item: $candidateCard) { card in
                 if let candidate = card.candidate {
                     SSIDeductionConfirmView(candidate: candidate) { type in
                         try await budgetDataManager.confirmSSIDeduction(candidate: candidate, as: type)
+                        budgetDataManager.resolveCard(card)
                     }
                 }
             }
@@ -192,15 +194,6 @@ struct MoneyHomeView: View {
         }
     }
 
-    static func labelMode(for card: AttentionCard) -> DepositLabelSheet.Mode {
-        let p = card.payload
-        if card.actionType == "enter_gross", let labelId = p.labelId {
-            return .gross(labelId: labelId, employer: p.employer ?? p.source ?? "your employer", netCents: p.netCents ?? p.amountCents ?? 0,
-                          lastGrossCents: p.lastGrossCents, occurredOn: p.occurredOn ?? "")
-        }
-        return .label(transactionId: p.transactionId ?? "", source: p.source ?? "a deposit", amountCents: p.amountCents ?? 0,
-                      occurredOn: p.occurredOn ?? "")
-    }
 
     // MARK: - a. Header
 

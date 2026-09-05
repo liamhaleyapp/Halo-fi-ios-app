@@ -15,6 +15,7 @@ import SwiftUI
 struct AttentionStack: View {
     let cards: [AttentionCard]
     let moreCount: Int
+    var isRefreshing: Bool = false
     let onOpen: (AttentionCard) -> Void
     let onNotNow: (AttentionCard) -> Void
 
@@ -26,7 +27,7 @@ struct AttentionStack: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityLabel(cards.isEmpty ? "Needs your attention. Nothing right now." : "Needs your attention. \(VoiceOverFormatter.count(cards.count, singular: "item", plural: "items")).")
             if cards.isEmpty {
-                Text("Nothing needs you right now.")
+                Text(isRefreshing ? "Checking…" : "Nothing needs you right now.")
                     .font(.subheadline)
                     .foregroundColor(.haloTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

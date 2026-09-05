@@ -33,7 +33,7 @@ import Testing
 
     @Test func grossCardBecomesGrossMode() throws {
         let r = try JSONDecoder().decode(AttentionResponse.self, from: Data(json.utf8))
-        let mode = MoneyHomeView.labelMode(for: r.cards[1])
+        let mode = DepositLabelSheet.mode(for: r.cards[1])
         #expect(mode == .gross(labelId: "L1", employer: "ACME", netCents: 41200, lastGrossCents: 64000, occurredOn: "2026-09-04"))
     }
 
