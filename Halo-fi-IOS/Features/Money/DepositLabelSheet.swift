@@ -140,6 +140,7 @@ struct DepositLabelSheet: View {
                             }
                         }
                     } else {
+                        details
                         Text(userManager.capabilities.expenseType == .bwe
                              ? "The gross is the amount before taxes, on the paystub. Social Security counts gross wages, and the taxes withheld count as a Blind Work Expense."
                              : userManager.capabilities.showsBenefitsLane
@@ -179,6 +180,21 @@ struct DepositLabelSheet: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(isSaving)
+                        if let txn = currentCard?.payload.transactionId ?? { if case .label(let id, _, _, _) = mode { return id } else { return nil } }() {
+                            Button {
+                                // Wrong guess: back to "what is this deposit?" for the same money.
+                                mode = .label(transactionId: txn, source: source, amountCents: amountCents, occurredOn: occurredOn)
+                                step = .kind
+                                UIAccessibility.post(notification: .announcement, argument: "Okay. What is this deposit?")
+                            } label: {
+                                Text("This isn't a paycheck")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isSaving)
+                            .accessibilityHint("Goes back to the six choices for this deposit.")
+                        }
                         Button {
                             if case .label = mode { saveKind(.workIncome, gross: nil) } else { dismiss() }
                         } label: {

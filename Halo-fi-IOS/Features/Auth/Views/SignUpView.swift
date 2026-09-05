@@ -21,6 +21,8 @@ struct SignUpView: View {
   @State private var showingSubscriptionOnboarding = false
   @State private var showingPlaidOnboarding = false
   @State private var agreedToTerms = false
+  @State private var scrollProxy: ScrollViewProxy?
+  @AccessibilityFocusState private var termsFocused: Bool
   @State private var showingTerms = false
   @State private var showingPrivacy = false
   @State private var termsHighlighted = false
@@ -30,6 +32,7 @@ struct SignUpView: View {
       // Background
       Color.haloBackground.ignoresSafeArea()
 
+      ScrollViewReader { proxy in
       ScrollView {
         VStack(spacing: 24) {
           // Header
@@ -43,8 +46,14 @@ struct SignUpView: View {
           VStack(spacing: 20) {
             // Terms & Privacy consent — moved up so users picking the
             // social path don't have to scroll past the entire manual
-            // form to find the checkbox. Same enforcement as before:
-            // tapping a disabled button highlights this row.
+            // form to find the checkbox. Tapping a disabled button scrolls
+            // here, moves VoiceOver focus here, and says why in words.
+            if termsHighlighted && !agreedToTerms {
+              Text("Please tick the box below to continue.")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(DesignTokens.ToneText.act)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(alignment: .center, spacing: 12) {
               Button {
                 agreedToTerms.toggle()
@@ -57,6 +66,8 @@ struct SignUpView: View {
               .scaleEffect(termsHighlighted ? 1.4 : 1.0)
               .accessibilityLabel(agreedToTerms ? "Terms accepted" : "Accept terms")
               .accessibilityHint("Toggle to agree to Terms of Service and Privacy Policy")
+              .accessibilityFocused($termsFocused)
+              .id("terms")
 
               Text(termsConsentText)
                 .font(.caption)
@@ -236,6 +247,8 @@ struct SignUpView: View {
         .padding(.top, 40)
         .readableContentWidth()
       }
+      .onAppear { scrollProxy = proxy }
+      }
       .scrollDismissesKeyboard(.interactively)
     }
     .navigationBarHidden(true)
@@ -359,14 +372,13 @@ struct SignUpView: View {
   private func highlightTerms() {
     let generator = UIImpactFeedbackGenerator(style: .heavy)
     generator.impactOccurred()
+    withAnimation { scrollProxy?.scrollTo("terms", anchor: .center) }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { termsFocused = true }
     UIAccessibility.post(
       notification: .announcement,
-      argument: "Please agree to the Terms of Service and Privacy Policy first"
+      argument: "Please tick the box to agree to the Terms of Service and Privacy Policy first. It is at the top of the form."
     )
-    termsHighlighted = true
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-      termsHighlighted = false
-    }
+    termsHighlighted = true   // stays until the box is ticked
   }
 
   private var termsConsentText: AttributedString {

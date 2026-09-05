@@ -254,7 +254,7 @@ enum ProfileQuestions {
             question: "Our promise",
             helpText: "HaloFi gives estimates and education, not decisions. Social Security makes every actual decision about your benefits. We'll always show our math, and we'll always point you to a free human expert when it matters.",
             options: [
-                ProfileOption("accepted", "That works for me", patch: BenefitsProfilePatch(promiseAcceptedAt: Date())),
+                ProfileOption("accepted", "I agree", patch: BenefitsProfilePatch(promiseAcceptedAt: Date())),
             ],
             skipTitle: nil
         ),

@@ -68,10 +68,10 @@ struct AccountDetailView: View {
           .foregroundColor(Color.haloTextSecondary)
       }
     } else if let lastSync = serverLastSync ?? bankDataManager.lastTransactionSyncAt {
-      Text("Synced \(lastSync.relativeDescription)")
+      Text("Checked \(lastSync.relativeDescription)")
         .font(.caption)
         .foregroundColor(Color.haloTextSecondary)
-        .accessibilityLabel("Last synced \(lastSync.relativeDescription)")
+        .accessibilityLabel("Last checked \(lastSync.relativeDescription). Banks post new activity a few times a day.")
     }
   }
 

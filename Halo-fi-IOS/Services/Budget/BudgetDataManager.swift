@@ -143,6 +143,22 @@ final class BudgetDataManager {
         }
     }
 
+    /// "Not this time": the card goes away until a materially different
+    /// proposal appears.
+    func dismissSuggestion() async throws {
+        try await service.dismissSuggestion()
+        suggestion = nil
+        attentionCards.removeAll { $0.kind == "budget_suggestion" }
+        attentionQueue.removeAll { $0.kind == "budget_suggestion" }
+    }
+
+    /// "10% less this month" / "make it a $3,000 month".
+    func scaleBudget(percent: Double? = nil, totalCents: Int? = nil) async throws {
+        try await service.scaleBudget(percent: percent, totalCents: totalCents)
+        markStale()
+        await refresh()
+    }
+
     func applySuggestion() async throws {
         do {
             try await service.applySuggestion()
@@ -357,7 +373,17 @@ final class BudgetDataManager {
 
     /// Answer "is this a bill?" — instantly on the card, then refresh.
     func confirmBill(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil) async throws {
-        _ = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind)
+        let updated = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind)
+        // The answered row moves sections immediately; the refresh confirms.
+        if let b = bills {
+            let streams = b.streams.map { $0.streamId == updated.streamId ? updated : $0 }
+            let confirmed = streams.filter { $0.userConfirmed == true }
+            bills = RecurringResponse(today: b.today, streams: streams, confirmedCount: confirmed.count,
+                                      monthlyBillsCents: b.monthlyBillsCents,
+                                      billsCount: confirmed.filter { !$0.isSubscription }.count,
+                                      subscriptionsCount: confirmed.filter { $0.isSubscription }.count,
+                                      monthlyBillsOnlyCents: b.monthlyBillsOnlyCents, monthlySubscriptionsCents: b.monthlySubscriptionsCents)
+        }
         if let card = (attentionCards + attentionQueue).first(where: { $0.kind == "bill_confirm" && $0.payload.streamId == streamId }) {
             resolveCard(card)
         } else {

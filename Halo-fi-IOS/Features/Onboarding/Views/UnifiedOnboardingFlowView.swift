@@ -240,12 +240,16 @@ struct SignUpOnboardingStep: View {
 struct AccessibleOnboardingHeader: View {
   let currentStep: OnboardingStep
   
+  // The account screen is not a numbered step (nobody saw a "Step 1");
+  // counting starts at AI consent so the first header says 1 of 4.
+  private var countedSteps: [OnboardingStep] { OnboardingStep.allCases.filter { $0 != .signUp } }
+
   private var stepIndex: Int {
-    OnboardingStep.allCases.firstIndex(of: currentStep) ?? 0
+    countedSteps.firstIndex(of: currentStep) ?? 0
   }
   
   private var totalSteps: Int {
-    OnboardingStep.allCases.count
+    countedSteps.count
   }
   
   var body: some View {

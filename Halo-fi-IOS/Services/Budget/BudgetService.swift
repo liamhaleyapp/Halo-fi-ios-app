@@ -22,6 +22,8 @@ protocol BudgetServiceProtocol {
 
     // WP5
     func fetchSuggestion() async throws -> BudgetSuggestion?
+    func dismissSuggestion() async throws
+    func scaleBudget(percent: Double?, totalCents: Int?) async throws
     func applySuggestion() async throws
     func addCategory(code: String, limitAmount: Double) async throws
     func deleteCategory(categoryId: String) async throws
@@ -40,9 +42,11 @@ struct BudgetSuggestion: Codable, Equatable {
     let appliedAt: String?
     /// "Includes about $X a month paid to credit cards HaloFi can't see…"
     var note: String? = nil
+    var dismissedAt: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, note
+        case dismissedAt = "dismissed_at"
         case generatedAt = "generated_at"
         case windowDays = "window_days"
         case totalIncomeCents = "total_income_cents"
@@ -134,6 +138,20 @@ final class BudgetService: BudgetServiceProtocol {
             body: body,
             responseType: EmptyResponse.self
         )
+    }
+
+    func dismissSuggestion() async throws {
+        struct Out: Codable { let suggestion: BudgetSuggestion? }
+        let _: Out = try await networkService.authenticatedRequest(endpoint: "/budget/suggestions/dismiss", method: .POST, body: nil, responseType: Out.self)
+    }
+
+    /// Raise or lower every category by the same factor.
+    func scaleBudget(percent: Double? = nil, totalCents: Int? = nil) async throws {
+        struct Body: Encodable { let percent: Double?; let total_cents: Int? }
+        struct Out: Codable { let total_limit: Double }
+        let _: Out = try await networkService.authenticatedRequest(
+            endpoint: "/budget/scale", method: .POST,
+            body: try JSONEncoder().encode(Body(percent: percent, total_cents: totalCents)), responseType: Out.self)
     }
 
     func fetchCategoryExamples(code: String) async throws -> CategoryExamples {

@@ -71,6 +71,7 @@ struct ServerEmbeddedAccount: Codable {
     let type: String
     let subtype: String
     let balance: Double?
+    var nickname: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id"
@@ -79,11 +80,12 @@ struct ServerEmbeddedAccount: Codable {
         case type
         case subtype
         case balance
+        case nickname
     }
 
     /// Convert to full BankAccount model
     func toBankAccount(plaidItemId: String) -> BankAccount {
-        BankAccount(
+        var account = BankAccount(
             name: name,
             mask: mask,
             type: type,
@@ -98,6 +100,8 @@ struct ServerEmbeddedAccount: Codable {
             createdAt: nil,
             updatedAt: nil
         )
+        account.nickname = nickname
+        return account
     }
 }
 

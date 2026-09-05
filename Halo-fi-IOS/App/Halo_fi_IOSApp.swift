@@ -71,6 +71,7 @@ struct Halo_fi_IOSApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
+        .biometricAppLock()   // inside the environment modifiers below
         .buttonStyle(HapticButtonStyle())
         .modelContainer(modelContainer)
         .environment(container)

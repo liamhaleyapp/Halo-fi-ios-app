@@ -30,6 +30,7 @@ struct BudgetView: View {
     @Environment(UserManager.self) private var userManager
     @State private var showingIncomeEditor = false
     @State private var showingLinkChooser = false
+    @State private var showingAdjust = false
     /// Phase 11 Track A — last announcement we already spoke, used
     /// to avoid re-announcing the same digest on every redraw.
     @State private var lastAnnouncedSummary: String?
@@ -76,6 +77,7 @@ struct BudgetView: View {
             .navigationTitle("Budget")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
+            .sheet(isPresented: $showingAdjust) { AdjustBudgetSheet() }
             .task {
                 if dataManager.shouldRefresh {
                     await dataManager.refresh()
@@ -101,7 +103,7 @@ struct BudgetView: View {
 
     @ViewBuilder
     private func suggestedBudgetCard(_ overview: BudgetOverview) -> some View {
-        if let suggestion = dataManager.suggestion, suggestion.appliedAt == nil, !suggestion.proposal.isEmpty {
+        if let suggestion = dataManager.suggestion, suggestion.appliedAt == nil, suggestion.dismissedAt == nil, !suggestion.proposal.isEmpty {
             SuggestedBudgetCard(
                 suggestion: suggestion,
                 hasBudget: overview.budgetStatus.hasBudget,
@@ -111,8 +113,35 @@ struct BudgetView: View {
                     } catch {
                         UIAccessibility.post(notification: .announcement, argument: "Couldn't apply the suggested budget. \(error.localizedDescription)")
                     }
+                },
+                onDecline: {
+                    do {
+                        try await dataManager.dismissSuggestion()
+                        UIAccessibility.post(notification: .announcement, argument: "Okay, keeping your budget.")
+                    } catch {
+                        UIAccessibility.post(notification: .announcement, argument: "Couldn't save that. \(error.localizedDescription)")
+                    }
                 }
             )
+        }
+        if overview.budgetStatus.hasBudget {
+            Button { showingAdjust = true } label: {
+                HStack(spacing: 14) {
+                    HaloIconTile(icon: "slider.horizontal.3", tint: .blue)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Adjust the whole budget").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
+                        Text("Spend a little less or more this month, across every category.").font(.subheadline).foregroundColor(.haloTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                }
+                .padding(16).frame(minHeight: 72).haloCard()
+            }
+            .buttonStyle(HapticPlainButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Adjust the whole budget. Spend a little less or more this month, across every category.")
+            .accessibilityHint("Opens choices like ten percent less, or a total for the month.")
         }
     }
 
@@ -1425,6 +1454,98 @@ enum BudgetFormatter {
         case "travel":                    return .cyan
         case "rent_and_utilities":        return .blue
         default:                          return .secondary
+        }
+    }
+}
+
+
+// MARK: - Adjust the whole budget (2026-09-05)
+
+/// "I want to spend 10% less this month" / "make it a $3,000 month":
+/// every category moves by the same factor. Big buttons, one tap.
+struct AdjustBudgetSheet: View {
+    @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var totalText = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @AccessibilityFocusState private var focused: Bool
+
+    private let steps: [Double] = [-15, -10, -5, 5, 10, 15]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Adjust the whole budget")
+                        .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($focused)
+                    if let total = dataManager.overview?.budgetStatus.total {
+                        Text("Right now: \(VoiceOverFormatter.dollars(total.limitCents)) a month. Every category moves by the same amount.")
+                            .font(.subheadline).foregroundColor(.haloTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text("By percent").font(.subheadline.weight(.semibold)).foregroundColor(.haloTextPrimary).accessibilityAddTraits(.isHeader)
+                    ForEach(steps, id: \.self) { pct in
+                        Button { apply(percent: pct) } label: {
+                            Text(pct < 0 ? "Spend \(Int(-pct))% less" : "Spend \(Int(pct))% more")
+                                .font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 52)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isSaving)
+                        .accessibilityHint("Changes every category limit and closes.")
+                    }
+                    Text("Or a total for the month").font(.subheadline.weight(.semibold)).foregroundColor(.haloTextPrimary).accessibilityAddTraits(.isHeader)
+                    HStack {
+                        Text("$").font(.title3)
+                        TextField("Monthly total", text: $totalText)
+                            .keyboardType(.decimalPad).font(.title3).textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Monthly total in dollars")
+                    }
+                    Button {
+                        guard let dollars = Double(totalText.replacingOccurrences(of: ",", with: "")), dollars > 0 else {
+                            errorMessage = "Enter the total as dollars, like 3000."
+                            UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+                            return
+                        }
+                        apply(totalCents: Int((dollars * 100).rounded()))
+                    } label: {
+                        Text(isSaving ? "Saving…" : "Use this total").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isSaving)
+                    if let errorMessage { Text(errorMessage).font(.callout).foregroundStyle(DesignTokens.ToneText.act) }
+                }
+                .padding(20)
+                .readableContentWidth()
+            }
+            .background(Color.haloBackground.ignoresSafeArea())
+            .navigationTitle("Adjust budget")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Cancel", hint: "Closes without changing the budget.") { dismiss() } } }
+            .accessibilityAction(.escape) { dismiss() }
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
+        }
+    }
+
+    private func apply(percent: Double? = nil, totalCents: Int? = nil) {
+        isSaving = true
+        errorMessage = nil
+        Task {
+            do {
+                try await dataManager.scaleBudget(percent: percent, totalCents: totalCents)
+                isSaving = false
+                Haptics.success()
+                let total = dataManager.overview?.budgetStatus.total?.limitCents
+                UIAccessibility.post(notification: .announcement, argument: "Budget updated." + (total.map { " Now \(VoiceOverFormatter.dollars($0)) a month." } ?? ""))
+                dismiss()
+            } catch {
+                isSaving = false
+                Haptics.error()
+                errorMessage = "Couldn't adjust the budget. \(error.localizedDescription)"
+                UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+            }
         }
     }
 }

@@ -143,7 +143,7 @@ struct IncomeView: View {
                                            lastGrossCents: summary?.sources.first { $0.sourceKey == label.sourceKey }?.lastGrossCents,
                                            occurredOn: label.occurredOn))
         }
-        .sheet(isPresented: $showingEditor) { IncomeEditorView() }
+        .sheet(isPresented: $showingEditor, onDismiss: { Task { await dataManager.refresh() } }) { IncomeEditorView() }
         .sheet(item: $relabelTarget) { label in
             DepositLabelSheet(mode: .label(transactionId: label.transactionId, source: label.source,
                                            amountCents: label.netCents, occurredOn: label.occurredOn))

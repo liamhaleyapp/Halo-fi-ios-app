@@ -172,7 +172,7 @@ struct SettingsView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar(.hidden, for: .navigationBar)
       .onAppear {
-        biometricEnrolled = container.biometricCredentialStore.hasEnrolledCredentials
+        biometricEnrolled = signedInWithSocial ? BiometricAppLock.isEnabled : container.biometricCredentialStore.hasEnrolledCredentials
       }
       .navigationDestination(for: SettingsDestination.self) { destination in
         switch destination {
@@ -316,7 +316,7 @@ struct SettingsView: View {
           .foregroundColor(.blue)
           .frame(width: 28, height: 28)
 
-        Text("Sign in with \(biometryDisplayName)")
+        Text(signedInWithSocial ? "Unlock with \(biometryDisplayName)" : "Sign in with \(biometryDisplayName)")
           .font(.body)
           .fontWeight(.medium)
           .foregroundColor(.primary)
@@ -339,7 +339,32 @@ struct SettingsView: View {
     }
   }
 
+  /// Google / Apple accounts have no HaloFi password to store, so for them
+  /// Face ID guards the app itself (an unlock) instead of re-signing in.
+  private var signedInWithSocial: Bool {
+    (UserDefaults.standard.string(forKey: "last_auth_provider") ?? "password") != "password"
+  }
+
   private func handleBiometricToggle(_ newValue: Bool) {
+    if signedInWithSocial {
+      Task {
+        if newValue {
+          do {
+            try await container.biometricAuthService.authenticate(reason: "Turn on \(biometryDisplayName) unlock")
+            BiometricAppLock.isEnabled = true
+            biometricEnrolled = true
+            UIAccessibility.post(notification: .announcement, argument: "\(biometryDisplayName) unlock is on.")
+          } catch {
+            biometricEnrolled = false
+          }
+        } else {
+          BiometricAppLock.isEnabled = false
+          biometricEnrolled = false
+          UIAccessibility.post(notification: .announcement, argument: "\(biometryDisplayName) unlock is off.")
+        }
+      }
+      return
+    }
     if newValue {
       // We don't have the user's password from current session — present the
       // enrollment sheet to collect + verify it, then save behind biometry.

@@ -14,6 +14,7 @@ struct SuggestedBudgetCard: View {
     let suggestion: BudgetSuggestion
     let hasBudget: Bool
     let onApply: () async -> Void
+    var onDecline: (() async -> Void)? = nil
 
     @State private var isApplying = false
     @State private var expanded = false
@@ -86,6 +87,16 @@ struct SuggestedBudgetCard: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isApplying)
                 .accessibilityHint(hasBudget ? "Replaces your current budget with the suggested limits." : "Creates your budget from these limits. You can edit any category after.")
+            }
+            if let onDecline {
+                Button {
+                    Task { await onDecline() }
+                } label: {
+                    Text("Not this time").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.haloTextSecondary)
+                .accessibilityHint("Keeps your current budget and hides this until a different suggestion comes along.")
             }
         }
         .padding(14)
