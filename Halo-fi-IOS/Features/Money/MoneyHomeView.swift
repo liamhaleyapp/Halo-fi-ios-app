@@ -287,7 +287,7 @@ struct MoneyHomeView: View {
     private var transactionsRow: some View {
         let line: String
         if let newest = recentTransactions.first {
-            line = "Newest: \(newest.merchantName ?? newest.name), \(Self.spokenDate(newest.transactionDate))."
+            line = "Newest: \(newest.displayName), \(Self.spokenDate(newest.transactionDate))."
         } else {
             line = isLoadingTransactions ? "Loading." : "Nothing yet. Pull down to refresh."
         }
@@ -368,7 +368,7 @@ extension WorkExpenseHandoff {
         formatter.dateFormat = "yyyy-MM-dd"
         let date = formatter.date(from: String(txn.transactionDate.prefix(10))) ?? Date()
         Haptics.engine.play(.tapLight)
-        offer(WorkExpenseDraft(amountCents: cents, description: txn.merchantName ?? txn.name, occurredOn: date))
+        offer(WorkExpenseDraft(amountCents: cents, description: txn.displayName, occurredOn: date))
     }
 }
 

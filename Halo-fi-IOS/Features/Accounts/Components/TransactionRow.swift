@@ -13,7 +13,7 @@ struct TransactionRow: View {
   var accountLabel: String? = nil
 
   private var displayName: String {
-    transaction.merchantName ?? transaction.name
+    transaction.displayName
   }
 
   private var categoryName: String {

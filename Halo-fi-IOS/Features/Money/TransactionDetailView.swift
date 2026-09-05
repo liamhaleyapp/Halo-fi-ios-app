@@ -18,7 +18,7 @@ struct TransactionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var labeling = false
 
-    private var displayName: String { transaction.merchantName ?? transaction.name }
+    private var displayName: String { transaction.displayName }
     private var amountText: String { transaction.amount.formatted(.currency(code: transaction.currency)) }
     private var isSpend: Bool { transaction.amount >= 0 }
 
@@ -60,7 +60,7 @@ struct TransactionDetailView: View {
                     detailRow("Account", bankDataManager.accountLabel(for: transaction.accountId) ?? "Not linked to a known account")
                     detailRow("Category", categoryName)
                     detailRow("Status", transaction.pending ? "Pending" : "Posted")
-                    if transaction.merchantName != nil, transaction.merchantName != transaction.name {
+                    if transaction.name != displayName {
                         detailRow("Bank description", transaction.name)
                     }
                     if let channel = transaction.paymentChannel, !channel.isEmpty {

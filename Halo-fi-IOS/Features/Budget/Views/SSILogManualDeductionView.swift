@@ -227,7 +227,7 @@ struct SSILogManualDeductionView: View {
             if let tx = linkedTransaction {
                 HStack {
                     Image(systemName: "link").foregroundColor(.blue).accessibilityHidden(true)
-                    Text("\(tx.merchantName ?? tx.name), \(Self.spokenDate(tx.transactionDate)), \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded())))")
+                    Text("\(tx.displayName), \(Self.spokenDate(tx.transactionDate)), \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded())))")
                         .font(.subheadline)
                         .foregroundColor(.haloTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -255,7 +255,7 @@ struct SSILogManualDeductionView: View {
         linkedTransaction = tx
         amountText = String(format: "%.2f", abs(tx.amount))
         if description.trimmingCharacters(in: .whitespaces).isEmpty {
-            description = tx.merchantName ?? tx.name
+            description = tx.displayName
         }
         if let date = Self.isoDate.date(from: String(tx.transactionDate.prefix(10))) {
             occurredOn = min(date, Date())
@@ -263,7 +263,7 @@ struct SSILogManualDeductionView: View {
         Haptics.engine.play(.tapLight)
         UIAccessibility.post(
             notification: .announcement,
-            argument: "Filled in from \(tx.merchantName ?? tx.name): \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded()))) on \(Self.spokenDate(tx.transactionDate)). Check the description, then save."
+            argument: "Filled in from \(tx.displayName): \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded()))) on \(Self.spokenDate(tx.transactionDate)). Check the description, then save."
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focus = .description }
     }

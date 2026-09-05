@@ -24,7 +24,7 @@ struct TransactionPickerView: View {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         let outflows = all.filter { $0.amount > 0 }   // charges, not deposits
         guard !q.isEmpty else { return Array(outflows.prefix(60)) }
-        return outflows.filter { ($0.merchantName ?? "").lowercased().contains(q) || $0.name.lowercased().contains(q) }
+        return outflows.filter { $0.displayName.lowercased().contains(q) || $0.name.lowercased().contains(q) }
     }
 
     var body: some View {
@@ -73,7 +73,7 @@ struct TransactionPickerView: View {
     private func row(_ tx: Transaction) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(tx.merchantName ?? tx.name).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(1)
+                Text(tx.displayName).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(1)
                 Text("\(Self.spokenDate(tx.transactionDate))\(accountSuffix(tx))")
                     .font(.caption).foregroundColor(.haloTextSecondary)
             }
@@ -85,7 +85,7 @@ struct TransactionPickerView: View {
     }
 
     private func label(_ tx: Transaction) -> String {
-        "\(tx.merchantName ?? tx.name), \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded()))), \(Self.spokenDate(tx.transactionDate))\(accountSuffix(tx))\(tx.pending ? ", pending" : "")"
+        "\(tx.displayName), \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded()))), \(Self.spokenDate(tx.transactionDate))\(accountSuffix(tx))\(tx.pending ? ", pending" : "")"
     }
 
     private func accountSuffix(_ tx: Transaction) -> String {
