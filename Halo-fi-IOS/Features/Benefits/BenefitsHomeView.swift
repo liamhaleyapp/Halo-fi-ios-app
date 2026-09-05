@@ -62,7 +62,6 @@ struct BenefitsHomeView: View {
                             }
                             learnRow
                             benefitsProfileSummaryRow
-                            redoQuestionnaireRow
                             counselorButton
                         case .ssdi:
                             workExpensesRow
@@ -70,7 +69,6 @@ struct BenefitsHomeView: View {
                             ssdiLaneRow
                             learnRow
                             benefitsProfileSummaryRow
-                            redoQuestionnaireRow
                             counselorButton
                         case .none:
                             startQuestionnaireRow
@@ -165,19 +163,9 @@ struct BenefitsHomeView: View {
             tone: .neutral,
             line: BenefitsProfileView.overviewLine(capabilities: userManager.capabilities, profile: userManager.benefitsProfile),
             estimate: false,
-            route: .benefitsProfile
+            route: .benefitsProfile,
+            hint: "Opens your answers. Change any one, or redo the questionnaire from there."
         )
-    }
-
-    private var redoQuestionnaireRow: some View {
-        NavigationLink(value: Route.questionnaire) {
-            Label("Redo the questionnaire", systemImage: "arrow.counterclockwise")
-                .font(.body.weight(.semibold))
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .buttonStyle(HapticPlainButtonStyle())
-        .accessibilityHint("Walks through every question again, one per screen.")
     }
 
     // MARK: - a. Header
@@ -236,7 +224,9 @@ struct BenefitsHomeView: View {
             tone: submit == nil ? .neutral : .watch,
             line: line,
             estimate: true,
-            route: .monthlyPackage(submit?.month)
+            route: .monthlyPackage(submit?.month),
+            spokenLine: submit.map { "\($0.title)." } ?? "Last month's SSA-795 package.",
+            hint: "Opens the package: cover, ledger and receipts. Share, print, or send it to yourself."
         )
     }
 
@@ -282,7 +272,9 @@ struct BenefitsHomeView: View {
             tone: .neutral,
             line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")): " + cards.map { $0.title.lowercased() }.joined(separator: ", ") + ".",
             estimate: false,
-            route: .learn
+            route: .learn,
+            spokenLine: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")).",
+            hint: "Opens the explainers: " + cards.map { $0.title.lowercased() }.joined(separator: ", ") + "."
         )
     }
 
@@ -340,8 +332,19 @@ struct BenefitsHomeView: View {
 
     // MARK: - Row builder
 
-    private func row(title: String, icon: String, tone: ScreenReaderSummaryHeader.Tone, line: String, estimate: Bool, route: Route) -> some View {
+    /// `line` is what sighted users read under the title. VoiceOver hears
+    /// `spokenLine` (the short state) or `line`; in Brief speech (Settings →
+    /// Accessibility) only the title, with the state in the hint. Long
+    /// explanations go in `hint`, which VoiceOver reads after a pause and
+    /// users can switch off.
+    private func row(title: String, icon: String, tone: ScreenReaderSummaryHeader.Tone, line: String, estimate: Bool, route: Route,
+                     spokenLine: String? = nil, hint: String? = nil) -> some View {
         let tint: Color = tone == .neutral ? .blue : tone.color
+        let state = spokenLine ?? line
+        let label = AccessibilityPrefs.isBriefSpeech ? "\(title)." : "\(title). \(state)\(estimate ? " Estimate." : "")"
+        let spokenHint = AccessibilityPrefs.isBriefSpeech
+            ? "\(state) \(hint ?? "Opens \(title.lowercased()).")"
+            : (hint ?? "Opens \(title.lowercased()).")
         return NavigationLink(value: route) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -369,7 +372,8 @@ struct BenefitsHomeView: View {
         }
         .buttonStyle(HapticPlainButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title). \(line)\(estimate ? " Estimate." : "")")
+        .accessibilityLabel(label)
+        .accessibilityHint(spokenHint)
         .accessibilityAddTraits(.isButton)
     }
 

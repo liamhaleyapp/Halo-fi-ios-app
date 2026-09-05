@@ -137,12 +137,23 @@ struct IncomeSummary: Codable, Equatable {
     }
 }
 
+struct IncomeSourceUpdate: Encodable {
+    var kind: String? = nil
+    var employer: String? = nil
+    var cadence_days: Int? = nil
+    var clear_cadence: Bool = false
+    var expected_gross_cents: Int? = nil
+    var expected_net_cents: Int? = nil
+}
+
 protocol IncomeServiceProtocol {
     func deposits(days: Int, unlabeledOnly: Bool) async throws -> [IncomeDeposit]
     func label(transactionId: String, kind: IncomeKind, grossCents: Int?, employer: String?) async throws -> IncomeLabelView
     func updateLabel(id: String, grossCents: Int?) async throws -> IncomeLabelView
     func deleteLabel(id: String) async throws
     func summary(month: String?) async throws -> IncomeSummary
+    func updateSource(key: String, update: IncomeSourceUpdate) async throws -> IncomeSource
+    func deleteSource(key: String) async throws
 }
 
 final class IncomeService: IncomeServiceProtocol {
@@ -186,6 +197,23 @@ final class IncomeService: IncomeServiceProtocol {
     func deleteLabel(id: String) async throws {
         let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
             endpoint: APIEndpoints.Income.label(id), method: .DELETE, body: nil, responseType: EmptyResponse.self
+        )
+    }
+
+    private struct SourceOut: Codable { let source: IncomeSource }
+
+    func updateSource(key: String, update: IncomeSourceUpdate) async throws -> IncomeSource {
+        let path = "\(APIEndpoints.Income.summary.replacingOccurrences(of: "/summary", with: ""))/sources/\(key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? key)"
+        let out: SourceOut = try await NetworkService.shared.authenticatedRequest(
+            endpoint: path, method: .PATCH, body: try JSONEncoder().encode(update), responseType: SourceOut.self
+        )
+        return out.source
+    }
+
+    func deleteSource(key: String) async throws {
+        let path = "\(APIEndpoints.Income.summary.replacingOccurrences(of: "/summary", with: ""))/sources/\(key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? key)"
+        let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
+            endpoint: path, method: .DELETE, body: nil, responseType: EmptyResponse.self
         )
     }
 

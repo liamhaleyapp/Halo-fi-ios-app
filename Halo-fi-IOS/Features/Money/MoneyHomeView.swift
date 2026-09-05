@@ -104,13 +104,6 @@ struct MoneyHomeView: View {
             }
             .navigationTitle("Money")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showingLinkChooser = true } label: { Image(systemName: "plus.app") }
-                        .accessibilityLabel("Add account")
-                        .accessibilityHint("Opens secure bank linking flow")
-                }
-            }
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
             .navigationDestination(for: ConnectedItem.self) { item in
                 InstitutionAccountsView(item: item)

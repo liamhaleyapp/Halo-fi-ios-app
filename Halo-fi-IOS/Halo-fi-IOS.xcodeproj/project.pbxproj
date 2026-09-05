@@ -88,11 +88,11 @@
 		9E95D7392E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Halo-fi-IOSTests/AttentionTests.swift",
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
 				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
-				"Halo-fi-IOSTests/AttentionTests.swift",
 				"Halo-fi-IOSTests/TransactionNameFormatterTests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
@@ -103,11 +103,11 @@
 		9E95D73A2E8DB160003087CE /* Exceptions for "Tests" folder in "Halo-fi-IOSTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Halo-fi-IOSTests/AttentionTests.swift",
 				"Halo-fi-IOSTests/Halo_fi_IOSTests.swift",
 				"Halo-fi-IOSTests/ReceiptOCRParserTests.swift",
 				"Halo-fi-IOSTests/RefreshTokenTests.swift.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
-				"Halo-fi-IOSTests/AttentionTests.swift",
 				"Halo-fi-IOSTests/TransactionNameFormatterTests.swift",
 			);
 			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;

@@ -366,6 +366,18 @@ final class BudgetDataManager {
         return label
     }
 
+    func updateSource(key: String, update: IncomeSourceUpdate) async throws {
+        _ = try await IncomeService.shared.updateSource(key: key, update: update)
+        markStale()
+        await refresh()
+    }
+
+    func forgetSource(key: String) async throws {
+        try await IncomeService.shared.deleteSource(key: key)
+        markStale()
+        await refresh()
+    }
+
     func forgetLabel(id: String) async throws {
         try await IncomeService.shared.deleteLabel(id: id)
         markStale()

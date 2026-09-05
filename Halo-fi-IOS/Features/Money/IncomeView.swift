@@ -15,6 +15,7 @@ struct IncomeView: View {
     @Environment(UserManager.self) private var userManager
 
     @State private var grossTarget: IncomeLabelView?
+    @State private var sourceTarget: IncomeSource?
     @State private var showingEditor = false
     @State private var summaryLoaded = false
 
@@ -53,16 +54,25 @@ struct IncomeView: View {
             Section {
                 if let s = summary, !s.sources.isEmpty {
                     ForEach(s.sources) { source in
-                        HStack {
-                            Image(systemName: (IncomeKind(rawValue: source.kind) ?? .other).icon)
-                                .foregroundColor(.indigo).frame(width: 28).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(source.employer ?? source.sourceKey.capitalized).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
-                                Text(Self.sourceLine(source)).font(.caption).foregroundColor(.haloTextSecondary)
+                        Button { sourceTarget = source } label: {
+                            HStack {
+                                Image(systemName: (IncomeKind(rawValue: source.kind) ?? .other).icon)
+                                    .foregroundColor(.indigo).frame(width: 28).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(source.employer ?? source.sourceKey.capitalized).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                                    Text(Self.sourceLine(source)).font(.caption).foregroundColor(.haloTextSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
                             }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
-                        .frame(minHeight: 44)
-                        .accessibilityElement(children: .combine)
+                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(source.employer ?? source.sourceKey.capitalized). \(Self.sourceLine(source))")
+                        .accessibilityHint("Edits this payer: what it is, how often it pays, expected gross and take-home.")
+                        .accessibilityAddTraits(.isButton)
                     }
                 } else {
                     Text(summaryLoaded
@@ -73,7 +83,7 @@ struct IncomeView: View {
             } header: {
                 Text("Where your money comes from")
             } footer: {
-                Text("Learned from your answers on the Money tab. Nothing here is sent to Social Security.")
+                Text("Learned from your answers on the Money tab. Tap a payer to set how often it pays and what to expect; that becomes your budget's income. Nothing here is sent to Social Security.")
             }
 
             if let s = summary, !s.labels.isEmpty {
@@ -102,10 +112,10 @@ struct IncomeView: View {
 
             Section {
                 Button { showingEditor = true } label: {
-                    Label("Paycheck and benefit amounts", systemImage: "pencil")
+                    Label("Benefit amounts and other fields", systemImage: "pencil")
                         .frame(minHeight: 44)
                 }
-                .accessibilityHint("Edits the amounts you told HaloFi at setup: paycheck, SSI, SSDI.")
+                .accessibilityHint("Edits SSI and SSDI amounts, ABLE balance, burial fund, and the paycheck fallback used before a payer is learned.")
             } footer: {
                 Text("Estimate for education only — Social Security makes all actual decisions.")
             }
@@ -123,6 +133,7 @@ struct IncomeView: View {
                                            occurredOn: label.occurredOn))
         }
         .sheet(isPresented: $showingEditor) { IncomeEditorView() }
+        .sheet(item: $sourceTarget) { source in IncomeSourceEditorSheet(source: source) }
     }
 
     private var header: some View {

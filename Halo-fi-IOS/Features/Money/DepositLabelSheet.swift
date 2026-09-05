@@ -30,6 +30,7 @@ struct DepositLabelSheet: View {
     private let startCard: AttentionCard?
 
     @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(BankDataManager.self) private var bankDataManager
     @Environment(\.dismiss) private var dismiss
     @State private var mode: Mode
     @State private var currentCard: AttentionCard?
@@ -115,6 +116,7 @@ struct DepositLabelSheet: View {
                         .accessibilityFocused($focus, equals: .heading)
 
                     if step == .kind {
+                        details
                         Text("One tap. HaloFi remembers this payer, so next time it only asks what changed.")
                             .font(.subheadline).foregroundColor(.haloTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -205,6 +207,33 @@ struct DepositLabelSheet: View {
             .onChange(of: step) { _, _ in DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
             .onChange(of: currentCard?.id) { _, _ in DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
         }
+    }
+
+    /// What the bank actually said about this deposit — the account it
+    /// landed in, the raw description, whether the payer sent more.
+    @ViewBuilder
+    private var details: some View {
+        let p = currentCard?.payload
+        let account = p?.accountId.flatMap { bankDataManager.accountLabel(for: $0) }
+        let raw = p?.rawName
+        let same = p?.sameSourceCount ?? 0
+        let rows: [(String, String)] = [
+            ("Into", account ?? "one of your accounts"),
+            ("Bank description", (raw?.isEmpty == false && raw != source) ? raw! : source),
+            ("From this payer", same > 1 ? "\(same) deposits in the last 30 days" : "first one in the last 30 days"),
+        ] + ((p?.pending ?? false) ? [("Status", "Pending")] : [])
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(rows, id: \.0) { row in
+                HStack(alignment: .top, spacing: 8) {
+                    Text(row.0).font(.caption).foregroundColor(.haloTextTertiary).frame(width: 110, alignment: .leading)
+                    Text(row.1).font(.caption).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(12)
+        .background(Color.haloSecondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var allDone: some View {

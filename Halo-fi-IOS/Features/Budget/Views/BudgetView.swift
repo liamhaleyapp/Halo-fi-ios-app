@@ -54,7 +54,6 @@ struct BudgetView: View {
                             }
                             suggestedBudgetCard(overview)
                             breakdownByCategoryButton(overview)
-                            monthlyIncomeSection(overview)
                                             alertsSection(overview.alerts)
                         } else if dataManager.isLoading {
                             ProgressView()
@@ -85,9 +84,6 @@ struct BudgetView: View {
             .onChange(of: dataManager.lastFetched) { _, _ in
                 // Re-announce when a refresh produces fresh data.
                 announceBudgetSummaryIfNeeded()
-            }
-            .sheet(isPresented: $showingIncomeEditor) {
-                IncomeEditorView()
             }
     }
 

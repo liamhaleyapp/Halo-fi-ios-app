@@ -100,7 +100,7 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Resource monitor"].exists, "resource monitor row moved to the Money tab")
         let profileRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Your benefits profile'")).firstMatch
         XCTAssertTrue(profileRow.waitForExistence(timeout: 10), "profile row missing")
-        XCTAssertTrue(app.buttons["Redo the questionnaire"].exists)
+        XCTAssertFalse(app.buttons["Redo the questionnaire"].exists, "redo lives inside the profile now")
     }
 
     func testTabBar_answeredNoBenefits_hidesBenefitsTab() {

@@ -29,9 +29,16 @@ struct AttentionCard: Codable, Equatable, Identifiable {
         var reason: String?
         var matchedKeywords: [String]?
         var count: Int?
+        var rawName: String?
+        var accountId: String?
+        var sameSourceCount: Int?
+        var pending: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case source, month, employer, description, confidence, reason, count
+            case source, month, employer, description, confidence, reason, count, pending
+            case rawName = "raw_name"
+            case accountId = "account_id"
+            case sameSourceCount = "same_source_count"
             case transactionId = "transaction_id"
             case amountCents = "amount_cents"
             case occurredOn = "occurred_on"
