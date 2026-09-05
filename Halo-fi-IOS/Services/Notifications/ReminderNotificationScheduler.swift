@@ -61,6 +61,7 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
             allowed = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         }
         guard allowed else { return }
+        PushRegistrar.shared.registerIfAllowed()
 
         let content = UNMutableNotificationContent()
         content.title = next.title

@@ -134,6 +134,13 @@ final class BudgetService: BudgetServiceProtocol {
         )
     }
 
+    func fetchCategoryExamples(code: String) async throws -> CategoryExamples {
+        try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Budget.categoryExamples(code), method: .GET, body: nil,
+            responseType: CategoryExamples.self
+        )
+    }
+
     func fetchSuggestion() async throws -> BudgetSuggestion? {
         let env: BudgetSuggestionEnvelope = try await networkService.authenticatedRequest(
             endpoint: APIEndpoints.Budget.suggestions, method: .GET, body: nil,

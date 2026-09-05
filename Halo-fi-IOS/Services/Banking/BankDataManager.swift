@@ -1013,10 +1013,7 @@ final class BankDataManager {
         guard let userId = currentUserId else { return }
 
         isSyncing = true
-        defer {
-            isSyncing = false
-            lastTransactionSyncAt = Date()
-        }
+        defer { isSyncing = false }
 
         do {
             if inflightItemFetches[itemId] != nil { return }

@@ -24,6 +24,8 @@ struct BudgetOverview: Codable, Equatable {
     let ssiAlerts: [SSIAlert]?
     let alerts: [BudgetAlert]
     let asOfUtc: String
+    /// Fixed vs variable (2026-09-05): confirmed bills + subscriptions.
+    var fixedExpenses: FixedExpenses? = nil
 
     enum CodingKeys: String, CodingKey {
         case month, period, spending
@@ -34,6 +36,77 @@ struct BudgetOverview: Codable, Equatable {
         case ssiAlerts = "ssi_alerts"
         case alerts
         case asOfUtc = "as_of_utc"
+        case fixedExpenses = "fixed_expenses"
+    }
+}
+
+/// The predictable part of the month: bills, subscriptions, and the
+/// consumption bills that move a little (fixed-variable).
+struct FixedExpenses: Codable, Equatable {
+    struct Item: Codable, Equatable, Identifiable {
+        let streamId: String
+        let label: String
+        let kind: String
+        let monthlyCents: Int
+        let varies: Bool
+        let frequencyLabel: String?
+        let nextExpected: String?
+        var id: String { streamId }
+        enum CodingKeys: String, CodingKey {
+            case label, kind, varies
+            case streamId = "stream_id"
+            case monthlyCents = "monthly_cents"
+            case frequencyLabel = "frequency_label"
+            case nextExpected = "next_expected"
+        }
+    }
+    let monthlyCents: Int
+    let billCents: Int
+    let subscriptionCents: Int
+    let count: Int
+    let billCount: Int
+    let subscriptionCount: Int
+    let variesCount: Int
+    let items: [Item]
+    let spentThisMonthCents: Int
+    let unansweredCount: Int
+    enum CodingKeys: String, CodingKey {
+        case count, items
+        case monthlyCents = "monthly_cents"
+        case billCents = "bill_cents"
+        case subscriptionCents = "subscription_cents"
+        case billCount = "bill_count"
+        case subscriptionCount = "subscription_count"
+        case variesCount = "varies_count"
+        case spentThisMonthCents = "spent_this_month_cents"
+        case unansweredCount = "unanswered_count"
+    }
+}
+
+/// "What counts as Entertainment?" — the user's own payees plus a guide.
+struct CategoryExamples: Codable, Equatable {
+    struct Example: Codable, Equatable, Identifiable {
+        let label: String
+        let count: Int
+        let totalCents: Int
+        let lastOn: String?
+        var id: String { label }
+        enum CodingKeys: String, CodingKey {
+            case label, count
+            case totalCents = "total_cents"
+            case lastOn = "last_on"
+        }
+    }
+    let category: String
+    let title: String
+    let what: String
+    let genericExamples: [String]
+    let examples: [Example]
+    let windowDays: Int
+    enum CodingKeys: String, CodingKey {
+        case category, title, what, examples
+        case genericExamples = "generic_examples"
+        case windowDays = "window_days"
     }
 }
 

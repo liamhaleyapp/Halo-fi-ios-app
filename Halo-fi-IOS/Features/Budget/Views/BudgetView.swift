@@ -49,6 +49,7 @@ struct BudgetView: View {
                         if let overview = dataManager.overview {
                             monthSubtitle(overview)
                             heroCard(overview)
+                            fixedExpensesCard(overview)
                             if let alertText = topCategoryAlert(overview) {
                                 categoryAlertRow(alertText)
                             }
@@ -156,6 +157,50 @@ struct BudgetView: View {
             BudgetHeroCard(total: total)
         } else {
             NoBudgetHeroCard(spending: overview.spending)
+        }
+    }
+
+    // MARK: - Fixed vs variable (2026-09-05)
+
+    /// The top of any budget: what is predictable (bills, subscriptions,
+    /// the consumption bills that move a little) and what is not.
+    @ViewBuilder
+    private func fixedExpensesCard(_ overview: BudgetOverview) -> some View {
+        if let fx = overview.fixedExpenses {
+            let spent = overview.spending.totalCents
+            let variable = max(0, spent - fx.spentThisMonthCents)
+            let line: String = fx.count == 0
+                ? (fx.unansweredCount > 0
+                   ? "\(VoiceOverFormatter.count(fx.unansweredCount, singular: "recurring charge", plural: "recurring charges")) waiting for a yes or no."
+                   : "No bills or subscriptions confirmed yet.")
+                : "\(VoiceOverFormatter.dollars(fx.monthlyCents)) a month: \(VoiceOverFormatter.count(fx.billCount, singular: "bill", plural: "bills")) and \(VoiceOverFormatter.count(fx.subscriptionCount, singular: "subscription", plural: "subscriptions"))"
+                  + (fx.variesCount > 0 ? ", \(fx.variesCount) that vary" : "") + "."
+            let second = "Fixed so far this month \(VoiceOverFormatter.dollars(fx.spentThisMonthCents)), variable \(VoiceOverFormatter.dollars(variable))."
+            NavigationLink {
+                BillsView()
+            } label: {
+                HStack(spacing: 14) {
+                    HaloIconTile(icon: "pin.fill", tint: .teal)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Fixed expenses").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
+                        Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if fx.count > 0 {
+                            Text(second).font(.caption).foregroundColor(.haloTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                }
+                .padding(16)
+                .frame(minHeight: 72)
+                .haloCard()
+            }
+            .buttonStyle(HapticPlainButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Fixed expenses. \(line)" + (fx.count > 0 ? " \(second)" : ""))
+            .accessibilityHint("Opens bills and subscriptions. Everything else this month is variable spending.")
         }
     }
 

@@ -63,11 +63,28 @@ struct AccountDetailView: View {
           .font(.caption)
           .foregroundColor(Color.haloTextSecondary)
       }
-    } else if let lastSync = bankDataManager.lastTransactionSyncAt {
-      Text(lastSync.relativeDescription)
+    } else if let lastSync = serverLastSync ?? bankDataManager.lastTransactionSyncAt {
+      Text("Synced \(lastSync.relativeDescription)")
         .font(.caption)
         .foregroundColor(Color.haloTextSecondary)
+        .accessibilityLabel("Last synced \(lastSync.relativeDescription)")
     }
+  }
+
+  /// When the backend last pulled this institution (PlaidItems.last_sync),
+  /// which is what "synced" actually means — not when this screen loaded.
+  private var serverLastSync: Date? {
+    guard let itemId = account.plaidItemId,
+          let item = bankDataManager.linkedItems?.first(where: { $0.itemId == itemId || $0.plaidItemId == itemId }),
+          let iso = item.lastSync else { return nil }
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = f.date(from: iso) { return d }
+    f.formatOptions = [.withInternetDateTime]
+    if let d = f.date(from: iso) { return d }
+    let plain = DateFormatter(); plain.locale = Locale(identifier: "en_US_POSIX"); plain.timeZone = TimeZone(identifier: "UTC")
+    plain.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+    return plain.date(from: iso)
   }
   
   @ViewBuilder

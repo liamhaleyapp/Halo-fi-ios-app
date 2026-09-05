@@ -13,6 +13,7 @@ import GoogleSignIn
 @main
 // swiftlint:disable:next type_name
 struct Halo_fi_IOSApp: App {
+  @UIApplicationDelegateAdaptor(HaloAppDelegate.self) private var appDelegate
   /// SwiftData ModelContainer for bank data persistence (transactions + accounts)
   private let modelContainer: ModelContainer
 
@@ -53,8 +54,9 @@ struct Halo_fi_IOSApp: App {
         accountPersistence: accountPersistence
     ))
 
-    // WP6 — local reminder notifications (taps route to the Benefits tab).
+    // Notifications: local digest planning + real push once allowed.
     ReminderNotificationScheduler.shared.install()
+    PushRegistrar.shared.registerIfAllowed()
 
     // Configure RevenueCat
     Purchases.logLevel = .error

@@ -16,7 +16,9 @@ extension Notification.Name {
 @MainActor
 final class UserManager {
     var currentUser: User?
-    var isAuthenticated = false
+    var isAuthenticated = false {
+        didSet { PushRegistrar.shared.isSignedIn = isAuthenticated }
+    }
     var isLoading = false
 
     /// Whether we're still determining the user's destination after login
@@ -359,6 +361,8 @@ final class UserManager {
     }
 
     func signOut() {
+        // The server stops pushing to this device.
+        Task { await PushRegistrar.shared.forget() }
         // Clear bank data first (before clearing user)
         bankDataManager?.clearAllData()
         // WP7 — the chat thread can carry balances; it leaves with the user.

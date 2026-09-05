@@ -90,12 +90,42 @@ struct MainTabView: View {
         }
     }
 
+    private static var coldLaunchRefreshed = false
+    private static var wentToBackgroundAt: Date?
+
+    private func refreshEverything(reason: String) async {
+        guard userManager.currentUser != nil else { return }
+        Logger.info("MainTabView: refreshing everything (\(reason))")
+        budgetDataManager.markStale()
+        async let bank: () = bankDataManager.forceRefresh()
+        async let budget: () = budgetDataManager.refresh()
+        async let caps: () = userManager.refreshCapabilities()
+        _ = await (bank, budget, caps)
+    }
+
     var body: some View {
         ZStack {
             routeView
                 .id(currentRoute)
         }
         .animation(.easeInOut(duration: 0.3), value: currentRoute)
+        .task {
+            // Killing and reopening the app must refresh (Liam, 2026-09-05):
+            // the restored caches paint first, then everything re-pulls.
+            guard !UITestArchetype.isActive, !Self.coldLaunchRefreshed else { return }
+            Self.coldLaunchRefreshed = true
+            await refreshEverything(reason: "cold launch")
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard !UITestArchetype.isActive else { return }
+            if phase == .background {
+                Self.wentToBackgroundAt = Date()
+            } else if phase == .active, let since = Self.wentToBackgroundAt,
+                      Date().timeIntervalSince(since) > 10 * 60 {
+                Self.wentToBackgroundAt = nil
+                Task { await refreshEverything(reason: "back after \(Int(Date().timeIntervalSince(since) / 60)) min") }
+            }
+        }
         .onChange(of: currentRoute) { _, newRoute in
             if newRoute != .main {
                 selectedTab = .money

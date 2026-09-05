@@ -107,6 +107,9 @@ enum APIEndpoints {
 
         /// POST - Add a category to the active budget.
         static let categories = "/budget/categories"
+        static func categoryExamples(_ code: String) -> String {
+            "/budget/categories/\(code)/examples"
+        }
 
         /// GET - Smart suggestion (90-day medians). POST …/apply creates the budget.
         static let suggestions = "/budget/suggestions"

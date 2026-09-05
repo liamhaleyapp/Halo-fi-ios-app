@@ -18,6 +18,7 @@ struct BudgetCategoryDetailView: View {
     let initial: BudgetStatusCategory
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var showingLimitEditor = false
+    @State private var showingExamples = false
     // Scales the hero "spent" amount with Dynamic Type instead of a fixed 40pt.
     @ScaledMetric(relativeTo: .largeTitle) private var amountFontSize: CGFloat = 40
 
@@ -38,10 +39,14 @@ struct BudgetCategoryDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 heroCard
+                whatCountsCard
                 statusCard
                 limitCard
             }
             .padding()
+        }
+        .sheet(isPresented: $showingExamples) {
+            CategoryExamplesSheet(code: category.category, title: BudgetFormatter.displayName(forCategory: category.category))
         }
         .navigationTitle(BudgetFormatter.displayName(forCategory: category.category))
         .navigationBarTitleDisplayMode(.inline)
@@ -51,6 +56,25 @@ struct BudgetCategoryDetailView: View {
     }
 
     // MARK: - Cards
+
+    /// "What counts as Entertainment?" — the user's own charges, or the
+    /// general guide when there are none (Liam, 2026-09-05).
+    private var whatCountsCard: some View {
+        let name = BudgetFormatter.displayName(forCategory: category.category)
+        return Button { showingExamples = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "questionmark.circle.fill").foregroundStyle(.blue).accessibilityHidden(true)
+                Text("What counts as \(name)?").font(.subheadline.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+            }
+            .padding()
+            .frame(minHeight: 56)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(HapticPlainButtonStyle())
+        .accessibilityHint("Shows what you have paid for in this group, or examples if there is nothing yet.")
+    }
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -305,6 +329,81 @@ private struct CategoryLimitEditorView: View {
             } catch {
                 isSaving = false
                 saveError = "Couldn't save: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+
+// MARK: - Examples sheet (2026-09-05)
+
+struct CategoryExamplesSheet: View {
+    let code: String
+    let title: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var examples: CategoryExamples?
+    @State private var errorMessage: String?
+    @AccessibilityFocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("What counts as \(title)")
+                        .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($focused)
+                    if let ex = examples {
+                        Text(ex.what).font(.body).foregroundColor(.haloTextPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if ex.examples.isEmpty {
+                            Text("Nothing of yours has landed here in the last \(ex.windowDays) days. It would look like:")
+                                .font(.subheadline).foregroundColor(.haloTextSecondary)
+                            ForEach(ex.genericExamples, id: \.self) { g in
+                                Label(g, systemImage: "circle.fill").font(.body).foregroundColor(.haloTextPrimary)
+                                    .accessibilityElement(children: .combine)
+                            }
+                        } else {
+                            Text("From your own charges, last \(ex.windowDays) days:")
+                                .font(.subheadline).foregroundColor(.haloTextSecondary)
+                                .accessibilityAddTraits(.isHeader)
+                            ForEach(ex.examples) { e in
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(e.label).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                                        Text(VoiceOverFormatter.count(e.count, singular: "charge", plural: "charges")
+                                             + (e.lastOn.map { ", last \(TabSummaries.spokenDate($0))" } ?? ""))
+                                            .font(.caption).foregroundColor(.haloTextSecondary)
+                                    }
+                                    Spacer()
+                                    Text(BudgetFormatter.cents(e.totalCents)).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityElement(children: .combine)
+                            }
+                        }
+                    } else if let errorMessage {
+                        Text(errorMessage).font(.callout).foregroundStyle(DesignTokens.ToneText.act)
+                    } else {
+                        ProgressView("Looking at your charges…")
+                    }
+                }
+                .padding(20)
+                .readableContentWidth()
+            }
+            .background(Color.haloBackground.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Close", hint: "Closes the examples.") { dismiss() } } }
+            .accessibilityAction(.escape) { dismiss() }
+            .task {
+                do {
+                    examples = try await BudgetService().fetchCategoryExamples(code: code)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true }
+                } catch {
+                    errorMessage = "Couldn't load examples. \(error.localizedDescription)"
+                }
             }
         }
     }
