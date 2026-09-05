@@ -23,6 +23,10 @@ struct ScreenReaderSummaryHeader: View {
     /// Accent for the visual chip; state is never conveyed by color alone —
     /// the verdict word is always present.
     var tone: Tone = .neutral
+    /// A shorter line to DRAW when `detail` is long (the spoken label keeps
+    /// the full detail). Main screens stay concise; the rest is one tap
+    /// deeper (Liam, 2026-09-05).
+    var visualDetail: String? = nil
 
     enum Tone {
         case neutral, positive, watch, act
@@ -48,16 +52,16 @@ struct ScreenReaderSummaryHeader: View {
                     .frame(width: 10, height: 10)
                     .accessibilityHidden(true)
                 Text(verdict)
-                    .font(.title3.weight(.bold))
+                    .font(.haloTitle)
                     .foregroundColor(.haloTextPrimary)
                 Spacer()
             }
-            Text(detail)
+            Text(visualDetail ?? detail)
                 .font(.body)
                 .foregroundColor(.haloTextPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             if isEstimate {
-                Text(Self.disclaimer)
+                Text("Estimate. Social Security makes all actual decisions.")
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -65,8 +69,12 @@ struct ScreenReaderSummaryHeader: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.haloSecondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(
+            LinearGradient(colors: [tone.color.opacity(tone == .neutral ? 0.08 : 0.18), Color.haloSecondaryBackground],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(tone.color.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilitySortPriority(1000)

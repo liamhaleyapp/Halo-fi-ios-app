@@ -148,3 +148,73 @@ extension Color {
     static let haloPositive = DesignTokens.Status.positive
     static let haloNegative = DesignTokens.Status.negative
 }
+
+// MARK: - Type (2026-09-05 style pass)
+//
+// One "number voice" for the app: rounded, heavy display figures; rounded
+// bold titles. Body text stays the system face for legibility.
+extension Font {
+    /// Display figures (balances, totals). Scales with Dynamic Type via
+    /// the caller's @ScaledMetric.
+    static func haloDisplay(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .heavy, design: .rounded)
+    }
+    /// Card verdicts ("Balance", "On pace").
+    static let haloTitle = Font.system(.title3, design: .rounded).weight(.bold)
+    /// Row titles.
+    static let haloRowTitle = Font.system(.headline, design: .rounded)
+}
+
+// MARK: - Shared surfaces (2026-09-05 style pass)
+
+/// The icon tile at the head of every row and attention card: a small
+/// two-stop gradient of the tint with a white glyph and a soft colored
+/// shadow. Decorative — always hidden from VoiceOver.
+struct HaloIconTile: View {
+    let icon: String
+    let tint: Color
+    var size: CGFloat = 44
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(colors: [tint, tint.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .shadow(color: tint.opacity(0.35), radius: 6, y: 3)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Card surface: continuous corners, hairline border, optional tint wash
+/// (deadline cards) so state is felt and also written.
+struct HaloCardModifier: ViewModifier {
+    var tint: Color? = nil
+    var radius: CGFloat = 18
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                ZStack {
+                    Color.haloSecondaryBackground
+                    if let tint {
+                        LinearGradient(colors: [tint.opacity(0.16), tint.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder((tint ?? Color.haloSeparator).opacity(tint == nil ? 0.5 : 0.45), lineWidth: tint == nil ? 0.5 : 1)
+            )
+    }
+}
+
+extension View {
+    func haloCard(tint: Color? = nil, radius: CGFloat = 18) -> some View {
+        modifier(HaloCardModifier(tint: tint, radius: radius))
+    }
+}

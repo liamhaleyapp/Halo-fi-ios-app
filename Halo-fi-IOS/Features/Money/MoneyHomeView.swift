@@ -77,13 +77,7 @@ struct MoneyHomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         header
-                        AttentionStack(
-                            cards: budgetDataManager.attentionCards,
-                            moreCount: budgetDataManager.attentionMoreCount,
-                            isRefreshing: budgetDataManager.isLoading,
-                            onOpen: { open($0) },
-                            onNotNow: { card in Task { await budgetDataManager.dismissCard(card) } }
-                        )
+                        attentionRow
                         budgetRow
                         incomeRow
                         billsRow
@@ -114,6 +108,7 @@ struct MoneyHomeView: View {
             .navigationDestination(for: MoneyRoute.self) { route in
                 switch route {
                 case .budget: BudgetView()
+                case .attention: AttentionView(onOpen: { open($0) })
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
                 case .allTransactions: AllTransactionsView(initial: recentTransactions)
                 case .resourceMonitor: ResourceMonitorView()
@@ -177,7 +172,7 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case budget, accounts, allTransactions, resourceMonitor, income, bills, workExpenses
+        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, workExpenses
         case package(String?)
         case review(String)
     }
@@ -235,6 +230,32 @@ struct MoneyHomeView: View {
         }
     }
 
+    // MARK: - a2. Needs your attention (one row; the cards live on their own
+    // screen — Liam, 2026-09-05: the main screens stay concise)
+
+    private var attentionRow: some View {
+        let cards = budgetDataManager.attentionCards
+        let total = cards.count + budgetDataManager.attentionQueue.count
+        let top = cards.first
+        let tint: Color = {
+            switch top?.tone {
+            case "act": return .haloNegative
+            case "watch": return .orange
+            case "learn": return .indigo
+            case .some: return .blue
+            case .none: return .gray
+            }
+        }()
+        let line: String = {
+            guard let top else { return budgetDataManager.isLoading ? "Checking…" : "Nothing right now." }
+            if total == 1 { return top.title + "." }
+            return "\(VoiceOverFormatter.count(total, singular: "thing", plural: "things")). First: \(top.title)."
+        }()
+        return row(title: "Needs your attention", icon: "bell.badge.fill", tint: tint, line: line,
+                   hint: total == 0 ? "Opens the list. It is empty right now." : "Opens the list, most urgent first.",
+                   route: .attention)
+    }
+
     // MARK: - b. Budget row
 
     private var budgetRow: some View {
@@ -253,9 +274,9 @@ struct MoneyHomeView: View {
                 if let cadence = first.cadenceDays {
                     text += cadence == 14 ? " every 2 weeks" : cadence == 7 ? " every week" : cadence >= 28 ? " monthly" : cadence == 15 ? " twice a month" : ""
                 }
-                if s.workIncomeGrossCents > 0 { text += ", \(BudgetFormatter.cents(s.workIncomeGrossCents)) gross this month" }
-                if s.paychecksNeedingGross > 0 { text += ", \(VoiceOverFormatter.count(s.paychecksNeedingGross, singular: "paystub gross", plural: "paystub grosses")) still needed" }
-                return text + "."
+                text += "."
+                if s.paychecksNeedingGross > 0 { text += " \(VoiceOverFormatter.count(s.paychecksNeedingGross, singular: "paystub gross", plural: "paystub grosses")) needed." }
+                return text
             }
             if !s.sources.isEmpty { return "\(VoiceOverFormatter.count(s.sources.count, singular: "payer", plural: "payers")) learned. No work income labeled yet." }
             return "What your deposits are, learned as they arrive."
@@ -276,9 +297,6 @@ struct MoneyHomeView: View {
                 return unanswered > 0 ? "\(VoiceOverFormatter.count(unanswered, singular: "charge", plural: "charges")) waiting for a yes or no." : "No recurring charges spotted yet."
             }
             var text = "\(VoiceOverFormatter.count(confirmed.count, singular: "bill", plural: "bills")), about \(VoiceOverFormatter.dollars(b.monthlyBillsCents)) a month."
-            if let next = confirmed.compactMap({ s in s.nextExpected.map { ($0, s.merchant) } }).min(by: { $0.0 < $1.0 }) {
-                text += " Next: \(next.1), \(TabSummaries.spokenDate(next.0))."
-            }
             if unanswered > 0 { text += " \(unanswered) to answer." }
             return text
         }()
@@ -298,8 +316,7 @@ struct MoneyHomeView: View {
         } else {
             let names = items.map(\.institutionName)
             line = VoiceOverFormatter.count(snapshot.accountCount, singular: "account", plural: "accounts")
-            if !names.isEmpty { line += " at " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? " and more" : "") }
-            if manual > 0 { line += ", plus \(VoiceOverFormatter.count(manual, singular: "manual account", plural: "manual accounts"))" }
+            if !names.isEmpty { line += " at " + names.prefix(2).joined(separator: " and ") + (names.count > 2 ? " and more" : "") }
             line += "."
             if attention > 0 { line += " \(VoiceOverFormatter.count(attention, singular: "connection needs", plural: "connections need")) attention." }
         }
@@ -344,26 +361,19 @@ struct MoneyHomeView: View {
 
     private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
         NavigationLink(value: route) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 42, height: 42)
-                    .background(tint.opacity(0.16))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline).foregroundColor(.haloTextPrimary)
+            HStack(spacing: 14) {
+                HaloIconTile(icon: icon, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
             }
-            .padding(14)
-            .frame(minHeight: 64)
-            .background(Color.haloSecondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(16)
+            .frame(minHeight: 72)
+            .haloCard(tint: route == .attention && tint != .gray ? tint : nil)
         }
         .buttonStyle(HapticPlainButtonStyle())
         .accessibilityElement(children: .ignore)

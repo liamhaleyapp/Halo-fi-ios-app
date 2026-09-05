@@ -2,15 +2,60 @@
 //  AttentionStack.swift
 //  Halo-fi-IOS
 //
-//  "Needs your attention" under the balance card (Liam, 2026-09-05): up
-//  to three cards, most urgent first, each one VoiceOver element and one
-//  tap. Deadlines (resources, package, receipts, a bank to reconnect)
-//  navigate; learning questions (a deposit, a paycheck's gross, a likely
-//  work expense) open a one-question sheet. "Not now" hides a card for a
-//  week. Words carry the state, never color alone.
+//  "Needs your attention": the Money tab shows ONE row; this screen lists
+//  every card, most urgent first, each one VoiceOver element and one tap
+//  (Liam, 2026-09-05: main screens stay concise, detail is one tap deeper).
+//  Deadlines (resources, package, receipts, a bank to reconnect) navigate;
+//  learning questions (a deposit, a paycheck's gross, a likely work
+//  expense) open a one-question sheet. "Not now" hides a card for a week.
+//  Words carry the state, never color alone.
 //
 
 import SwiftUI
+
+struct AttentionView: View {
+    @Environment(BudgetDataManager.self) private var dataManager
+    let onOpen: (AttentionCard) -> Void
+
+    private var cards: [AttentionCard] { dataManager.attentionCards + dataManager.attentionQueue }
+
+    private var tone: ScreenReaderSummaryHeader.Tone {
+        switch cards.first?.tone {
+        case "act": return .act
+        case "watch": return .watch
+        case .some: return .neutral
+        case .none: return .positive
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ScreenReaderSummaryHeader(
+                    verdict: cards.isEmpty
+                        ? "Nothing needs you right now"
+                        : VoiceOverFormatter.count(cards.count, singular: "thing needs you", plural: "things need you"),
+                    detail: cards.isEmpty
+                        ? "New deposits, charges and deadlines show up here as they arrive."
+                        : "Most urgent first. Open one to handle it. Not now hides it for a week.",
+                    tone: tone
+                )
+                ForEach(cards) { card in
+                    AttentionCardView(card: card, onOpen: { onOpen(card) },
+                                      onNotNow: { Task { await dataManager.dismissCard(card) } })
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 100)
+            .readableContentWidth()
+        }
+        .background(Color.haloBackground.ignoresSafeArea())
+        .navigationTitle("Needs your attention")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await dataManager.refresh() }
+    }
+}
 
 struct AttentionStack: View {
     let cards: [AttentionCard]
@@ -108,28 +153,20 @@ struct AttentionCardView: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 42, height: 42)
-                    .background(tint.opacity(0.16))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(card.title).font(.headline).foregroundColor(.haloTextPrimary)
+            HStack(alignment: .top, spacing: 14) {
+                HaloIconTile(icon: icon, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(card.title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(card.line).font(.subheadline).foregroundColor(.haloTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
             }
-            .padding(14)
-            .frame(minHeight: 64)
-            .background(card.learn ? Color.haloSecondaryBackground : tint.opacity(0.10))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(card.learn ? Color.clear : tint.opacity(0.45), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(16)
+            .frame(minHeight: 72)
+            .haloCard(tint: card.learn ? nil : tint)
         }
         .buttonStyle(HapticPlainButtonStyle())
         .contextMenu {

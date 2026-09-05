@@ -158,9 +158,12 @@ final class TabHeaderUITests: XCTestCase {
         let app = launch("ssi_blind")
         openTab(app, "Money")
         XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention'")).firstMatch.waitForExistence(timeout: 10), "attention heading missing")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "attention row missing")
+        XCTAssertTrue(row.label.contains("First: Hand in August work expenses"), row.label)
+        row.tap()
         let package = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in August work expenses'")).firstMatch
-        XCTAssertTrue(package.exists, "deadline card missing")
+        XCTAssertTrue(package.waitForExistence(timeout: 10), "deadline card missing")
         let deposit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '$412.00 from ACME PAYROLL.'")).firstMatch
         XCTAssertTrue(scrollTo(deposit, in: app), "deposit card missing")
         deposit.tap()
@@ -172,19 +175,24 @@ final class TabHeaderUITests: XCTestCase {
     func testMoneyAttention_unansweredUser_isQuiet() {
         let app = launch("none")
         openTab(app, "Money")
-        let empty = app.staticTexts["Nothing needs you right now."]
-        XCTAssertTrue(scrollTo(empty, in: app), "empty state missing")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "attention row missing")
+        XCTAssertTrue(row.label.contains("Nothing right now."), row.label)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in'")).firstMatch.exists)
     }
 
     func testMoneyAttention_noneAnswered_onlyBankCard() {
         let app = launch("none_answered")
         openTab(app, "Money")
-        let bank = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reconnect Chase.'")).firstMatch
-        XCTAssertTrue(scrollTo(bank, in: app), "bank card missing")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in'")).firstMatch.exists)
         let income = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Income.'")).firstMatch
         XCTAssertTrue(scrollTo(income, in: app), "Income row missing")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(scrollTo(row, in: app), "attention row missing")
+        XCTAssertTrue(row.label.contains("Reconnect Chase."), row.label)
+        row.tap()
+        let bank = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reconnect Chase.'")).firstMatch
+        XCTAssertTrue(bank.waitForExistence(timeout: 10), "bank card missing")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hand in'")).firstMatch.exists)
     }
 
     func testMoneyHero_ssiWatch_speaksProjectionAndBillCardOpens() {
@@ -193,8 +201,11 @@ final class TabHeaderUITests: XCTestCase {
         let label = header(in: app).label
         XCTAssertTrue(label.contains("By October 1, about 1,940 dollars of 2,000 dollars, act now."), label)
         XCTAssertTrue(label.contains("1 possible bill not counted yet"), label)
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(scrollTo(row, in: app), "attention row missing")
+        row.tap()
         let bill = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Is XYZ Property a bill?'")).firstMatch
-        XCTAssertTrue(scrollTo(bill, in: app), "bill card missing")
+        XCTAssertTrue(bill.waitForExistence(timeout: 10), "bill card missing")
         bill.tap()
         XCTAssertTrue(app.buttons["Yes, it's a bill"].waitForExistence(timeout: 10), "bill sheet did not open")
         XCTAssertTrue(app.buttons["No, not a bill"].exists)

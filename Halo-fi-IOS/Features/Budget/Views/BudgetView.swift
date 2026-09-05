@@ -425,87 +425,85 @@ struct BudgetView: View {
 private struct BudgetHeroCard: View {
     let total: BudgetStatusTotal
 
+    @ScaledMetric(relativeTo: .largeTitle) private var figureSize: CGFloat = 40
+    @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 10
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Spent so far")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text(total.formatted["spent"] ?? "$0.00")
-                        .font(.largeTitle.weight(.bold))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                        .foregroundStyle(.white)
-                    Text("of \(total.formatted["limit"] ?? "$0.00") monthly budget")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle().fill(statusColor).frame(width: 10, height: 10)
+                Text(statusWord)
+                    .font(.haloTitle)
+                    .foregroundColor(.haloTextPrimary)
+                Spacer()
                 pctChip
             }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(total.formatted["spent"] ?? "$0.00")
+                    .font(.haloDisplay(figureSize))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .foregroundColor(.haloTextPrimary)
+                Text("spent of \(total.formatted["limit"] ?? "$0.00") this month")
+                    .font(.caption)
+                    .foregroundColor(.haloTextSecondary)
+            }
             progressBar
-            legend
+            Text("\(total.formatted["remaining"] ?? "$0.00") left")
+                .font(.subheadline)
+                .foregroundColor(.haloTextSecondary)
         }
         .padding(18)
-        .background(heroGradient, in: RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [statusColor.opacity(0.18), Color.haloSecondaryBackground],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(statusColor.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }
 
     private var pctChip: some View {
         Text("\(Int(total.pctUsed.rounded()))% used")
-            .font(.caption)
-            .fontWeight(.semibold)
+            .font(.caption.weight(.semibold))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.22), in: Capsule())
-            .foregroundStyle(.white)
+            .background(statusColor.opacity(0.16), in: Capsule())
+            .foregroundColor(.haloTextPrimary)
     }
 
     private var progressBar: some View {
         GeometryReader { geo in
             let pct = min(max(total.pctUsed / 100.0, 0), 1)
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.22))
+                Capsule().fill(Color.haloTextTertiary.opacity(0.25))
                 Capsule()
-                    .fill(progressColor)
-                    .frame(width: geo.size.width * CGFloat(pct))
+                    .fill(statusColor)
+                    .frame(width: max(barHeight, geo.size.width * CGFloat(pct)))
             }
         }
-        .frame(height: 8)
+        .frame(height: barHeight)
     }
 
-    private var legend: some View {
-        HStack {
-            Text("$0")
-            Spacer()
-            Text("\(total.formatted["remaining"] ?? "$0.00") remaining")
-            Spacer()
-            Text(total.formatted["limit"] ?? "$0.00")
-        }
-        .font(.caption2)
-        .foregroundStyle(.white.opacity(0.75))
-    }
-
-    private var progressColor: Color {
+    /// The state in a word; color only echoes it.
+    private var statusWord: String {
         switch total.status {
-        case "over":     return Color(red: 1.00, green: 0.45, blue: 0.35)
-        case "behind":   return Color(red: 1.00, green: 0.65, blue: 0.25)
-        case "ahead":    return Color(red: 0.40, green: 0.85, blue: 0.55)
-        default:         return Color(red: 0.95, green: 0.80, blue: 0.35)
+        case "over":   return "Over budget"
+        case "behind": return "Spending fast"
+        case "ahead":  return "Under budget"
+        default:       return "On pace"
         }
     }
 
-    private var heroGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.16, green: 0.22, blue: 0.48),
-                Color(red: 0.10, green: 0.14, blue: 0.32),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var statusColor: Color {
+        switch total.status {
+        case "over":   return .haloNegative
+        case "behind": return .orange
+        case "ahead":  return .haloPositive
+        default:       return .blue
+        }
     }
 
     private var accessibilityLabel: String {
@@ -521,30 +519,39 @@ private struct BudgetHeroCard: View {
 private struct NoBudgetHeroCard: View {
     let spending: BudgetSpending
 
+    @ScaledMetric(relativeTo: .largeTitle) private var figureSize: CGFloat = 40
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Spent this month")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle().fill(Color.blue).frame(width: 10, height: 10)
+                Text("Spending")
+                    .font(.haloTitle)
+                    .foregroundColor(.haloTextPrimary)
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(spending.formatted["total"] ?? "$0.00")
+                    .font(.haloDisplay(figureSize))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .foregroundColor(.haloTextPrimary)
+                Text("spent this month")
+                    .font(.caption)
+                    .foregroundColor(.haloTextSecondary)
+            }
+            Text("No budget yet. Ask Halo to set one up.")
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.75))
-            Text(spending.formatted["total"] ?? "$0.00")
-                .font(.largeTitle.weight(.bold))
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                .foregroundStyle(.white)
-            Text("Set up a budget to track progress — ask Halo to get started.")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundColor(.haloTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(
-            LinearGradient(
-                colors: [Color.blue.opacity(0.55), Color.blue.opacity(0.30)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16)
+            LinearGradient(colors: [Color.blue.opacity(0.18), Color.haloSecondaryBackground],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Spent \(spending.formatted["total"] ?? "zero dollars") this month. No budget set yet.")
     }

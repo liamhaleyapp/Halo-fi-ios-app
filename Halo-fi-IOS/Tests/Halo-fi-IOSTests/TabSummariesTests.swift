@@ -121,7 +121,7 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         let s = TabSummaries.money(snapshot(resources(status: "ok")), capabilities: ssiCaps)
         #expect(s.verdict == "Balance")
         #expect(s.detail.hasPrefix("Cash 1,214 dollars across 2 accounts. Owed 1,870 dollars. Counts toward your SSI limit: 1,214 dollars of 2,000 dollars, on track."))
-        #expect(s.subline == "Counts toward your SSI limit: 1,214 dollars of 2,000 dollars, on track.")
+        #expect(s.subline == nil)   // the gauge draws the counted figure; nothing else to draw without a projection
         #expect(s.isEstimate)
         #expect(s.tone == .positive)
     }

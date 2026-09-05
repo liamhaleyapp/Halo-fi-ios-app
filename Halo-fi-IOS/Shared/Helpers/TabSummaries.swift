@@ -22,6 +22,9 @@ struct TabSummary: Equatable {
     /// shows the first sentence of `detail`). Explicit, so adding a
     /// sentence to `detail` never silently changes what is visible.
     var subline: String? = nil
+    /// The short line DRAWN under the verdict on a tab header when `detail`
+    /// is long. Spoken output always uses `detail`.
+    var visual: String? = nil
 
     var spoken: String {
         var parts = ["\(verdict).", detail]
@@ -72,15 +75,15 @@ enum TabSummaries {
                 line += " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
             }
             detail += " " + line
-            sublines.append(line)
-            // The forward number (2026-09-05): what the 1st looks like once
-            // the expected money lands and the confirmed bills go out.
+            // The gauge already draws the counted figure; the only drawn
+            // sentence is the forward number (2026-09-05), one line. The
+            // possible-bill note is spoken and lives on the monitor.
             if let proj = res.projection {
-                var forward = "By \(spokenDate(proj.measurementDateIso)), about \(VoiceOverFormatter.dollars(proj.projectedCents)) of \(VoiceOverFormatter.dollars(proj.limitCents)), \(proj.stateWords)."
-                if proj.unconfirmedBillCount > 0 {
-                    forward += " \(VoiceOverFormatter.count(proj.unconfirmedBillCount, singular: "possible bill", plural: "possible bills")) not counted yet."
-                }
+                let forward = "By \(spokenDate(proj.measurementDateIso)), about \(VoiceOverFormatter.dollars(proj.projectedCents)) of \(VoiceOverFormatter.dollars(proj.limitCents)), \(proj.stateWords)."
                 detail += " " + forward
+                if proj.unconfirmedBillCount > 0 {
+                    detail += " \(VoiceOverFormatter.count(proj.unconfirmedBillCount, singular: "possible bill", plural: "possible bills")) not counted yet."
+                }
                 sublines.append(forward)
             }
         }
@@ -98,9 +101,7 @@ enum TabSummaries {
         guard let total = s.budgetTotal else {
             return "No budget yet. Spent \(VoiceOverFormatter.dollars(s.spentCents)) this month."
         }
-        var line = "Spent \(VoiceOverFormatter.dollars(total.spentCents)) of \(VoiceOverFormatter.dollars(total.limitCents)) this month"
-        if let days = s.daysLeft { line += ", \(days == 1 ? "1 day" : "\(days) days") left" }
-        line += "."
+        var line = "Spent \(VoiceOverFormatter.dollars(total.spentCents)) of \(VoiceOverFormatter.dollars(total.limitCents))."
         if let over = s.firstOverCategory { line += " Over in \(over)." }
         return line
     }
@@ -140,34 +141,36 @@ enum TabSummaries {
                 return " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
             }()
 
+            // Drawn line: one short sentence; the full detail is spoken.
+            let resourcesShort = (resourcesLine + measures).trimmingCharacters(in: .whitespaces)
             if status == "over" {
-                return TabSummary(verdict: "Over the SSI resource limit", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act)
+                return TabSummary(verdict: "Over the SSI resource limit", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act, visual: resourcesShort)
             }
             if status == "critical" {
-                return TabSummary(verdict: "Act now on resources", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act)
+                return TabSummary(verdict: "Act now on resources", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act, visual: resourcesShort)
             }
             if let packageDue {
-                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch)
+                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch, visual: packageLine(packageDue))
             }
             if let receipts {
-                return TabSummary(verdict: receipts, detail: "Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch)
+                return TabSummary(verdict: receipts, detail: "Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch, visual: "Attach them under Work expenses.")
             }
             if status == "warning" {
-                return TabSummary(verdict: "Resources getting close", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .watch)
+                return TabSummary(verdict: "Resources getting close", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .watch, visual: resourcesShort)
             }
             let detail = ("Your SSI. " + resourcesLine + projected + " " + expenses).replacingOccurrences(of: "  ", with: " ")
-            return TabSummary(verdict: "Your SSI is on track", detail: detail, isEstimate: true, tone: .positive)
+            return TabSummary(verdict: "Your SSI is on track", detail: detail, isEstimate: true, tone: .positive, visual: resourcesLine.isEmpty ? nil : resourcesLine)
         }
         if capabilities.showsSSDILane {
             if let packageDue {
-                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSDI. \(expenses)", isEstimate: true, tone: .watch)
+                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSDI. \(expenses)", isEstimate: true, tone: .watch, visual: packageLine(packageDue))
             }
             if let receipts {
-                return TabSummary(verdict: receipts, detail: "Your SSDI. \(expenses)", isEstimate: true, tone: .watch)
+                return TabSummary(verdict: receipts, detail: "Your SSDI. \(expenses)", isEstimate: true, tone: .watch, visual: "Attach them under Work expenses.")
             }
             // The "work incentives coming later" note is the card below the
             // header; the header says it once, not twice (2026-09-05).
-            return TabSummary(verdict: "Your SSDI", detail: expenses, isEstimate: true, tone: .neutral)
+            return TabSummary(verdict: "Your SSDI", detail: expenses, isEstimate: true, tone: .neutral, visual: expensesShortLine(expensesThisMonth, expensesTotalCents))
         }
         // Not answered yet: nothing about either program is shown; the only
         // thing on the tab is the way to start. (Answered "no SSI, no SSDI"
@@ -178,6 +181,26 @@ enum TabSummaries {
             isEstimate: false,
             tone: .neutral
         )
+    }
+
+    /// The drawn version of `expensesLine`: count and total only.
+    static func expensesShortLine(_ count: Int, _ totalCents: Int) -> String {
+        let month = DateFormatter().monthSymbols[Calendar.current.component(.month, from: Date()) - 1]
+        guard count > 0 else { return "\(month): none logged yet." }
+        return "\(month): \(VoiceOverFormatter.count(count, singular: "expense", plural: "expenses")), \(VoiceOverFormatter.dollars(totalCents))."
+    }
+
+    /// "August package is ready. Due by September 6." — the drawn line for
+    /// a submit reminder; the reminder body is spoken.
+    static func packageLine(_ reminder: SSIReminder) -> String {
+        var line = "\(monthName(reminder.month)) package is ready."
+        if let due = reminder.dueOn { line += " Due by \(spokenDate(due))." }
+        return line
+    }
+
+    static func monthName(_ key: String?) -> String {
+        guard let key, key.count >= 7, let m = Int(key.dropFirst(5).prefix(2)), (1...12).contains(m) else { return "Last month's" }
+        return DateFormatter().monthSymbols[m - 1]
     }
 
     static func expensesLine(_ count: Int, _ totalCents: Int, _ impactCents: Int) -> String {

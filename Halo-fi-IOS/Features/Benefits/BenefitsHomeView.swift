@@ -191,7 +191,8 @@ struct BenefitsHomeView: View {
             verdict: summary.verdict,
             detail: summary.detail,
             isEstimate: summary.isEstimate,
-            tone: summary.tone
+            tone: summary.tone,
+            visualDetail: summary.visual
         )
     }
 
@@ -202,13 +203,17 @@ struct BenefitsHomeView: View {
             title: "Work expenses",
             icon: "briefcase.fill",
             tone: .neutral,
-            line: TabSummaries.expensesLine(
+            line: TabSummaries.expensesShortLine(
+                dataManager.ssiManualDeductions.count,
+                dataManager.ssiManualDeductions.reduce(0) { $0 + $1.amountCents }
+            ),
+            estimate: expensesImpact > 0,
+            route: .workExpenses,
+            spokenLine: TabSummaries.expensesLine(
                 dataManager.ssiManualDeductions.count,
                 dataManager.ssiManualDeductions.reduce(0) { $0 + $1.amountCents },
                 expensesImpact
-            ),
-            estimate: expensesImpact > 0,
-            route: .workExpenses
+            )
         )
     }
 
@@ -216,8 +221,8 @@ struct BenefitsHomeView: View {
 
     private var monthlyPackageRow: some View {
         let submit = dataManager.ssiReminders.first { $0.kind == "submit_package" }
-        let line = submit.map { "\($0.title). \($0.body)" }
-            ?? "Last month's SSA-795 package: cover, ledger and receipts. Share, print, or send it to yourself."
+        let line = submit.map { TabSummaries.packageLine($0) }
+            ?? "Last month's SSA-795 package."
         return row(
             title: "Monthly package",
             icon: "doc.text.fill",
@@ -225,40 +230,38 @@ struct BenefitsHomeView: View {
             line: line,
             estimate: true,
             route: .monthlyPackage(submit?.month),
-            spokenLine: submit.map { "\($0.title)." } ?? "Last month's SSA-795 package.",
+            spokenLine: submit.map { "\($0.title). \($0.body)" } ?? "Last month's SSA-795 package.",
             hint: "Opens the package: cover, ledger and receipts. Share, print, or send it to yourself."
         )
     }
 
     private var lockedBWERow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lock.fill").foregroundColor(.haloTextSecondary).frame(width: 36).accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 14) {
+            HaloIconTile(icon: "lock.fill", tint: .gray)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Blind Work Expenses — locked").font(.headline).foregroundColor(.haloTextPrimary)
-                Text("Locked until Social Security's record confirms statutory blindness. Here's how to check: your award letter or a BPQY from 1-800-772-1213. Update it in Settings, Benefits profile.")
+                Text("Locked until Social Security's record confirms statutory blindness. Update it in Settings, Benefits profile.")
                     .font(.subheadline).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(14)
-        .background(Color.haloSecondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(16)
+        .haloCard()
         .accessibilityElement(children: .combine)
     }
 
     private var ssdiLaneRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lock.fill").foregroundColor(.haloTextSecondary).frame(width: 36).accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 14) {
+            HaloIconTile(icon: "lock.fill", tint: .gray)
             VStack(alignment: .leading, spacing: 4) {
                 Text("SSDI work incentives — coming soon").font(.headline).foregroundColor(.haloTextPrimary)
-                Text("Trial Work Period and substantial-gainful-activity tracking arrive in a later update. Your work expenses still count as IRWE today.")
+                Text("Trial Work Period tracking arrives in a later update. Work expenses still count as IRWE.")
                     .font(.subheadline).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(14)
-        .background(Color.haloSecondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(16)
+        .haloCard()
         .accessibilityElement(children: .combine)
     }
 
@@ -270,7 +273,7 @@ struct BenefitsHomeView: View {
             title: "Learn",
             icon: "book.fill",
             tone: .neutral,
-            line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")): " + cards.map { $0.title }.joined(separator: ", ") + ".",
+            line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")).",
             estimate: false,
             route: .learn,
             spokenLine: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")).",
@@ -346,16 +349,10 @@ struct BenefitsHomeView: View {
             ? "\(state) \(hint ?? "Opens \(title.lowercased()).")"
             : (hint ?? "Opens \(title.lowercased()).")
         return NavigationLink(value: route) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 42, height: 42)
-                    .background(tint.opacity(0.16))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline).foregroundColor(.haloTextPrimary)
+            HStack(spacing: 14) {
+                HaloIconTile(icon: icon, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if estimate {
@@ -363,12 +360,11 @@ struct BenefitsHomeView: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
             }
-            .padding(14)
-            .frame(minHeight: 64)
-            .background(Color.haloSecondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(16)
+            .frame(minHeight: 72)
+            .haloCard(tint: tone == .neutral ? nil : tint)
         }
         .buttonStyle(HapticPlainButtonStyle())
         .accessibilityElement(children: .ignore)

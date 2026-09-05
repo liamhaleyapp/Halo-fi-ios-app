@@ -348,6 +348,7 @@ final class BudgetDataManager {
     func dismissCard(_ card: AttentionCard, days: Int = 7) async {
         attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
+        attentionQueue.removeAll { $0.id == card.id }
         do { try await AttentionService.shared.dismiss(cardId: card.id, days: days) } catch {
             Logger.warning("BudgetDataManager: dismiss failed: \(error)")
         }
@@ -362,6 +363,7 @@ final class BudgetDataManager {
     func resolveCard(_ card: AttentionCard, refresh: Bool = true) {
         attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
+        attentionQueue.removeAll { $0.id == card.id }
         attentionQueue.removeAll { $0.id == card.id }
         // Same payer answered → its other deposits are labeled server-side.
         if card.kind == "deposit_label", let source = card.payload.source {
