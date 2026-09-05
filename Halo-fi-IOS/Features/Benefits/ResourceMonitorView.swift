@@ -114,7 +114,7 @@ struct ResourceMonitorView: View {
                 actionButton("Move to ABLE", icon: "arrow.down.to.line.circle") { explainer = .moveToABLE }
             }
             actionButton("Spending that counts", icon: "cart") { explainer = .spendingThatCounts }
-            actionButton("Ask my counselor", icon: "person.wave.2") { openURL(ProfileExplainer.wipaURL) }
+            actionButton("Ask my counselor", icon: "person.wave.2") { InAppBrowser.open(ProfileExplainer.wipaURL) }
         }
         .padding(.top, 4)
     }
@@ -189,7 +189,7 @@ struct ResourceMonitorView: View {
     }
 
     private var counselorButton: some View {
-        Button { openURL(ProfileExplainer.wipaURL) } label: {
+        Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
             Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                 .font(.body.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 56)

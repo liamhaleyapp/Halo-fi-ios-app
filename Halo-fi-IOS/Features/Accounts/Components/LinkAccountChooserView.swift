@@ -48,7 +48,7 @@ struct LinkAccountChooserView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
-          Button("Cancel") { dismiss() }
+          CloseToolbarButton(label: "Cancel") { dismiss() }
             .foregroundColor(Color.haloTextPrimary)
         }
       }

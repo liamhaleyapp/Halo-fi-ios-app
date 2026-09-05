@@ -80,7 +80,7 @@ struct ReceiptCaptureView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    CloseToolbarButton(label: "Cancel") { dismiss() }
                 }
             }
             .onAppear {

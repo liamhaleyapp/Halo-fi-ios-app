@@ -155,12 +155,9 @@ enum TabSummaries {
             if let receipts {
                 return TabSummary(verdict: receipts, detail: "Your SSDI. \(expenses)", isEstimate: true, tone: .watch)
             }
-            return TabSummary(
-                verdict: "Your SSDI",
-                detail: "Work incentives tracking for SSDI is coming in a later update. " + expenses,
-                isEstimate: true,
-                tone: .neutral
-            )
+            // The "work incentives coming later" note is the card below the
+            // header; the header says it once, not twice (2026-09-05).
+            return TabSummary(verdict: "Your SSDI", detail: expenses, isEstimate: true, tone: .neutral)
         }
         // Not answered yet: nothing about either program is shown; the only
         // thing on the tab is the way to start. (Answered "no SSI, no SSDI"

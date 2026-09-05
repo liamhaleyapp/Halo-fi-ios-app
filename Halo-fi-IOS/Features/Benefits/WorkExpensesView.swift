@@ -16,7 +16,6 @@ struct WorkExpensesView: View {
     @Environment(\.openURL) private var openURL
 
     @State private var showingLogSheet = false
-    @State private var showingVoiceLog = false
     @State private var handoffReceipt: CapturedReceipt?
     @State private var handoffDraft: WorkExpenseDraft?
     @State private var receiptAttachTarget: SSIManualDeduction?
@@ -66,7 +65,7 @@ struct WorkExpensesView: View {
                         guard let assetId = entry.receiptAssetId else { return }
                         Task {
                             if let url = try? await ReceiptService.shared.viewURL(assetId: assetId) {
-                                openURL(url)
+                                InAppBrowser.open(url)
                             } else {
                                 UIAccessibility.post(notification: .announcement, argument: "Couldn't open the receipt right now.")
                             }
@@ -87,7 +86,7 @@ struct WorkExpensesView: View {
                 Text(ScreenReaderSummaryHeader.disclaimer)
                     .font(.caption).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button { openURL(ProfileExplainer.wipaURL) } label: {
+                Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
                     Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                         .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 56)
@@ -109,6 +108,14 @@ struct WorkExpensesView: View {
                 initialReceipt: handoffReceipt,
                 initialDraft: handoffDraft,
                 onSave: { draft in
+                    if let transactionId = draft.transactionId {
+                        // Picked from the bank feed: log it against that
+                        // charge, so it is matched and never double-counted.
+                        try await dataManager.logTransactionDeduction(
+                            transactionId: transactionId, type: draft.type, description: draft.description,
+                            notes: draft.notes, receipt: draft.receipt)
+                        return
+                    }
                     let formatter = DateFormatter()
                     formatter.locale = Locale(identifier: "en_US_POSIX")
                     formatter.dateFormat = "yyyy-MM-dd"
@@ -117,9 +124,6 @@ struct WorkExpensesView: View {
                         occurredOn: formatter.string(from: draft.occurredOn), notes: draft.notes, receipt: draft.receipt)
                 }
             )
-        }
-        .fullScreenCover(isPresented: $showingVoiceLog) {
-            ConversationView(customGreetingId: "deduction_intake")
         }
         .sheet(item: $receiptAttachTarget) { entry in
             ReceiptCaptureView { captured in Task { await attachReceipt(captured, to: entry) } }
@@ -166,23 +170,17 @@ struct WorkExpensesView: View {
         .accessibilityHint("Goes through each expense one at a time. Keep or remove; the running total is read after every step.")
     }
 
+    /// One way in (Liam, 2026-09-05): the form, which can pull the charge
+    /// from your transactions or read a receipt. Voice logging lives on
+    /// the Agent tab as the "Log a work expense" shortcut.
     private var logButtons: some View {
-        HStack(spacing: 10) {
-            Button { showingLogSheet = true } label: {
-                Label("Log an expense", systemImage: "plus.circle.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityHint("Opens the form. You can add a receipt photo and Halo reads it for you.")
-            Button { showingVoiceLog = true } label: {
-                Label("Tell Halo", systemImage: "mic.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityHint("Log it by voice. Halo will remind you to add the receipt.")
+        Button { showingLogSheet = true } label: {
+            Label("Log an expense", systemImage: "plus.circle.fill")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 56)
         }
+        .buttonStyle(.borderedProminent)
+        .accessibilityHint("Opens the form. Pick the charge from your transactions, or add a receipt photo and Halo reads it.")
     }
 
     private func takeHandoffs() {

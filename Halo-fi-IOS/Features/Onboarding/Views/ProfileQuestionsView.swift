@@ -327,7 +327,7 @@ struct ProfileExplainerSheet: View {
 
                     if let title = explainer.linkTitle, let url = explainer.linkURL {
                         Button {
-                            openURL(url)
+                            InAppBrowser.open(url)
                         } label: {
                             Label(title, systemImage: "person.wave.2")
                                 .font(.body.weight(.semibold))
@@ -352,7 +352,7 @@ struct ProfileExplainerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { onContinue() }
+                    CloseToolbarButton(hint: "Closes the explanation and continues.") { onContinue() }
                 }
             }
             .onAppear {

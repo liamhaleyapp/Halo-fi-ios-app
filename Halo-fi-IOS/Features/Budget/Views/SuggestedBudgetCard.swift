@@ -137,7 +137,7 @@ struct AddCategorySheet: View {
             .navigationTitle("Add category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isSaving ? "Saving…" : "Add") { save() }
                         .disabled(isSaving || category.isEmpty || Double(amountText) == nil)

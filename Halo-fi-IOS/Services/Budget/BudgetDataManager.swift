@@ -295,6 +295,35 @@ final class BudgetDataManager {
         await refresh()
     }
 
+    /// Log an expense picked from the bank feed (the work-expense form's
+    /// "Find it in your transactions"): the same exclusion path the
+    /// candidate cards use, so the charge is matched and never counted
+    /// twice.
+    func logTransactionDeduction(
+        transactionId: String,
+        type: SSIExclusionType,
+        description: String,
+        notes: String? = nil,
+        receipt: ManualDeductionReceiptFields = ManualDeductionReceiptFields()
+    ) async throws {
+        var request = SSICreateExclusionRequest(
+            transactionId: transactionId,
+            exclusionType: type,
+            description: description.isEmpty ? "Bank transaction" : description,
+            notes: notes
+        )
+        request.receiptAssetId = receipt.assetId
+        request.receiptPending = receipt.pending
+        request.counselorQuestion = receipt.counselorQuestion
+        do {
+            _ = try await ssiService.confirm(request)
+        } catch {
+            Logger.error("BudgetDataManager: log transaction deduction failed: \(error)")
+            throw error
+        }
+        await refresh()
+    }
+
     /// Log a manual deduction (Phase 8 — voice or UI entry). After
     /// success, refreshes the whole overview so projected SSI math
     /// reflects the new deduction.

@@ -278,12 +278,18 @@ struct SSICreateExclusionRequest: Encodable, Equatable {
     /// WP3: required — every logged expense carries a description.
     let description: String
     let notes: String?
+    var receiptAssetId: String? = nil
+    var receiptPending: Bool = false
+    var counselorQuestion: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case transactionId = "transaction_id"
         case exclusionType = "exclusion_type"
         case description
         case notes
+        case receiptAssetId = "receipt_asset_id"
+        case receiptPending = "receipt_pending"
+        case counselorQuestion = "counselor_question"
     }
 }
 

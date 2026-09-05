@@ -327,14 +327,14 @@ struct BenefitsHomeView: View {
                let withState = URL(string: "https://choosework.ssa.gov/findhelp/result?option=stateList&state=\(state)") {
                 url = withState
             }
-            openURL(url)
+            InAppBrowser.open(url)
         } label: {
             Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                 .font(.body.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 56)
         }
         .buttonStyle(.borderedProminent)
-        .accessibilityHint("Opens the Social Security counselor finder for your state.")
+        .accessibilityHint("Opens the Social Security counselor finder for your state, inside the app. Close returns here.")
         .padding(.top, 8)
     }
 
@@ -484,7 +484,7 @@ struct LearnListView: View {
                     .accessibilityLabel("\(card.title). \(card.summary)")
                     .accessibilityHint("Opens a short explainer.")
                 }
-                Button { openURL(ProfileExplainer.wipaURL) } label: {
+                Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
                     Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                         .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 56)
@@ -520,7 +520,7 @@ struct LearnCardView: View {
                 Text(ScreenReaderSummaryHeader.disclaimer)
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
-                Button { openURL(ProfileExplainer.wipaURL) } label: {
+                Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
                     Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                         .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 56)

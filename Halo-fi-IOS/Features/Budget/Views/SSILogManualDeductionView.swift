@@ -25,6 +25,9 @@ struct ManualDeductionDraft: Equatable {
     var occurredOn: Date
     var notes: String?
     var receipt: ManualDeductionReceiptFields
+    /// Set when the expense was picked from the bank feed: it is logged
+    /// against that charge (matched, never double-counted).
+    var transactionId: String? = nil
 }
 
 struct SSILogManualDeductionView: View {
@@ -38,7 +41,10 @@ struct SSILogManualDeductionView: View {
     let onSave: (ManualDeductionDraft) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(BankDataManager.self) private var bankDataManager
     @State private var amountText: String = ""
+    @State private var showingTransactionPicker = false
+    @State private var linkedTransaction: Transaction?
     @State private var description: String = ""
     @State private var selectedType: SSIExclusionType
     @State private var occurredOn: Date = Date()
@@ -85,6 +91,7 @@ struct SSILogManualDeductionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                transactionSection
                 receiptSection
 
                 Section {
@@ -177,7 +184,7 @@ struct SSILogManualDeductionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    CloseToolbarButton(label: "Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isSubmitting ? "Saving…" : "Save") {
@@ -191,6 +198,11 @@ struct SSILogManualDeductionView: View {
                     handle(captured)
                 }
             }
+            .sheet(isPresented: $showingTransactionPicker) {
+                TransactionPickerView(bankDataManager: bankDataManager) { picked in
+                    apply(picked)
+                }
+            }
             .onAppear {
                 if let initialReceipt, receipt == nil {
                     handle(initialReceipt)
@@ -198,6 +210,71 @@ struct SSILogManualDeductionView: View {
             }
             .accessibilityAction(.escape) { dismiss() }
         }
+    }
+
+    // MARK: - From your transactions (Liam, 2026-09-05)
+
+    private var transactionSection: some View {
+        Section {
+            Button {
+                showingTransactionPicker = true
+            } label: {
+                Label(linkedTransaction == nil ? "Find it in your transactions" : "Change the transaction",
+                      systemImage: "magnifyingglass")
+                    .frame(minHeight: 44)
+            }
+            .accessibilityHint("Search your bank charges by name, like Uber, and pick one. The amount, date and description fill in from it.")
+            if let tx = linkedTransaction {
+                HStack {
+                    Image(systemName: "link").foregroundColor(.blue).accessibilityHidden(true)
+                    Text("\(tx.merchantName ?? tx.name), \(Self.spokenDate(tx.transactionDate)), \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded())))")
+                        .font(.subheadline)
+                        .foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button {
+                        linkedTransaction = nil
+                        UIAccessibility.post(notification: .announcement, argument: "Transaction unlinked. The amount and date stay as typed.")
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.haloTextTertiary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Unlink transaction")
+                }
+                .accessibilityElement(children: .contain)
+            }
+        } footer: {
+            Text(linkedTransaction == nil
+                 ? "Paid by card or from your bank account? Pick the charge and the amount, date and description fill in."
+                 : "Logged against that charge, so it is matched and never counted twice. Edit anything before saving.")
+        }
+    }
+
+    private func apply(_ tx: Transaction) {
+        linkedTransaction = tx
+        amountText = String(format: "%.2f", abs(tx.amount))
+        if description.trimmingCharacters(in: .whitespaces).isEmpty {
+            description = tx.merchantName ?? tx.name
+        }
+        if let date = Self.isoDate.date(from: String(tx.transactionDate.prefix(10))) {
+            occurredOn = min(date, Date())
+        }
+        Haptics.engine.play(.tapLight)
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "Filled in from \(tx.merchantName ?? tx.name): \(VoiceOverFormatter.dollarsAndCents(Int((abs(tx.amount) * 100).rounded()))) on \(Self.spokenDate(tx.transactionDate)). Check the description, then save."
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focus = .description }
+    }
+
+    private static let isoDate: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+
+    private static func spokenDate(_ iso: String) -> String {
+        guard let d = isoDate.date(from: String(iso.prefix(10))) else { return iso }
+        return spokenDateFormatter.string(from: d)
     }
 
     // MARK: - Receipt section
@@ -409,7 +486,8 @@ struct SSILogManualDeductionView: View {
             description: trimmedDesc,
             occurredOn: occurredOn,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            receipt: receiptFields
+            receipt: receiptFields,
+            transactionId: linkedTransaction?.idTransaction
         )
 
         isSubmitting = true

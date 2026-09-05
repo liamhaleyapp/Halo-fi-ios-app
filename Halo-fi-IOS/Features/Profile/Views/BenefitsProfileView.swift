@@ -239,12 +239,12 @@ struct BenefitsProfileView: View {
 
             Section {
                 Button {
-                    openURL(ProfileExplainer.wipaURL)
+                    InAppBrowser.open(ProfileExplainer.wipaURL)
                 } label: {
                     Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                         .frame(minHeight: 44)
                 }
-                .accessibilityHint("Opens the Social Security counselor finder in your browser.")
+                .accessibilityHint("Opens the Social Security counselor finder inside the app. Close returns here.")
             } footer: {
                 Text("Estimate for education only — Social Security makes all actual decisions.")
             }

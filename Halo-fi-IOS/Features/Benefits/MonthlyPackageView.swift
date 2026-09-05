@@ -337,7 +337,7 @@ struct MonthlyPackageView: View {
     }
 
     private var counselorButton: some View {
-        Button { openURL(ProfileExplainer.wipaURL) } label: {
+        Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
             Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
                 .font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 56)
         }

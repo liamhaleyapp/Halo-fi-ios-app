@@ -147,7 +147,7 @@ struct BiometricSettingsEnrollmentSheet: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
+          CloseToolbarButton(label: "Cancel") {
             onComplete(false)
             dismiss()
           }

@@ -80,7 +80,7 @@ struct ShortcutsSheet: View {
             .background(Color.haloBackground.ignoresSafeArea())
             .navigationTitle("Shortcuts")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(hint: "Goes back to the conversation.") { dismiss() } } }
             .accessibilityAction(.escape) { dismiss() }
         }
         .presentationDetents([.medium, .large])

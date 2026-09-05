@@ -59,7 +59,7 @@ struct SSILoggedDeductionsCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Logged deductions")
+                    Text("Logged this month")
                         .font(.headline)
                         .foregroundStyle(.primary)
                     if let line = totalsLine {
@@ -97,12 +97,8 @@ struct SSILoggedDeductionsCard: View {
                     .accessibilityLabel("Export this month's SSI deductions")
                     .accessibilityHint("Opens a menu to email the CSV to a recipient you choose, or share it via the system share sheet.")
                 }
-                Button(action: onAdd) {
-                    Label("Add", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Add a manual SSI deduction")
+                // No second "Add" here: "Log an expense" above the list is
+                // the one way in (it read as two different things, 2026-09-05).
             }
             if let exportError {
                 Text(exportError)
@@ -118,7 +114,7 @@ struct SSILoggedDeductionsCard: View {
             }
 
             if deductions.isEmpty {
-                Text("Nothing logged this month yet. Tell Halo \"save \(expenseType == .bwe ? "fifty dollars on Uber as a BWE" : "fifty dollars on copays as IRWE")\", or tap Add.")
+                Text("Nothing logged this month yet. Tap Log an expense above\(expenseType == .bwe ? " — Uber to work, readers, guide dog costs all count" : " — medication, devices and rides you need because of your condition count").")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)

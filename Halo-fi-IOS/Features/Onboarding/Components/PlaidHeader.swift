@@ -13,7 +13,7 @@ struct PlaidHeader: View {
   var body: some View {
     VStack(spacing: 16) {
       HStack {
-        Button("Cancel") {
+        CloseToolbarButton(label: "Cancel", hint: "Stops linking a bank and goes back.") {
           onCancel()
         }
         .foregroundColor(.white)
