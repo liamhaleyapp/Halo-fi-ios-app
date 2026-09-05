@@ -133,6 +133,9 @@ struct DepositLabelSheet: View {
                                 }
                                 .buttonStyle(HapticPlainButtonStyle())
                                 .disabled(isSaving)
+                                .accessibilityHint(kind == .workIncome
+                                                   ? "Opens one more question: the gross on the paystub."
+                                                   : "Saves it and loads the next deposit, if there is one.")
                                 .accessibilityIdentifier("depositKind-\(kind.rawValue)")
                             }
                         }
@@ -152,6 +155,7 @@ struct DepositLabelSheet: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(isSaving)
+                            .accessibilityHint("Saves that gross and loads the next deposit, if there is one.")
                         }
                         HStack {
                             Text("$").font(.title2)
@@ -257,6 +261,7 @@ struct DepositLabelSheet: View {
                 Text("Done").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityHint("Closes this and returns to Money.")
         }
     }
 

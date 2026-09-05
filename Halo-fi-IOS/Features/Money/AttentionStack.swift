@@ -41,8 +41,14 @@ struct AttentionView: View {
                     tone: tone
                 )
                 ForEach(cards) { card in
-                    AttentionCardView(card: card, onOpen: { onOpen(card) },
-                                      onNotNow: { Task { await dataManager.dismissCard(card) } })
+                    AttentionCardView(card: card, onOpen: { onOpen(card) }, onNotNow: {
+                        Task {
+                            await dataManager.dismissCard(card)
+                            let left = cards.count
+                            UIAccessibility.post(notification: .announcement,
+                                                 argument: "Hidden for a week. " + (left == 0 ? "Nothing else needs you." : VoiceOverFormatter.count(left, singular: "thing left", plural: "things left") + "."))
+                        }
+                    })
                 }
             }
             .padding(.horizontal, 20)
@@ -53,7 +59,10 @@ struct AttentionView: View {
         .background(Color.haloBackground.ignoresSafeArea())
         .navigationTitle("Needs your attention")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await dataManager.refresh() }
+        .refreshable {
+            await dataManager.refresh()
+            UIAccessibility.post(notification: .announcement, argument: cards.isEmpty ? "Updated. Nothing needs you." : "Updated. \(VoiceOverFormatter.count(cards.count, singular: "thing needs you", plural: "things need you")).")
+        }
     }
 }
 

@@ -115,9 +115,15 @@ struct BalanceHeroCard: View {
                 }
             }
             .frame(height: barHeight)
-            HStack(spacing: 14) {
-                legend(color: .haloPositive, text: "Cash \(Self.dollars(cash))")
-                legend(color: .orange, text: "Owed \(Self.dollars(owed))")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    legend(color: .haloPositive, text: "Cash \(Self.dollars(cash))")
+                    legend(color: .orange, text: "Owed \(Self.dollars(owed))")
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    legend(color: .haloPositive, text: "Cash \(Self.dollars(cash))")
+                    legend(color: .orange, text: "Owed \(Self.dollars(owed))")
+                }
             }
         }
     }
@@ -135,7 +141,7 @@ struct BalanceHeroCard: View {
                 Spacer()
                 Text("\(Self.dollars(res.currentCents)) of \(Self.dollars(res.limitCents))")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(tone.color)
+                    .foregroundColor(tone.textColor)
             }
             resourceGauge(res)
         }
@@ -159,10 +165,17 @@ struct BalanceHeroCard: View {
                 }
             }
             .frame(height: barHeight)
-            HStack(spacing: 14) {
-                legend(color: .haloPositive, text: "Safe under 75%")
-                legend(color: .orange, text: "Watch to 95%")
-                legend(color: .haloNegative, text: "Act above")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    legend(color: .haloPositive, text: "Safe under 75%")
+                    legend(color: .orange, text: "Watch to 95%")
+                    legend(color: .haloNegative, text: "Act above")
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    legend(color: .haloPositive, text: "Safe under 75%")
+                    legend(color: .orange, text: "Watch to 95%")
+                    legend(color: .haloNegative, text: "Act above")
+                }
             }
         }
     }
@@ -172,7 +185,7 @@ struct BalanceHeroCard: View {
     private func legend(color: Color, text: String) -> some View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 10, height: 10)
-            Text(text).font(.caption).foregroundColor(.haloTextSecondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(text).font(.caption).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 

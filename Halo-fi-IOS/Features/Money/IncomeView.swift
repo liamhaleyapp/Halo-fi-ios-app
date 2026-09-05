@@ -17,6 +17,7 @@ struct IncomeView: View {
     @State private var grossTarget: IncomeLabelView?
     @State private var sourceTarget: IncomeSource?
     @State private var forgetTarget: IncomeLabelView?
+    @State private var relabelTarget: IncomeLabelView?
     @State private var showingEditor = false
     @State private var summaryLoaded = false
 
@@ -82,9 +83,9 @@ struct IncomeView: View {
                         .foregroundColor(.haloTextSecondary)
                 }
             } header: {
-                Text("Where your money comes from")
+                Text("Payers HaloFi remembers")
             } footer: {
-                Text("Learned from your answers on the Money tab. Tap a payer to set how often it pays and what to expect; that becomes your budget's income. Nothing here is sent to Social Security.")
+                Text("One row per payer, learned from the deposits you answered about. Tap a payer to set how often it pays and what to expect; that becomes your budget's income. \"I'm not sure\" answers are not remembered. Nothing here is sent to Social Security.")
             }
 
             if let s = summary, !s.labels.isEmpty {
@@ -92,7 +93,7 @@ struct IncomeView: View {
                     ForEach(s.labels.sorted { $0.occurredOn > $1.occurredOn }) { label in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(label.source).font(.body).foregroundColor(.haloTextPrimary).lineLimit(1)
+                                Text(label.source).font(.body).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                                 Text("\(DepositLabelSheet.spokenDate(label.occurredOn)) · \((IncomeKind(rawValue: label.kind) ?? .other).title)\(label.grossCents.map { " · gross \(BudgetFormatter.cents($0))" } ?? "")")
                                     .font(.caption).foregroundColor(.haloTextSecondary)
                             }
@@ -100,14 +101,20 @@ struct IncomeView: View {
                             Text(BudgetFormatter.cents(label.netCents)).font(.body.weight(.semibold))
                         }
                         .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if label.kind == "unsure" { relabelTarget = label } }
                         .accessibilityElement(children: .combine)
+                        .accessibilityHint(label.kind == "unsure" ? "Double tap to answer what this deposit was." : "")
+                        .accessibilityAddTraits(label.kind == "unsure" ? .isButton : [])
                         .accessibilityAction(named: "Forget this label") { forgetTarget = label }
                         .swipeActions {
                             Button(role: .destructive) { forgetTarget = label } label: { Label("Forget", systemImage: "trash") }
                         }
                     }
                 } header: {
-                    Text("This month's deposits")
+                    Text("Deposits this month")
+                } footer: {
+                    Text("Each deposit you answered about this month, with your answer. Tap an \"I'm not sure\" deposit to answer it now.")
                 }
             }
 
@@ -116,14 +123,17 @@ struct IncomeView: View {
                     Label("Benefit amounts and other fields", systemImage: "pencil")
                         .frame(minHeight: 44)
                 }
-                .accessibilityHint("Edits SSI and SSDI amounts, ABLE balance, burial fund, and the paycheck fallback used before a payer is learned.")
+                .accessibilityHint("Opens the benefit amounts editor.")
             } footer: {
                 Text("Estimate for education only — Social Security makes all actual decisions.")
             }
         }
         .navigationTitle("Income")
         .navigationBarTitleDisplayMode(.large)
-        .refreshable { await dataManager.refresh() }
+        .refreshable {
+            await dataManager.refresh()
+            UIAccessibility.post(notification: .announcement, argument: "Updated.")
+        }
         .task {
             if dataManager.incomeSummary == nil { await dataManager.refresh() }
             summaryLoaded = true
@@ -134,6 +144,10 @@ struct IncomeView: View {
                                            occurredOn: label.occurredOn))
         }
         .sheet(isPresented: $showingEditor) { IncomeEditorView() }
+        .sheet(item: $relabelTarget) { label in
+            DepositLabelSheet(mode: .label(transactionId: label.transactionId, source: label.source,
+                                           amountCents: label.netCents, occurredOn: label.occurredOn))
+        }
         .confirmationDialog("Forget this label?", isPresented: Binding(get: { forgetTarget != nil }, set: { if !$0 { forgetTarget = nil } }), titleVisibility: .visible) {
             Button("Forget", role: .destructive) {
                 guard let label = forgetTarget else { return }

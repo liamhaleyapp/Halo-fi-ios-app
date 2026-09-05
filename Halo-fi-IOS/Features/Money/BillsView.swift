@@ -47,7 +47,10 @@ struct BillsView: View {
         }
         .navigationTitle("Bills")
         .navigationBarTitleDisplayMode(.large)
-        .refreshable { await dataManager.refresh() }
+        .refreshable {
+            await dataManager.refresh()
+            UIAccessibility.post(notification: .announcement, argument: "Updated.")
+        }
         .task {
             if dataManager.bills == nil { await dataManager.refresh() }
             loaded = true
@@ -72,7 +75,7 @@ struct BillsView: View {
         Button { target = s } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(1)
+                    Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + (s.nextExpected.map { " · next \(TabSummaries.spokenDate($0))" } ?? ""))
                         .font(.caption).foregroundColor(.haloTextSecondary)
                 }

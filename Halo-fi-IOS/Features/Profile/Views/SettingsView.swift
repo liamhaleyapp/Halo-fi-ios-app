@@ -43,6 +43,7 @@ struct SettingsView: View {
 
         ScrollView {
           VStack(spacing: 8) {
+            TabTitle("Settings", spokenAsHeader: true)
             NavigationLink(value: SettingsDestination.profile) {
               SettingsOptionLabel(icon: "person.fill", title: "Profile")
             }
@@ -162,13 +163,14 @@ struct SettingsView: View {
             )
           }
           .padding(.horizontal, 20)
-          .padding(.top, 20)
+          .padding(.top, 12)
           .padding(.bottom, 100)
           .readableContentWidth()
         }
       }
       .navigationTitle("Settings")
-      .navigationBarTitleDisplayMode(.large)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar(.hidden, for: .navigationBar)
       .onAppear {
         biometricEnrolled = container.biometricCredentialStore.hasEnrolledCredentials
       }

@@ -46,6 +46,7 @@ struct BenefitsHomeView: View {
                 Color.haloBackground.ignoresSafeArea()
                 ScrollView {
                     LazyVStack(spacing: 12) {
+                        TabTitle("Benefits")
                         header
                         switch lane {
                         case .ssi:
@@ -57,18 +58,18 @@ struct BenefitsHomeView: View {
                             if userManager.capabilities.bweLocked {
                                 lockedBWERow
                             }
+                            learnRow
+                            benefitsProfileSummaryRow
                             if userManager.capabilities.showsSSDILane {
                                 ssdiLaneRow
                             }
-                            learnRow
-                            benefitsProfileSummaryRow
                             counselorButton
                         case .ssdi:
                             workExpensesRow
                             monthlyPackageRow
-                            ssdiLaneRow
                             learnRow
                             benefitsProfileSummaryRow
+                            ssdiLaneRow
                             counselorButton
                         case .none:
                             startQuestionnaireRow
@@ -87,10 +88,12 @@ struct BenefitsHomeView: View {
                     async let caps: Void = userManager.refreshCapabilities()
                     async let data: Void = dataManager.refresh()
                     _ = await (caps, data)
+                    UIAccessibility.post(notification: .announcement, argument: "Updated. \(summary.verdict).")
                 }
             }
             .navigationTitle("Benefits")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .resourceMonitor: ResourceMonitorView()
@@ -277,7 +280,7 @@ struct BenefitsHomeView: View {
             estimate: false,
             route: .learn,
             spokenLine: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")).",
-            hint: "Opens the explainers: " + cards.map { $0.title }.joined(separator: ", ") + "."
+            hint: "Opens the list of explainers."
         )
     }
 
@@ -356,7 +359,7 @@ struct BenefitsHomeView: View {
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if estimate {
-                        Text("Estimate").font(.caption2).foregroundColor(.haloTextTertiary)
+                        Text("Estimate").font(.caption2).foregroundColor(.haloTextSecondary)
                     }
                 }
                 Spacer()
@@ -490,6 +493,7 @@ struct LearnListView: View {
                         .frame(maxWidth: .infinity, minHeight: 56)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityHint("Opens the free counselor finder inside HaloFi.")
                 .padding(.top, 8)
             }
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 100)
@@ -511,6 +515,7 @@ struct LearnCardView: View {
                 Text(card.title)
                     .font(.title.weight(.bold))
                     .accessibilityAddTraits(.isHeader)
+                    .accessibilitySortPriority(1000)
                 ForEach(Array(card.body.enumerated()), id: \.offset) { _, paragraph in
                     Text(paragraph)
                         .font(.body)
@@ -526,10 +531,13 @@ struct LearnCardView: View {
                         .frame(maxWidth: .infinity, minHeight: 56)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityHint("Opens the free counselor finder inside HaloFi.")
                 .padding(.top, 8)
             }
             .padding(20)
         }
+        .navigationTitle(card.title)
+        .navigationBarTitleDisplayMode(.inline)
         .readableContentWidth()
         .background(Color.haloBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)

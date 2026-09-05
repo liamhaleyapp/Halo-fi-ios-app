@@ -76,6 +76,7 @@ struct MoneyHomeView: View {
                 Color.haloBackground.ignoresSafeArea()
                 ScrollView {
                     LazyVStack(spacing: 12) {
+                        TabTitle("Money")
                         header
                         attentionRow
                         budgetRow
@@ -97,10 +98,12 @@ struct MoneyHomeView: View {
                     async let budget: () = budgetDataManager.refresh()
                     _ = await (bank, budget)
                     await loadTransactions(forceRefresh: true)
+                    UIAccessibility.post(notification: .announcement, argument: "Updated. \(summary.verdict). \(summary.subline ?? "")")
                 }
             }
             .navigationTitle("Money")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
             .navigationDestination(for: ConnectedItem.self) { item in
                 InstitutionAccountsView(item: item)
@@ -259,8 +262,10 @@ struct MoneyHomeView: View {
     // MARK: - b. Budget row
 
     private var budgetRow: some View {
-        row(title: "Budget", icon: "chart.pie.fill", tint: .blue, line: TabSummaries.budgetRow(snapshot),
-            hint: "Opens your budget.", route: .budget)
+        // Before the overview lands the row must not claim "No budget yet".
+        let line = budgetDataManager.overview == nil ? "Loading…" : TabSummaries.budgetRow(snapshot)
+        return row(title: "Budget", icon: "chart.pie.fill", tint: .blue, line: line,
+                   hint: "Opens your budget.", route: .budget)
     }
 
     // MARK: - b2. Income row (2026-09-05)
@@ -282,7 +287,7 @@ struct MoneyHomeView: View {
             return "What your deposits are, learned as they arrive."
         }()
         return row(title: "Income", icon: "arrow.down.circle.fill", tint: .indigo, line: line,
-                   hint: "Opens where your money comes from, this month's work income, and the amounts you told HaloFi.", route: .income)
+                   hint: "Opens your income: payers and this month's work income.", route: .income)
     }
 
     // MARK: - b3. Bills row (2026-09-05)
@@ -301,7 +306,7 @@ struct MoneyHomeView: View {
             return text
         }()
         return row(title: "Bills", icon: "calendar.badge.clock", tint: .teal, line: line,
-                   hint: "Opens your recurring charges: answer which are bills; they count in what is left by the 1st.", route: .bills)
+                   hint: "Opens your recurring charges to answer which are bills.", route: .bills)
     }
 
     // MARK: - c. Accounts row

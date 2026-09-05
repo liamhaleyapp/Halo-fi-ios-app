@@ -46,7 +46,12 @@ enum DesignTokens {
         /// Primary text. Dark: white (matches old `.white`), Light: black.
         static let primary = Color(uiColor: .label)
         /// Secondary text — replaces `.white.opacity(0.8...0.85)`.
-        static let secondary = Color(uiColor: .secondaryLabel)
+        /// Light mode uses a deeper shade than Apple's secondaryLabel: on a
+        /// card (#F2F2F7) the system value is ~3.3:1, below WCAG AA for the
+        /// row lines that carry most of the app's meaning. 0.78 alpha ≈ 4.7:1.
+        static let secondary = Color(uiColor: UIColor { t in
+            t.userInterfaceStyle == .dark ? .secondaryLabel : UIColor(red: 60/255, green: 60/255, blue: 67/255, alpha: 0.78)
+        })
         /// De-emphasized text — replaces `.white.opacity(~0.6)`.
         static let tertiary = Color(uiColor: .tertiaryLabel)
     }
@@ -62,6 +67,23 @@ enum DesignTokens {
     enum Status {
         static let positive = Color(uiColor: .systemGreen)
         static let negative = Color(uiColor: .systemRed)
+    }
+
+    /// Tone colors used as TEXT (not fills). System orange/green/red on a
+    /// light card fall below WCAG AA for small text (2.1–2.9:1), so light
+    /// mode uses deeper shades (≥ 4.6:1 on #F2F2F7); dark mode keeps the
+    /// bright system colors, which pass on near-black.
+    enum ToneText {
+        static let watch = Color(uiColor: UIColor { t in
+            t.userInterfaceStyle == .dark ? .systemOrange : UIColor(red: 0.60, green: 0.30, blue: 0.00, alpha: 1)
+        })
+        static let act = Color(uiColor: UIColor { t in
+            t.userInterfaceStyle == .dark ? .systemRed : UIColor(red: 0.78, green: 0.06, blue: 0.10, alpha: 1)
+        })
+        static let positive = Color(uiColor: UIColor { t in
+            t.userInterfaceStyle == .dark ? .systemGreen : UIColor(red: 0.09, green: 0.47, blue: 0.24, alpha: 1)
+        })
+        static let neutral = Color(uiColor: .secondaryLabel)
     }
 
     // MARK: - SSI hero cards
@@ -173,7 +195,12 @@ extension Font {
 struct HaloIconTile: View {
     let icon: String
     let tint: Color
-    var size: CGFloat = 44
+    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 44
+
+    init(icon: String, tint: Color) {
+        self.icon = icon
+        self.tint = tint
+    }
 
     var body: some View {
         Image(systemName: icon)
@@ -216,5 +243,31 @@ struct HaloCardModifier: ViewModifier {
 extension View {
     func haloCard(tint: Color? = nil, radius: CGFloat = 18) -> some View {
         modifier(HaloCardModifier(tint: tint, radius: radius))
+    }
+}
+
+/// The tab's title drawn inside the scroll content (Liam, 2026-09-05: the
+/// large-title navigation bar left too much empty space above "Money").
+/// The root hides its navigation bar; pushed screens keep theirs. Hidden
+/// from VoiceOver by default because the tab bar already names the tab
+/// and the screen summary header is the first thing read.
+struct TabTitle: View {
+    let text: String
+    var spokenAsHeader: Bool = false
+
+    init(_ text: String, spokenAsHeader: Bool = false) {
+        self.text = text
+        self.spokenAsHeader = spokenAsHeader
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+            .foregroundColor(.haloTextPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
+            .accessibilityHidden(!spokenAsHeader)
+            .accessibilityAddTraits(.isHeader)
     }
 }

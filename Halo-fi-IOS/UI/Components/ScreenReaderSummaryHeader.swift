@@ -39,6 +39,16 @@ struct ScreenReaderSummaryHeader: View {
             case .act: return .haloNegative
             }
         }
+
+        /// The same tone as legible TEXT (see DesignTokens.ToneText).
+        var textColor: Color {
+            switch self {
+            case .neutral: return DesignTokens.ToneText.neutral
+            case .positive: return DesignTokens.ToneText.positive
+            case .watch: return DesignTokens.ToneText.watch
+            case .act: return DesignTokens.ToneText.act
+            }
+        }
     }
 
     static let disclaimer = "Estimate for education only — Social Security makes all actual decisions."

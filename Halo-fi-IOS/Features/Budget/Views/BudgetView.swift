@@ -410,13 +410,20 @@ struct BudgetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(err.errorDescription ?? "Couldn't load budget.")
                 .font(.subheadline)
-                .foregroundStyle(.red)
+                .foregroundStyle(DesignTokens.ToneText.act)
+                .fixedSize(horizontal: false, vertical: true)
             Button("Retry") {
-                Task { await dataManager.refresh() }
+                Task {
+                    await dataManager.refresh()
+                    UIAccessibility.post(notification: .announcement, argument: dataManager.error == nil ? "Budget loaded." : "Still couldn't load the budget.")
+                }
             }
             .buttonStyle(.bordered)
+            .frame(minHeight: 44)
+            .accessibilityHint("Loads the budget again.")
         }
         .padding()
+        .onAppear { UIAccessibility.post(notification: .announcement, argument: err.errorDescription ?? "Couldn't load budget.") }
     }
 }
 
@@ -511,8 +518,7 @@ private struct BudgetHeroCard: View {
         let limit = total.formatted["limit"] ?? "zero dollars"
         let remaining = total.formatted["remaining"] ?? "zero dollars"
         let pct = Int(total.pctUsed.rounded())
-        let status = total.status.replacingOccurrences(of: "_", with: " ")
-        return "Budget this month. Spent \(spent) of \(limit) monthly budget. \(pct) percent used. \(remaining) remaining. Status: \(status)."
+        return "\(statusWord). Spent \(spent) of \(limit) this month, \(pct) percent used, \(remaining) left."
     }
 }
 
@@ -1203,7 +1209,7 @@ private struct BreakdownByCategoryRow: View {
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Double-tap to open the full category breakdown.")
+        .accessibilityHint("Opens the full category breakdown.")
     }
 
     private var icon: some View {
