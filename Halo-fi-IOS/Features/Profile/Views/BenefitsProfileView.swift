@@ -49,7 +49,7 @@ struct BenefitsProfileView: View {
     }
 
     /// Questions still relevant (their `showIf` holds for the answers so
-    /// far) and not answered yet — what "Answer N more" walks through.
+    /// far) and not answered yet — what "Answer N more" counts.
     private var remaining: [ProfileQuestionSpec] {
         let answers = answersById
         var seen = Set<String>()
@@ -58,6 +58,16 @@ struct BenefitsProfileView: View {
             guard profile.answer(for: spec.field) == nil else { return false }
             guard spec.showIf(answers) else { return false }
             return seen.insert(spec.field).inserted
+        }
+    }
+
+    /// Every unanswered question, relevant or not. The question screen
+    /// applies `showIf` itself against the live answers, so a branch that
+    /// opens mid-way (SSI → who shares your household) is asked in the
+    /// same pass instead of needing another "Answer N more".
+    private var unansweredAll: [ProfileQuestionSpec] {
+        ProfileQuestions.v1.filter { spec in
+            spec.field != "promise_accepted_at" && profile.answer(for: spec.field) == nil
         }
     }
 
@@ -270,13 +280,27 @@ struct BenefitsProfileView: View {
                 ignoreVisibility: true,
                 onComplete: {
                     editing = nil
-                    Task { await userManager.refreshCapabilities() }
+                    // The intended flow: changing one answer can open a
+                    // follow-up ("Yes, I receive a payment" → "Which
+                    // benefit?"). Ask it now rather than parking it behind
+                    // "Answer 1 more question".
+                    Task {
+                        await userManager.refreshCapabilities()
+                        let followUps = remaining
+                        guard !followUps.isEmpty else { return }
+                        UIAccessibility.post(
+                            notification: .announcement,
+                            argument: followUps.count == 1 ? "One more question." : "\(followUps.count) more questions."
+                        )
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        finishingRemaining = true
+                    }
                 }
             )
         }
         .navigationDestination(isPresented: $finishingRemaining) {
             ProfileQuestionsView(
-                questions: remaining,
+                questions: unansweredAll,
                 embeddedInOnboarding: false,
                 onComplete: {
                     finishingRemaining = false

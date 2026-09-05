@@ -36,6 +36,12 @@ struct ProfileQuestionsView: View {
     let onAnswer: ((BenefitsProfilePatch) -> Void)?
 
     @State private var answers: [String: String] = [:]
+    /// Stored answers are read in onAppear, AFTER the first render. Until
+    /// then a follow-up question (its showIf reads other answers) looks
+    /// irrelevant, and the "nothing to ask" branch used to fire
+    /// onComplete on that first pass — a white flash and an instant pop
+    /// (Liam, 2026-09-05). Nothing is concluded before seeding.
+    @State private var seeded = false
     @State private var index: Int = 0
     @State private var pendingOption: ProfileOption?
     @State private var showingExplainer = false
@@ -138,7 +144,7 @@ struct ProfileQuestionsView: View {
                             .frame(maxWidth: .infinity, minHeight: 56)
                             .disabled(isSaving)
                     }
-                } else {
+                } else if seeded {
                     // No visible question left — defensive; onComplete
                     // normally fires from advance().
                     ProgressView()
@@ -217,6 +223,7 @@ struct ProfileQuestionsView: View {
                 answers[spec.id] = stored
             }
         }
+        seeded = true
     }
 
     private func focusQuestion() {
