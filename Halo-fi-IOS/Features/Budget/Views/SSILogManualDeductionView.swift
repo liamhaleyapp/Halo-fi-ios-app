@@ -102,6 +102,7 @@ struct SSILogManualDeductionView: View {
                             .accessibilityFocused($focus, equals: .summary)
                     }
                     TextField("Amount", text: $amountText)
+                        .disabled(linkedTransaction != nil)
                         .keyboardType(.decimalPad)
                         .accessibilityLabel("Amount in dollars")
                     TextField("Description (e.g. Uber to work)", text: $description)
@@ -154,6 +155,7 @@ struct SSILogManualDeductionView: View {
                         in: ...Date(),
                         displayedComponents: .date
                     )
+                    .disabled(linkedTransaction != nil)
                 } header: {
                     Text("When").textCase(nil)
                 } footer: {
@@ -247,7 +249,7 @@ struct SSILogManualDeductionView: View {
         } footer: {
             Text(linkedTransaction == nil
                  ? "Paid by card or from your bank account? Pick the charge and the amount, date and description fill in."
-                 : "Logged against that charge, so it is matched and never counted twice. Edit anything before saving.")
+                 : "Logged against that charge, so it is matched and never counted twice. Amount and date come from the charge; unlink it to change them.")
         }
     }
 

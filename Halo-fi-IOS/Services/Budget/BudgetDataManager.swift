@@ -45,6 +45,10 @@ final class BudgetDataManager {
     var attentionCards: [AttentionCard] = []
     var attentionQueue: [AttentionCard] = []
     var attentionMoreCount: Int = 0
+    /// Bumped on every local resolve/dismiss. A refresh started before the
+    /// bump must not put a resolved card back (2026-09-06 review).
+    @ObservationIgnored private var attentionGeneration = 0
+    @ObservationIgnored private var attentionRefreshPending = false
 
     /// This month's learned income (sources, gross by employer).
     var incomeSummary: IncomeSummary?
@@ -197,6 +201,15 @@ final class BudgetDataManager {
         refreshTask = task
         await task.value
         refreshTask = nil
+        if attentionRefreshPending {
+            // A card was resolved while the last fetch was in flight; pull once more.
+            attentionRefreshPending = false
+            if let r = try? await AttentionService.shared.fetch(userTz: userTz) {
+                attentionCards = r.cards
+                attentionQueue = r.queue
+                attentionMoreCount = r.moreCount
+            }
+        }
     }
 
     /// Save an income update and refresh the overview.
@@ -284,6 +297,7 @@ final class BudgetDataManager {
 
         // Attention + income summary, in parallel, failures isolated: the
         // stack keeps its last cards when the fetch fails.
+        let generationAtStart = attentionGeneration
         async let attentionResult: Result<AttentionResponse, Error> = {
             do { return .success(try await AttentionService.shared.fetch(userTz: userTz)) } catch { return .failure(error) }
         }()
@@ -295,9 +309,15 @@ final class BudgetDataManager {
         }()
         switch await attentionResult {
         case .success(let response):
-            attentionCards = response.cards
-            attentionQueue = response.queue
-            attentionMoreCount = response.moreCount
+            if generationAtStart == attentionGeneration {
+                attentionCards = response.cards
+                attentionQueue = response.queue
+                attentionMoreCount = response.moreCount
+            } else {
+                // Something was resolved while this was in flight: keep the
+                // local state and fetch once more when this refresh ends.
+                attentionRefreshPending = true
+            }
         case .failure(let error):
             Logger.warning("BudgetDataManager: fetch attention failed: \(error)")
         }
@@ -326,6 +346,7 @@ final class BudgetDataManager {
 
     /// "Not now": hide the card for a week, locally at once and on the server.
     func dismissCard(_ card: AttentionCard, days: Int = 7) async {
+        attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
         do { try await AttentionService.shared.dismiss(cardId: card.id, days: days) } catch {
             Logger.warning("BudgetDataManager: dismiss failed: \(error)")
@@ -338,7 +359,8 @@ final class BudgetDataManager {
     /// from the queue so the stack never blanks, and refresh in the
     /// background (the full refresh recomputes the overview and takes
     /// seconds — nothing on screen waits for it).
-    func resolveCard(_ card: AttentionCard) {
+    func resolveCard(_ card: AttentionCard, refresh: Bool = true) {
+        attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
         attentionQueue.removeAll { $0.id == card.id }
         // Same payer answered → its other deposits are labeled server-side.
@@ -350,7 +372,7 @@ final class BudgetDataManager {
             attentionCards.append(next)
         }
         markStale()
-        Task { await refresh() }
+        if refresh { Task { await self.refresh() } }
     }
 
     /// The next learning question after `card`, for the sheet to continue

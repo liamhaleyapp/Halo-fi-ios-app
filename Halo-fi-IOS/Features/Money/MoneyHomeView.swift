@@ -152,8 +152,8 @@ struct MoneyHomeView: View {
             .sheet(item: $candidateCard) { card in
                 if let candidate = card.candidate {
                     SSIDeductionConfirmView(candidate: candidate) { type in
+                        budgetDataManager.resolveCard(card, refresh: false)
                         try await budgetDataManager.confirmSSIDeduction(candidate: candidate, as: type)
-                        budgetDataManager.resolveCard(card)
                     }
                 }
             }
@@ -186,12 +186,15 @@ struct MoneyHomeView: View {
 
     private func open(_ card: AttentionCard) {
         switch card.actionType {
-        case "label_deposit", "enter_gross": labelCard = card
-        case "confirm_bill": billCard = card
+        case "label_deposit", "enter_gross":
+            if card.payload.transactionId != nil || card.payload.labelId != nil { labelCard = card }
+        case "confirm_bill":
+            if card.payload.streamId != nil { billCard = card }
         case "apply_budget_suggestion": suggestionCard = card
         case "open_budget": navigationPath.append(MoneyRoute.budget)
         case "open_benefits_profile": navigationPath.append(BenefitsHomeView.Route.benefitsProfile)
-        case "confirm_candidate": candidateCard = card
+        case "confirm_candidate":
+            if card.candidate != nil { candidateCard = card }
         case "open_resource_monitor": navigationPath.append(MoneyRoute.resourceMonitor)
         case "open_package": navigationPath.append(MoneyRoute.package(card.payload.month))
         case "open_review": navigationPath.append(MoneyRoute.review(card.payload.month ?? MonthKey.current))

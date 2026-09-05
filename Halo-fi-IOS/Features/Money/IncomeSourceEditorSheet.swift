@@ -28,7 +28,8 @@ struct IncomeSourceEditorSheet: View {
 
     init(source: IncomeSource) {
         self.source = source
-        _kind = State(initialValue: IncomeKind(rawValue: source.kind) ?? .other)
+        let stored = IncomeKind(rawValue: source.kind) ?? .other
+        _kind = State(initialValue: stored == .unsure ? .other : stored)
         _employer = State(initialValue: source.employer ?? source.sourceKey.capitalized)
         _cadence = State(initialValue: source.cadenceDays.map { d in [7, 14, 15].contains(d) ? d : (d >= 28 ? 30 : d) } ?? 0)
         _grossText = State(initialValue: source.lastGrossCents.map { String(format: "%.2f", Double($0) / 100) } ?? "")

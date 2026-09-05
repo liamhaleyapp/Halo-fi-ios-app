@@ -171,6 +171,32 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(MainTab.visible(for: UITestArchetype.noneAnswered.capabilities) == [.money, .agent, .settings])
     }
 
+    @Test func promiseAloneKeepsTheTab() {
+        // Backend flags profileAnswered after the promise; no real answer yet.
+        let caps = UserCapabilities(showsBenefitsLane: false, showsResourceCounter: false, showsSSDILane: false, expenseType: .none,
+                                    bweLocked: false, coupleLimits: false, deemingReferral: false, showsWorkIncentives: false,
+                                    benefitType: nil, blindStatus: nil, profileAnswered: true, getsSsaPayment: nil)
+        #expect(caps.benefitsUnanswered)
+        #expect(MainTab.visible(for: caps).contains(.benefits))
+    }
+
+    @Test func unsureKeepsTheTab() {
+        let caps = UserCapabilities(showsBenefitsLane: false, showsResourceCounter: false, showsSSDILane: false, expenseType: .none,
+                                    bweLocked: false, coupleLimits: false, deemingReferral: false, showsWorkIncentives: false,
+                                    benefitType: "unsure", blindStatus: nil, profileAnswered: false, getsSsaPayment: "unsure")
+        #expect(caps.benefitsUnanswered)
+        #expect(MainTab.visible(for: caps).contains(.benefits))
+    }
+
+    @Test func answeredNoOnOlderBackendHidesIt() {
+        // profileAnswered absent (older backend), but a real "no" is present.
+        let caps = UserCapabilities(showsBenefitsLane: false, showsResourceCounter: false, showsSSDILane: false, expenseType: .none,
+                                    bweLocked: false, coupleLimits: false, deemingReferral: false, showsWorkIncentives: false,
+                                    benefitType: "none", blindStatus: nil, profileAnswered: false, getsSsaPayment: "no")
+        #expect(!caps.benefitsUnanswered)
+        #expect(!MainTab.visible(for: caps).contains(.benefits))
+    }
+
     @Test func benefitUsersKeepIt() {
         #expect(MainTab.visible(for: ssiCaps).contains(.benefits))
         #expect(MainTab.visible(for: ssdiCaps).contains(.benefits))

@@ -272,7 +272,7 @@ struct SSIProjection: Codable, Equatable {
         let expectedDateIso: String
         let cents: Int
         let confidence: String
-        var id: String { "\(kind)-\(label)-\(expectedDateIso)" }
+        var id: String { "\(kind)-\(label)-\(expectedDateIso)-\(cents)" }
         enum CodingKeys: String, CodingKey {
             case kind, label, cents, confidence
             case expectedDateIso = "expected_date_iso"

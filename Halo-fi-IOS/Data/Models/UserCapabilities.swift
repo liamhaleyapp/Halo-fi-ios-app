@@ -129,11 +129,20 @@ struct UserCapabilities: Codable, Equatable {
         showsBenefitsLane || benefitsUnanswered
     }
 
+    /// The questionnaire has a real answer when the payment question was
+    /// answered yes/no or a benefit was named. The promise (recorded before
+    /// any question) and "I'm not sure" never count — otherwise a new user
+    /// lost the tab the moment they tapped Start (2026-09-06 review).
+    private var hasRealAnswer: Bool {
+        if let p = getsSsaPayment, p == "yes" || p == "no" { return true }
+        if let b = benefitType, ["ssi", "ssdi", "both", "other", "none"].contains(b) { return true }
+        return false
+    }
+
     var benefitsUnanswered: Bool {
-        if profileAnswered { return false }
-        // Older backends do not send profileAnswered; fall back to the
-        // benefit type alone.
-        return benefitType == nil || benefitType == "unsure"
+        if hasRealAnswer { return false }
+        if profileAnswered && (getsSsaPayment != nil || benefitType != nil) { return false }
+        return true
     }
 
     /// Human wording for the statutory-blindness verification state.

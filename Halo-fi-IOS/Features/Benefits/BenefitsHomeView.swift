@@ -270,11 +270,11 @@ struct BenefitsHomeView: View {
             title: "Learn",
             icon: "book.fill",
             tone: .neutral,
-            line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")): " + cards.map { $0.title.lowercased() }.joined(separator: ", ") + ".",
+            line: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")): " + cards.map { $0.title }.joined(separator: ", ") + ".",
             estimate: false,
             route: .learn,
             spokenLine: "\(VoiceOverFormatter.count(cards.count, singular: "short explainer", plural: "short explainers")).",
-            hint: "Opens the explainers: " + cards.map { $0.title.lowercased() }.joined(separator: ", ") + "."
+            hint: "Opens the explainers: " + cards.map { $0.title }.joined(separator: ", ") + "."
         )
     }
 

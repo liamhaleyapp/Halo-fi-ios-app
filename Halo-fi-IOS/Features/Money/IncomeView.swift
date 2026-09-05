@@ -16,6 +16,7 @@ struct IncomeView: View {
 
     @State private var grossTarget: IncomeLabelView?
     @State private var sourceTarget: IncomeSource?
+    @State private var forgetTarget: IncomeLabelView?
     @State private var showingEditor = false
     @State private var summaryLoaded = false
 
@@ -100,9 +101,9 @@ struct IncomeView: View {
                         }
                         .frame(minHeight: 44)
                         .accessibilityElement(children: .combine)
-                        .accessibilityAction(named: "Forget this label") { Task { try? await dataManager.forgetLabel(id: label.id) } }
+                        .accessibilityAction(named: "Forget this label") { forgetTarget = label }
                         .swipeActions {
-                            Button(role: .destructive) { Task { try? await dataManager.forgetLabel(id: label.id) } } label: { Label("Forget", systemImage: "trash") }
+                            Button(role: .destructive) { forgetTarget = label } label: { Label("Forget", systemImage: "trash") }
                         }
                     }
                 } header: {
@@ -133,6 +134,23 @@ struct IncomeView: View {
                                            occurredOn: label.occurredOn))
         }
         .sheet(isPresented: $showingEditor) { IncomeEditorView() }
+        .confirmationDialog("Forget this label?", isPresented: Binding(get: { forgetTarget != nil }, set: { if !$0 { forgetTarget = nil } }), titleVisibility: .visible) {
+            Button("Forget", role: .destructive) {
+                guard let label = forgetTarget else { return }
+                forgetTarget = nil
+                Task {
+                    do {
+                        try await dataManager.forgetLabel(id: label.id)
+                        UIAccessibility.post(notification: .announcement, argument: "Forgotten. \(label.source) will be asked about again.")
+                    } catch {
+                        UIAccessibility.post(notification: .announcement, argument: "Couldn't forget it. \(error.localizedDescription)")
+                    }
+                }
+            }
+            Button("Keep", role: .cancel) { forgetTarget = nil }
+        } message: {
+            Text("The deposit goes back to unlabeled and any taxes-withheld expense from it is removed.")
+        }
         .sheet(item: $sourceTarget) { source in IncomeSourceEditorSheet(source: source) }
     }
 

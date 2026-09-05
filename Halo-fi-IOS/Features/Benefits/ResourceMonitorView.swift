@@ -123,10 +123,10 @@ struct ResourceMonitorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
-            ForEach(proj.inflows) { item in
+            ForEach(Array(proj.inflows.enumerated()), id: \.offset) { _, item in
                 projectionRow(item, sign: "+")
             }
-            ForEach(proj.outflows) { item in
+            ForEach(Array(proj.outflows.enumerated()), id: \.offset) { _, item in
                 projectionRow(item, sign: "−")
             }
             if proj.inflows.isEmpty && proj.outflows.isEmpty {

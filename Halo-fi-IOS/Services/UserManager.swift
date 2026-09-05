@@ -911,6 +911,7 @@ final class UserManager {
         // Fixtures seed `capabilities` directly; a network answer (or a
         // stored real account on the same simulator) must not replace them.
         guard !UITestArchetype.isActive else { return }
+        let requestedFor = currentUser?.id
         do {
             let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
                 endpoint: APIEndpoints.User.capabilities,
@@ -918,6 +919,8 @@ final class UserManager {
                 body: nil,
                 responseType: CapabilitiesResponse.self
             )
+            // A slow answer for one account must never land under another.
+            guard currentUser?.id == requestedFor else { return }
             capabilities = response.capabilities
             if let profile = response.benefitsProfile {
                 benefitsProfile = profile
@@ -934,12 +937,14 @@ final class UserManager {
     /// on as if the answers had been stored.
     func refreshCapabilitiesOrThrow() async throws {
         guard !UITestArchetype.isActive else { return }
+        let requestedFor = currentUser?.id
         let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
             endpoint: APIEndpoints.User.capabilities,
             method: .GET,
             body: nil,
             responseType: CapabilitiesResponse.self
         )
+        guard currentUser?.id == requestedFor else { return }
         capabilities = response.capabilities
         if let profile = response.benefitsProfile {
             benefitsProfile = profile

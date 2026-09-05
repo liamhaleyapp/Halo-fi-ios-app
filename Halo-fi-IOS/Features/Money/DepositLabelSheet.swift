@@ -31,6 +31,7 @@ struct DepositLabelSheet: View {
 
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(BankDataManager.self) private var bankDataManager
+    @Environment(UserManager.self) private var userManager
     @Environment(\.dismiss) private var dismiss
     @State private var mode: Mode
     @State private var currentCard: AttentionCard?
@@ -136,7 +137,11 @@ struct DepositLabelSheet: View {
                             }
                         }
                     } else {
-                        Text("The gross is the amount before taxes, on the paystub. Social Security counts gross wages, and the taxes withheld can count as a work expense.")
+                        Text(userManager.capabilities.expenseType == .bwe
+                             ? "The gross is the amount before taxes, on the paystub. Social Security counts gross wages, and the taxes withheld count as a Blind Work Expense."
+                             : userManager.capabilities.showsBenefitsLane
+                                ? "The gross is the amount before taxes, on the paystub. Social Security counts gross wages."
+                                : "The gross is the amount before taxes, on the paystub.")
                             .font(.subheadline).foregroundColor(.haloTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if let last = lastGross {
@@ -204,8 +209,11 @@ struct DepositLabelSheet: View {
             .accessibilityAction(.escape) { dismiss() }
             .interactiveDismissDisabled(isSaving)
             .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
-            .onChange(of: step) { _, _ in DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
-            .onChange(of: currentCard?.id) { _, _ in DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
+            .onChange(of: step) { old, new in
+                // Kind → gross within one deposit moves focus at once; a new
+                // deposit's focus is scheduled by advance() after its announcement.
+                if old == .kind && new == .gross { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .heading } }
+            }
         }
     }
 
@@ -263,6 +271,7 @@ struct DepositLabelSheet: View {
             } else {
                 finished = true
                 UIAccessibility.post(notification: .announcement, argument: "\(saved) That was the last one.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { focus = .heading }
             }
             return
         }
@@ -271,7 +280,10 @@ struct DepositLabelSheet: View {
         grossText = ""
         errorMessage = nil
         step = { if case .gross = mode { return .gross } else { return .kind } }()
-        UIAccessibility.post(notification: .announcement, argument: "\(saved) Next: \(next.title).")
+        // Say what was saved; the heading (which names the next question)
+        // takes focus after the announcement instead of cutting it off.
+        UIAccessibility.post(notification: .announcement, argument: saved)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { focus = .heading }
     }
 
     // MARK: - Actions
