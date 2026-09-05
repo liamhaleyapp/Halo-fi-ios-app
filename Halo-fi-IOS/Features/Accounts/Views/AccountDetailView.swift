@@ -13,6 +13,8 @@ struct AccountDetailView: View {
   /// the Nickname button (manual accounts have their own editor).
   var bankAccount: BankAccount? = nil
   @State private var nicknameTarget: BankAccount?
+  @State private var savedNickname: String?
+  private var shownNickname: String { savedNickname ?? account.nickname }
 
   @Environment(BankDataManager.self) private var bankDataManager
   @Environment(UserManager.self) private var userManager
@@ -44,7 +46,9 @@ struct AccountDetailView: View {
       }
     }
     .sheet(item: $nicknameTarget) { acct in
-      AccountNicknameSheet(account: acct)
+      AccountNicknameSheet(account: acct) { updated in
+        savedNickname = updated.nickname?.isEmpty == false ? updated.nickname : account.name
+      }
     }
     .task {
       await loadTransactions(forceRefresh: false)
@@ -83,8 +87,11 @@ struct AccountDetailView: View {
     f.formatOptions = [.withInternetDateTime]
     if let d = f.date(from: iso) { return d }
     let plain = DateFormatter(); plain.locale = Locale(identifier: "en_US_POSIX"); plain.timeZone = TimeZone(identifier: "UTC")
-    plain.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
-    return plain.date(from: iso)
+    for fmt in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSSSSS", "yyyy-MM-dd HH:mm:ss"] {
+      plain.dateFormat = fmt
+      if let d = plain.date(from: iso) { return d }
+    }
+    return nil
   }
   
   @ViewBuilder
@@ -144,12 +151,12 @@ struct AccountDetailView: View {
           .clipShape(Circle())
         
         VStack(alignment: .leading, spacing: 4) {
-          Text(account.nickname)
+          Text(shownNickname)
             .font(.title2)
             .fontWeight(.bold)
             .foregroundColor(Color.haloTextPrimary)
           
-          if account.nickname != account.name {
+          if shownNickname != account.name {
             Text(account.name)
               .font(.subheadline)
               .foregroundColor(Color.haloTextSecondary)
@@ -163,7 +170,7 @@ struct AccountDetailView: View {
       if let bankAccount {
         // Visible, not hidden behind a long press (Liam, 2026-09-05).
         Button { nicknameTarget = bankAccount } label: {
-          Label(bankAccount.nickname?.isEmpty == false ? "Change nickname" : "Add a nickname", systemImage: "pencil")
+          Label(shownNickname != account.name ? "Change nickname" : "Add a nickname", systemImage: "pencil")
             .font(.subheadline.weight(.semibold))
             .frame(minHeight: 44)
         }

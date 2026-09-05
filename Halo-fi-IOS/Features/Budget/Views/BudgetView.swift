@@ -169,7 +169,8 @@ struct BudgetView: View {
     private func unlinkedCardsNote(_ overview: BudgetOverview) -> some View {
         if let cards = overview.budgetStatus.unlinkedCards, !cards.isEmpty {
             let monthly = overview.budgetStatus.unlinkedCardsMonthlyCents ?? cards.reduce(0) { $0 + $1.monthlyCents }
-            let names = cards.map(\.label).joined(separator: " and ")
+            let labels = cards.map(\.label)
+            let names = labels.count <= 1 ? (labels.first ?? "") : labels.dropLast().joined(separator: ", ") + " and " + labels.last!
             let line = "About \(VoiceOverFormatter.dollars(monthly)) a month goes to \(names) cards that aren't linked, so that spending isn't in these categories."
             Button { showingLinkChooser = true } label: {
                 HStack(spacing: 14) {
@@ -1029,11 +1030,13 @@ struct SSIEarnRoomHeroCard: View {
 struct SSISpendDownBanner: View {
     let spendDownFormatted: String?
 
+    /// Never "spend"; never a fact about the check. The estimate, the
+    /// amount over, and where to get help (hard rules, 2026-09-05).
     private var spendDownPhrase: String {
         if let amount = spendDownFormatted, !amount.isEmpty {
-            return "spending down about \(amount) before the first of next month would requalify you"
+            return "About \(amount) is over the limit. Money moved into an ABLE account or spent on needs can count differently; a free benefits counselor can walk you through it."
         }
-        return "getting back under the limit before the first of next month would requalify you"
+        return "A free benefits counselor can walk you through what counts and what does not."
     }
 
     var body: some View {
@@ -1041,10 +1044,10 @@ struct SSISpendDownBanner: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 4) {
-                Text("No SSI check expected this month")
+                Text("Resources over the limit")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text("You're over the $2,000 resource limit, so your check is paused this month regardless of your income. \(spendDownPhrase.prefix(1).capitalized + spendDownPhrase.dropFirst()). Check with SSA before making big moves.")
+                Text("Estimate: resources above $2,000 on the 1st can mean no SSI payment for that month. \(spendDownPhrase)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1058,7 +1061,7 @@ struct SSISpendDownBanner: View {
                 .stroke(Color.orange.opacity(0.25), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("No SSI check expected this month. You're over the two thousand dollar resource limit, so your check is paused this month regardless of your income. \(spendDownPhrase.prefix(1).capitalized + spendDownPhrase.dropFirst()). Check with SSA before making big moves.")
+        .accessibilityLabel("Resources over the limit. Estimate: resources above two thousand dollars on the first can mean no SSI payment for that month. \(spendDownPhrase)")
     }
 }
 

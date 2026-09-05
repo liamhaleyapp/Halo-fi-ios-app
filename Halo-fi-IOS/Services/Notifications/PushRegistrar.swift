@@ -17,7 +17,20 @@ final class PushRegistrar: NSObject, @unchecked Sendable {
     static let shared = PushRegistrar()
 
     private let tokenKey = "pushDeviceToken.v1"
+    private let registeredKey = "pushDeviceRegistered.v1"
     private var pendingToken: String?
+    /// True once /me/devices accepted this device: the server pushes, the
+    /// app stops scheduling local digests.
+    var isRegistered: Bool { UserDefaults.standard.bool(forKey: registeredKey) }
+
+    /// Ask for permission in the foreground (first Money screen), then
+    /// register. Never called from a background refresh.
+    func requestPermissionIfNeeded() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { registerIfAllowed(); return }
+        let ok = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
+        if ok { registerIfAllowed() }
+    }
     /// Set by UserManager; a token is only sent for a signed-in user.
     var isSignedIn = false {
         didSet { if isSignedIn { Task { await sendIfSignedIn() } } }
@@ -60,6 +73,7 @@ final class PushRegistrar: NSObject, @unchecked Sendable {
                                                     timezone: TimeZone.current.identifier, app_version: version)),
                 responseType: Out.self)
             pendingToken = nil
+            UserDefaults.standard.set(true, forKey: registeredKey)
             Logger.info("PushRegistrar: device registered")
         } catch {
             Logger.warning("PushRegistrar: register failed: \(error)")
@@ -68,6 +82,7 @@ final class PushRegistrar: NSObject, @unchecked Sendable {
 
     /// Sign-out: the server stops sending to this device.
     func forget() async {
+        UserDefaults.standard.set(false, forKey: registeredKey)
         guard let token = UserDefaults.standard.string(forKey: tokenKey) else { return }
         struct Out: Codable { let ok: Bool }
         _ = try? await NetworkService.shared.authenticatedRequest(endpoint: "/me/devices/\(token)", method: .DELETE, body: nil, responseType: Out.self) as Out

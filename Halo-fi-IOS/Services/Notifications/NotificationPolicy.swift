@@ -82,8 +82,13 @@ enum NotificationPolicy {
         if let first = urgent.first {
             let sentToday = history.lastUrgentAt.map { calendar.isDate($0, inSameDayAs: now) } ?? false
             if !sentToday {
-                let fireAt = isDaytime(now, calendar: calendar) ? now.addingTimeInterval(60) : nextDeliverySlot(after: now, calendar: calendar)
-                return PlannedNotification(kind: .urgent, title: "HaloFi needs you", body: first.title + ".",
+                // Not "in a minute": the person is in the app right now (that is
+                // how the card was fetched). Ten minutes lets them finish; if
+                // they are still in the app, the foreground guard swallows it.
+                let fireAt = isDaytime(now, calendar: calendar) ? now.addingTimeInterval(10 * 60) : nextDeliverySlot(after: now, calendar: calendar)
+                let benefits = ["resources", "submit_package", "receipts_needed"].contains(first.kind)
+                let body = first.title + "." + (benefits ? " Estimate. A free benefits counselor can help." : "")
+                return PlannedNotification(kind: .urgent, title: "HaloFi needs you", body: body,
                                            fireAt: fireAt, itemIds: [first.id],
                                            routeKind: first.kind, routeMonth: first.payload.month ?? "")
             }
@@ -91,40 +96,48 @@ enum NotificationPolicy {
 
         // 2. Otherwise one calm digest a day, and only when there is something
         //    the last digest did not already cover, or 3 days have passed.
-        let openIds = cards.map(\.id)
-        guard !openIds.isEmpty else { return nil }
+        //    "Something new" is judged on the non-learning cards: one fresh
+        //    deposit question a day must not re-open the digest every morning.
+        let ordered = cards.sorted { $0.priority > $1.priority }
+        guard !ordered.isEmpty else { return nil }
+        let keyIds = ordered.filter { !$0.learn }.map(\.id).isEmpty ? ["learn-only"] : ordered.filter { !$0.learn }.map(\.id)
         if let last = history.lastDigestAt {
             let sinceLast = now.timeIntervalSince(last)
             if sinceLast < 20 * 3600 { return nil }
-            let unchanged = Set(openIds) == Set(history.lastDigestItemIds)
+            let unchanged = Set(keyIds) == Set(history.lastDigestItemIds)
             if unchanged && sinceLast < Double(repeatDays) * 86_400 { return nil }
         }
-        let count = cards.count
+        let count = ordered.count
+        let first = ordered[0].title
+        let firstLower = first.prefix(3).uppercased() == first.prefix(3) ? first : first.prefix(1).lowercased() + first.dropFirst()
         let body: String
         if count == 1 {
-            body = "One thing is waiting when you have a minute: \(cards[0].title.lowercased())."
+            body = "One thing is waiting when you have a minute: \(firstLower)."
         } else {
-            body = "\(count) things are waiting when you have a minute, like \(cards[0].title.lowercased())."
+            body = "\(count) things are waiting when you have a minute, like \(firstLower)."
         }
         return PlannedNotification(kind: .digest, title: "HaloFi", body: body,
-                                   fireAt: nextDeliverySlot(after: now, calendar: calendar), itemIds: openIds,
+                                   fireAt: nextDeliverySlot(after: now, calendar: calendar), itemIds: keyIds,
                                    routeKind: "attention", routeMonth: "")
     }
 
-    /// Record what was scheduled so the next plan does not repeat it.
-    static func recorded(_ n: PlannedNotification, into history: NotificationHistory) -> NotificationHistory {
+    /// Record what was scheduled so the next plan does not repeat it. Keyed
+    /// on WHEN it was planned: recording the future fire time made the next
+    /// plan think nothing had been sent yet and cancel the pending request.
+    static func recorded(_ n: PlannedNotification, into history: NotificationHistory, now: Date = Date()) -> NotificationHistory {
         var h = history
+        let stamp = min(now, n.fireAt)
         switch n.kind {
         case .urgent:
-            for id in n.itemIds { h.urgentSentAt[id] = n.fireAt }
-            h.lastUrgentAt = n.fireAt
+            for id in n.itemIds { h.urgentSentAt[id] = stamp }
+            h.lastUrgentAt = stamp
             // Keep the map bounded.
             if h.urgentSentAt.count > 100 {
                 let keep = h.urgentSentAt.sorted { $0.value > $1.value }.prefix(60)
                 h.urgentSentAt = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
             }
         case .digest:
-            h.lastDigestAt = n.fireAt
+            h.lastDigestAt = stamp
             h.lastDigestItemIds = n.itemIds
         }
         return h

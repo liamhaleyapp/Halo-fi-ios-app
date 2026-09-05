@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import UIKit
 import UserNotifications
 
 extension Notification.Name {
@@ -51,17 +52,26 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
         let legacy = pending.filter { $0.hasPrefix("ssi:") }
         if !legacy.isEmpty { center.removePendingNotificationRequests(withIdentifiers: legacy) }
 
-        guard let next = NotificationPolicy.plan(cards: cards, now: now, history: history) else {
+        // Once the server can push, local digests would only duplicate it.
+        if PushRegistrar.shared.isRegistered {
             center.removePendingNotificationRequests(withIdentifiers: Self.requestIds)
             return
         }
-        let settings = await center.notificationSettings()
-        var allowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
-        if settings.authorizationStatus == .notDetermined {
-            allowed = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        if cards.isEmpty {
+            // Nothing open: a pending digest about resolved items must not fire.
+            center.removePendingNotificationRequests(withIdentifiers: Self.requestIds)
+            return
         }
-        guard allowed else { return }
-        PushRegistrar.shared.registerIfAllowed()
+        // A pending urgent note about a card that is no longer open is dropped.
+        let openIds = Set(cards.map(\.id))
+        let staleUrgent = pending.filter { $0.hasPrefix("halo:urgent:") && !openIds.contains(String($0.dropFirst("halo:urgent:".count))) }
+        if !staleUrgent.isEmpty { center.removePendingNotificationRequests(withIdentifiers: staleUrgent) }
+        // nil = nothing NEW to say; whatever is pending stays scheduled.
+        guard let next = NotificationPolicy.plan(cards: cards, now: now, history: history) else { return }
+        let settings = await center.notificationSettings()
+        // Permission is asked on the Money tab, in the foreground, never from a
+        // background refresh (an unexplained system prompt is disorienting).
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
 
         let content = UNMutableNotificationContent()
         content.title = next.title
@@ -69,12 +79,12 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
         content.sound = next.kind == .urgent ? .default : nil
         content.userInfo = ["kind": next.routeKind, "month": next.routeMonth]
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: next.fireAt)
-        let id = next.kind == .urgent ? "halo:urgent" : "halo:digest"
+        let id = next.kind == .urgent ? "halo:urgent:\(next.itemIds.first ?? "x")" : "halo:digest"
         let request = UNNotificationRequest(identifier: id, content: content,
                                             trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false))
         do {
             try await center.add(request)
-            history = NotificationPolicy.recorded(next, into: history)
+            history = NotificationPolicy.recorded(next, into: history, now: now)
             Logger.info("Notifications: planned \(next.kind.rawValue) for \(next.fireAt)")
         } catch {
             Logger.warning("Notifications: could not schedule: \(error)")
@@ -83,9 +93,13 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
 
     // MARK: - UNUserNotificationCenterDelegate
 
+    /// Someone using the app is never interrupted by a banner about it
+    /// (Liam, 2026-09-05). A notification that arrives while HaloFi is in
+    /// the foreground is swallowed; the screen already shows the same thing.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        let active = await MainActor.run { UIApplication.shared.applicationState == .active }
+        return active ? [] : [.banner, .sound]
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,

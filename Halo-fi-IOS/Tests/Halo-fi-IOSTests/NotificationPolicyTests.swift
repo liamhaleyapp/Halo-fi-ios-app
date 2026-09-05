@@ -42,8 +42,12 @@ import Testing
         let cards = [card("d1", kind: "deposit_label")]
         let first = NotificationPolicy.plan(cards: cards, now: at(14), history: NotificationHistory())!
         let h = NotificationPolicy.recorded(first, into: NotificationHistory())
-        let more = cards + [card("d2", kind: "deposit_label")]
-        #expect(NotificationPolicy.plan(cards: more, now: at(12, day: 6), history: h) == nil)      // < 20 h after the 9 a.m. digest
+        // A new learning question alone is not "new" (it would re-open the digest daily);
+        // a new non-learning card is.
+        let moreLearn = cards + [card("d2", kind: "deposit_label")]
+        #expect(NotificationPolicy.plan(cards: moreLearn, now: at(10, day: 7), history: h) == nil)
+        let more = cards + [card("b2", kind: "bill_confirm", title: "Is Netflix a subscription?")]
+        #expect(NotificationPolicy.plan(cards: more, now: at(8, day: 6), history: h) == nil)       // 17.5 h after the digest was planned
         #expect(NotificationPolicy.plan(cards: more, now: at(10, day: 7), history: h)?.kind == .digest)
     }
 
@@ -52,7 +56,7 @@ import Testing
         let evening = NotificationPolicy.plan(cards: [urgent], now: at(22), history: NotificationHistory())!
         #expect(evening.kind == .urgent && Calendar.current.component(.hour, from: evening.fireAt) == 9)
         let daytime = NotificationPolicy.plan(cards: [urgent], now: at(11), history: NotificationHistory())!
-        #expect(daytime.fireAt.timeIntervalSince(at(11)) < 120)
+        #expect(daytime.fireAt.timeIntervalSince(at(11)) < 11 * 60)
         let h = NotificationPolicy.recorded(daytime, into: NotificationHistory())
         // The same urgent item is never repeated; a digest can still follow.
         #expect(NotificationPolicy.plan(cards: [urgent], now: at(11, day: 6), history: h)?.kind == .digest)

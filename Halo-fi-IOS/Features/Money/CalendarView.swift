@@ -14,7 +14,6 @@ struct CalendarView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(UserManager.self) private var userManager
     @State private var month: String? = nil       // nil = current
-    @State private var isLoading = false
     @State private var errorMessage: String?
     @AccessibilityFocusState private var focus: Bool
 
@@ -23,6 +22,7 @@ struct CalendarView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                monthNav(cal?.month ?? month ?? Self.currentMonthKey(), label: cal?.monthLabel)
                 if let cal {
                     ScreenReaderSummaryHeader(
                         verdict: cal.monthLabel,
@@ -31,7 +31,7 @@ struct CalendarView: View {
                         tone: .neutral,
                         visualDetail: summaryLine(cal)
                     )
-                    monthNav(cal)
+                    .accessibilityFocused($focus)
                     if cal.days.isEmpty {
                         Text("Nothing confirmed for this month yet. Answer the deposit and bill questions on the Money tab and they show up here.")
                             .font(.subheadline).foregroundColor(.haloTextSecondary)
@@ -81,16 +81,20 @@ struct CalendarView: View {
         return s
     }
 
-    private func monthNav(_ cal: CalendarMonth) -> some View {
+    static func currentMonthKey() -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM"; return f.string(from: Date())
+    }
+
+    private func monthNav(_ key: String, label: String?) -> some View {
         HStack {
-            Button { month = shift(cal.month, by: -1) } label: {
+            Button { month = shift(key, by: -1) } label: {
                 Label("Previous month", systemImage: "chevron.left").labelStyle(.iconOnly).frame(width: 44, height: 44)
             }
             .accessibilityLabel("Previous month")
             Spacer()
-            Text(cal.monthLabel).font(.haloRowTitle).foregroundColor(.haloTextPrimary).accessibilityHidden(true)
+            Text(label ?? key).font(.haloRowTitle).foregroundColor(.haloTextPrimary).accessibilityHidden(true)
             Spacer()
-            Button { month = shift(cal.month, by: 1) } label: {
+            Button { month = shift(key, by: 1) } label: {
                 Label("Next month", systemImage: "chevron.right").labelStyle(.iconOnly).frame(width: 44, height: 44)
             }
             .accessibilityLabel("Next month")
@@ -111,7 +115,7 @@ struct CalendarView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.haloTextSecondary)
                 .accessibilityAddTraits(.isHeader)
-            ForEach(day.items) { item in itemRow(item, day: day) }
+            ForEach(Array(day.items.enumerated()), id: \.offset) { _, item in itemRow(item, day: day) }
         }
     }
 
@@ -167,13 +171,11 @@ struct CalendarView: View {
     private func load(force: Bool = false) async {
         guard !UITestArchetype.isActive else { return }
         if !force, cal != nil { return }
-        isLoading = true
         errorMessage = nil
         do {
             try await dataManager.loadCalendar(month: month)
         } catch {
             errorMessage = "Couldn't build the month. \(error.localizedDescription)"
         }
-        isLoading = false
     }
 }

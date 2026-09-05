@@ -70,7 +70,7 @@ struct InstitutionAccountsView: View {
             BankAccountRow(account: account)
           }
           .buttonStyle(HapticPlainButtonStyle())
-          .accessibilityAction(named: "Add a nickname") { nicknameTarget = account }
+          .accessibilityAction(named: account.nickname?.isEmpty == false ? "Change nickname" : "Add a nickname") { nicknameTarget = account }
         }
       }
       .padding(.horizontal, 20)

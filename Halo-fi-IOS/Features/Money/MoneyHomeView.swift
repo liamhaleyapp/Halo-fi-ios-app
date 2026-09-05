@@ -102,6 +102,13 @@ struct MoneyHomeView: View {
                     UIAccessibility.post(notification: .announcement, argument: "Updated. \(summary.verdict). \(summary.subline ?? "")")
                 }
             }
+            .task {
+                // Foreground, after the first paint: the one place the
+                // notification permission is asked.
+                guard !UITestArchetype.isActive else { return }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await PushRegistrar.shared.requestPermissionIfNeeded()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
                 if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
                 navigationPath.append(MoneyRoute.attention)

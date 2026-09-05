@@ -93,14 +93,17 @@ struct MainTabView: View {
     private static var coldLaunchRefreshed = false
     private static var wentToBackgroundAt: Date?
 
-    private func refreshEverything(reason: String) async {
-        guard userManager.currentUser != nil else { return }
+    /// Returns false when there was no signed-in user to refresh for (so a
+    /// cold-launch attempt before session restore can try again).
+    @discardableResult
+    private func refreshEverything(reason: String) async -> Bool {
+        guard userManager.currentUser != nil else { return false }
         Logger.info("MainTabView: refreshing everything (\(reason))")
         budgetDataManager.markStale()
         async let bank: () = bankDataManager.forceRefresh()
         async let budget: () = budgetDataManager.refresh()
-        async let caps: () = userManager.refreshCapabilities()
-        _ = await (bank, budget, caps)
+        _ = await (bank, budget)   // capabilities refresh on foreground is handled below
+        return true
     }
 
     var body: some View {
@@ -113,8 +116,7 @@ struct MainTabView: View {
             // Killing and reopening the app must refresh (Liam, 2026-09-05):
             // the restored caches paint first, then everything re-pulls.
             guard !UITestArchetype.isActive, !Self.coldLaunchRefreshed else { return }
-            Self.coldLaunchRefreshed = true
-            await refreshEverything(reason: "cold launch")
+            if await refreshEverything(reason: "cold launch") { Self.coldLaunchRefreshed = true }
         }
         .onChange(of: scenePhase) { _, phase in
             guard !UITestArchetype.isActive else { return }
