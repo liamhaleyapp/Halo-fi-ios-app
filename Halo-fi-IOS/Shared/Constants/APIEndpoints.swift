@@ -53,6 +53,8 @@ enum APIEndpoints {
         /// POST - Verify the 6-digit phone OTP sent during signup.
         /// Body: { id_user, verification_token }.
         static let verifyPhoneCode = "/auth/verification_code"
+        static let verifyEmailCode = "/auth/verify-email"
+        static let resendEmailCode = "/auth/resend-email-code"
 
         /// POST - Resend the phone OTP for a user that hasn't verified yet.
         /// Body: { user_auth_id }.

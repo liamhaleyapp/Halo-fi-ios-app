@@ -221,6 +221,23 @@ final class UserManager {
     /// Verify the phone OTP sent during signup. On success the user's
     /// phone is marked confirmed in Supabase; the caller can then sign
     /// in normally with phone + password.
+    /// Email/password sign-up: the 6-digit code we emailed (2026-09-05).
+    func verifyEmailCode(idUser: String, code: String) async throws {
+        struct Body: Encodable { let id_user: String; let code: String }
+        struct Out: Codable { let success: Bool? }
+        let _: Out = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.verifyEmailCode, method: .POST,
+            body: try JSONEncoder().encode(Body(id_user: idUser, code: code)), responseType: Out.self)
+    }
+
+    func resendEmailCode(idUser: String) async throws {
+        struct Body: Encodable { let id_user: String }
+        struct Out: Codable { let success: Bool? }
+        let _: Out = try await NetworkService.shared.publicRequest(
+            endpoint: APIEndpoints.Auth.resendEmailCode, method: .POST,
+            body: try JSONEncoder().encode(Body(id_user: idUser)), responseType: Out.self)
+    }
+
     func verifyPhoneOTP(idUser: String, code: String) async throws {
         struct VerifyBody: Encodable {
             let idUser: String

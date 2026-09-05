@@ -51,6 +51,15 @@ class SignUpViewModel {
     let password: String
     let smsAlreadySent: Bool
   }
+
+  struct PendingEmailVerification: Identifiable, Equatable {
+    let id = UUID()
+    let idUser: String
+    let email: String
+    let password: String
+    let emailAlreadySent: Bool
+  }
+  var pendingEmailVerification: PendingEmailVerification?
   
   // MARK: - Derived / helpers
   
@@ -295,6 +304,14 @@ class SignUpViewModel {
       // Older backends (or future social-only flows) that omit the flag
       // fall through to the original sign-in-immediately path.
       // Only run SMS verification when the user actually provided a phone.
+      // Email code first (2026-09-05): the account is unconfirmed until the
+      // 6-digit code we emailed is typed back.
+      if signupResponse.requiresEmailVerification == true {
+        pendingEmailVerification = PendingEmailVerification(
+          idUser: signupResponse.idUser, email: trimmedEmail, password: password,
+          emailAlreadySent: signupResponse.emailSent ?? false)
+        return
+      }
       if signupResponse.requiresPhoneVerification == true && !fullPhone.isEmpty {
         pendingPhoneVerification = PendingPhoneVerification(
           idUser: signupResponse.idUser,
@@ -334,6 +351,22 @@ class SignUpViewModel {
   /// SMS OTP in PhoneVerificationView. Signs the user in with the
   /// password we held in memory during the verification step, redeems
   /// any referral, and fires onComplete.
+  func completeEmailVerification(using userManager: UserManager, onComplete: (() -> Void)?) async {
+    guard let pending = pendingEmailVerification else { return }
+    isLoading = true
+    defer { isLoading = false }
+    do {
+      try await userManager.signIn(email: pending.email, password: pending.password)
+      await redeemReferralIfNeeded()
+      pendingEmailVerification = nil
+      onComplete?()
+    } catch {
+      pendingEmailVerification = nil
+      errorMessage = "Email verified, but sign-in failed. Please sign in with your email and password."
+      showingError = true
+    }
+  }
+
   func completePhoneVerification(using userManager: UserManager, onComplete: (() -> Void)?) async {
     guard let pending = pendingPhoneVerification else { return }
     isLoading = true

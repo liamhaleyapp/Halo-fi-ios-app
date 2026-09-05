@@ -283,6 +283,21 @@ struct SignUpView: View {
     // Uses fullScreenCover (not navigationDestination) because SignUpView
     // is itself presented via fullScreenCover with no NavigationStack.
     .fullScreenCover(item: Binding(
+      get: { viewModel.pendingEmailVerification },
+      set: { viewModel.pendingEmailVerification = $0 }
+    )) { pending in
+      EmailVerificationView(
+        idUser: pending.idUser,
+        email: pending.email,
+        emailAlreadySent: pending.emailAlreadySent,
+        onVerified: {
+          Task {
+            await viewModel.completeEmailVerification(using: userManager, onComplete: onComplete)
+          }
+        }
+      )
+    }
+    .fullScreenCover(item: Binding(
       get: { viewModel.pendingPhoneVerification },
       set: { viewModel.pendingPhoneVerification = $0 }
     )) { pending in
