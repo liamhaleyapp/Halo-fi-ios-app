@@ -16,6 +16,10 @@ import Foundation
 
 enum UITestArchetype: String, CaseIterable {
     case none, ssiBlind = "ssi_blind", ssiUnverified = "ssi_unverified", ssdi, both
+    /// Answered the questionnaire: no SSI, no SSDI → no Benefits tab.
+    case noneAnswered = "none_answered"
+    /// SSI, resources in the 75–95 % watch band → alert banner + urgent header.
+    case ssiWatch = "ssi_watch"
 
     static let argumentPrefix = "--ui-test-archetype="
 
@@ -34,14 +38,14 @@ enum UITestArchetype: String, CaseIterable {
     /// at launch (screenshot runs and UI tests that start off Money).
     static let tabArgumentPrefix = "--ui-test-tab="
 
-    static let initialTabIndex: Int? = {
+    static let initialTab: MainTab? = {
         #if DEBUG
         for arg in ProcessInfo.processInfo.arguments where arg.hasPrefix(tabArgumentPrefix) {
             switch String(arg.dropFirst(tabArgumentPrefix.count)) {
-            case "money": return 0
-            case "benefits": return 1
-            case "agent": return 2
-            case "settings": return 3
+            case "money": return .money
+            case "benefits": return .benefits
+            case "agent": return .agent
+            case "settings": return .settings
             default: return nil
             }
         }
@@ -55,7 +59,12 @@ enum UITestArchetype: String, CaseIterable {
         switch self {
         case .none:
             return .none
-        case .ssiBlind:
+        case .noneAnswered:
+            return UserCapabilities(showsBenefitsLane: false, showsResourceCounter: false, showsSSDILane: false,
+                                    expenseType: .none, bweLocked: false, coupleLimits: false, deemingReferral: false,
+                                    showsWorkIncentives: false, benefitType: "none", blindStatus: "no",
+                                    profileAnswered: true, getsSsaPayment: "no")
+        case .ssiBlind, .ssiWatch:
             return UserCapabilities(showsBenefitsLane: true, showsResourceCounter: true, showsSSDILane: false,
                                     expenseType: .bwe, bweLocked: false, coupleLimits: false, deemingReferral: false,
                                     showsWorkIncentives: true, benefitType: "ssi", blindStatus: "yes")
@@ -103,7 +112,23 @@ enum UITestArchetype: String, CaseIterable {
     /// A BudgetOverview for this archetype, decoded from JSON so it matches
     /// the wire shape exactly.
     var overview: BudgetOverview? {
-        let ssi = self == .none || self == .ssdi
+        let watch = self == .ssiWatch
+        let resources = watch
+            ? """
+              {"current_cents": 180000, "limit_cents": 200000, "remaining_cents": 20000, "pct_used": 90.0,
+               "status": "warning", "formatted": {"current": "$1,800.00", "limit": "$2,000.00", "remaining": "$200.00"},
+               "note": "", "excluded_cents": 0, "able_balance_cents": 0, "burial_fund_cents": 0, "v2_status": "warning",
+               "band_status": "watch", "escalated": false, "pct_of_limit": 90.0, "days_until_measurement": 27,
+               "measurement_date_iso": "2026-10-01", "spend_or_move_cents": 30000, "spend_or_move_formatted": "$300.00"}
+              """
+            : """
+              {"current_cents": 121400, "limit_cents": 200000, "remaining_cents": 78600, "pct_used": 60.7,
+               "status": "safe", "formatted": {"current": "$1,214.00", "limit": "$2,000.00", "remaining": "$786.00"},
+               "note": "", "excluded_cents": 0, "able_balance_cents": 0, "burial_fund_cents": 0, "v2_status": "ok",
+               "band_status": "ok", "escalated": false, "pct_of_limit": 60.7, "days_until_measurement": 27,
+               "measurement_date_iso": "2026-10-01", "spend_or_move_cents": 0, "spend_or_move_formatted": "$0.00"}
+              """
+        let ssi = self == .none || self == .noneAnswered || self == .ssdi
             ? """
               {"has_ssi": false, "household_size": null, "resources": null, "income": null,
                "next_ssa_deposit": null, "recent_ssa_deposits": null, "overpayment_flag": null,
@@ -111,11 +136,7 @@ enum UITestArchetype: String, CaseIterable {
               """
             : """
               {"has_ssi": true, "household_size": 1,
-               "resources": {"current_cents": 121400, "limit_cents": 200000, "remaining_cents": 78600, "pct_used": 60.7,
-                             "status": "safe", "formatted": {"current": "$1,214.00", "limit": "$2,000.00", "remaining": "$786.00"},
-                             "note": "", "excluded_cents": 0, "able_balance_cents": 0, "burial_fund_cents": 0, "v2_status": "ok",
-                             "band_status": "ok", "escalated": false, "pct_of_limit": 60.7, "days_until_measurement": 27,
-                             "measurement_date_iso": "2026-10-01", "spend_or_move_cents": 0, "spend_or_move_formatted": "$0.00"},
+               "resources": \(resources),
                "income": {"countable_cents": 0, "threshold_cents": 283000, "status": "safe",
                           "formatted": {"countable": "$0.00", "threshold": "$2,830.00"}, "note": "",
                           "fbr_cents": 99400, "projected_payment_cents": 99400, "eligible_for_cash": true, "earn_room_gross_cents": 207300},
@@ -139,7 +160,7 @@ enum UITestArchetype: String, CaseIterable {
                                         "ssi": {"enabled": false, "amount_cents": null}, "ssdi": {"enabled": false, "amount_cents": null}},
                             "editable": true},
          "ssi_status": \(ssi),
-         "ssi_profile": {"is_blind": \(self == .ssiBlind || self == .both), "has_able_account": false, "able_balance_cents": null, "burial_fund_cents": null},
+         "ssi_profile": {"is_blind": \(self == .ssiBlind || self == .ssiWatch || self == .both), "has_able_account": false, "able_balance_cents": null, "burial_fund_cents": null},
          "ssi_alerts": [], "alerts": [], "as_of_utc": "2026-09-03T12:00:00Z"}
         """
         return try? JSONDecoder().decode(BudgetOverview.self, from: Data(json.utf8))

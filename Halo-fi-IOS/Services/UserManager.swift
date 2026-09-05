@@ -32,6 +32,45 @@ final class UserManager {
     /// The raw benefits-profile answers, for seeding the editor.
     var benefitsProfile: BenefitsProfile = .empty
 
+    /// When `capabilities` last came from the server. Nil = never this
+    /// session (a persisted copy may have been restored, see
+    /// `restoreCapabilities`). Drives `refreshCapabilitiesIfStale`.
+    var capabilitiesLoadedAt: Date?
+
+    /// Persisted copy of the last server answer, so a cold launch starts
+    /// from the last known lane (no "Start the questionnaire" flash, no
+    /// Benefits tab blinking in and out) and then refreshes.
+    private struct StoredCapabilities: Codable {
+        var capabilities: UserCapabilities
+        var benefitsProfile: BenefitsProfile
+    }
+
+    private func capabilitiesKey(for userId: String) -> String { "capabilities_v1_\(userId)" }
+
+    private func storeCapabilities() {
+        guard let userId = currentUser?.id else { return }
+        let stored = StoredCapabilities(capabilities: capabilities, benefitsProfile: benefitsProfile)
+        if let data = try? JSONEncoder().encode(stored) {
+            userDefaults.set(data, forKey: capabilitiesKey(for: userId))
+        }
+    }
+
+    private func restoreCapabilities(for userId: String) {
+        // UI-test fixtures stand in for auth + network (WP4 §9).
+        guard !UITestArchetype.isActive else { return }
+        guard let data = userDefaults.data(forKey: capabilitiesKey(for: userId)),
+              let stored = try? JSONDecoder().decode(StoredCapabilities.self, from: data) else { return }
+        capabilities = stored.capabilities
+        benefitsProfile = stored.benefitsProfile
+    }
+
+    /// Refresh unless the last server answer is younger than `maxAge`.
+    /// Called when the main tabs appear and on every foreground.
+    func refreshCapabilitiesIfStale(maxAge: TimeInterval = 600) async {
+        if let loaded = capabilitiesLoadedAt, Date().timeIntervalSince(loaded) < maxAge { return }
+        await refreshCapabilities()
+    }
+
     private let userDefaults = UserDefaults.standard
     private let userKey = "currentUser"
     private let legacyOnboardingKey = "user_onboarding_completed"  // Legacy global key for migration
@@ -348,6 +387,15 @@ final class UserManager {
         if let versionKey = aiConsentKey("policy_version") {
             userDefaults.removeObject(forKey: versionKey)
         }
+
+        // The lane belongs to the account, not the device: never let one
+        // user's capabilities gate the next user's tabs.
+        if let userId = currentUser?.id {
+            userDefaults.removeObject(forKey: capabilitiesKey(for: userId))
+        }
+        capabilities = .none
+        benefitsProfile = .empty
+        capabilitiesLoadedAt = nil
 
         currentUser = nil
         isAuthenticated = false
@@ -768,6 +816,10 @@ final class UserManager {
         // absent local mirror. Previously this call had no callers, so the
         // per-user consent state was never reconciled after sign-in.
         Task { await refreshAIConsentFromServer() }
+        // The lane (Benefits tab or not, SSI / SSDI) must be known before
+        // the main tabs render; /auth/me may or may not have carried it.
+        restoreCapabilities(for: user.id)
+        Task { await refreshCapabilities() }
 
         // Configure bank data manager - it will notify us when done via NotificationCenter
         bankDataManager?.configureForUser(userId: user.id)
@@ -841,9 +893,13 @@ final class UserManager {
 
         if let caps = profileData.capabilities {
             capabilities = caps
+            capabilitiesLoadedAt = Date()
         }
         if let profile = profileData.benefitsProfile {
             benefitsProfile = profile
+        }
+        if profileData.capabilities != nil || profileData.benefitsProfile != nil {
+            storeCapabilities()
         }
     }
 
@@ -852,6 +908,9 @@ final class UserManager {
     /// GET /users/me/capabilities — call after any profile change so the
     /// app re-gates immediately (also embedded in /auth/me).
     func refreshCapabilities() async {
+        // Fixtures seed `capabilities` directly; a network answer (or a
+        // stored real account on the same simulator) must not replace them.
+        guard !UITestArchetype.isActive else { return }
         do {
             let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
                 endpoint: APIEndpoints.User.capabilities,
@@ -863,6 +922,8 @@ final class UserManager {
             if let profile = response.benefitsProfile {
                 benefitsProfile = profile
             }
+            capabilitiesLoadedAt = Date()
+            storeCapabilities()
         } catch {
             Logger.warning("UserManager: could not refresh capabilities: \(error)")
         }
@@ -872,6 +933,7 @@ final class UserManager {
     /// after a profile write, where a silent miss would let the app carry
     /// on as if the answers had been stored.
     func refreshCapabilitiesOrThrow() async throws {
+        guard !UITestArchetype.isActive else { return }
         let response: CapabilitiesResponse = try await NetworkService.shared.authenticatedRequest(
             endpoint: APIEndpoints.User.capabilities,
             method: .GET,
@@ -882,6 +944,8 @@ final class UserManager {
         if let profile = response.benefitsProfile {
             benefitsProfile = profile
         }
+        capabilitiesLoadedAt = Date()
+        storeCapabilities()
     }
 
     /// PATCH /users/me with one or more benefits-profile answers, then
@@ -942,6 +1006,11 @@ final class UserManager {
         if tokenStorage.isTokenValid() {
             currentUser = user
             isAuthenticated = true
+            // Cold launch: start from the last known lane, then refresh.
+            // Without this the Benefits tab rendered as "not answered"
+            // for every returning user until some screen refetched.
+            restoreCapabilities(for: user.id)
+            Task { await refreshCapabilities() }
         } else if let refreshToken = tokenStorage.getRefreshToken() {
             Task {
                 await refreshTokensIfNeeded(refreshToken: refreshToken)
@@ -974,6 +1043,8 @@ final class UserManager {
                let user = try? JSONDecoder().decode(User.self, from: data) {
                 currentUser = user
                 isAuthenticated = true
+                restoreCapabilities(for: user.id)
+                await refreshCapabilities()
                 bankDataManager?.configureForUser(userId: user.id)
             }
 

@@ -18,6 +18,10 @@ struct TabSummary: Equatable {
     let detail: String
     let isEstimate: Bool
     let tone: ScreenReaderSummaryHeader.Tone
+    /// The one line drawn under the hero figure (the figure itself already
+    /// shows the first sentence of `detail`). Explicit, so adding a
+    /// sentence to `detail` never silently changes what is visible.
+    var subline: String? = nil
 
     var spoken: String {
         var parts = ["\(verdict).", detail]
@@ -48,25 +52,35 @@ enum TabSummaries {
         var tone: ScreenReaderSummaryHeader.Tone = .neutral
         var isEstimate = false
 
+        var sublines: [String] = []
+
+        // The balance is the headline for everyone. For SSI users the same
+        // card also carries the resource counter (Liam, 2026-09-04): the
+        // countable figure against the limit, in words before numbers, and
+        // the card opens the Resource monitor.
+        verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
+        let accounts = VoiceOverFormatter.count(s.accountCount, singular: "account", plural: "accounts")
+        detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)) across \(accounts). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
+        tone = s.owedCents > s.cashCents ? .watch : .positive
+
         if capabilities.showsResourceCounter, let res = s.resources {
-            let (word, t) = resourceVerdict(res)
-            verdict = word
+            let (state, t) = resourceState(res)
             tone = t
             isEstimate = true
-            detail = "Counted resources: \(VoiceOverFormatter.dollars(res.currentCents)) of \(VoiceOverFormatter.dollars(res.limitCents))."
+            var line = "Counts toward your SSI limit: \(VoiceOverFormatter.dollars(res.currentCents)) of \(VoiceOverFormatter.dollars(res.limitCents)), \(state)."
             if let days = res.daysUntilMeasurement, res.effectiveStatus != "ok" {
-                detail += " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
+                line += " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
             }
-        } else {
-            verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
-            let accounts = VoiceOverFormatter.count(s.accountCount, singular: "account", plural: "accounts")
-            detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)) across \(accounts). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
-            tone = s.owedCents > s.cashCents ? .watch : .positive
+            detail += " " + line
+            sublines.append(line)
         }
         if s.connectionsNeedingAttention > 0 {
-            detail += " \(VoiceOverFormatter.count(s.connectionsNeedingAttention, singular: "connection", plural: "connections")) need\(s.connectionsNeedingAttention == 1 ? "s" : "") attention."
+            let line = "\(VoiceOverFormatter.count(s.connectionsNeedingAttention, singular: "connection", plural: "connections")) need\(s.connectionsNeedingAttention == 1 ? "s" : "") attention."
+            detail += " " + line
+            sublines.append(line)
         }
-        return TabSummary(verdict: verdict, detail: detail, isEstimate: isEstimate, tone: tone)
+        return TabSummary(verdict: verdict, detail: detail, isEstimate: isEstimate, tone: tone,
+                          subline: sublines.isEmpty ? nil : sublines.joined(separator: " "))
     }
 
     /// The budget summary row under the Money header.
@@ -83,40 +97,77 @@ enum TabSummaries {
 
     // MARK: - Benefits
 
+    /// The Benefits header leads with the MOST URGENT item (Liam,
+    /// 2026-09-04): over the limit > act now > package due > receipts still
+    /// needed > resources in the watch band > the plain lane line.
     static func benefits(
         capabilities: UserCapabilities,
         ssi: SSIStatus?,
         expensesThisMonth: Int,
         expensesTotalCents: Int,
-        expensesImpactCents: Int
+        expensesImpactCents: Int,
+        reminders: [SSIReminder] = [],
+        needsReceiptCount: Int = 0
     ) -> TabSummary {
+        let expenses = expensesLine(expensesThisMonth, expensesTotalCents, expensesImpactCents)
+        let packageDue = reminders.first { $0.kind == "submit_package" }
+        let receipts: String? = needsReceiptCount > 0
+            ? "\(VoiceOverFormatter.count(needsReceiptCount, singular: "receipt", plural: "receipts")) still needed"
+            : nil
+
         if capabilities.showsResourceCounter {
-            let (word, tone) = ssi?.resources.map(resourceVerdict) ?? ("Your SSI", .neutral)
-            var detail = "Your SSI."
-            if let res = ssi?.resources {
-                detail += " Resources \(VoiceOverFormatter.dollars(res.currentCents)) of \(VoiceOverFormatter.dollars(res.limitCents))."
+            let res = ssi?.resources
+            let status = res?.effectiveStatus ?? "ok"
+            var projected = ""
+            if let p = ssi?.income?.projectedPaymentCents {
+                projected = " Projected check about \(VoiceOverFormatter.dollars(p))."
             }
-            if let projected = ssi?.income?.projectedPaymentCents {
-                detail += " Projected check about \(VoiceOverFormatter.dollars(projected))."
+            let resourcesLine: String = res.map {
+                "Resources \(VoiceOverFormatter.dollars($0.currentCents)) of \(VoiceOverFormatter.dollars($0.limitCents))."
+            } ?? ""
+            let measures: String = {
+                guard let days = res?.daysUntilMeasurement, status != "ok" else { return "" }
+                return " Social Security measures in \(days == 1 ? "1 day" : "\(days) days")."
+            }()
+
+            if status == "over" {
+                return TabSummary(verdict: "Over the SSI resource limit", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act)
             }
-            detail += " " + expensesLine(expensesThisMonth, expensesTotalCents, expensesImpactCents)
-            return TabSummary(verdict: word == "On track" ? "Your SSI is on track" : word, detail: detail, isEstimate: true, tone: tone)
+            if status == "critical" {
+                return TabSummary(verdict: "Act now on resources", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .act)
+            }
+            if let packageDue {
+                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch)
+            }
+            if let receipts {
+                return TabSummary(verdict: receipts, detail: "Your SSI. \(resourcesLine) \(expenses)", isEstimate: true, tone: .watch)
+            }
+            if status == "warning" {
+                return TabSummary(verdict: "Resources getting close", detail: "\(resourcesLine)\(measures)\(projected) \(expenses)", isEstimate: true, tone: .watch)
+            }
+            let detail = ("Your SSI. " + resourcesLine + projected + " " + expenses).replacingOccurrences(of: "  ", with: " ")
+            return TabSummary(verdict: "Your SSI is on track", detail: detail, isEstimate: true, tone: .positive)
         }
         if capabilities.showsSSDILane {
+            if let packageDue {
+                return TabSummary(verdict: "Monthly package due", detail: "\(packageDue.body) Your SSDI. \(expenses)", isEstimate: true, tone: .watch)
+            }
+            if let receipts {
+                return TabSummary(verdict: receipts, detail: "Your SSDI. \(expenses)", isEstimate: true, tone: .watch)
+            }
             return TabSummary(
                 verdict: "Your SSDI",
-                detail: "Work incentives tracking for SSDI is coming in a later update. " + expensesLine(expensesThisMonth, expensesTotalCents, expensesImpactCents),
+                detail: "Work incentives tracking for SSDI is coming in a later update. " + expenses,
                 isEstimate: true,
                 tone: .neutral
             )
         }
-        // No SSI, no SSDI (or not answered yet): nothing about either
-        // program is shown; the only thing here is the way to change it.
+        // Not answered yet: nothing about either program is shown; the only
+        // thing on the tab is the way to start. (Answered "no SSI, no SSDI"
+        // users have no Benefits tab at all.)
         return TabSummary(
             verdict: "No benefits set up",
-            detail: capabilities.benefitsUnanswered
-                ? "You haven't told us about your Social Security benefits yet. A short questionnaire sets this tab up for you."
-                : "You told us you don't receive SSI or SSDI, so there's nothing to track here. Redo the questionnaire anytime if that changes.",
+            detail: "You haven't told us about your Social Security benefits yet. A short questionnaire sets this tab up for you.",
             isEstimate: false,
             tone: .neutral
         )
@@ -140,6 +191,17 @@ enum TabSummaries {
         case "critical": return ("Act now", .act)
         case "warning": return ("Watch", .watch)
         default: return ("On track", .positive)
+        }
+    }
+
+    /// The same bands as `resourceVerdict`, as a phrase that reads inside a
+    /// sentence ("…of 2,000 dollars, getting close.").
+    static func resourceState(_ res: SSIResources) -> (String, ScreenReaderSummaryHeader.Tone) {
+        switch res.effectiveStatus {
+        case "over": return ("over the limit", .act)
+        case "critical": return ("act now", .act)
+        case "warning": return ("getting close", .watch)
+        default: return ("on track", .positive)
         }
     }
 

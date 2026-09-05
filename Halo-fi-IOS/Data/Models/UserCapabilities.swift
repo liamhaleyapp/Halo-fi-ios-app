@@ -71,8 +71,12 @@ struct UserCapabilities: Codable, Equatable {
         deemingReferral: Bool,
         showsWorkIncentives: Bool,
         benefitType: String?,
-        blindStatus: String?
+        blindStatus: String?,
+        profileAnswered: Bool = false,
+        getsSsaPayment: String? = nil
     ) {
+        self.profileAnswered = profileAnswered
+        self.getsSsaPayment = getsSsaPayment
         self.showsBenefitsLane = showsBenefitsLane
         self.showsResourceCounter = showsResourceCounter
         self.showsSSDILane = showsSSDILane
@@ -117,6 +121,14 @@ struct UserCapabilities: Codable, Equatable {
 
     /// True when the profile question has simply not been answered yet
     /// (as opposed to an explicit "no").
+    /// Whether the Benefits tab exists for this user (Liam, 2026-09-04):
+    /// shown while the questionnaire is unanswered (its only content is the
+    /// way to start it) and for SSI / SSDI users; hidden once the answers
+    /// say no SSI and no SSDI. Settings → "Set up benefits" brings it back.
+    var showsBenefitsTab: Bool {
+        showsBenefitsLane || benefitsUnanswered
+    }
+
     var benefitsUnanswered: Bool {
         if profileAnswered { return false }
         // Older backends do not send profileAnswered; fall back to the

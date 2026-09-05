@@ -85,20 +85,29 @@ struct BenefitsProfileView: View {
         }
     }
 
-    private var overviewLine: String {
+    private var overviewLine: String { Self.overviewLine(capabilities: caps, profile: profile) }
+
+    /// One line that says what the answers add up to. Shared with the
+    /// Benefits tab's "Your benefits profile" row.
+    static func overviewLine(capabilities caps: UserCapabilities, profile: BenefitsProfile) -> String {
         switch caps.lane {
         case .ssi:
-            var parts = [caps.blindStatus == "yes" ? "Statutory blindness verified" : "Blind Work Expenses locked until verified"]
+            var parts = [caps.showsSSDILane ? "SSI and SSDI" : "SSI"]
+            parts.append(caps.blindStatus == "yes" ? "statutory blindness verified" : "Blind Work Expenses locked until verified")
             if let work = profile.workStatus {
                 parts.append(work == "working" ? "working now" : work == "starting_soon" ? "starting work soon" : "not working right now")
             }
             return parts.joined(separator: ", ") + "."
         case .ssdi:
-            return "Work expenses count as IRWE."
+            var parts = ["SSDI", "work expenses count as IRWE"]
+            if let work = profile.workStatus {
+                parts.append(work == "working" ? "working now" : work == "starting_soon" ? "starting work soon" : "not working right now")
+            }
+            return parts.joined(separator: ", ") + "."
         case .none:
             return caps.benefitsUnanswered
-                ? "A few one-tap questions decide what the Benefits tab shows."
-                : "The Benefits tab stays quiet unless this changes."
+                ? "A few one-tap questions decide what HaloFi shows you."
+                : "No SSI or SSDI, so there is no Benefits tab. Change an answer and it comes back."
         }
     }
 

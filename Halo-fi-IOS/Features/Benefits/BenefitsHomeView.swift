@@ -2,16 +2,20 @@
 //  BenefitsHomeView.swift
 //  Halo-fi-IOS
 //
-//  The Benefits tab (WP4). Shown for everyone: benefit users get the
-//  resource monitor and their lane; everyone gets the work-expense log and
-//  the education cards. Reading order:
-//    a. Summary header ("Your SSI" / "Your SSDI" / "Work expenses")
-//    b. Resource monitor row (SSI only) → ResourceMonitorView
+//  The Benefits tab (WP4, reshaped 2026-09-04). Exists for SSI / SSDI users
+//  and for anyone who has not answered the questionnaire yet; answered
+//  "no SSI, no SSDI" users have no Benefits tab (MainTabView.visibleTabs).
+//  Reading order:
+//    a. Summary header — the MOST URGENT item first (over the limit > act
+//       now > package due > receipts needed > watch band > lane line)
+//    b. Resource alert banner (SSI, only in watch / act / over) → monitor
 //    c. Work expenses row → WorkExpensesView
-//    d. Learn cards (static in V1)
-//    e. Last element, always: "Talk to a free benefits counselor"
-//  SSI and SSDI are never blended into one number. BWE rows render
-//  visible-but-locked when statutory blindness is unverified.
+//    d. Monthly package row, locked-BWE / SSDI cards, Learn
+//    e. "Your benefits profile" row (the answers, each tappable to change)
+//       and "Redo the questionnaire"
+//    f. Last element, always: "Talk to a free benefits counselor"
+//  The resource COUNTER lives on the Money tab's balance card. SSI and SSDI
+//  are never blended into one number.
 //
 
 import SwiftUI
@@ -45,7 +49,9 @@ struct BenefitsHomeView: View {
                         header
                         switch lane {
                         case .ssi:
-                            resourceMonitorRow
+                            if let res = dataManager.overview?.ssiStatus.resources {
+                                ResourceAlertBanner(resources: res)
+                            }
                             workExpensesRow
                             monthlyPackageRow
                             if userManager.capabilities.bweLocked {
@@ -55,15 +61,19 @@ struct BenefitsHomeView: View {
                                 ssdiLaneRow
                             }
                             learnRow
+                            benefitsProfileSummaryRow
+                            redoQuestionnaireRow
                             counselorButton
                         case .ssdi:
                             workExpensesRow
                             monthlyPackageRow
                             ssdiLaneRow
                             learnRow
+                            benefitsProfileSummaryRow
+                            redoQuestionnaireRow
                             counselorButton
                         case .none:
-                            benefitsProfileRow
+                            startQuestionnaireRow
                         }
                     }
                     .padding(.horizontal, 20)
@@ -71,7 +81,15 @@ struct BenefitsHomeView: View {
                     .padding(.bottom, 100)
                     .readableContentWidth()
                 }
-                .refreshable { await dataManager.refresh() }
+                .refreshable {
+                    // The lane can change on the server (an answer edited on
+                    // another device, a capabilities fix); pull-to-refresh
+                    // must be able to change what this tab IS, not only its
+                    // numbers.
+                    async let caps: Void = userManager.refreshCapabilities()
+                    async let data: Void = dataManager.refresh()
+                    _ = await (caps, data)
+                }
             }
             .navigationTitle("Benefits")
             .navigationBarTitleDisplayMode(.large)
@@ -125,19 +143,41 @@ struct BenefitsHomeView: View {
         if navigationPath.isEmpty { navigationPath.append(Route.workExpenses) }
     }
 
-    // MARK: - No benefits: the only row is the way to change the answer
+    // MARK: - Not answered yet: the only row is the way to start
 
-    private var benefitsProfileRow: some View {
+    private var startQuestionnaireRow: some View {
         row(
-            title: userManager.capabilities.benefitsUnanswered ? "Start the benefits questionnaire" : "Benefits questionnaire",
+            title: "Start the benefits questionnaire",
             icon: "list.bullet.clipboard.fill",
             tone: .neutral,
-            line: userManager.capabilities.benefitsUnanswered
-                ? "About a minute, one tap per answer. This tab is built from what you tell us."
-                : "You said no SSI or SSDI. Redo the questionnaire if that changes.",
+            line: "About a minute, one tap per answer. This tab is built from what you tell us.",
             estimate: false,
             route: .questionnaire
         )
+    }
+
+    // MARK: - e. The answers behind one row, and the way to redo them
+
+    private var benefitsProfileSummaryRow: some View {
+        row(
+            title: "Your benefits profile",
+            icon: "person.text.rectangle.fill",
+            tone: .neutral,
+            line: BenefitsProfileView.overviewLine(capabilities: userManager.capabilities, profile: userManager.benefitsProfile),
+            estimate: false,
+            route: .benefitsProfile
+        )
+    }
+
+    private var redoQuestionnaireRow: some View {
+        NavigationLink(value: Route.questionnaire) {
+            Label("Redo the questionnaire", systemImage: "arrow.counterclockwise")
+                .font(.body.weight(.semibold))
+                .foregroundColor(.blue)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(HapticPlainButtonStyle())
+        .accessibilityHint("Walks through every question again, one per screen.")
     }
 
     // MARK: - a. Header
@@ -147,19 +187,15 @@ struct BenefitsHomeView: View {
     }
 
     private var summary: TabSummary {
-        let base = TabSummaries.benefits(
+        TabSummaries.benefits(
             capabilities: userManager.capabilities,
             ssi: dataManager.overview?.ssiStatus,
             expensesThisMonth: dataManager.ssiManualDeductions.count,
             expensesTotalCents: dataManager.ssiManualDeductions.reduce(0) { $0 + $1.amountCents },
-            expensesImpactCents: expensesImpact
+            expensesImpactCents: expensesImpact,
+            reminders: dataManager.ssiReminders,
+            needsReceiptCount: dataManager.ssiManualDeductions.filter { $0.resolvedMatchStatus == "needs_receipt" }.count
         )
-        // WP6 — reminders ride on the header so the first swipe says it.
-        let count = dataManager.ssiReminders.count
-        guard count > 0 else { return base }
-        let line = " " + VoiceOverFormatter.count(count, singular: "reminder", plural: "reminders") + "."
-        return TabSummary(verdict: base.verdict, detail: base.detail + line, isEstimate: base.isEstimate,
-                          tone: base.tone == .neutral ? .watch : base.tone)
     }
 
     private var header: some View {
@@ -168,28 +204,6 @@ struct BenefitsHomeView: View {
             detail: summary.detail,
             isEstimate: summary.isEstimate,
             tone: summary.tone
-        )
-    }
-
-    // MARK: - b. Resource monitor row
-
-    private var resourceMonitorRow: some View {
-        let res = dataManager.overview?.ssiStatus.resources
-        let (word, tone) = res.map(TabSummaries.resourceVerdict) ?? ("Resources", .neutral)
-        var line = "Resource monitor."
-        if let res {
-            line = "\(VoiceOverFormatter.dollars(res.currentCents)) of \(VoiceOverFormatter.dollars(res.limitCents)). \(word)."
-            if let iso = res.measurementDateIso, let days = res.daysUntilMeasurement {
-                line += " SSA measures on \(Self.spokenDate(iso)), in \(days == 1 ? "1 day" : "\(days) days")."
-            }
-        }
-        return row(
-            title: "Resource monitor",
-            icon: "gauge.with.dots.needle.33percent",
-            tone: tone,
-            line: line,
-            estimate: true,
-            route: .resourceMonitor
         )
     }
 
@@ -359,12 +373,6 @@ struct BenefitsHomeView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private static func spokenDate(_ iso: String) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: String(iso.prefix(10))) else { return iso }
-        let out = DateFormatter(); out.dateFormat = "MMMM d"
-        return out.string(from: d)
-    }
 }
 
 // MARK: - Learn cards (static V1)

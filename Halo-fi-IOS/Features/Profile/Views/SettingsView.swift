@@ -57,10 +57,14 @@ struct SettingsView: View {
             }
 
             // Benefits profile (Sep-2026): the answers that drive every
-            // benefit-specific screen. Shown for everyone so non-benefit
-            // users can opt in later.
+            // benefit-specific screen. For users without a Benefits tab
+            // (answered no SSI / no SSDI, or not answered yet) this is the
+            // way in: "Set up benefits" brings the tab back.
             NavigationLink(value: SettingsDestination.benefitsProfile) {
-              SettingsOptionLabel(icon: "heart.text.square.fill", title: "Benefits profile")
+              SettingsOptionLabel(
+                icon: userManager.capabilities.showsBenefitsLane ? "heart.text.square.fill" : "plus.circle.fill",
+                title: userManager.capabilities.showsBenefitsLane ? "Benefits profile" : "Set up benefits"
+              )
             }
 
             // WP3 — expenses flagged "Not sure this counts? Ask my counselor".

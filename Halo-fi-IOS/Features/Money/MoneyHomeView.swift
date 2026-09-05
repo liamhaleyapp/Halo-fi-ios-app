@@ -109,6 +109,7 @@ struct MoneyHomeView: View {
                 case .budget: BudgetView()
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
                 case .allTransactions: AllTransactionsView(initial: recentTransactions)
+                case .resourceMonitor: ResourceMonitorView()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .resetMoneyNavigation)) { _ in
@@ -130,7 +131,7 @@ struct MoneyHomeView: View {
         }
     }
 
-    enum MoneyRoute: Hashable { case budget, accounts, allTransactions }
+    enum MoneyRoute: Hashable { case budget, accounts, allTransactions, resourceMonitor }
 
     // MARK: - a. Header
 
@@ -142,12 +143,24 @@ struct MoneyHomeView: View {
         TabSummaries.money(snapshot, capabilities: userManager.capabilities)
     }
 
+    @ViewBuilder
     private var header: some View {
-        BalanceHeroCard(
-            summary: summary,
-            snapshot: snapshot,
-            showsResources: userManager.capabilities.showsResourceCounter
-        )
+        let showsResources = userManager.capabilities.showsResourceCounter
+        let card = BalanceHeroCard(summary: summary, snapshot: snapshot, showsResources: showsResources)
+        if showsResources, snapshot.resources != nil {
+            // For SSI users the balance card is the resource counter and
+            // opens the monitor (counted vs excluded accounts, actions).
+            NavigationLink(value: MoneyRoute.resourceMonitor) { card }
+                .buttonStyle(HapticPlainButtonStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(summary.spoken)
+                .accessibilityHint("Opens the resource monitor.")
+                .accessibilityAddTraits([.isHeader, .isButton])
+                .accessibilitySortPriority(1000)
+                .accessibilityIdentifier(ScreenReaderSummaryHeader.accessibilityID)
+        } else {
+            card
+        }
     }
 
     // MARK: - b. Budget row

@@ -28,8 +28,15 @@ extension Notification.Name {
 }
 
 /// WP4 tab order (Liam, 2026-09-03): Money · Benefits · Agent · Settings.
-enum MainTab: Int {
+/// Tabs are addressed by identity, never by position: the Benefits tab is
+/// absent for users whose answers say no SSI and no SSDI (2026-09-04).
+enum MainTab: Int, CaseIterable, Identifiable {
     case money = 0, benefits = 1, agent = 2, settings = 3
+    var id: Int { rawValue }
+
+    static func visible(for capabilities: UserCapabilities) -> [MainTab] {
+        allCases.filter { $0 != .benefits || capabilities.showsBenefitsTab }
+    }
 }
 
 struct MainTabView: View {
@@ -38,12 +45,14 @@ struct MainTabView: View {
     @Environment(BankDataManager.self) private var bankDataManager
     @Environment(BudgetDataManager.self) private var budgetDataManager
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab = UITestArchetype.initialTabIndex ?? 0
+    @State private var selectedTab: MainTab = UITestArchetype.initialTab ?? .money
     @State private var feedbackService = AudioFeedbackService()
     /// Tab the user was on when a cross-tab conversation was launched.
     /// Restored when the conversation dismisses so the user lands back
     /// where they started rather than getting stranded on the Agent tab.
-    @State private var conversationOriginTab: Int? = nil
+    @State private var conversationOriginTab: MainTab? = nil
+
+    private var visibleTabs: [MainTab] { MainTab.visible(for: userManager.capabilities) }
 
     private enum AppRoute: Equatable {
         case loggedOut
@@ -89,32 +98,55 @@ struct MainTabView: View {
         .animation(.easeInOut(duration: 0.3), value: currentRoute)
         .onChange(of: currentRoute) { _, newRoute in
             if newRoute != .main {
-                selectedTab = 0
+                selectedTab = .money
+            } else if !UITestArchetype.isActive {
+                // The lane decides which tabs exist; make sure it is fresh
+                // the moment the tabs appear.
+                Task { await userManager.refreshCapabilitiesIfStale() }
+            }
+        }
+        .onChange(of: visibleTabs) { oldTabs, newTabs in
+            // The Benefits tab comes and goes with the questionnaire answers.
+            if !newTabs.contains(selectedTab) {
+                // The user is standing on a tab that just vanished (they
+                // answered "no SSI, no SSDI" from the Benefits tab): land on
+                // Money and say why, after the system's own screen-change
+                // announcement has had its turn (BudgetView pattern).
+                selectedTab = .money
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    UIAccessibility.post(
+                        notification: .screenChanged,
+                        argument: "No SSI or SSDI on file. The Benefits tab is hidden. You can set it up again in Settings, Benefits profile."
+                    )
+                }
+            } else if !oldTabs.contains(.benefits), newTabs.contains(.benefits), currentRoute == .main {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    UIAccessibility.post(notification: .announcement, argument: "Benefits tab added.")
+                }
             }
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()
-                // Game-quality haptic: ascending tick keyed to tab
-                // index so blind users feel which tab they landed on
-                // by pitch alone. 4 tabs (0-3) → progress 0.0 / 0.33
-                // / 0.67 / 1.0. Pairs with the existing earcon
-                // sound for a multi-channel cue.
-                let totalTabs = 4
-                let progress = Double(newTab) / Double(max(totalTabs - 1, 1))
+                // Game-quality haptic: ascending tick keyed to the tab's
+                // POSITION among the visible tabs so blind users feel which
+                // tab they landed on by pitch alone (first 0.0 … last 1.0).
+                // Pairs with the existing earcon for a multi-channel cue.
+                let tabs = visibleTabs
+                let position = tabs.firstIndex(of: newTab) ?? 0
+                let progress = Double(position) / Double(max(tabs.count - 1, 1))
                 Haptics.engine.play(.tickAscending(progress: progress))
             }
-            // WP4 tab order: 0 Money · 1 Benefits · 2 Agent · 3 Settings.
             // Leaving a tab resets its nested navigation so the user
             // always re-enters at that tab's root list.
-            if oldTab == MainTab.money.rawValue && newTab != MainTab.money.rawValue {
+            if oldTab == .money && newTab != .money {
                 NotificationCenter.default.post(name: .resetMoneyNavigation, object: nil)
                 NotificationCenter.default.post(name: .resetAccountsNavigation, object: nil)
             }
-            if oldTab == MainTab.benefits.rawValue && newTab != MainTab.benefits.rawValue {
+            if oldTab == .benefits && newTab != .benefits {
                 NotificationCenter.default.post(name: .resetBenefitsNavigation, object: nil)
             }
-            if oldTab == MainTab.settings.rawValue && newTab != MainTab.settings.rawValue {
+            if oldTab == .settings && newTab != .settings {
                 NotificationCenter.default.post(name: .resetSettingsNavigation, object: nil)
             }
         }
@@ -123,16 +155,16 @@ struct MainTabView: View {
         // back there when the conversation dismisses.
         .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { _ in
             guard currentRoute == .main else { return }
-            if selectedTab != MainTab.agent.rawValue {
+            if selectedTab != .agent {
                 conversationOriginTab = selectedTab
             }
-            selectedTab = MainTab.agent.rawValue
+            selectedTab = .agent
         }
         // WP3 — a receipt arrived from the share extension: land on the
-        // Budget tab, which opens the log form with it attached.
+        // Benefits tab, which opens the log form with it attached.
         .onReceive(NotificationCenter.default.publisher(for: .receiptShared)) { _ in
             guard currentRoute == .main else { return }
-            selectedTab = MainTab.benefits.rawValue
+            openBenefitsTab()
         }
         // WP5 — server said accounts changed: refresh the bank store now.
         .onReceive(NotificationCenter.default.publisher(for: .bankDataDidMutate)) { _ in
@@ -141,19 +173,19 @@ struct MainTabView: View {
         // WP4 — "Mark as work expense" from the Money tab lands on Benefits.
         .onReceive(NotificationCenter.default.publisher(for: .workExpenseDraftRequested)) { _ in
             guard currentRoute == .main else { return }
-            selectedTab = MainTab.benefits.rawValue
+            openBenefitsTab()
         }
         // WP6 — a tapped reminder notification lands on Benefits.
         .onReceive(NotificationCenter.default.publisher(for: .ssiReminderOpened)) { _ in
             guard currentRoute == .main else { return }
-            selectedTab = MainTab.benefits.rawValue
+            openBenefitsTab()
         }
         // Posted by HomeView when ConversationView closes. Restore the
-        // originating tab if we recorded one (otherwise stay on Agent
-        // — the user opened the agent directly).
+        // originating tab if we recorded one and it still exists
+        // (otherwise stay on Agent — the user opened the agent directly).
         .onReceive(NotificationCenter.default.publisher(for: .conversationDismissed)) { _ in
             if let origin = conversationOriginTab {
-                selectedTab = origin
+                selectedTab = visibleTabs.contains(origin) ? origin : .money
                 conversationOriginTab = nil
             }
         }
@@ -165,6 +197,22 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active, currentRoute == .main else { return }
             Task { await bankDataManager.refreshIfStale() }
+            if !UITestArchetype.isActive {
+                Task { await userManager.refreshCapabilitiesIfStale() }
+            }
+        }
+    }
+
+    /// Deep links that end on the Benefits tab — a shared receipt, "mark as
+    /// work expense", a reminder — only make sense when the tab exists.
+    private func openBenefitsTab() {
+        if visibleTabs.contains(.benefits) {
+            selectedTab = .benefits
+        } else {
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Receipts and work expenses need a benefits profile. Set it up in Settings."
+            )
         }
     }
 
@@ -208,33 +256,11 @@ struct MainTabView: View {
 
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
-            MoneyHomeView()
-                .tabItem {
-                    Label("Money", systemImage: "banknote.fill")
-                        .accessibilityHint("Accounts, budget, and recent transactions")
-                }
-                .tag(MainTab.money.rawValue)
-
-            BenefitsHomeView()
-                .tabItem {
-                    Label("Benefits", systemImage: "heart.text.square.fill")
-                        .accessibilityHint("SSI resource monitor, work expenses, and education")
-                }
-                .tag(MainTab.benefits.rawValue)
-
-            HomeView()
-                .tabItem {
-                    Label("Agent", systemImage: "mic.circle.fill")
-                        .accessibilityHint("Talk to Halo")
-                }
-                .tag(MainTab.agent.rawValue)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                        .accessibilityHint("App settings and preferences")
-                }
-                .tag(MainTab.settings.rawValue)
+            ForEach(visibleTabs) { tab in
+                tabRoot(tab)
+                    .tabItem { tabLabel(tab) }
+                    .tag(tab)
+            }
         }
         .accentColor(.blue)
         // No swipe-between-tabs gesture: it fought horizontal scrolls and
@@ -247,6 +273,36 @@ struct MainTabView: View {
         }
         .task {
             seedUITestFixturesIfNeeded()
+        }
+    }
+
+    // MARK: - Tabs
+
+    @ViewBuilder
+    private func tabRoot(_ tab: MainTab) -> some View {
+        switch tab {
+        case .money: MoneyHomeView()
+        case .benefits: BenefitsHomeView()
+        case .agent: HomeView()
+        case .settings: SettingsView()
+        }
+    }
+
+    @ViewBuilder
+    private func tabLabel(_ tab: MainTab) -> some View {
+        switch tab {
+        case .money:
+            Label("Money", systemImage: "banknote.fill")
+                .accessibilityHint("Accounts, budget, and recent transactions")
+        case .benefits:
+            Label("Benefits", systemImage: "heart.text.square.fill")
+                .accessibilityHint("Work expenses, monthly package, and your benefits profile")
+        case .agent:
+            Label("Agent", systemImage: "mic.circle.fill")
+                .accessibilityHint("Talk to Halo")
+        case .settings:
+            Label("Settings", systemImage: "gearshape.fill")
+                .accessibilityHint("App settings and preferences")
         }
     }
 
@@ -264,7 +320,9 @@ struct MainTabView: View {
                 ssi: budgetDataManager.overview?.ssiStatus,
                 expensesThisMonth: deductions.count,
                 expensesTotalCents: deductions.reduce(0) { $0 + $1.amountCents },
-                expensesImpactCents: deductions.reduce(0) { $0 + ($1.estimatedCheckImpactCents ?? 0) }
+                expensesImpactCents: deductions.reduce(0) { $0 + ($1.estimatedCheckImpactCents ?? 0) },
+                reminders: budgetDataManager.ssiReminders,
+                needsReceiptCount: deductions.filter { $0.resolvedMatchStatus == "needs_receipt" }.count
             )
             : nil
         var nextTask: String?

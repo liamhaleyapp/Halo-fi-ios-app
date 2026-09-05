@@ -2,9 +2,11 @@
 //  BalanceHeroCard.swift
 //  Halo-fi-IOS
 //
-//  The Money tab's summary header with a visual: a large figure, a
-//  cash-versus-owed bar (or, for SSI users, a resource gauge against the
-//  limit with the 75 % / 95 % bands), and a soft tone-tinted gradient.
+//  The Money tab's summary header with a visual: the balance as a large
+//  figure with a cash-versus-owed bar, and — for SSI users — the resource
+//  counter underneath: the countable figure against the limit with the
+//  75 % / 95 % bands (Liam, 2026-09-04: the balance card IS the resource
+//  counter; the Benefits tab only alerts). A soft tone-tinted gradient.
 //  VoiceOver semantics are identical to ScreenReaderSummaryHeader: one
 //  combined element, header trait, sort priority 1000, the same identifier
 //  and the same verdict-first spoken label. Every visual is hidden from
@@ -30,15 +32,6 @@ struct BalanceHeroCard: View {
         ).spokenLabel
     }
 
-    private var extraDetail: String? {
-        let sentences = summary.detail
-            .split(separator: ".", omittingEmptySubsequences: true)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        let rest = sentences.dropFirst(showsResources ? 1 : 2)
-        return rest.isEmpty ? nil : rest.joined(separator: ". ") + "."
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -49,19 +42,18 @@ struct BalanceHeroCard: View {
                 Spacer()
             }
 
+            cashFigure
+            cashOwedBar
+
             if showsResources, let res = snapshot.resources {
-                resourceFigure(res)
-                resourceGauge(res)
-            } else {
-                cashFigure
-                cashOwedBar
+                resourceCounter(res)
             }
 
-            // The first sentence of the detail is the figure the visual already
-            // shows; only the extra sentences (measurement date, connections
-            // needing attention) are drawn. VoiceOver hears the full label.
-            if let extra = extraDetail {
-                Text(extra)
+            // The figure already shows the first sentence of the detail; the
+            // summary names what else is worth drawing (the resource line,
+            // connections needing attention). VoiceOver hears the full label.
+            if let subline = summary.subline {
+                Text(subline)
                     .font(.subheadline)
                     .foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -130,24 +122,24 @@ struct BalanceHeroCard: View {
         }
     }
 
-    // MARK: - Resource gauge (SSI)
+    // MARK: - Resource counter (SSI)
 
-    private func resourceFigure(_ res: SSIResources) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func resourceCounter(_ res: SSIResources) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Self.dollars(res.currentCents))
-                    .font(.system(size: figureSize, weight: .bold, design: .rounded))
+                Image(systemName: "gauge.with.dots.needle.33percent")
+                    .foregroundColor(tone.color)
+                Text("SSI resource limit")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(.haloTextPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text("of \(Self.dollars(res.limitCents))")
-                    .font(.headline)
-                    .foregroundColor(.haloTextSecondary)
+                Spacer()
+                Text("\(Self.dollars(res.currentCents)) of \(Self.dollars(res.limitCents))")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(tone.color)
             }
-            Text("counted resources · Estimate")
-                .font(.caption)
-                .foregroundColor(.haloTextSecondary)
+            resourceGauge(res)
         }
+        .padding(.top, 4)
     }
 
     private func resourceGauge(_ res: SSIResources) -> some View {
