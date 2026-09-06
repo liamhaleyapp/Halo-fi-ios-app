@@ -99,8 +99,13 @@ final class BankDataManager {
 
     /// Call after auth resolves with valid user
     func configureForUser(userId: String) {
+        // A different person than last time: nothing of theirs may linger.
+        if let previous = currentUserId, previous != userId {
+            clearAllData()
+        }
         currentUserId = userId
         SnapshotCache.currentUserId = userId
+        Diagnostics.send("sign_in", ["restored_manual": "\(manualAccounts.count)"])
         // Last known manual accounts draw immediately; the refresh below replaces them.
         if manualAccounts.isEmpty, let cached = SnapshotCache.load([ManualAccount].self, key: "manual_accounts", userId: userId) {
             manualAccounts = cached
@@ -302,6 +307,8 @@ final class BankDataManager {
         let cash = all.filter { $0.isActive && !["credit", "loan"].contains($0.type.lowercased()) }
             .reduce(0.0) { $0 + max(0, $1.currentBalance ?? 0) }
         Logger.info("BankDataManager: account map (\(source)): \(accountsByItemId.count) items, \(all.count) accounts, cash \(Int(cash))")
+        Diagnostics.send("account_map", ["source": source, "items": "\(accountsByItemId.count)", "accounts": "\(all.count)",
+                                         "cash": "\(Int(cash))", "manual": "\(manualAccounts.count)", "linked": "\((linkedItems ?? []).count)"])
     }
 
     private func rebuildAccountsByItemId() {
@@ -516,8 +523,12 @@ final class BankDataManager {
 
     func clearAllData() {
         guard let userId = currentUserId else { return }
+        Diagnostics.send("sign_out", ["manual_accounts": "\(manualAccounts.count)", "items": "\(accountsByItemId.count)"])
         SnapshotCache.clear(userId: userId)
         hasCompletedInitialLoad = false
+        // Manual accounts were never cleared here (2026-09-06): the review
+        // account's three mock accounts followed Liam into his own account.
+        manualAccounts = []
         linkedItems = nil
         accountsByItemId = [:]
         transactionsByItemId = [:]
@@ -532,6 +543,7 @@ final class BankDataManager {
         transactionsError = nil
         syncError = nil
         persistence.clear(for: userId)
+        NotificationCenter.default.post(name: .userDataCleared, object: nil)
 
         // Cancel any in-flight refresh tasks
         for task in accountRefreshTasks.values {
@@ -1274,4 +1286,10 @@ final class BankDataManager {
     func totalBalanceForInstitution(itemId: String) -> Double {
         accountsForInstitution(itemId: itemId).reduce(0) { $0 + ($1.currentBalance ?? 0) }
     }
+}
+
+
+extension Notification.Name {
+    /// Sign-out (or a different user signing in): every manager drops its data.
+    static let userDataCleared = Notification.Name("UserDataCleared")
 }

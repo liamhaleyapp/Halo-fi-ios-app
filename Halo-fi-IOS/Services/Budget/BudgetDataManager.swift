@@ -101,6 +101,16 @@ final class BudgetDataManager {
             overview = cached
         }
 
+        clearObserver = NotificationCenter.default.addObserver(forName: .userDataCleared, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.clearAllData() }
+        }
+        hydrateObserver = NotificationCenter.default.addObserver(forName: .bankDataConfigurationComplete, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.overview == nil, let cached = SnapshotCache.load(BudgetOverview.self, key: "budget_overview") else { return }
+                self.overview = cached
+                self.markStale()
+            }
+        }
         mutationObserver = NotificationCenter.default.addObserver(
             forName: .budgetDataDidMutate,
             object: nil,
@@ -117,6 +127,30 @@ final class BudgetDataManager {
                 self?.scheduleDebouncedRefresh()
             }
         }
+    }
+
+    private var clearObserver: NSObjectProtocol?
+    private var hydrateObserver: NSObjectProtocol?
+
+    /// Sign-out, or a different user signing in (2026-09-06): the previous
+    /// person's budget, SSI figures, attention cards and bills must not
+    /// survive into the next session.
+    func clearAllData() {
+        overview = nil
+        error = nil
+        lastFetched = nil
+        ssiCandidates = []
+        ssiManualDeductions = []
+        ssiManualTotalsCents = [:]
+        ssiReminders = []
+        fieldOffice = nil
+        calendars = [:]
+        currentCalendarKey = nil
+        attentionCards = []
+        attentionQueue = []
+        attentionMoreCount = 0
+        bills = nil
+        pendingMutationRefresh?.cancel()
     }
 
     /// Debounce: several writes can land in one turn (income + budget), so
