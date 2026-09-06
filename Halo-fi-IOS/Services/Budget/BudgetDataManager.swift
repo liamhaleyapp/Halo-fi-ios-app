@@ -95,6 +95,11 @@ final class BudgetDataManager {
     ) {
         self.service = service
         self.ssiService = ssiService
+        // Cold launch: the last overview (budget, SSI resources) draws at
+        // once; the first refresh replaces it (Liam, 2026-09-05).
+        if let cached = SnapshotCache.load(BudgetOverview.self, key: "budget_overview") {
+            overview = cached
+        }
 
         mutationObserver = NotificationCenter.default.addObserver(
             forName: .budgetDataDidMutate,
@@ -284,6 +289,7 @@ final class BudgetDataManager {
 
         do {
             overview = try await service.getOverview(userTz: userTz)
+            SnapshotCache.save(overview, key: "budget_overview")
             lastFetched = Date()
         } catch {
             Logger.error("BudgetDataManager: fetch overview failed: \(error)")

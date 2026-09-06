@@ -44,6 +44,8 @@ struct MoneySnapshot: Equatable {
     var spentCents: Int
     var daysLeft: Int?
     var firstOverCategory: String?
+    /// First launch with nothing cached: the hero says so instead of $0.
+    var isLoading: Bool = false
 }
 
 enum TabSummaries {
@@ -56,6 +58,10 @@ enum TabSummaries {
         var isEstimate = false
 
         var sublines: [String] = []
+
+        if s.isLoading {
+            return TabSummary(verdict: "Loading your accounts", detail: "One moment.", isEstimate: false, tone: .neutral)
+        }
 
         // The balance is the headline for everyone. For SSI users the same
         // card also carries the resource counter (Liam, 2026-09-04): the

@@ -42,10 +42,14 @@ struct BalanceHeroCard: View {
                 Spacer()
             }
 
-            cashFigure
-            cashOwedBar
+            if snapshot.isLoading {
+                loadingFigure
+            } else {
+                cashFigure
+                cashOwedBar
+            }
 
-            if showsResources, let res = snapshot.resources {
+            if showsResources, !snapshot.isLoading, let res = snapshot.resources {
                 resourceCounter(res)
             }
 
@@ -86,6 +90,19 @@ struct BalanceHeroCard: View {
     }
 
     // MARK: - Cash vs owed (everyone without a resource counter)
+
+    /// First launch, nothing cached yet: keep the card's shape, say what
+    /// is happening, and let the real figure replace it in place.
+    private var loadingFigure: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("$ —")
+                .font(.haloDisplay(figureSize))
+                .foregroundColor(.haloTextSecondary)
+            Text("fetching your balances")
+                .font(.caption)
+                .foregroundColor(.haloTextSecondary)
+        }
+    }
 
     private var cashFigure: some View {
         VStack(alignment: .leading, spacing: 2) {

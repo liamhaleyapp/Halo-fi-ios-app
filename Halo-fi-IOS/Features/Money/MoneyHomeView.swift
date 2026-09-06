@@ -514,7 +514,8 @@ extension MoneySnapshot {
             budgetTotal: overview?.budgetStatus.hasBudget == true ? overview?.budgetStatus.total : nil,
             spentCents: overview?.spending.totalCents ?? 0,
             daysLeft: daysLeft,
-            firstOverCategory: over
+            firstOverCategory: over,
+            isLoading: bank.isInitialLoad && overview == nil
         )
     }
 

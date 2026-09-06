@@ -36,6 +36,13 @@ final class BankDataManager {
     var isLoadingTransactions = false
     var isSyncing = false
 
+    /// False until the first configuration pass has finished. With nothing
+    /// cached, the Money hero shows "Loading your accounts" instead of $0.
+    private(set) var hasCompletedInitialLoad = false
+    var isInitialLoad: Bool {
+        !hasCompletedInitialLoad && (accounts ?? []).isEmpty && accountsByItemId.isEmpty && manualAccounts.isEmpty
+    }
+
     /// When transactions were last synced from the server (for "Updated X ago" display)
     var lastTransactionSyncAt: Date?
 
@@ -93,6 +100,11 @@ final class BankDataManager {
     /// Call after auth resolves with valid user
     func configureForUser(userId: String) {
         currentUserId = userId
+        SnapshotCache.currentUserId = userId
+        // Last known manual accounts draw immediately; the refresh below replaces them.
+        if manualAccounts.isEmpty, let cached = SnapshotCache.load([ManualAccount].self, key: "manual_accounts", userId: userId) {
+            manualAccounts = cached
+        }
 
         Task { @MainActor in
             // 1. Restore linked items - return value for explicit ordering
@@ -124,6 +136,7 @@ final class BankDataManager {
     /// Posts notification that bank data configuration is complete
     /// Used by UserManager to determine onboarding destination
     private func notifyConfigurationComplete() {
+        hasCompletedInitialLoad = true
         let hasAccounts = !accountsByItemId.isEmpty || (accounts?.isEmpty == false)
         Logger.info("BankDataManager: Configuration complete, hasAccounts=\(hasAccounts)")
         NotificationCenter.default.post(
@@ -454,6 +467,8 @@ final class BankDataManager {
 
     func clearAllData() {
         guard let userId = currentUserId else { return }
+        SnapshotCache.clear(userId: userId)
+        hasCompletedInitialLoad = false
         linkedItems = nil
         accountsByItemId = [:]
         transactionsByItemId = [:]
@@ -663,6 +678,7 @@ final class BankDataManager {
     func refreshManualAccounts() async {
         do {
             manualAccounts = try await ManualAccountService.shared.list()
+            SnapshotCache.save(manualAccounts, key: "manual_accounts", userId: currentUserId)
             Logger.success("BankDataManager: loaded \(manualAccounts.count) manual account(s)")
         } catch {
             Logger.warning("BankDataManager: refreshManualAccounts failed — \(error)")
