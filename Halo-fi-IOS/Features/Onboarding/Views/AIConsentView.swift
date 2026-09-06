@@ -36,20 +36,20 @@ struct AIConsentView: View {
           .padding(.top, 40)
           .accessibilityHidden(true)
 
-        Text("Voice AI Consent")
+        Text("AI and Data Consent")
           .font(.largeTitle)
           .fontWeight(.bold)
           .foregroundColor(.haloTextPrimary)
           .multilineTextAlignment(.center)
 
         VStack(alignment: .leading, spacing: 16) {
-          Text("Halo Fi uses AI to power voice conversations.")
+          Text("HaloFi uses AI for chat and voice conversations, reading receipts, and budget suggestions.")
             .foregroundColor(.haloTextPrimary)
 
           Text("To answer your questions, we send transcripts and your account context to OpenAI, Anthropic, and ElevenLabs. None of them train models on your data.")
             .foregroundColor(.haloTextSecondary)
 
-          Text("Halo Fi stores recordings on our own servers to improve quality. Withdraw consent anytime via Settings → AI & Data Sharing.")
+          Text("HaloFi stores conversations and voice recordings on our own servers to improve quality. Withdraw consent anytime via Settings → AI & Data Sharing.")
             .foregroundColor(.haloTextSecondary)
 
           if showingDetails {
@@ -139,11 +139,11 @@ struct AIConsentView: View {
       .readableContentWidth()
     }
     .background(Color.haloBackground.ignoresSafeArea())
-    .alert("Without consent, Halo Fi can't function", isPresented: $showingDeclineConfirm) {
+    .alert("Without consent, HaloFi can't work", isPresented: $showingDeclineConfirm) {
       Button("Go back", role: .cancel) { }
       Button("Sign out", role: .destructive) { decline() }
     } message: {
-      Text("Halo Fi is a voice-first app and requires AI processing to work. You can sign back in any time after agreeing.")
+      Text("Chat, voice, receipt reading, and budget suggestions all run on AI, so HaloFi needs this consent to work. You can sign back in any time after agreeing.")
     }
     .task {
       await fetchCurrentPolicyVersion()
