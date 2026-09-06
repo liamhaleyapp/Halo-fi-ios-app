@@ -501,6 +501,7 @@ final class BankDataManager {
                             // Final check: don't write if user changed during fetch
                             guard self.currentUserId == userId else { return }
                             self.accountsByItemId[item.itemId] = response.accounts
+                            self.logAccountMap("per-item \(item.institutionName)")
                         }
 
                         // Persist accounts for instant display on next launch

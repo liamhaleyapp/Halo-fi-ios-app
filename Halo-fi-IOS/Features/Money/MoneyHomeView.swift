@@ -466,6 +466,8 @@ extension WorkExpenseHandoff {
 // MARK: - Snapshot from managers
 
 extension MoneySnapshot {
+    @MainActor static var lastReportedCash: Int = -1
+
     @MainActor
     static func make(bank: BankDataManager, budget: BudgetDataManager) -> MoneySnapshot {
         var cash = 0.0
@@ -478,17 +480,23 @@ extension MoneySnapshot {
         // the per-item map is filled from the flat list rather than dropped,
         // so the headline never loses a bank because one feed lagged.
         var source: [BankAccount] = []
+        var branch = ""
         if let linked = bank.linkedItems, !linked.isEmpty {
             for item in linked where item.isActive {
                 if let list = bank.accountsByItemId[item.itemId], !list.isEmpty {
                     source += list
+                    branch += "m\(list.count)"
                 } else {
-                    source += (bank.accounts ?? []).filter { $0.plaidItemId == item.plaidItemId || $0.plaidItemId == item.itemId }
+                    let fb = (bank.accounts ?? []).filter { $0.plaidItemId == item.plaidItemId || $0.plaidItemId == item.itemId }
+                    source += fb
+                    branch += "f\(fb.count)"
                 }
             }
+            branch += (linked.contains { !$0.isActive }) ? "+inactive" : ""
         } else {
             let perItem = bank.accountsByItemId.values.flatMap { $0 }
             source = perItem.isEmpty ? (bank.accounts ?? []) : perItem
+            branch = bank.linkedItems == nil ? "nil-linked" : "empty-linked"
         }
         // Dedupe by account id: three feeds write accountsByItemId and a
         // stale or doubled entry must never change the headline number.
@@ -518,6 +526,16 @@ extension MoneySnapshot {
             }
         }
         let attention = (bank.linkedItems ?? []).filter { !$0.isActive }.count
+        // Breadcrumb when the headline changes (2026-09-06): which branch
+        // built it, from how many accounts, with how many linked items.
+        let cashInt = Int(cash.rounded())
+        if cashInt != Self.lastReportedCash {
+            Self.lastReportedCash = cashInt
+            Diagnostics.send("hero_cash", ["cash": "\(cashInt)", "count": "\(count)", "branch": branch,
+                                           "linked": "\((bank.linkedItems ?? []).count)", "map_items": "\(bank.accountsByItemId.count)",
+                                           "flat": "\((bank.accounts ?? []).count)", "manual": "\(bank.manualAccounts.count)",
+                                           "inactive_accts": "\(source.filter { !$0.isActive }.count)"])
+        }
         let overview = budget.overview
         var daysLeft: Int?
         if let end = overview?.period.endUtc, let endDate = ISO8601DateFormatter().date(from: end) ?? isoNoFraction(end) {
