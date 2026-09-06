@@ -27,6 +27,15 @@ struct SettingsView: View {
   /// stays in sync. Re-read in .onAppear.
   @State private var biometricEnrolled = false
   @State private var showBiometricEnrollSheet = false
+
+  // Refresh from bank (metered, 2026-09-06)
+  @Environment(BankDataManager.self) private var bankDataManager
+  @Environment(BudgetDataManager.self) private var budgetDataManager
+  @State private var refreshStatus: ManualRefreshStatus?
+  @State private var showRefreshConfirm = false
+  @State private var showRefreshExhausted = false
+  @State private var isRefreshingFromBank = false
+  @State private var refreshMessage: String?
   // Temporary debug — voice-minute reset button. Drop the state +
   // the SettingsOption when minute-quota UX is finalized.
   @State private var isResettingMinutes = false
@@ -101,6 +110,22 @@ struct SettingsView: View {
 
             NavigationLink(value: SettingsDestination.accounts) {
               SettingsOptionLabel(icon: "building.2.fill", title: "Manage Linked Accounts")
+            }
+
+            // The paid bank refresh, chosen on purpose with a visible count.
+            SettingsOption(
+              icon: "arrow.clockwise.circle.fill",
+              title: isRefreshingFromBank ? "Refreshing from your banks…" : "Refresh from bank",
+              action: { askToRefreshFromBank() }
+            )
+            .disabled(isRefreshingFromBank)
+            .accessibilityHint("Asks your banks for today's balances and transactions. Counts against your monthly manual refreshes.")
+            if let refreshMessage {
+              Text(refreshMessage)
+                .font(.footnote)
+                .foregroundColor(.haloTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
             }
 
             // Apple 5.1.1(i)/5.1.2(i): the disclosure of what we send to
@@ -238,6 +263,17 @@ struct SettingsView: View {
         }
       }
     }
+    .alert("Refresh from bank", isPresented: $showRefreshConfirm, presenting: refreshStatus) { status in
+      Button("Refresh") { runRefreshFromBank() }
+      Button("Not now", role: .cancel) { }
+    } message: { status in
+      Text(status.confirmLine ?? "Refresh now?")
+    }
+    .alert("No manual refreshes left", isPresented: $showRefreshExhausted, presenting: refreshStatus) { _ in
+      Button("OK", role: .cancel) { }
+    } message: { status in
+      Text(status.exhaustedLine)
+    }
     .alert("Log Out", isPresented: $showLogoutConfirmation) {
       Button("Cancel", role: .cancel) { }
       Button("Log Out", role: .destructive) {
@@ -316,6 +352,55 @@ struct SettingsView: View {
       return "touchid"
     }
     return "faceid"
+  }
+
+  // MARK: - Refresh from bank
+
+  private var planHint: String { ManualRefreshService.planHint(Array(subscriptionService.activeEntitlements)) }
+
+  private func askToRefreshFromBank() {
+    refreshMessage = nil
+    Task { @MainActor in
+      do {
+        let status = try await ManualRefreshService.status(plan: planHint)
+        refreshStatus = status
+        if status.remaining > 0 { showRefreshConfirm = true } else { showRefreshExhausted = true }
+      } catch {
+        refreshMessage = "Couldn't check your refreshes right now. Try again in a moment."
+        UIAccessibility.post(notification: .announcement, argument: refreshMessage ?? "")
+      }
+    }
+  }
+
+  private func runRefreshFromBank() {
+    isRefreshingFromBank = true
+    Task { @MainActor in
+      defer { isRefreshingFromBank = false }
+      do {
+        let after = try await ManualRefreshService.run(plan: planHint)
+        refreshStatus = after
+        // The server already pulled from Plaid; now every screen re-reads.
+        budgetDataManager.markStale()
+        async let bank: () = bankDataManager.forceRefresh()
+        async let budget: () = budgetDataManager.refresh()
+        _ = await (bank, budget)
+        refreshMessage = "Refreshed. Checked just now. \(after.remaining) of \(after.limit) manual refreshes left for \(after.monthLabel)."
+        Haptics.success()
+      } catch ManualRefreshError.exhausted {
+        if let status = try? await ManualRefreshService.status(plan: planHint) { refreshStatus = status }
+        showRefreshExhausted = true
+      } catch {
+        // A 429 the error parser could not classify still means "used up".
+        if let status = try? await ManualRefreshService.status(plan: planHint), status.remaining == 0 {
+          refreshStatus = status
+          showRefreshExhausted = true
+        } else {
+          refreshMessage = "The refresh didn't finish. Your balances still update on their own each day."
+          Haptics.error()
+        }
+      }
+      UIAccessibility.post(notification: .announcement, argument: refreshMessage ?? "")
+    }
   }
 
   @ViewBuilder

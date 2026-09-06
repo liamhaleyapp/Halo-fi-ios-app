@@ -72,6 +72,8 @@ enum APIEndpoints {
 
         /// GET - Server-computed feature gating from the benefits profile.
         static let capabilities = "/users/me/capabilities"
+        /// Metered manual bank refresh (2026-09-06): GET = allowance, POST = run.
+        static let manualRefresh = "/me/refresh"
 
         /// GET / PUT - Work-context profile (drives BWE/IRWE classifier).
         /// Phase 3a — captures intent that Plaid descriptions don't carry.
