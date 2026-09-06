@@ -28,6 +28,9 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
     private let historyKey = "notificationHistory.v2"
     private let defaults = UserDefaults.standard
     private static let requestIds = ["halo:digest", "halo:urgent"]
+    /// A tap that arrived before the Money screen existed (the app was
+    /// launched by the notification); the screen consumes it on appear.
+    static var pendingAttentionOpen = false
 
     /// Call once at launch so taps on a notification reach the app.
     func install() {
@@ -96,24 +99,37 @@ final class ReminderNotificationScheduler: NSObject, UNUserNotificationCenterDel
     /// Someone using the app is never interrupted by a banner about it
     /// (Liam, 2026-09-05). A notification that arrives while HaloFi is in
     /// the foreground is swallowed; the screen already shows the same thing.
+    ///
+    /// Completion-handler form on purpose (TestFlight crash 2026-09-05,
+    /// "Crashed. When opening push notification."): the `async` variants
+    /// return on a cooperative background thread, and UIKit asserts when the
+    /// notification-response completion runs off the main thread
+    /// (`_updateSnapshotAndStateRestorationWithAction`). Everything here
+    /// stays on main.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        let active = await MainActor.run { UIApplication.shared.applicationState == .active }
-        return active ? [] : [.banner, .sound]
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        DispatchQueue.main.async {
+            let active = UIApplication.shared.applicationState == .active
+            completionHandler(active ? [] : [.banner, .sound])
+        }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse) async {
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
         let kind = info["kind"] as? String ?? ""
         let month = info["month"] as? String ?? ""
-        await MainActor.run {
+        DispatchQueue.main.async {
             if kind == "attention" || kind == "bank_reconnect" || kind == "resources" {
+                Self.pendingAttentionOpen = true
                 NotificationCenter.default.post(name: .attentionOpened, object: nil)
             } else {
                 NotificationCenter.default.post(name: .ssiReminderOpened, object: nil,
                                                 userInfo: ["kind": kind, "month": month])
             }
+            completionHandler()
         }
     }
 }

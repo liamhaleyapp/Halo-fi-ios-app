@@ -110,8 +110,10 @@ struct MoneyHomeView: View {
                 await PushRegistrar.shared.requestPermissionIfNeeded()
             }
             .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
-                if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
-                navigationPath.append(MoneyRoute.attention)
+                openAttentionFromNotification()
+            }
+            .onAppear {
+                if ReminderNotificationScheduler.pendingAttentionOpen { openAttentionFromNotification() }
             }
             .navigationTitle("Money")
             .navigationBarTitleDisplayMode(.inline)
@@ -194,6 +196,16 @@ struct MoneyHomeView: View {
     }
 
     // MARK: - Attention actions
+
+    /// A tapped notification: land on Needs your attention. The tab switch
+    /// posts a navigation reset in the same frame, so the push waits a beat.
+    private func openAttentionFromNotification() {
+        ReminderNotificationScheduler.pendingAttentionOpen = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+            navigationPath.append(MoneyRoute.attention)
+        }
+    }
 
     private func open(_ card: AttentionCard) {
         switch card.actionType {

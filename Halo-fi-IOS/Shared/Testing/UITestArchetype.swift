@@ -37,6 +37,12 @@ enum UITestArchetype: String, CaseIterable {
     /// `--ui-test-tab=<money|benefits|agent|settings>` — the tab to land on
     /// at launch (screenshot runs and UI tests that start off Money).
     static let tabArgumentPrefix = "--ui-test-tab="
+    /// `--ui-test-notification=<kind>` — schedule a local notification with
+    /// that userInfo kind two seconds after the tabs appear, so a UI test can
+    /// background the app, tap the banner and prove the tap path is sound.
+    static var notificationKind: String? {
+        ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--ui-test-notification=") }.map { String($0.dropFirst("--ui-test-notification=".count)) }
+    }
 
     static let initialTab: MainTab? = {
         #if DEBUG

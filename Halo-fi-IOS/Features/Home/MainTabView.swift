@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 extension Notification.Name {
     /// Phase 11 Track B — posted by quick-action buttons that want
@@ -112,6 +113,21 @@ struct MainTabView: View {
                 .id(currentRoute)
         }
         .animation(.easeInOut(duration: 0.3), value: currentRoute)
+        .onChange(of: scenePhase) { _, phase in
+            // UI-test seam: once the test backgrounds the app, fire a local
+            // notification so it can tap the banner and prove the tap path.
+            guard phase == .background, let kind = UITestArchetype.notificationKind else { return }
+            Task {
+                let center = UNUserNotificationCenter.current()
+                _ = try? await center.requestAuthorization(options: [.alert, .sound])
+                let content = UNMutableNotificationContent()
+                content.title = "HaloFi needs you"
+                content.body = "Act now on your SSI resources. Estimate."
+                content.userInfo = ["kind": kind, "month": ""]
+                try? await center.add(UNNotificationRequest(identifier: "uitest", content: content,
+                                                            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)))
+            }
+        }
         .task {
             // Killing and reopening the app must refresh (Liam, 2026-09-05):
             // the restored caches paint first, then everything re-pulls.

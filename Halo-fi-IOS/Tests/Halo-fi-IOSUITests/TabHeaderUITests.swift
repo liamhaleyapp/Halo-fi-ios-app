@@ -236,6 +236,27 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(scrollTo(paycheck, in: app), "paycheck item missing")
     }
 
+    /// Tapping a notification while the app is in the background opens
+    /// Money → Needs your attention and must never crash (TestFlight
+    /// crash feedback, 2026-09-05 8:01 PM: "Crashed. When opening push
+    /// notification.").
+    func testNotificationTap_opensAttentionWithoutCrashing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-notification=resources"]
+        app.launch()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
+        XCUIDevice.shared.press(.home)
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 4) { allow.tap() }
+        let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'HaloFi needs you'")).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 25), "notification banner did not appear")
+        banner.tap()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10), "app did not come to the foreground")
+        let attention = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "3 things need you")).firstMatch
+        XCTAssertTrue(attention.waitForExistence(timeout: 10), "Needs your attention did not open; state = \(app.state.rawValue)")
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")
