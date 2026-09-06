@@ -493,8 +493,14 @@ extension MoneySnapshot {
         // Dedupe by account id: three feeds write accountsByItemId and a
         // stale or doubled entry must never change the headline number.
         var seenIds = Set<String>()
+        var staleCount = 0
+        var earliestStale: String?
         for account in source where account.isActive && seenIds.insert(account.idAccount).inserted {
             count += 1
+            if let since = account.staleSince {
+                staleCount += 1
+                if earliestStale == nil || since < earliestStale! { earliestStale = since }
+            }
             let balance = account.currentBalance ?? 0
             if account.type.lowercased() == "credit" || account.type.lowercased() == "loan" {
                 owed += max(0, balance)
@@ -529,7 +535,9 @@ extension MoneySnapshot {
             spentCents: overview?.spending.totalCents ?? 0,
             daysLeft: daysLeft,
             firstOverCategory: over,
-            isLoading: bank.isInitialLoad && overview == nil
+            isLoading: bank.isInitialLoad && overview == nil,
+            staleCount: staleCount,
+            staleSinceSpoken: earliestStale.flatMap { ISO8601DateFormatter.dateOnly.date(from: $0) }.map { $0.formatted(.dateTime.month(.wide).day()) }
         )
     }
 

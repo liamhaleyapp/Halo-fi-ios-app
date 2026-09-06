@@ -46,6 +46,9 @@ struct MoneySnapshot: Equatable {
     var firstOverCategory: String?
     /// First launch with nothing cached: the hero says so instead of $0.
     var isLoading: Bool = false
+    /// Accounts the bank stopped sharing (balances frozen), and the earliest date.
+    var staleCount: Int = 0
+    var staleSinceSpoken: String? = nil
 }
 
 enum TabSummaries {
@@ -92,6 +95,16 @@ enum TabSummaries {
                 }
                 sublines.append(forward)
             }
+        }
+        if let line = s.resources?.notCounted?.line, capabilities.showsResourceCounter {
+            detail += " " + line
+            sublines.append(line)
+        }
+        if s.staleCount > 0 {
+            let line = "\(VoiceOverFormatter.count(s.staleCount, singular: "account", plural: "accounts")) not updating since \(s.staleSinceSpoken ?? "a few days ago"). Open Accounts to update what your bank shares."
+            detail += " " + line
+            sublines.append(line)
+            if tone == .positive { tone = .watch }
         }
         if s.connectionsNeedingAttention > 0 {
             let line = "\(VoiceOverFormatter.count(s.connectionsNeedingAttention, singular: "connection", plural: "connections")) need\(s.connectionsNeedingAttention == 1 ? "s" : "") attention."

@@ -417,9 +417,12 @@ struct SSIResources: Codable, Equatable {
     let spendOrMoveFormatted: String?         // "over" | "critical" | "warning" | "ok"
     // 2026-09-05 — where countable resources land on the 1st.
     let projection: SSIProjection?
+    /// Money the counter leaves out on purpose, said in one line (2026-09-06).
+    var notCounted: SSINotCounted? = nil
 
     enum CodingKeys: String, CodingKey {
         case projection
+        case notCounted = "not_counted"
         case currentCents = "current_cents"
         case limitCents = "limit_cents"
         case remainingCents = "remaining_cents"
@@ -568,5 +571,15 @@ struct UnlinkedCard: Codable, Equatable, Identifiable {
         case totalCents = "total_cents"
         case monthlyCents = "monthly_cents"
         case lastOn = "last_on"
+    }
+}
+
+
+struct SSINotCounted: Codable, Equatable {
+    let investmentsCents: Int
+    let line: String?
+    enum CodingKeys: String, CodingKey {
+        case investmentsCents = "investments_cents"
+        case line
     }
 }

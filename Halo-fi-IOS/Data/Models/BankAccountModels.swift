@@ -24,6 +24,14 @@ struct BankAccount: Codable, Identifiable {
     let updatedAt: String?
     /// The user's own name for the account (2026-09-05); nil = the bank's name.
     var nickname: String? = nil
+    /// ISO date Plaid last listed this account, set only once it has been
+    /// missing for 3+ days (2026-09-06). The balance is frozen from then.
+    var staleSince: String? = nil
+
+    var staleSpoken: String? {
+        guard let staleSince, let d = ISO8601DateFormatter.dateOnly.date(from: staleSince) else { return nil }
+        return d.formatted(.dateTime.month(.wide).day())
+    }
 
     /// What to show and speak: the nickname when set, else the bank's name.
     var displayName: String { (nickname?.isEmpty == false) ? nickname! : name }
@@ -47,5 +55,16 @@ struct BankAccount: Codable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case nickname
+        case staleSince = "stale_since"
     }
+}
+
+
+extension ISO8601DateFormatter {
+    /// "2026-09-05" → Date (no time component).
+    static let dateOnly: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate]
+        return f
+    }()
 }

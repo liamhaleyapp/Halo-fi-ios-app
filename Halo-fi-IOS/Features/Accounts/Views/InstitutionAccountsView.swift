@@ -218,6 +218,7 @@ struct BankAccountRow: View {
     } else {
       label += ", Balance \(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))"
     }
+    if let since = account.staleSpoken { label += ", not updating since \(since)" }
 
     return label
   }
@@ -239,6 +240,11 @@ struct BankAccountRow: View {
           Text(account.name)
             .font(.caption)
             .foregroundColor(Color.haloTextSecondary)
+        }
+        if let since = account.staleSpoken {
+          Text("Not updating since \(since)")
+            .font(.caption.weight(.semibold))
+            .foregroundColor(DesignTokens.ToneText.watch)
         }
 
         HStack(spacing: 4) {
