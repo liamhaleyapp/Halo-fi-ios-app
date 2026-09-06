@@ -60,8 +60,9 @@ struct MoneyProfileSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(showsIntro ? "Later" : "Done") { dismiss() }
-                        .accessibilityHint("Closes this. You can answer any time from Settings, under Money profile.")
+                    // The app's standard close: an X, read as the word.
+                    CloseToolbarButton(label: showsIntro ? "Later" : "Done",
+                                       hint: "Closes this. You can answer any time from Settings, under Money profile.") { dismiss() }
                 }
             }
         }
