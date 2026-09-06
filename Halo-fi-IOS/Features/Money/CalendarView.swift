@@ -130,6 +130,7 @@ struct CalendarView: View {
             case "income": return .haloPositive
             case "deadline": return .orange
             case "subscription": return .indigo
+            case "card_payment": return item.status == "overdue" ? .red : .orange
             default: return .teal
             }
         }()
@@ -138,6 +139,7 @@ struct CalendarView: View {
             case "income": return "arrow.down.circle.fill"
             case "deadline": return "calendar.badge.exclamationmark"
             case "subscription": return "repeat.circle.fill"
+            case "card_payment": return item.status == "overdue" ? "exclamationmark.circle.fill" : "creditcard.fill"
             default: return "calendar.badge.clock"
             }
         }()
@@ -146,7 +148,8 @@ struct CalendarView: View {
             switch item.status {
             case "arrived": return "arrived"
             case "paid": return "paid"
-            case "due": return "due"
+            case "due": return "due today"
+            case "overdue": return "past due"
             case "past": return ""
             default: return "expected"
             }
@@ -163,7 +166,7 @@ struct CalendarView: View {
         }
         .padding(14)
         .frame(minHeight: 64)
-        .haloCard(tint: item.kind == "deadline" && item.status == "due" ? .orange : nil)
+        .haloCard(tint: (item.kind == "deadline" && item.status == "due") ? .orange : (item.status == "overdue" ? .red : nil))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + ".")
     }

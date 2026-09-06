@@ -139,6 +139,7 @@ struct AttentionCardView: View {
         case "budget_over": return "chart.pie.fill"
         case "profile_incomplete", "money_profile_incomplete": return "person.text.rectangle.fill"
         case "unlinked_card": return "creditcard.trianglebadge.exclamationmark"
+        case "card_overdue": return "exclamationmark.circle.fill"
         default: return "bell.fill"
         }
     }

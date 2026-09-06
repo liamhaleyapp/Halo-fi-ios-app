@@ -19,11 +19,17 @@ struct BillsView: View {
     private var confirmedSubscriptions: [RecurringStream] { confirmed.filter { $0.isSubscription } }
     private var unanswered: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == nil } ?? [] }
     private var declined: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == false } ?? [] }
+    private var statementPayments: [StatementPayment] { bills?.statementPayments ?? [] }
 
     var body: some View {
         List {
             Section {
                 header.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            }
+            if !statementPayments.isEmpty {
+                Section {
+                    ForEach(statementPayments) { p in statementRow(p) }
+                } header: { Text("From your statements") } footer: { Text("Card and loan payments with the exact due date and minimum your bank reported.") }
             }
             if !unanswered.isEmpty {
                 Section {
@@ -81,6 +87,22 @@ struct BillsView: View {
         if let next { detail += " Next: \(next.1.merchant), \(TabSummaries.spokenDate(next.0))." }
         if !unanswered.isEmpty { detail += " \(VoiceOverFormatter.count(unanswered.count, singular: "charge", plural: "charges")) waiting for a yes or no." }
         return ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: detail, isEstimate: count > 0, tone: unanswered.isEmpty ? .neutral : .watch)
+    }
+
+    private func statementRow(_ p: StatementPayment) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.label).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Text(p.line).font(.caption).foregroundColor(p.isOverdue ? DesignTokens.ToneText.act : .haloTextSecondary)
+            }
+            Spacer()
+            Image(systemName: p.isOverdue ? "exclamationmark.circle.fill" : "creditcard.fill")
+                .foregroundColor(p.isOverdue ? .red : .haloTextTertiary)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(p.label). \(p.line)")
     }
 
     private func row(_ s: RecurringStream, prompt: Bool) -> some View {
