@@ -119,10 +119,17 @@ final class BankDataManager {
                 return
             }
 
-            // 3. Restore accounts from persistence (only if we didn't fetch fresh from server)
+            // 3. Restore accounts from persistence for the first paint only.
             await restoreAccounts()
 
-            // 4. Refresh if stale (single network call, guarded)
+            // 4. Always confirm with the server (2026-09-05). /bank/multi-items
+            //    is a database read (no Plaid call), and the disk copy can be
+            //    hours old: Liam's Chase kept showing three accounts for five
+            //    minutes after every launch because the "recent refresh"
+            //    guard skipped this.
+            if !UITestArchetype.isActive { await fetchLinkedItemsFromServer() }
+
+            // 5. Anything else that is stale (guarded)
             await refreshIfStale()
 
             // 5. Ensure accountsByItemId is populated from accounts property
@@ -216,6 +223,14 @@ final class BankDataManager {
                         }
                     }
                     logAccountMap("server items")
+                }
+                // Keep the disk copy in step with the server: refreshAllAccounts
+                // used to be the only writer, so a bank that changed between
+                // pull-to-refreshes was restored stale on the next launch.
+                if let userId = currentUserId, let persistence = accountPersistence {
+                    for (itemId, list) in embeddedAccountsByItemId {
+                        await persistence.saveAccounts(list, for: userId, itemId: itemId)
+                    }
                 }
                 // Persisted accounts of retired connections would otherwise be
                 // restored on the next launch (2026-09-05).
