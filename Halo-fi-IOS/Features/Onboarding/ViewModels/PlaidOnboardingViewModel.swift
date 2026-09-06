@@ -218,6 +218,7 @@ class PlaidOnboardingViewModel {
       if let accounts = accounts, !accounts.isEmpty {
         Logger.success("PlaidOnboardingVM: Found \(accounts.count) accounts on attempt \(attempt)")
         accountsFound = true
+        NotificationCenter.default.post(name: .accountLinked, object: nil)
         break
       }
 

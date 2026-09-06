@@ -88,6 +88,13 @@ struct ProfileOption: Identifiable, Equatable {
     }
 }
 
+/// A typed amount instead of options (monthly housing cost).
+struct AmountEntry {
+    let label: String
+    let placeholder: String
+    let patch: (Double) -> BenefitsProfilePatch
+}
+
 struct ProfileQuestionSpec: Identifiable {
     let id: String
     /// Backend field this question answers (for Settings to show the
@@ -97,6 +104,9 @@ struct ProfileQuestionSpec: Identifiable {
     let question: String
     let helpText: String?
     let options: [ProfileOption]
+    /// When set, the screen shows a number field and Continue instead of
+    /// (or in addition to) the options.
+    let amountEntry: AmountEntry?
     /// Label of the always-present escape hatch; nil hides it (promise
     /// screen only).
     let skipTitle: String?
@@ -109,6 +119,7 @@ struct ProfileQuestionSpec: Identifiable {
         question: String,
         helpText: String? = nil,
         options: [ProfileOption],
+        amountEntry: AmountEntry? = nil,
         skipTitle: String? = "Skip for now",
         showIf: @escaping ([String: String]) -> Bool = { _ in true }
     ) {
@@ -117,6 +128,7 @@ struct ProfileQuestionSpec: Identifiable {
         self.question = question
         self.helpText = helpText
         self.options = options
+        self.amountEntry = amountEntry
         self.skipTitle = skipTitle
         self.showIf = showIf
     }
@@ -133,12 +145,81 @@ struct ProfileQuestionSpec: Identifiable {
         case "work_status": return "Work status"
         case "has_able_account": return "ABLE account"
         case "promise_accepted_at": return "Our promise"
+        case "housing_situation": return "Housing"
+        case "housing_cost": return "Monthly housing cost"
+        case "financial_goal": return "Number one goal"
+        case "money_style": return "Money style"
+        case "biggest_financial_stress": return "Biggest stress"
         default: return question
         }
     }
 }
 
 enum ProfileQuestions {
+    /// "Finish setting up" (2026-09-05): the four questions Halo used to ask
+    /// by voice before answering anything. Asked on a screen after the
+    /// first account is linked; every one is skippable. Housing feeds rent
+    /// detection; goal and money style shape the budget proposal.
+    static let money: [ProfileQuestionSpec] = [
+        ProfileQuestionSpec(
+            id: "housing",
+            field: "housing_situation",
+            question: "What's your housing setup?",
+            options: [
+                ProfileOption("rent", "I rent", patch: BenefitsProfilePatch(housingSituation: "rent")),
+                ProfileOption("own", "I own, with a mortgage or payment", patch: BenefitsProfilePatch(housingSituation: "own")),
+                ProfileOption("with_someone", "I stay with someone", patch: BenefitsProfilePatch(housingSituation: "with_someone")),
+                ProfileOption("none", "No housing payment", patch: BenefitsProfilePatch(housingSituation: "none")),
+            ]
+        ),
+        ProfileQuestionSpec(
+            id: "housing_cost",
+            field: "housing_cost",
+            question: "About how much do you pay for housing each month?",
+            helpText: "A rough number is fine. HaloFi uses it to recognize rent in your transactions.",
+            options: [],
+            amountEntry: AmountEntry(label: "Monthly housing cost in dollars", placeholder: "850",
+                                     patch: { BenefitsProfilePatch(housingCost: $0) }),
+            skipTitle: "I'm not sure",
+            showIf: { answers in ["rent", "own"].contains(answers["housing"] ?? "") }
+        ),
+        ProfileQuestionSpec(
+            id: "goal",
+            field: "financial_goal",
+            question: "What's the number one thing you want help with?",
+            options: [
+                ProfileOption("debt", "Paying off debt", patch: BenefitsProfilePatch(financialGoal: "debt")),
+                ProfileOption("savings", "Building savings", patch: BenefitsProfilePatch(financialGoal: "savings")),
+                ProfileOption("benefits", "Keeping my benefits on track", patch: BenefitsProfilePatch(financialGoal: "benefits")),
+                ProfileOption("basics", "Covering the basics each month", patch: BenefitsProfilePatch(financialGoal: "basics")),
+                ProfileOption("other", "Something else", patch: BenefitsProfilePatch(financialGoal: "other")),
+            ]
+        ),
+        ProfileQuestionSpec(
+            id: "money_style",
+            field: "money_style",
+            question: "How would you describe your money style?",
+            options: [
+                ProfileOption("saver", "Saver", patch: BenefitsProfilePatch(moneyStyle: "saver")),
+                ProfileOption("spender", "Spender", patch: BenefitsProfilePatch(moneyStyle: "spender")),
+                ProfileOption("avoider", "I'd rather not look", patch: BenefitsProfilePatch(moneyStyle: "avoider")),
+                ProfileOption("mix", "A mix", patch: BenefitsProfilePatch(moneyStyle: "mix")),
+            ]
+        ),
+        ProfileQuestionSpec(
+            id: "stress",
+            field: "biggest_financial_stress",
+            question: "What's the biggest money stress on your mind right now?",
+            options: [
+                ProfileOption("bills", "Keeping up with bills", patch: BenefitsProfilePatch(biggestFinancialStress: "bills")),
+                ProfileOption("debt", "Debt", patch: BenefitsProfilePatch(biggestFinancialStress: "debt")),
+                ProfileOption("benefits", "Benefits rules", patch: BenefitsProfilePatch(biggestFinancialStress: "benefits")),
+                ProfileOption("income", "Income that changes month to month", patch: BenefitsProfilePatch(biggestFinancialStress: "irregular_income")),
+                ProfileOption("other", "Something else", patch: BenefitsProfilePatch(biggestFinancialStress: "other")),
+            ]
+        ),
+    ]
+
     private static func householdSizeOptions() -> [ProfileOption] {
         [
             ProfileOption("1", "1 — just me", patch: BenefitsProfilePatch(householdSize: 1)),

@@ -19,11 +19,18 @@ struct HomeView: View {
     @State private var voicePrompt: String? = nil
     @State private var showingShortcuts = false
     @State private var showingHistory = false
+    @State private var showingMoneyProfile = false
+    @State private var hidMoneyPrompt = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 headerRow
+                if userManager.capabilities.moneyProfileRemaining > 0 && !hidMoneyPrompt {
+                    MoneyProfilePromptCard(remaining: userManager.capabilities.moneyProfileRemaining,
+                                           onOpen: { showingMoneyProfile = true },
+                                           onNotNow: { hidMoneyPrompt = true })
+                }
                 TranscriptView(
                     entries: viewModel.entries,
                     onCopyEntry: viewModel.copyEntry,
@@ -44,6 +51,7 @@ struct HomeView: View {
             .readableContentWidth()
             .background(Color(.systemBackground).ignoresSafeArea())
             .navigationBarHidden(true)
+            .fullScreenCover(isPresented: $showingMoneyProfile) { MoneyProfileSheet() }
             .fullScreenCover(isPresented: $showingVoice, onDismiss: {
                 voicePrompt = nil
                 NotificationCenter.default.post(name: .conversationDismissed, object: nil)

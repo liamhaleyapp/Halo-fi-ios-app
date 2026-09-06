@@ -135,6 +135,7 @@ struct ManualAccountFormView: View {
         _ = try await ManualAccountService.shared.create(payload)
       }
       await bankDataManager.refreshManualAccounts()
+      NotificationCenter.default.post(name: .accountLinked, object: nil)
       dismiss()
     } catch {
       Logger.error("ManualAccountFormView: save failed — \(error)")

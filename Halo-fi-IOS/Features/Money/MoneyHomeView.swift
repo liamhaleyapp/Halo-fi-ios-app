@@ -57,6 +57,7 @@ struct MoneyHomeView: View {
 
     @State private var navigationPath = NavigationPath()
     @State private var showingLinkChooser = false
+    @State private var showingMoneyProfile = false
     @State private var hasAppeared = false
     @State private var isLoadingTransactions = false
     /// View-owned copy of the all-accounts list, so cache resets elsewhere
@@ -119,6 +120,15 @@ struct MoneyHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
+            .fullScreenCover(isPresented: $showingMoneyProfile) { MoneyProfileSheet() }
+            .onReceive(NotificationCenter.default.publisher(for: .accountLinked)) { _ in
+                // First account in: offer the four money questions once,
+                // after the link sheet has gone (Liam, 2026-09-05).
+                guard MoneyProfilePrompt.shouldOfferAfterLink(remaining: userManager.capabilities.moneyProfileRemaining) else { return }
+                MoneyProfilePrompt.markOffered()
+                showingLinkChooser = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { showingMoneyProfile = true }
+            }
             .navigationDestination(for: ConnectedItem.self) { item in
                 InstitutionAccountsView(item: item)
             }
@@ -224,6 +234,7 @@ struct MoneyHomeView: View {
         case "open_work_expenses": navigationPath.append(MoneyRoute.workExpenses)
         case "open_accounts": navigationPath.append(MoneyRoute.accounts)
         case "open_link_bank": showingLinkChooser = true
+        case "open_money_profile": showingMoneyProfile = true
         default: break
         }
     }

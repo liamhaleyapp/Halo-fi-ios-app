@@ -73,7 +73,8 @@ enum UITestArchetype: String, CaseIterable {
         case .ssiBlind, .ssiWatch:
             return UserCapabilities(showsBenefitsLane: true, showsResourceCounter: true, showsSSDILane: false,
                                     expenseType: .bwe, bweLocked: false, coupleLimits: false, deemingReferral: false,
-                                    showsWorkIncentives: true, benefitType: "ssi", blindStatus: "yes")
+                                    showsWorkIncentives: true, benefitType: "ssi", blindStatus: "yes",
+                                    moneyProfileRemaining: self == .ssiWatch ? 4 : 0)
         case .ssiUnverified:
             return UserCapabilities(showsBenefitsLane: true, showsResourceCounter: true, showsSSDILane: false,
                                     expenseType: .irwe, bweLocked: true, coupleLimits: false, deemingReferral: false,

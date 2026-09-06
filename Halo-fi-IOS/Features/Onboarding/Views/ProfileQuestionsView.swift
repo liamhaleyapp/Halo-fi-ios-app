@@ -47,6 +47,7 @@ struct ProfileQuestionsView: View {
     @State private var showingExplainer = false
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var amountText = ""
 
     private enum Focus: Hashable {
         case question
@@ -127,6 +128,24 @@ struct ProfileQuestionsView: View {
                         }
                     }
                     .padding(.top, 8)
+
+                    if let entry = spec.amountEntry {
+                        HStack(spacing: 8) {
+                            Text("$").font(.title2.weight(.semibold)).foregroundColor(.haloTextSecondary).accessibilityHidden(true)
+                            TextField(entry.placeholder, text: $amountText)
+                                .keyboardType(.decimalPad)
+                                .font(.title2)
+                                .accessibilityLabel(entry.label)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 56)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemBackground)))
+                        Button { commitAmount(entry, for: spec) } label: {
+                            Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                        }
+                        .buttonStyle(.borderedProminent).tint(.indigo)
+                        .disabled(isSaving || amountText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
 
                     if let skip = spec.skipTitle {
                         Button(skip) { advance(recording: "skipped", for: spec) }
@@ -275,6 +294,17 @@ struct ProfileQuestionsView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focus = .error }
             }
         }
+    }
+
+    private func commitAmount(_ entry: AmountEntry, for spec: ProfileQuestionSpec) {
+        let cleaned = amountText.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        guard let value = Double(cleaned), value >= 0 else {
+            errorMessage = "Enter a number, like 850."
+            UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+            return
+        }
+        amountText = ""
+        commit(ProfileOption("amount", cleaned, patch: entry.patch(value)), for: spec)
     }
 
     private func advance(recording value: String, for spec: ProfileQuestionSpec) {

@@ -45,6 +45,9 @@ struct UserCapabilities: Codable, Equatable {
     /// `benefitType` empty, so that field alone cannot tell.
     var profileAnswered: Bool = false
     var getsSsaPayment: String? = nil
+    /// How many "finish setting up" money questions (housing, goal, money
+    /// style, biggest stress) are still unanswered (2026-09-05).
+    var moneyProfileRemaining: Int = 0
 
     /// Safe default before the profile has loaded: nothing benefit-specific
     /// is shown, nothing is computed.
@@ -73,10 +76,12 @@ struct UserCapabilities: Codable, Equatable {
         benefitType: String?,
         blindStatus: String?,
         profileAnswered: Bool = false,
-        getsSsaPayment: String? = nil
+        getsSsaPayment: String? = nil,
+        moneyProfileRemaining: Int = 0
     ) {
         self.profileAnswered = profileAnswered
         self.getsSsaPayment = getsSsaPayment
+        self.moneyProfileRemaining = moneyProfileRemaining
         self.showsBenefitsLane = showsBenefitsLane
         self.showsResourceCounter = showsResourceCounter
         self.showsSSDILane = showsSSDILane
@@ -105,6 +110,7 @@ struct UserCapabilities: Codable, Equatable {
         blindStatus = try c.decodeIfPresent(String.self, forKey: .blindStatus)
         profileAnswered = try c.decodeIfPresent(Bool.self, forKey: .profileAnswered) ?? false
         getsSsaPayment = try c.decodeIfPresent(String.self, forKey: .getsSsaPayment)
+        moneyProfileRemaining = (try? c.decodeIfPresent(Int.self, forKey: .moneyProfileRemaining)) ?? 0
     }
 
     /// Which benefits lane the Benefits tab renders. Nothing outside the
@@ -258,6 +264,12 @@ struct BenefitsProfilePatch: Encodable, Equatable {
     var promiseAcceptedAt: Date?
     var fieldOfficeChannel: String?
     var fieldOfficeNotes: String?
+    // Money profile (2026-09-05)
+    var housingSituation: String?
+    var housingCost: Double?
+    var financialGoal: String?
+    var moneyStyle: String?
+    var biggestFinancialStress: String?
 
     static let none = BenefitsProfilePatch()
 
@@ -279,6 +291,11 @@ struct BenefitsProfilePatch: Encodable, Equatable {
         if let v = other.promiseAcceptedAt { out.promiseAcceptedAt = v }
         if let v = other.fieldOfficeChannel { out.fieldOfficeChannel = v }
         if let v = other.fieldOfficeNotes { out.fieldOfficeNotes = v }
+        if let v = other.housingSituation { out.housingSituation = v }
+        if let v = other.housingCost { out.housingCost = v }
+        if let v = other.financialGoal { out.financialGoal = v }
+        if let v = other.moneyStyle { out.moneyStyle = v }
+        if let v = other.biggestFinancialStress { out.biggestFinancialStress = v }
         return out
     }
 
@@ -296,6 +313,11 @@ struct BenefitsProfilePatch: Encodable, Equatable {
         case promiseAcceptedAt = "promise_accepted_at"
         case fieldOfficeChannel = "field_office_channel"
         case fieldOfficeNotes = "field_office_notes"
+        case housingSituation = "housing_situation"
+        case housingCost = "housing_cost"
+        case financialGoal = "financial_goal"
+        case moneyStyle = "money_style"
+        case biggestFinancialStress = "biggest_financial_stress"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -315,6 +337,11 @@ struct BenefitsProfilePatch: Encodable, Equatable {
         }
         try c.encodeIfPresent(fieldOfficeChannel, forKey: .fieldOfficeChannel)
         try c.encodeIfPresent(fieldOfficeNotes, forKey: .fieldOfficeNotes)
+        try c.encodeIfPresent(housingSituation, forKey: .housingSituation)
+        try c.encodeIfPresent(housingCost, forKey: .housingCost)
+        try c.encodeIfPresent(financialGoal, forKey: .financialGoal)
+        try c.encodeIfPresent(moneyStyle, forKey: .moneyStyle)
+        try c.encodeIfPresent(biggestFinancialStress, forKey: .biggestFinancialStress)
     }
 }
 

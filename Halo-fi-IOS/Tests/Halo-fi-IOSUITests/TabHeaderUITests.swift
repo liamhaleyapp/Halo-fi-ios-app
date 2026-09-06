@@ -257,6 +257,20 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(attention.waitForExistence(timeout: 10), "Needs your attention did not open; state = \(app.state.rawValue)")
     }
 
+    /// The four money questions moved from the voice welcome flow to a
+    /// screen (2026-09-05): the Agent tab offers them while any remain.
+    func testAgentTabOffersMoneyProfile() {
+        let app = launch("ssi_watch")
+        openTab(app, "Agent")
+        let prompt = app.descendants(matching: .any)["moneyProfilePrompt"].firstMatch
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10), "money profile prompt missing")
+        prompt.tap()
+        let heading = app.staticTexts["What's your housing setup?"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "housing question did not open")
+        XCTAssertTrue(app.buttons["I rent"].exists)
+        app.buttons["Later"].tap()
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

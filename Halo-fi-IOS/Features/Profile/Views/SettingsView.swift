@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, accessibility, benefitsProfile, counselorQuestions, fieldOffice, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
+  case profile, preferences, accessibility, benefitsProfile, moneyProfile, counselorQuestions, fieldOffice, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -66,6 +66,12 @@ struct SettingsView: View {
                 icon: userManager.capabilities.showsBenefitsLane ? "heart.text.square.fill" : "plus.circle.fill",
                 title: userManager.capabilities.showsBenefitsLane ? "Benefits profile" : "Set up benefits"
               )
+            }
+
+            // Money profile (2026-09-05): housing, goal, money style, stress.
+            NavigationLink(value: SettingsDestination.moneyProfile) {
+              SettingsOptionLabel(icon: "person.text.rectangle.fill",
+                                  title: userManager.capabilities.moneyProfileRemaining > 0 ? "Finish setting up" : "Money profile")
             }
 
             // WP3 — expenses flagged "Not sure this counts? Ask my counselor".
@@ -188,6 +194,11 @@ struct SettingsView: View {
 
         case .benefitsProfile:
           BenefitsProfileView()
+
+        case .moneyProfile:
+          ProfileQuestionsView(questions: ProfileQuestions.money, embeddedInOnboarding: false,
+                               ignoreVisibility: true, onComplete: {})
+            .navigationTitle("Money profile")
 
         case .counselorQuestions:
           CounselorQuestionsView()
