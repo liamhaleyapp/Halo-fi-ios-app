@@ -332,10 +332,7 @@ struct SignUpView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
           ToolbarItem(placement: .navigationBarTrailing) {
-            Button("Done") {
-              showingDatePicker = false
-            }
-            .foregroundColor(.blue)
+            CloseToolbarButton(label: "Done", hint: "Keeps the selected date and closes the picker.") { showingDatePicker = false }
           }
         }
       }

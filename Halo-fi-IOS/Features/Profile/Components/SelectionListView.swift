@@ -59,7 +59,7 @@ struct SelectionListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    CloseToolbarButton(label: "Done") { dismiss() }
                 }
             }
         }

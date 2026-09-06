@@ -96,8 +96,7 @@ struct SSIDeductionConfirmView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Not now") { dismiss() }
-                        .accessibilityHint("Dismisses without saving.")
+                    CloseToolbarButton(label: "Not now", hint: "Dismisses without saving.") { dismiss() }
                 }
             }
         }

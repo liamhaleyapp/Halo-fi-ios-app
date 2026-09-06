@@ -569,7 +569,7 @@ private struct EmailRecipientPromptSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
+                    CloseToolbarButton(label: "Cancel", hint: "Closes without sending.", action: onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Send") { onSend(trimmed) }

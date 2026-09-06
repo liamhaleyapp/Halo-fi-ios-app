@@ -501,7 +501,7 @@ struct FieldOfficeChannelSheet: View {
             .navigationTitle("My field office")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Later") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Later", hint: "Closes without changing the channel.") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         if let selection { onSave(selection) }
@@ -545,7 +545,7 @@ struct PacketPreviewSheet: View {
             }
             .navigationTitle("Preview")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Done") { dismiss() } } }
             .accessibilityAction(.escape) { dismiss() }
         }
     }

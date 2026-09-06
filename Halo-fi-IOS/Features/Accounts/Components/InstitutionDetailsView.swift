@@ -68,10 +68,7 @@ struct InstitutionDetailsView: View {
       .navigationBarHidden(true)
       .toolbar {
         ToolbarItem(placement: .navigationBarTrailing) {
-          Button("Done") {
-            dismiss()
-          }
-          .foregroundColor(Color.haloTextPrimary)
+          CloseToolbarButton(label: "Done") { dismiss() }
         }
       }
     }

@@ -169,9 +169,7 @@ struct ConversationMoreMenu: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    CloseToolbarButton(label: "Done") { dismiss() }
                 }
             }
         }

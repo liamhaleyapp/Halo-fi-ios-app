@@ -105,7 +105,7 @@ struct InstitutionDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    CloseToolbarButton(label: "Done") { dismiss() }
                         .disabled(isDisconnecting)
                 }
             }

@@ -185,8 +185,7 @@ struct LegalDocumentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .accessibilityLabel("Close \(title)")
+                    CloseToolbarButton(label: "Close \(title)") { dismiss() }
                 }
             }
             .task {
@@ -259,8 +258,7 @@ struct HelpFeedbackView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .accessibilityLabel("Close Help & Feedback")
+                    CloseToolbarButton(label: "Close Help & Feedback") { dismiss() }
                 }
             }
         }
