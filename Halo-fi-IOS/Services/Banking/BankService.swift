@@ -278,6 +278,13 @@ final class BankService: BankServiceProtocol {
     /// Fetches all linked items (connected institutions) for the authenticated user
     /// - Returns: Full MultiItemsResponse including items and embedded accounts
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func getUpdateLinkToken(itemId: String) async throws -> String {
+        struct Out: Codable { let linkToken: String; enum CodingKeys: String, CodingKey { case linkToken = "link_token" } }
+        let out: Out = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Bank.updateLinkToken(itemId), method: .POST, body: nil, responseType: Out.self)
+        return out.linkToken
+    }
+
     func getLinkedItems() async throws -> MultiItemsResponse {
         Logger.info("Fetching linked items from server")
 

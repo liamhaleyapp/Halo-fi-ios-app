@@ -154,6 +154,8 @@ enum APIEndpoints {
 
         /// POST - Sync multiple items.
         static let multiItemsSync = "/bank/multi-items/sync"
+        /// Plaid Link UPDATE mode for an existing item (reauth, or add / drop shared accounts).
+        static func updateLinkToken(_ itemId: String) -> String { "/bank/items/\(itemId)/update-link-token" }
 
         /// POST - Sync a specific item.
         /// Usage: `Bank.syncItem(itemId)` where itemId is the internal UUID (not plaid_item_id)

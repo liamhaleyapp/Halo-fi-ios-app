@@ -72,6 +72,8 @@ struct InstitutionAccountsView: View {
           .buttonStyle(HapticPlainButtonStyle())
           .accessibilityAction(named: account.nickname?.isEmpty == false ? "Change nickname" : "Add a nickname") { nicknameTarget = account }
         }
+        UpdateSharedAccountsButton(item: item) { await loadAccounts() }
+          .padding(.top, 8)
       }
       .padding(.horizontal, 20)
       .padding(.top, 20)

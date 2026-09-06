@@ -63,6 +63,8 @@ protocol BankServiceProtocol {
     /// Fetches all linked items (connected institutions) for the authenticated user.
     /// - Returns: Full response including items and embedded accounts
     func getLinkedItems() async throws -> MultiItemsResponse
+    /// Update-mode link token for one connection (2026-09-05).
+    func getUpdateLinkToken(itemId: String) async throws -> String
 
     /// Registers a Plaid Link session ID for webhook processing (multi-item link).
     /// Maps link_session_id → user_id in Redis for webhook routing.
@@ -156,6 +158,8 @@ actor MockBankService: BankServiceProtocol {
             {"status": "healthy", "timestamp": "2025-01-01T00:00:00Z"}
             """)
     }
+
+    func getUpdateLinkToken(itemId: String) async throws -> String { "mock-update-link-token" }
 
     func getLinkedItems() async throws -> MultiItemsResponse {
         guard shouldSucceed else { throw BankError.networkError }
