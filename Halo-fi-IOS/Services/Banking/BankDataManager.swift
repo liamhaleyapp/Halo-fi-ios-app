@@ -193,6 +193,9 @@ final class BankDataManager {
 
                 await MainActor.run {
                     setLinkedItems(items)  // Sets property + persists
+                    // Drop in-memory accounts for connections the server no longer lists.
+                    let serverIds = Set(items.map(\.itemId))
+                    accountsByItemId = accountsByItemId.filter { serverIds.contains($0.key) }
 
                     // Populate accountsByItemId with embedded accounts (REPLACE, not merge)
                     if !embeddedAccountsByItemId.isEmpty {
@@ -211,6 +214,16 @@ final class BankDataManager {
                         if let userId = currentUserId {
                             persistence.setLastRefreshAt(Date(), for: userId)
                         }
+                    }
+                    logAccountMap("server items")
+                }
+                // Persisted accounts of retired connections would otherwise be
+                // restored on the next launch (2026-09-05).
+                if let userId = currentUserId, let persistence = accountPersistence {
+                    let serverIds = Set(items.map(\.itemId))
+                    let onDisk = await persistence.loadAllAccounts(for: userId)
+                    for staleId in onDisk.keys where !serverIds.contains(staleId) {
+                        await persistence.clearAccounts(for: userId, itemId: staleId)
                     }
                 }
                 Logger.success("BankDataManager: Fetched \(items.count) linked items from server")
@@ -266,6 +279,16 @@ final class BankDataManager {
 
     /// Rebuild accountsByItemId from accounts (always run to avoid stale state)
     /// Keys by internal itemId, looking up from linkedItems
+    /// One line per write to the account map: item count, account count,
+    /// cash total. The Money hero flipping between two totals (Liam,
+    /// 2026-09-05) was invisible without it.
+    private func logAccountMap(_ source: String) {
+        let all = accountsByItemId.values.flatMap { $0 }
+        let cash = all.filter { $0.isActive && !["credit", "loan"].contains($0.type.lowercased()) }
+            .reduce(0.0) { $0 + max(0, $1.currentBalance ?? 0) }
+        Logger.info("BankDataManager: account map (\(source)): \(accountsByItemId.count) items, \(all.count) accounts, cash \(Int(cash))")
+    }
+
     private func rebuildAccountsByItemId() {
         guard let accounts = accounts, !accounts.isEmpty else { return }
 
@@ -284,15 +307,26 @@ final class BankDataManager {
             let key = plaidToItemId[plaidItemId] ?? plaidItemId
             newCache[key, default: []].append(account)
         }
-        accountsByItemId = newCache
-        Logger.debug("BankDataManager: Rebuilt accountsByItemId with \(accountsByItemId.count) items")
+        // MERGE (2026-09-05): the flat list can lag the per-item map (a bank
+        // linked minutes ago, an account without an item id). Replacing the
+        // whole map made the Money hero flip between two totals as the
+        // paths took turns. Items the flat list did not cover keep what
+        // they had.
+        for (key, list) in newCache { accountsByItemId[key] = list }
+        logAccountMap("rebuilt from flat list")
     }
 
     private func restoreAccounts() async {
         guard let userId = currentUserId, let persistence = accountPersistence else { return }
 
-        let accountsByItem = await persistence.loadAllAccounts(for: userId)
-        if !accountsByItem.isEmpty {
+        var accountsByItem = await persistence.loadAllAccounts(for: userId)
+        // Only items that are still linked: a retired connection's accounts
+        // must never come back from disk (2026-09-05).
+        if let linked = linkedItems {
+            let ids = Set(linked.map(\.itemId))
+            accountsByItem = accountsByItem.filter { ids.contains($0.key) }
+        }
+        if !accountsByItem.isEmpty && accountsByItemId.isEmpty {
             accountsByItemId = accountsByItem
             Logger.info("BankDataManager: Restored \(accountsByItem.values.flatMap { $0 }.count) accounts across \(accountsByItem.count) items")
             // Debug: Show breakdown per item

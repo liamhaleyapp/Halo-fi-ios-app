@@ -474,8 +474,22 @@ extension MoneySnapshot {
         // Single source: the per-institution accounts (what the Accounts page
         // lists). The flat /bank/accounts list is only a stopgap before the
         // first per-item load completes.
-        let perItem = bank.accountsByItemId.values.flatMap { $0 }
-        let source = perItem.isEmpty ? (bank.accounts ?? []) : perItem
+        // Linked, active connections only (2026-09-05): an item missing from
+        // the per-item map is filled from the flat list rather than dropped,
+        // so the headline never loses a bank because one feed lagged.
+        var source: [BankAccount] = []
+        if let linked = bank.linkedItems, !linked.isEmpty {
+            for item in linked where item.isActive {
+                if let list = bank.accountsByItemId[item.itemId], !list.isEmpty {
+                    source += list
+                } else {
+                    source += (bank.accounts ?? []).filter { $0.plaidItemId == item.plaidItemId || $0.plaidItemId == item.itemId }
+                }
+            }
+        } else {
+            let perItem = bank.accountsByItemId.values.flatMap { $0 }
+            source = perItem.isEmpty ? (bank.accounts ?? []) : perItem
+        }
         // Dedupe by account id: three feeds write accountsByItemId and a
         // stale or doubled entry must never change the headline number.
         var seenIds = Set<String>()
