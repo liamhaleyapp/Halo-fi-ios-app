@@ -448,17 +448,47 @@ extension SubscriptionService {
   }
 }
 
+enum SubscriptionBillingCycle: String, CaseIterable, Identifiable {
+  case monthly, yearly
+  var id: String { rawValue }
+  var title: String { self == .monthly ? "Monthly" : "Yearly" }
+}
+
+enum SubscriptionTier: Int, CaseIterable {
+  case basic, pro, max
+  var title: String {
+    switch self { case .basic: return "Basic"; case .pro: return "Pro"; case .max: return "Max" }
+  }
+  static func from(productID: String) -> SubscriptionTier? {
+    let parts = productID.lowercased().split(whereSeparator: { $0 == "." || $0 == "_" }).map(String.init)
+    return allCases.first { parts.contains($0.title.lowercased()) }
+  }
+}
+
 /// Store-provided terms for a selectable auto-renewing plan.
 struct SubscriptionPlan: Identifiable {
   let package: Package
   let title: String
   let detail: String
   let terms: String
+  let hasIntroductoryOffer: Bool
   var id: String { package.identifier }
+  var tier: SubscriptionTier? { SubscriptionTier.from(productID: package.storeProduct.productIdentifier) }
+  var billingCycle: SubscriptionBillingCycle? {
+    guard let period = package.storeProduct.subscriptionPeriod else { return nil }
+    if period.unit == .year && period.value == 1 { return .yearly }
+    if period.unit == .month && period.value == 12 { return .yearly }
+    if period.unit == .month && period.value == 1 { return .monthly }
+    return nil
+  }
+  var displayTitle: String { tier?.title ?? title }
+  var price: String { package.storeProduct.localizedPriceString }
+  var billingLabel: String { billingCycle == .yearly ? "per year" : "per month" }
 
   init(package: Package, introEligible: Bool) {
     self.package = package
     let product = package.storeProduct
+    hasIntroductoryOffer = introEligible && product.introductoryDiscount != nil
     title = product.localizedTitle.isEmpty ? "Subscription" : product.localizedTitle
     detail = product.localizedDescription
     let recurring = "\(product.localizedPriceString) every \(Self.period(product.subscriptionPeriod))"
@@ -510,6 +540,18 @@ final class SubscriptionCheckout {
   private var active = true
   private(set) var plans: [SubscriptionPlan] = []
   var selectedID: String?
+  private(set) var billingCycle: SubscriptionBillingCycle = .monthly
+  var visiblePlans: [SubscriptionPlan] {
+    plans.filter { $0.billingCycle == billingCycle }.sorted {
+      ($0.tier?.rawValue ?? 3, $0.title) < ($1.tier?.rawValue ?? 3, $1.title)
+    }
+  }
+  func selectCycle(_ cycle: SubscriptionBillingCycle) {
+    guard isCurrent, !isBusy, !awaitingConfirmation, cycle != billingCycle else { return }
+    let previousTier = selectedPlan?.tier
+    billingCycle = cycle
+    selectedID = previousTier.flatMap { tier in visiblePlans.first { $0.tier == tier }?.id }
+  }
   private(set) var isBusy = false
   private(set) var loaded = false
   private(set) var catalogError: String?
@@ -523,7 +565,7 @@ final class SubscriptionCheckout {
   }
 
   var isCurrent: Bool { active && service.isCurrentSession(owner) }
-  var selectedPlan: SubscriptionPlan? { plans.first { $0.id == selectedID } }
+  var selectedPlan: SubscriptionPlan? { visiblePlans.first { $0.id == selectedID } }
   var canPurchase: Bool { isCurrent && !isBusy && !awaitingConfirmation && selectedPlan != nil && !completed }
 
   func close() { active = false }

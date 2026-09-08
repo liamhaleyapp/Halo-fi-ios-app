@@ -308,7 +308,9 @@ extension TabHeaderUITests {
 
     private func revealCheckout(_ element: XCUIElement, app: XCUIApplication) {
         for _ in 0..<12 {
-            if element.exists && element.isHittable { return }
+            if element.exists && element.isHittable,
+               element.frame.midY > app.frame.minY + 80,
+               element.frame.midY < app.frame.maxY - 80 { return }
             app.swipeUp()
         }
         XCTAssertTrue(element.exists && element.isHittable)
@@ -354,6 +356,7 @@ extension TabHeaderUITests {
         screenshot.lifetime = .keepAlways
         add(screenshot)
         plan.tap()
+        XCTAssertTrue(plan.label.contains("Selected"))
         let purchase = app.buttons["checkoutPurchase"]
         revealCheckout(purchase, app: app)
         purchase.tap()
@@ -380,5 +383,36 @@ extension TabHeaderUITests {
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertEqual(status.label, "Could not restore purchases. Please try again.")
         XCTAssertTrue(restore.isEnabled)
+    }
+}
+
+
+extension TabHeaderUITests {
+    func testCheckoutMonthlyYearlyToggleKeepsTierAndUpdatesPrices() {
+        let app = launchCheckout("catalog")
+        let monthly = app.buttons["checkoutCycle_monthly"]
+        let yearly = app.buttons["checkoutCycle_yearly"]
+        XCTAssertTrue(monthly.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(monthly.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(yearly.frame.height, 44)
+        let basic = app.buttons["checkoutPlan_fixture-basic-monthly"]
+        let pro = app.buttons["checkoutPlan_fixture-pro-monthly"]
+        let max = app.buttons["checkoutPlan_fixture-max-monthly"]
+        XCTAssertTrue(basic.waitForExistence(timeout: 10))
+        XCTAssertLessThan(basic.frame.minY, pro.frame.minY)
+        XCTAssertLessThan(pro.frame.minY, max.frame.minY)
+        pro.tap()
+        yearly.tap()
+        let annualPro = app.buttons["checkoutPlan_fixture-pro-yearly"]
+        XCTAssertTrue(annualPro.waitForExistence(timeout: 5))
+        XCTAssertTrue(annualPro.label.contains("$99.99"))
+        XCTAssertTrue(annualPro.label.contains("Selected"))
+        XCTAssertFalse(app.buttons["checkoutPlan_fixture-pro-monthly"].exists)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "Yearly subscription picker"
+        image.lifetime = .keepAlways
+        add(image)
+        monthly.tap()
+        XCTAssertTrue(app.buttons["checkoutPlan_fixture-pro-monthly"].label.contains("Selected"))
     }
 }

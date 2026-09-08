@@ -415,6 +415,7 @@ final class ConversationCoordinator {
                 guard let self else { return }
                 do {
                     try await self.voiceService.preWarmCapture()
+                    try Task.checkCancellation()
 
                     if self.conversationMode == .handsFree {
                         // Wire the same router we use during a normal
@@ -429,6 +430,11 @@ final class ConversationCoordinator {
                             }
                         }
                         try await self.voiceService.startRecording()
+                        if Task.isCancelled && !self.agentWebSocket.isConnected {
+                            self.voiceService.stopRecording()
+                            self.voiceService.onAudioBuffer = nil
+                            return
+                        }
                         Logger.info("Hands-free: voice service primed for barge-in during welcome")
                     }
                 } catch {
@@ -1469,6 +1475,24 @@ final class ConversationCoordinator {
             setState(.error(error.error))
             audioFeedback.feedbackForStateChange(.error(error.error))
 
+            if AgentWebSocketManager.terminalErrorCodes.contains(error.code) {
+                prewarmTask?.cancel()
+                prewarmTask = nil
+                idleWatchdogTask?.cancel()
+                idleWatchdogTask = nil
+                sttService.onSessionReady = nil
+                cancelSpeechFinalization()
+                isVoiceSessionActive = false
+                suppressNextAutoResume = true
+                voiceService.stopRecording()
+                voiceService.onAudioBuffer = nil
+                sttService.disconnect()
+                transcriptStore?.discardDraft()
+                streamingAudioPlayer?.stopAndDiscardPending()
+                UIAccessibility.post(notification: .announcement, argument: error.error)
+                return
+            }
+
             // Hands-free: an agent error (including guardrail rejections,
             // which arrive as plain error events with no TTS) used to
             // strand the loop in .error forever — dead air with minutes
@@ -1477,7 +1501,8 @@ final class ConversationCoordinator {
             if conversationMode == .handsFree && !isMicMuted {
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard let self, case .error = self.state else { return }
+                    guard !Task.isCancelled, let self, self.state == .error(error.error),
+                          self.agentWebSocket.isConnected else { return }
                     UIAccessibility.post(
                         notification: .announcement,
                         argument: "I couldn't process that. I'm listening again."

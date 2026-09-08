@@ -33,8 +33,9 @@ struct SubscriptionManagementView: View {
             Text(subscriptionService.statusError == nil ? "Current Plan" : "Last Known Plan")
               .font(.subheadline)
               .foregroundColor(.haloTextSecondary)
-            Text(!subscriptionService.hasActiveSubscription && subscriptionService.customerInfo == nil
-                 ? "Not available" : subscriptionService.currentSubscription.displayName)
+            Text(subscriptionService.customerInfo == nil
+                 ? (subscriptionService.statusError == nil ? "Checking your subscription..." : "Could not check subscription")
+                 : subscriptionService.currentSubscription.displayName)
               .font(.headline)
               .foregroundColor(.haloTextPrimary)
           }
@@ -57,7 +58,7 @@ struct SubscriptionManagementView: View {
               }
             }
           } else {
-            Text(subscriptionService.customerInfo == nil ? "Not checked" : "Inactive")
+            Text(subscriptionService.customerInfo == nil ? "" : "Inactive")
               .font(.caption)
               .foregroundColor(.red)
           }
@@ -76,18 +77,21 @@ struct SubscriptionManagementView: View {
           .frame(minHeight: 44)
         }
 
-        // Primary Action
-        ActionButton(
-          title: subscriptionService.hasActiveSubscription ? "Change Plan" : "Subscribe Now",
-          gradient: LinearGradient(
-            colors: [Color.blue, Color.purple],
-            startPoint: .leading,
-            endPoint: .trailing
-          )
-        ) {
-          showingPaywall = true
+        // Only offer a new purchase after a successful account-specific check.
+        // A missing/unavailable result must not look like a cancelled subscription.
+        if subscriptionService.customerInfo != nil && subscriptionService.statusError == nil {
+          ActionButton(
+            title: subscriptionService.hasActiveSubscription ? "Change Plan" : "Subscribe Now",
+            gradient: LinearGradient(
+              colors: [Color.blue, Color.purple],
+              startPoint: .leading,
+              endPoint: .trailing
+            )
+          ) {
+            showingPaywall = true
+          }
+          .padding(.top, 8)
         }
-        .padding(.top, 8)
 
         // Cancel — de-emphasized text link
         if subscriptionService.hasActiveSubscription {
@@ -150,6 +154,7 @@ struct AccountSubscriptionPaywall: View {
 
 struct SubscriptionCheckoutView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var checkout: SubscriptionCheckout
   private let service: SubscriptionService
   var displayCloseButton = true
@@ -157,6 +162,10 @@ struct SubscriptionCheckoutView: View {
   @State private var completionDelivered = false
   @AccessibilityFocusState private var focus: Focus?
   private enum Focus: Hashable { case heading, status }
+  private var billingCycleLayout: AnyLayout {
+    dynamicTypeSize.isAccessibilitySize
+      ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
+  }
 
   init(service: SubscriptionService, displayCloseButton: Bool = true, onComplete: @escaping () -> Void) {
     self.service = service
@@ -168,13 +177,13 @@ struct SubscriptionCheckoutView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("Choose a subscription")
+        Text("Choose your plan")
           .font(.title.bold())
           .accessibilityAddTraits(.isHeader)
           .accessibilityIdentifier("checkoutHeading")
           .accessibilityFocused($focus, equals: .heading)
 
-        Text("Select a plan to review with Apple. Prices and available offers come from the App Store.")
+        Text("Choose your billing cycle and plan.")
 
         if !checkout.loaded {
           ProgressView("Loading subscription plans...")
@@ -190,13 +199,48 @@ struct SubscriptionCheckoutView: View {
             .disabled(checkout.isBusy)
         }
 
-        ForEach(checkout.plans) { plan in
+        if !checkout.plans.isEmpty {
+          billingCycleLayout {
+            ForEach(SubscriptionBillingCycle.allCases) { cycle in
+              Button {
+                checkout.selectCycle(cycle)
+              } label: {
+                Text(cycle.title)
+                  .font(.body.weight(.semibold))
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(maxWidth: .infinity, minHeight: 48)
+                  .foregroundStyle(checkout.billingCycle == cycle ? Color(uiColor: .systemBackground) : Color.primary)
+                  .background(checkout.billingCycle == cycle ? Color(uiColor: .label) : Color.clear)
+                  .clipShape(RoundedRectangle(cornerRadius: 10))
+                  .contentShape(Rectangle())
+              }
+              .buttonStyle(.plain)
+              .accessibilityIdentifier("checkoutCycle_\(cycle.rawValue)")
+              .accessibilityAddTraits(checkout.billingCycle == cycle ? [.isSelected] : [])
+              .accessibilityHint("Shows \(cycle.title.lowercased()) prices for Basic, Pro, and Max.")
+              .disabled(checkout.isBusy || checkout.awaitingConfirmation)
+            }
+          }
+          .padding(4)
+          .background(Color(uiColor: .secondarySystemBackground))
+          .clipShape(RoundedRectangle(cornerRadius: 14))
+          .accessibilityElement(children: .contain)
+          .accessibilityLabel("Billing cycle")
+
+          if checkout.visiblePlans.isEmpty {
+            Text("No \(checkout.billingCycle.title.lowercased()) plans are available right now. Choose another billing option or try again later.")
+          }
+        }
+
+        ForEach(checkout.visiblePlans) { plan in
           Button {
             checkout.selectedID = plan.id
           } label: {
             VStack(alignment: .leading, spacing: 8) {
-              Text(plan.title).font(.headline)
-              Text(plan.terms).font(.body.weight(.semibold))
+              Text(plan.displayTitle).font(.title2.bold())
+              Text("\(plan.price) \(plan.billingLabel)")
+                .font(.title3.weight(.semibold))
+              if plan.hasIntroductoryOffer { Text(plan.terms).font(.body) }
               if !plan.detail.isEmpty { Text(plan.detail).font(.body) }
               if checkout.selectedID == plan.id {
                 Text("Selected").font(.body.weight(.semibold))
@@ -209,7 +253,8 @@ struct SubscriptionCheckoutView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay {
               RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary, lineWidth: checkout.selectedID == plan.id ? 3 : 1)
+                .stroke(checkout.selectedID == plan.id ? Color.haloTextPrimary : Color.haloTextSecondary,
+                        lineWidth: checkout.selectedID == plan.id ? 3 : 1)
             }
             .contentShape(Rectangle())
           }
@@ -227,7 +272,7 @@ struct SubscriptionCheckoutView: View {
           Button {
             Task { await checkout.purchase() }
           } label: {
-            Text(checkout.selectedPlan.map { "Subscribe to \($0.title)" } ?? "Select a plan above")
+            Text(checkout.selectedPlan.map { "Continue with \($0.displayTitle) \(checkout.billingCycle.title)" } ?? "Select a plan above")
               .font(.headline)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity, minHeight: 44)

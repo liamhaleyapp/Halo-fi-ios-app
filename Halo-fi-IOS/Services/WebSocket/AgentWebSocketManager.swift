@@ -482,8 +482,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     /// loop reconnects after the WS closes, the server re-checks
     /// the limit, fails again, and we loop forever — which the
     /// production trace from 2026-04-25 hit on MINUTE_LIMIT_REACHED.
-    private static let terminalErrorCodes: Set<String> = [
-        "MINUTE_LIMIT_REACHED",
+    static let terminalErrorCodes: Set<String> = [
+        "MINUTE_LIMIT_REACHED", "SUBSCRIPTION_UNAVAILABLE", "ACCOUNT_UNAVAILABLE",
+        "AUTHENTICATION_FAILED", "INVALID_TOKEN", "TOKEN_EXPIRED",
     ]
 
     private func handleError(_ error: ErrorPayload) {

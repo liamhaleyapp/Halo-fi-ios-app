@@ -795,3 +795,39 @@ extension SessionIsolationTests {
             "$1.00 every 1 month for 3 payments, then $9.99 every 1 month.")
     }
 }
+
+
+extension SessionIsolationTests {
+    @MainActor
+    func testBillingCycleShowsThreeTiersAndKeepsTheSelectedTier() async throws {
+        let (client, _, _, checkout) = try await checkoutSetup()
+        client.offeredPackages = try await CheckoutFixtureClient(mode: "catalog").packages()
+        await checkout.load()
+        XCTAssertEqual(checkout.visiblePlans.map(\.displayTitle), ["Basic", "Pro", "Max"])
+        XCTAssertTrue(checkout.visiblePlans.allSatisfy { $0.billingCycle == .monthly })
+        checkout.selectedID = "fixture-pro-monthly"
+        checkout.selectCycle(.yearly)
+        XCTAssertEqual(checkout.selectedID, "fixture-pro-yearly")
+        XCTAssertEqual(checkout.selectedPlan?.package.storeProduct.productIdentifier, "com.halofi.pro.yearly")
+        XCTAssertTrue(checkout.visiblePlans.allSatisfy { $0.terms.contains("99.99") && $0.terms.contains("1 year") })
+        XCTAssertTrue(checkout.canPurchase)
+        checkout.selectCycle(.monthly)
+        XCTAssertEqual(checkout.selectedID, "fixture-pro-monthly")
+    }
+
+    @MainActor
+    func testMissingYearlyProductCannotPurchaseHiddenMonthlySelection() async throws {
+        let (_, _, _, checkout) = try await checkoutSetup()
+        XCTAssertTrue(checkout.canPurchase)
+        checkout.selectCycle(.yearly)
+        XCTAssertNil(checkout.selectedPlan)
+        XCTAssertFalse(checkout.canPurchase)
+    }
+
+    @MainActor
+    func testVoiceSubscriptionOutageRequiresManualRetry() {
+        XCTAssertTrue(AgentWebSocketManager.terminalErrorCodes.contains("SUBSCRIPTION_UNAVAILABLE"))
+        XCTAssertTrue(AgentWebSocketManager.terminalErrorCodes.contains("MINUTE_LIMIT_REACHED"))
+        XCTAssertFalse(AgentWebSocketManager.terminalErrorCodes.contains("PROCESSING_ERROR"))
+    }
+}

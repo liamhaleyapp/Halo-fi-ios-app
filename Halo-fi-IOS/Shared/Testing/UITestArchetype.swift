@@ -258,17 +258,30 @@ import RevenueCat
 /// Entirely local checkout fixture. Only reachable alongside the existing
 /// debug-only UI-test archetype flag; never sends SDK billing requests.
 final class CheckoutFixturePeriod: SKProductSubscriptionPeriod {
+    let periodUnit: SKProduct.PeriodUnit
+    init(unit: SKProduct.PeriodUnit = .month) { self.periodUnit = unit; super.init() }
     override var numberOfUnits: Int { 1 }
-    override var unit: SKProduct.PeriodUnit { .month }
+    override var unit: SKProduct.PeriodUnit { periodUnit }
 }
 
 final class CheckoutFixtureProduct: SKProduct {
-    override var productIdentifier: String { "checkout.fixture.pro" }
-    override var localizedTitle: String { "HaloFi Pro" }
+    let fixtureTier: SubscriptionTier
+    let fixtureCycle: SubscriptionBillingCycle
+    let legacyID: Bool
+    init(tier: SubscriptionTier = .pro, cycle: SubscriptionBillingCycle = .monthly, legacyID: Bool = true) {
+        self.fixtureTier = tier; self.fixtureCycle = cycle; self.legacyID = legacyID
+        super.init()
+    }
+    override var productIdentifier: String {
+        legacyID ? "checkout.fixture.pro" : "com.halofi.\(fixtureTier.title.lowercased()).\(fixtureCycle.rawValue)"
+    }
+    override var localizedTitle: String { "HaloFi \(fixtureTier.title)" }
     override var localizedDescription: String { "A sample plan for checkout testing." }
-    override var price: NSDecimalNumber { NSDecimalNumber(string: "9.99") }
+    override var price: NSDecimalNumber { NSDecimalNumber(string: fixtureCycle == .monthly ? "9.99" : "99.99") }
     override var priceLocale: Locale { Locale(identifier: "en_US") }
-    override var subscriptionPeriod: SKProductSubscriptionPeriod? { CheckoutFixturePeriod() }
+    override var subscriptionPeriod: SKProductSubscriptionPeriod? {
+        CheckoutFixturePeriod(unit: fixtureCycle == .monthly ? .month : .year)
+    }
 }
 
 @MainActor
@@ -280,6 +293,16 @@ final class CheckoutFixtureClient: SubscriptionClient {
     func logOut() async throws { appUserID = nil }
     func packages() async throws -> [Package] {
         if mode == "empty" { return [] }
+        if mode == "catalog" {
+            return SubscriptionBillingCycle.allCases.flatMap { cycle in
+                SubscriptionTier.allCases.reversed().map { tier in
+                    Package(identifier: "fixture-\(tier.title.lowercased())-\(cycle.rawValue)",
+                        packageType: cycle == .monthly ? .monthly : .annual,
+                        storeProduct: StoreProduct(sk1Product: CheckoutFixtureProduct(tier: tier, cycle: cycle, legacyID: false)),
+                        presentedOfferingContext: .init(offeringIdentifier: "fixture"), webCheckoutUrl: nil)
+                }
+            }
+        }
         return [Package(identifier: "fixture-pro", packageType: .monthly,
                         storeProduct: StoreProduct(sk1Product: CheckoutFixtureProduct()),
                         presentedOfferingContext: .init(offeringIdentifier: "fixture"), webCheckoutUrl: nil)]
