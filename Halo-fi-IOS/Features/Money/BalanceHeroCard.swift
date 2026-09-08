@@ -206,40 +206,6 @@ struct BalanceHeroCard: View {
 }
 
 
-struct PendingActivityView: View {
-    let pending: PendingBankActivity?
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                Text("Pending activity").font(.title.bold()).accessibilityAddTraits(.isHeader)
-                Text("Amounts may change or disappear before they post.")
-                    .fixedSize(horizontal: false, vertical: true)
-                if let pending {
-                    Text("\(pending.count) pending transactions").font(.headline)
-                    ForEach(pending.transactions) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(entry.name).font(.headline)
-                            Text("\(PendingBankActivity.money(abs(entry.amountCents))) \(entry.amountCents < 0 ? "incoming" : "outgoing") · Pending")
-                            Text(entry.accountName + (entry.mask.map { " ending in " + $0 } ?? ""))
-                            Text(entry.spokenDate)
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.haloSecondaryBackground, in: RoundedRectangle(cornerRadius: 14))
-                        .accessibilityElement(children: .combine)
-                    }
-                } else { Text("Pending activity is not available yet. Refresh Money to try again.") }
-            }
-            .foregroundStyle(Color.haloTextPrimary)
-            .padding(20)
-            .readableContentWidth()
-        }
-        .background(Color.haloBackground)
-        .navigationTitle("Pending activity")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
 
 /// The same explicit split on total and category budget cards, including VoiceOver.
 struct PendingSpendingBreakdown: View {

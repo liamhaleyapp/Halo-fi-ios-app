@@ -323,7 +323,7 @@ extension TabHeaderUITests {
         let purchase = app.buttons["checkoutPurchase"]
         XCTAssertFalse(purchase.isEnabled)
         XCTAssertTrue(plan.label.contains("$9.99"))
-        XCTAssertTrue(plan.label.contains("1 month"))
+        XCTAssertTrue(plan.label.contains("per month"))
         plan.tap()
         revealCheckout(purchase, app: app)
         XCTAssertTrue(purchase.isEnabled)
@@ -444,44 +444,6 @@ extension TabHeaderUITests {
         button.tap()
         XCTAssertTrue(app.staticTexts["fixtureBankOpened"].waitForExistence(timeout: 5))
     }
-
-    func testMoneyPendingActivityOpensAndBudgetAnnouncesPending() {
-        let app = launch("none_answered")
-        openTab(app, "Money")
-        XCTAssertTrue(header(in: app).label.contains("Pending $50.00."))
-        XCTAssertFalse(header(in: app).label.contains("card and loan"))
-        let moneyScreenshot = XCTAttachment(screenshot: app.screenshot())
-        moneyScreenshot.name = "Simple Cash Owed Pending"
-        moneyScreenshot.lifetime = .keepAlways
-        add(moneyScreenshot)
-        let pending = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pending activity'")).firstMatch
-        XCTAssertTrue(pending.waitForExistence(timeout: 10))
-        pending.tap()
-        XCTAssertTrue(app.navigationBars["Pending activity"].waitForExistence(timeout: 5))
-        let transaction = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Example groceries'")).firstMatch
-        for _ in 0..<6 {
-            if transaction.exists && transaction.isHittable { break }
-            app.swipeUp()
-        }
-        XCTAssertTrue(transaction.exists)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Pending activity"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        app.navigationBars.buttons.firstMatch.tap()
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
-        for _ in 0..<6 {
-            if row.exists && row.isHittable { break }
-            app.swipeUp()
-        }
-        row.tap()
-        let split = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Pending $50.00'")).firstMatch
-        XCTAssertTrue(split.waitForExistence(timeout: 10))
-        let budgetScreenshot = XCTAttachment(screenshot: app.screenshot())
-        budgetScreenshot.name = "Budget posted and pending"
-        budgetScreenshot.lifetime = .keepAlways
-        add(budgetScreenshot)
-    }
 }
 
 
@@ -491,13 +453,6 @@ extension TabHeaderUITests {
         app.launchArguments = ["--ui-test-archetype=none_answered", "--ui-test-bars-large", "-themeMode", "Dark"]
         app.launch()
         XCTAssertTrue(header(in: app).label.contains("Pending $50.00."))
-        let pending = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pending activity'")).firstMatch
-        for _ in 0..<12 {
-            if pending.exists && pending.isHittable { break }
-            app.swipeUp()
-        }
-        XCTAssertTrue(pending.isHittable)
-        XCTAssertGreaterThanOrEqual(pending.frame.height, 44)
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
         for _ in 0..<12 {
             if row.exists && row.isHittable { break }

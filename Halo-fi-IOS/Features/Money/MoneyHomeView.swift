@@ -79,11 +79,6 @@ struct MoneyHomeView: View {
                     LazyVStack(spacing: 12) {
                         TabTitle("Money")
                         header
-                        if let pending = budgetDataManager.overview?.pending, pending.count > 0 {
-                            row(title: "Pending activity", icon: "clock.fill", tint: .yellow,
-                                line: VoiceOverFormatter.count(pending.count, singular: "transaction", plural: "transactions"),
-                                hint: "Opens pending transactions.", route: .pending)
-                        }
                         attentionRow
                         budgetRow
                         incomeRow
@@ -137,7 +132,6 @@ struct MoneyHomeView: View {
             .navigationDestination(for: MoneyRoute.self) { route in
                 switch route {
                 case .reconnectBank(let itemId, let name): BankReconnectView(itemId: itemId, name: name)
-                case .pending: PendingActivityView(pending: budgetDataManager.overview?.pending)
                 case .budget: BudgetView()
                 case .attention: AttentionView(onOpen: { open($0) })
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
@@ -204,7 +198,7 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case pending, budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
+        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
         case reconnectBank(String, String)
         case package(String?)
         case review(String)
@@ -427,7 +421,7 @@ struct MoneyHomeView: View {
     private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
         NavigationLink(value: route) {
             HStack(spacing: 14) {
-                HaloIconTile(icon: icon, tint: tint, symbolColor: route == .pending ? .black : .white)
+                HaloIconTile(icon: icon, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
