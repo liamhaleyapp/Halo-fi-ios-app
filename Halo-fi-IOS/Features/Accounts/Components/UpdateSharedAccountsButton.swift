@@ -58,14 +58,20 @@ struct UpdateSharedAccountsButton: View {
     private func start() {
         isWorking = true
         errorMessage = nil
+        let generation = SessionLifetime.shared.current
         Task { @MainActor in
             do {
                 let token = try await BankService.shared.getUpdateLinkToken(itemId: item.itemId)
+                try SessionLifetime.shared.check(generation)
                 plaidManager.linkToken = token
                 guard let created = plaidManager.createHandler(
-                    onSuccess: { _ in Task { @MainActor in await finish() } },
+                    onSuccess: { _ in Task { @MainActor in
+                        guard SessionLifetime.shared.isCurrent(generation) else { return }
+                        await finish()
+                    } },
                     onExit: { exit in
                         Task { @MainActor in
+                            guard SessionLifetime.shared.isCurrent(generation) else { return }
                             showingLink = false
                             isWorking = false
                             if let error = exit?.error { errorMessage = "\(item.institutionName) didn't finish: \(error.errorMessage)" }
@@ -75,6 +81,7 @@ struct UpdateSharedAccountsButton: View {
                 handler = created
                 showingLink = true
             } catch {
+                guard SessionLifetime.shared.isCurrent(generation) else { return }
                 isWorking = false
                 // The server's detail can be a full Plaid error dump; log it, say one sentence.
                 Logger.error("UpdateSharedAccounts: \(error)")
@@ -88,12 +95,58 @@ struct UpdateSharedAccountsButton: View {
     private func finish() async {
         showingLink = false
         plaidManager.clearSession()
-        // The server re-reads the item from Plaid (accounts + balances), then
-        // the app reloads everything.
-        try? await bankDataManager.syncBankData(itemId: item.itemId)
-        await bankDataManager.forceRefresh()
-        await onUpdated()
-        isWorking = false
-        UIAccessibility.post(notification: .announcement, argument: "\(item.institutionName) updated.")
+        let generation = SessionLifetime.shared.current
+        defer { if SessionLifetime.shared.isCurrent(generation) { isWorking = false } }
+        do {
+            try await BankService.shared.completeReconnection(itemId: item.itemId)
+            try SessionLifetime.shared.check(generation)
+            await bankDataManager.forceRefresh()
+            try SessionLifetime.shared.check(generation)
+            NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil, userInfo: ["scope": "accounts"])
+            await onUpdated()
+            guard SessionLifetime.shared.isCurrent(generation) else { return }
+            UIAccessibility.post(notification: .announcement, argument: "\(item.institutionName) updated.")
+        } catch {
+            guard SessionLifetime.shared.isCurrent(generation) else { return }
+            errorMessage = "Couldn't verify \(item.institutionName) yet. Try reconnecting again in a moment."
+            UIAccessibility.post(notification: .announcement, argument: errorMessage)
+        }
+    }
+}
+
+
+struct BankReconnectView: View {
+    let itemId: String
+    let name: String
+    @SwiftUI.Environment(BudgetDataManager.self) private var budgetDataManager
+    @State private var completed = false
+    private var item: ConnectedItem {
+        ConnectedItem(institutionId: "", institutionName: name, availableProducts: nil,
+                      itemId: itemId, userId: "", plaidItemId: itemId, isActive: false,
+                      lastSync: nil, createdAt: nil, updatedAt: nil)
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text(completed ? "\(name) reconnected" : "Reconnect \(name)")
+                    .font(.title.bold()).accessibilityAddTraits(.isHeader)
+                if completed {
+                    Text("Your connection is verified. New bank activity will appear as your bank shares it.")
+                } else {
+                    Text("Sign in securely to restore this existing connection and resume account updates.")
+                    UpdateSharedAccountsButton(item: item) {
+                        completed = true
+                        await budgetDataManager.refresh()
+                    }
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(Color.haloTextPrimary)
+            .padding(20)
+            .readableContentWidth()
+        }
+        .background(Color.haloBackground)
+        .navigationTitle("Bank connection")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

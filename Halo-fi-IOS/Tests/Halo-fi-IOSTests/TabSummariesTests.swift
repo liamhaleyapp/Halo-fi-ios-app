@@ -234,3 +234,37 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(MainTab.visible(for: ssdiCaps).contains(.benefits))
     }
 }
+
+@Suite struct PendingBankActivityTests {
+    @Test func oldOverviewStillDecodesWithoutPendingFields() throws {
+        let overview = try #require(UITestArchetype.noneAnswered.overview)
+        let encoded = try JSONEncoder().encode(overview)
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "pending")
+        var spending = try #require(object["spending"] as? [String: Any])
+        spending.removeValue(forKey: "pending_cents")
+        spending.removeValue(forKey: "posted_cents")
+        object["spending"] = spending
+        let decoded = try JSONDecoder().decode(BudgetOverview.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(decoded.pending == nil)
+        #expect(decoded.spending.pendingCents == nil)
+        #expect(decoded.spending.totalCents == 144600)
+    }
+
+    @Test func moneyVoiceOverIncludesExactPendingAmounts() throws {
+        let pending = try #require(UITestArchetype.noneAnswered.overview?.pending)
+        let snapshot = MoneySnapshot(cashCents: 121400, owedCents: 187000, accountCount: 2,
+                                     connectionsNeedingAttention: 0, resources: nil, budgetTotal: nil,
+                                     spentCents: 144600, daysLeft: nil, firstOverCategory: nil, pending: pending)
+        let label = TabSummaries.money(snapshot, capabilities: UITestArchetype.noneAnswered.capabilities).spoken
+        #expect(label.contains("Pending: card and loan charges $50.00"))
+        #expect(label.contains("bank balances may already reflect holds"))
+        #expect(!label.contains("$1,920"))
+    }
+
+    @Test func bankCalendarDateDoesNotShiftToPreviousDay() throws {
+        let entry = try #require(UITestArchetype.noneAnswered.overview?.pending?.transactions.first)
+        let expected = try #require(Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 12)))
+        #expect(entry.spokenDate == expected.formatted(.dateTime.month(.wide).day().year()))
+    }
+}

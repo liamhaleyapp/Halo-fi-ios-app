@@ -26,9 +26,10 @@ struct BudgetOverview: Codable, Equatable {
     let asOfUtc: String
     /// Fixed vs variable (2026-09-05): confirmed bills + subscriptions.
     var fixedExpenses: FixedExpenses? = nil
+    var pending: PendingBankActivity? = nil
 
     enum CodingKeys: String, CodingKey {
-        case month, period, spending
+        case month, period, spending, pending
         case budgetStatus = "budget_status"
         case monthlyIncome = "monthly_income"
         case ssiStatus = "ssi_status"
@@ -163,7 +164,12 @@ struct BudgetSpending: Codable, Equatable {
     let groups: [BudgetSpendingGroup]
     let formatted: [String: String]
 
+    var pendingCents: Int? = nil
+    var postedCents: Int? = nil
+
     enum CodingKeys: String, CodingKey {
+        case pendingCents = "pending_cents"
+        case postedCents = "posted_cents"
         case totalCents = "total_cents"
         case count, currency
         case groupBy = "group_by"
@@ -216,7 +222,12 @@ struct BudgetStatusTotal: Codable, Equatable {
     let status: String     // "over" | "behind" | "on_pace" | "ahead"
     let formatted: [String: String]
 
+    var pendingSpentCents: Int? = nil
+    var postedSpentCents: Int? = nil
+
     enum CodingKeys: String, CodingKey {
+        case pendingSpentCents = "pending_spent_cents"
+        case postedSpentCents = "posted_spent_cents"
         case limitCents = "limit_cents"
         case spentCents = "spent_cents"
         case remainingCents = "remaining_cents"
@@ -240,7 +251,12 @@ struct BudgetStatusCategory: Codable, Equatable, Identifiable, Hashable {
     let status: String
     let formatted: [String: String]
 
+    var pendingSpentCents: Int? = nil
+    var postedSpentCents: Int? = nil
+
     enum CodingKeys: String, CodingKey {
+        case pendingSpentCents = "pending_spent_cents"
+        case postedSpentCents = "posted_spent_cents"
         case categoryId = "category_id"
         case category
         case limitCents = "limit_cents"
@@ -581,5 +597,49 @@ struct SSINotCounted: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case investmentsCents = "investments_cents"
         case line
+    }
+}
+
+/// Outstanding activity across all dates; separate from bank-reported balances.
+struct PendingBankActivity: Codable, Equatable {
+    let count: Int
+    let outflowCents: Int
+    let creditOutflowCents: Int
+    let cashOutflowCents: Int
+    let incomingCents: Int
+    let currency: String
+    let transactions: [Entry]
+    enum CodingKeys: String, CodingKey {
+        case count, currency, transactions
+        case outflowCents = "outflow_cents", creditOutflowCents = "credit_outflow_cents"
+        case cashOutflowCents = "cash_outflow_cents", incomingCents = "incoming_cents"
+    }
+    struct Entry: Codable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let accountName: String
+        let mask: String?
+        let amountCents: Int
+        let date: String
+        enum CodingKeys: String, CodingKey {
+            case id, name, mask, date
+            case accountName = "account_name", amountCents = "amount_cents"
+        }
+        var spokenDate: String {
+            // Plaid sends a calendar date, not a UTC timestamp. Parsing at UTC
+            // midnight moves it to the previous day in American time zones.
+            let parser = DateFormatter()
+            parser.locale = Locale(identifier: "en_US_POSIX")
+            parser.calendar = Calendar(identifier: .gregorian)
+            parser.dateFormat = "yyyy-MM-dd"
+            return parser.date(from: date)?.formatted(.dateTime.month(.wide).day().year()) ?? date
+        }
+    }
+    var spokenSummary: String {
+        if count == 0 { return "No pending activity reported." }
+        return "Pending: card and loan charges \(Self.money(creditOutflowCents)), other outgoing \(Self.money(cashOutflowCents)), incoming \(Self.money(incomingCents)). Shown separately; bank balances may already reflect holds."
+    }
+    static func money(_ cents: Int) -> String {
+        (Decimal(cents) / 100).formatted(.currency(code: "USD"))
     }
 }

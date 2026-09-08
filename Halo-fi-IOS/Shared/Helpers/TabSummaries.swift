@@ -49,6 +49,7 @@ struct MoneySnapshot: Equatable {
     /// Accounts the bank stopped sharing (balances frozen), and the earliest date.
     var staleCount: Int = 0
     var staleSinceSpoken: String? = nil
+    var pending: PendingBankActivity? = nil
 }
 
 enum TabSummaries {
@@ -73,6 +74,7 @@ enum TabSummaries {
         verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
         let accounts = VoiceOverFormatter.count(s.accountCount, singular: "account", plural: "accounts")
         detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)) across \(accounts). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
+        if let pending = s.pending { detail += " " + pending.spokenSummary }
         tone = s.owedCents > s.cashCents ? .watch : .positive
 
         if capabilities.showsResourceCounter, let res = s.resources {
@@ -121,6 +123,7 @@ enum TabSummaries {
             return "No budget yet. Spent \(VoiceOverFormatter.dollars(s.spentCents)) this month."
         }
         var line = "Spent \(VoiceOverFormatter.dollars(total.spentCents)) of \(VoiceOverFormatter.dollars(total.limitCents))."
+        if let pending = total.pendingSpentCents { line += " Includes \(PendingBankActivity.money(pending)) pending." }
         if let over = s.firstOverCategory { line += " Over in \(over)." }
         return line
     }

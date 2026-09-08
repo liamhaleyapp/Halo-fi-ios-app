@@ -230,11 +230,12 @@ enum UITestArchetype: String, CaseIterable {
         let json = """
         {"month": "September 2026",
          "period": {"start_utc": "2026-09-01T04:00:00Z", "end_utc": "2026-10-01T04:00:00Z"},
-         "spending": {"total_cents": 144600, "count": 42, "currency": "USD", "group_by": "category",
+         "pending": {"count": 1, "outflow_cents": 5000, "credit_outflow_cents": 5000, "cash_outflow_cents": 0, "incoming_cents": 0, "currency": "USD", "transactions": [{"id": "pending-fixture", "name": "Example groceries", "account_name": "Example card", "mask": "1234", "amount_cents": 5000, "date": "2026-09-07"}]},
+         "spending": {"pending_cents": 5000, "posted_cents": 139600, "total_cents": 144600, "count": 42, "currency": "USD", "group_by": "category",
                       "groups": [{"key": "food_and_drink", "total_cents": 52000, "count": 12, "pct_of_total": 36.0, "formatted": "$520.00"}],
                       "formatted": {"total": "$1,446.00"}},
          "budget_status": {"has_budget": true, "month": "September 2026",
-                           "total": {"limit_cents": 350000, "spent_cents": 144600, "remaining_cents": 205400, "pct_used": 41.3, "pace_pct": 10.0, "status": "on_pace",
+                           "total": {"pending_spent_cents": 5000, "posted_spent_cents": 139600, "limit_cents": 350000, "spent_cents": 144600, "remaining_cents": 205400, "pct_used": 41.3, "pace_pct": 10.0, "status": "on_pace",
                                      "formatted": {"spent": "$1,446.00", "limit": "$3,500.00", "remaining": "$2,054.00"}},
                            "categories": [{"category_id": "c1", "category": "home_improvement", "limit_cents": 20000, "spent_cents": 26000,
                                            "remaining_cents": -6000, "pct_used": 130.0, "status": "over", "formatted": {"spent": "$260.00", "limit": "$200.00"}}]},
@@ -335,6 +336,26 @@ struct CheckoutFixtureHost: View {
     var body: some View {
         SubscriptionCheckoutView(service: service, onComplete: {})
             .dynamicTypeSize(ProcessInfo.processInfo.arguments.contains("--ui-test-checkout-large") ? .accessibility5 : .large)
+    }
+}
+#endif
+
+
+#if DEBUG
+struct BankIntroFixtureHost: View {
+    @State private var opened = false
+    var body: some View {
+        NavigationStack {
+            if opened {
+                Text("Secure connection opened").accessibilityIdentifier("fixtureBankOpened")
+            } else {
+                PlaidIntroView(alreadyLinked: ["American Express", "Chase"]) { opened = true }
+                    .background(Color.haloBackground)
+                    .navigationTitle("Bank connection")
+            }
+        }
+        .dynamicTypeSize(ProcessInfo.processInfo.arguments.contains("--ui-test-bank-large") ? .accessibility5 : .large)
+        .preferredColorScheme(.dark)
     }
 }
 #endif

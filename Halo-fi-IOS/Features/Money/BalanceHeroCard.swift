@@ -47,6 +47,22 @@ struct BalanceHeroCard: View {
             } else {
                 cashFigure
                 cashOwedBar
+                if let pending = snapshot.pending {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Pending").font(.headline)
+                        if pending.count == 0 {
+                            Text("No pending activity reported.")
+                        } else {
+                            Text("Card and loan charges: \(PendingBankActivity.money(pending.creditOutflowCents))")
+                            Text("Other outgoing: \(PendingBankActivity.money(pending.cashOutflowCents))")
+                            Text("Incoming: \(PendingBankActivity.money(pending.incomingCents))")
+                            Text("Shown separately; bank balances may already reflect holds.").font(.callout)
+                        }
+                    }
+                    .foregroundStyle(Color.haloTextPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if showsResources, !snapshot.isLoading, let res = snapshot.resources {
@@ -212,5 +228,64 @@ struct BalanceHeroCard: View {
         f.currencyCode = "USD"
         f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$\(cents / 100)"
+    }
+}
+
+
+struct PendingActivityView: View {
+    let pending: PendingBankActivity?
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                Text("Pending activity").font(.title.bold()).accessibilityAddTraits(.isHeader)
+                Text("These amounts can change or disappear before they post. Bank balances may already reflect holds. Budget includes pending spending in the month shown; transfers and card payments are not spending.")
+                    .fixedSize(horizontal: false, vertical: true)
+                if let pending {
+                    Text(pending.spokenSummary).font(.headline)
+                    ForEach(pending.transactions) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(entry.name).font(.headline)
+                            Text("\(PendingBankActivity.money(abs(entry.amountCents))) \(entry.amountCents < 0 ? "incoming" : "outgoing") · Pending")
+                            Text(entry.accountName + (entry.mask.map { " ending in " + $0 } ?? ""))
+                            Text(entry.spokenDate)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color.haloSecondaryBackground, in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityElement(children: .combine)
+                    }
+                } else { Text("Pending activity is not available yet. Refresh Money to try again.") }
+            }
+            .foregroundStyle(Color.haloTextPrimary)
+            .padding(20)
+            .readableContentWidth()
+        }
+        .background(Color.haloBackground)
+        .navigationTitle("Pending activity")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The same explicit split on total and category budget cards, including VoiceOver.
+struct PendingSpendingBreakdown: View {
+    let posted: Int?
+    let pending: Int?
+    var body: some View {
+        if let pending {
+            VStack(alignment: .leading, spacing: 6) {
+                if let posted { Text("Posted: \(PendingBankActivity.money(posted))") }
+                Text("Pending: \(PendingBankActivity.money(pending))")
+                Text("Pending spending is included in the total and remaining budget.").font(.caption)
+            }
+            .font(.subheadline)
+            .foregroundStyle(Color.haloTextPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    static func spoken(posted: Int?, pending: Int?) -> String {
+        guard let pending else { return "" }
+        let postedLine = posted.map { " Posted \(PendingBankActivity.money($0))." } ?? ""
+        return postedLine + " Pending \(PendingBankActivity.money(pending)). Pending spending is included in the total and remaining budget."
     }
 }

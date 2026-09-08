@@ -79,6 +79,13 @@ struct MoneyHomeView: View {
                     LazyVStack(spacing: 12) {
                         TabTitle("Money")
                         header
+                        if let pending = budgetDataManager.overview?.pending, pending.count > 0 {
+                            NavigationLink(value: MoneyRoute.pending) {
+                                Label("Pending activity (\(pending.count))", systemImage: "clock")
+                                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            }
+                            .accessibilityHint("Shows outstanding charges and incoming payments.")
+                        }
                         attentionRow
                         budgetRow
                         incomeRow
@@ -94,11 +101,8 @@ struct MoneyHomeView: View {
                     .readableContentWidth()
                 }
                 .refreshable {
-                    // Bank + budget in parallel; transactions after the bank
-                    // (they need the linked items).
-                    async let bank: () = bankDataManager.forceRefresh()
-                    async let budget: () = budgetDataManager.refresh()
-                    _ = await (bank, budget)
+                    await bankDataManager.forceRefresh()
+                    await budgetDataManager.refresh()
                     await loadTransactions(forceRefresh: true)
                     UIAccessibility.post(notification: .announcement, argument: "Updated. \(summary.verdict). \(summary.subline ?? "")")
                 }
@@ -134,6 +138,8 @@ struct MoneyHomeView: View {
             }
             .navigationDestination(for: MoneyRoute.self) { route in
                 switch route {
+                case .reconnectBank(let itemId, let name): BankReconnectView(itemId: itemId, name: name)
+                case .pending: PendingActivityView(pending: budgetDataManager.overview?.pending)
                 case .budget: BudgetView()
                 case .attention: AttentionView(onOpen: { open($0) })
                 case .accounts: AccountsListView(onLink: { showingLinkChooser = true })
@@ -200,7 +206,8 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
+        case pending, budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
+        case reconnectBank(String, String)
         case package(String?)
         case review(String)
     }
@@ -232,7 +239,11 @@ struct MoneyHomeView: View {
         case "open_package": navigationPath.append(MoneyRoute.package(card.payload.month))
         case "open_review": navigationPath.append(MoneyRoute.review(card.payload.month ?? MonthKey.current))
         case "open_work_expenses": navigationPath.append(MoneyRoute.workExpenses)
-        case "open_accounts": navigationPath.append(MoneyRoute.accounts)
+        case "open_accounts":
+            if card.kind == "bank_reconnect", let itemId = card.payload.itemId {
+                let name = card.title.replacingOccurrences(of: "Reconnect ", with: "", options: .anchored)
+                navigationPath.append(MoneyRoute.reconnectBank(itemId, name))
+            } else { navigationPath.append(MoneyRoute.accounts) }
         case "open_link_bank": showingLinkChooser = true
         case "open_money_profile": showingMoneyProfile = true
         default: break
@@ -555,7 +566,8 @@ extension MoneySnapshot {
             firstOverCategory: over,
             isLoading: bank.isInitialLoad && overview == nil,
             staleCount: staleCount,
-            staleSinceSpoken: earliestStale.flatMap { ISO8601DateFormatter.dateOnly.date(from: $0) }.map { $0.formatted(.dateTime.month(.wide).day()) }
+            staleSinceSpoken: earliestStale.flatMap { ISO8601DateFormatter.dateOnly.date(from: $0) }.map { $0.formatted(.dateTime.month(.wide).day()) },
+            pending: overview?.pending
         )
     }
 

@@ -278,6 +278,13 @@ final class BankService: BankServiceProtocol {
     /// Fetches all linked items (connected institutions) for the authenticated user
     /// - Returns: Full MultiItemsResponse including items and embedded accounts
     /// - Note: Uses NetworkService for authenticated requests with proper error handling
+    func completeReconnection(itemId: String) async throws {
+        struct Out: Codable { let success: Bool }
+        let out = try await networkService.authenticatedRequest(
+            endpoint: APIEndpoints.Bank.completeBankReconnection(itemId), method: .POST, body: nil, responseType: Out.self)
+        guard out.success else { throw BankError.invalidResponse }
+    }
+
     func getUpdateLinkToken(itemId: String) async throws -> String {
         struct Out: Codable { let linkToken: String; enum CodingKeys: String, CodingKey { case linkToken = "link_token" } }
         let out: Out = try await networkService.authenticatedRequest(

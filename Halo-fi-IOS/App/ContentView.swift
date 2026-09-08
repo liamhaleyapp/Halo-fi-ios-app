@@ -30,7 +30,9 @@ struct ContentView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if UITestArchetype.isActive,
+            if UITestArchetype.isActive, ProcessInfo.processInfo.arguments.contains("--ui-test-bank-intro") {
+                BankIntroFixtureHost()
+            } else if UITestArchetype.isActive,
                let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-checkout=") }) {
                 CheckoutFixtureHost(mode: String(argument.dropFirst("--ui-test-checkout=".count)))
             } else {

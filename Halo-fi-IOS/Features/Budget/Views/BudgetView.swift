@@ -560,11 +560,12 @@ private struct BudgetHeroCard: View {
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                     .foregroundColor(.haloTextPrimary)
-                Text("spent of \(total.formatted["limit"] ?? "$0.00") this month")
+                Text("spent and pending of \(total.formatted["limit"] ?? "$0.00") this month")
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
             }
             progressBar
+            PendingSpendingBreakdown(posted: total.postedSpentCents, pending: total.pendingSpentCents)
             Text("\(total.formatted["remaining"] ?? "$0.00") left")
                 .font(.subheadline)
                 .foregroundColor(.haloTextSecondary)
@@ -627,7 +628,7 @@ private struct BudgetHeroCard: View {
         let limit = total.formatted["limit"] ?? "zero dollars"
         let remaining = total.formatted["remaining"] ?? "zero dollars"
         let pct = Int(total.pctUsed.rounded())
-        return "\(statusWord). Spent \(spent) of \(limit) this month, \(pct) percent used, \(remaining) left."
+        return "\(statusWord). Spent and pending \(spent) of \(limit) this month, \(pct) percent used, \(remaining) left." + PendingSpendingBreakdown.spoken(posted: total.postedSpentCents, pending: total.pendingSpentCents)
     }
 }
 
@@ -651,10 +652,11 @@ private struct NoBudgetHeroCard: View {
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                     .foregroundColor(.haloTextPrimary)
-                Text("spent this month")
+                Text("spent and pending this month")
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
             }
+            PendingSpendingBreakdown(posted: spending.postedCents, pending: spending.pendingCents)
             Text("No budget yet. Ask Halo to set one up.")
                 .font(.subheadline)
                 .foregroundColor(.haloTextSecondary)
@@ -668,7 +670,7 @@ private struct NoBudgetHeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Spent \(spending.formatted["total"] ?? "zero dollars") this month. No budget set yet.")
+        .accessibilityLabel("Spent and pending \(spending.formatted["total"] ?? "zero dollars") this month. No budget set yet." + PendingSpendingBreakdown.spoken(posted: spending.postedCents, pending: spending.pendingCents))
     }
 }
 

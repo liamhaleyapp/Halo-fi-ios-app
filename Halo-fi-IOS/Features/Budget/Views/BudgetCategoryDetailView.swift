@@ -99,6 +99,7 @@ struct BudgetCategoryDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
+            PendingSpendingBreakdown(posted: category.postedSpentCents, pending: category.pendingSpentCents)
             progressBar
 
             HStack {
@@ -213,7 +214,7 @@ struct BudgetCategoryDetailView: View {
         let limit = category.formatted["limit"] ?? "zero dollars"
         let remaining = category.formatted["remaining"] ?? "zero dollars"
         let pct = Int(category.pctUsed.rounded())
-        return "\(name) this month. Spent \(spent) of \(limit) limit. \(pct) percent used. \(remaining) remaining."
+        return "\(name) this month. Spent and pending \(spent) of \(limit) limit. \(pct) percent used. \(remaining) remaining." + PendingSpendingBreakdown.spoken(posted: category.postedSpentCents, pending: category.pendingSpentCents)
     }
 
     private func limitAccessibilityLabel(canEdit: Bool) -> String {

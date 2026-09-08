@@ -20,7 +20,6 @@ struct PlaidIntroView: View {
   var linkedStateUnconfirmed = false
   let action: () -> Void
 
-  @State private var showingRelinkConfirmation = false
 
   var body: some View {
 
@@ -43,12 +42,12 @@ struct PlaidIntroView: View {
         VStack(spacing: 12) {
           Text("Securely connect your accounts to get personalized financial insights and manage your money in one place.")
             .font(.body)
-            .foregroundColor(.secondary)
+            .foregroundStyle(Color.haloTextPrimary)
             .multilineTextAlignment(.center)
 
           Text("Your data is encrypted and protected with bank-level security.")
             .font(.subheadline)
-            .foregroundColor(.secondary)
+            .foregroundStyle(Color.haloTextPrimary)
             .multilineTextAlignment(.center)
         }
         .padding(.horizontal)
@@ -79,6 +78,11 @@ struct PlaidIntroView: View {
               .accessibilityElement(children: .combine)
               .accessibilityLabel("\(name), already connected")
             }
+            Text("To reconnect a listed bank, open it in Accounts and choose Reconnect or Update shared accounts. Use the button below to add another bank or account.")
+              .font(.body)
+              .foregroundStyle(Color.haloTextPrimary)
+              .fixedSize(horizontal: false, vertical: true)
+              .accessibilityIdentifier("linkedBankGuidance")
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding()
@@ -90,13 +94,7 @@ struct PlaidIntroView: View {
         Spacer(minLength: 20)
 
         // Start button
-        Button(action: {
-          if alreadyLinked.isEmpty {
-            action()
-          } else {
-            showingRelinkConfirmation = true
-          }
-        }) {
+        Button(action: action) {
           HStack(spacing: 12) {
             Image(systemName: "arrow.right.circle.fill")
               .font(.headline)
@@ -106,26 +104,18 @@ struct PlaidIntroView: View {
           }
           .foregroundColor(.white)
           .frame(maxWidth: .infinity)
-          .frame(height: 56)
-          .background(Color.accentColor)
+          .frame(minHeight: 56)
+          .padding(.vertical, 12)
+          .background(Color(red: 0.0, green: 0.28, blue: 0.60))
           .cornerRadius(16)
         }
+        .accessibilityIdentifier("startBankConnection")
         .accessibilityLabel(alreadyLinked.isEmpty ? "Start bank connection" : "Link another account")
         .accessibilityHint("Opens secure bank connection interface")
         .padding(.horizontal, 20)
         .padding(.bottom, 40)
       }
       .padding(.top, 20)
-    }
-    .confirmationDialog(
-      "Some banks are already connected",
-      isPresented: $showingRelinkConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Continue") { action() }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text("\(alreadyLinked.joined(separator: ", ")) \(alreadyLinked.count == 1 ? "is" : "are") already connected. Connecting the same bank again can duplicate your accounts. Continue only to add a different bank or account.")
     }
   }
 }

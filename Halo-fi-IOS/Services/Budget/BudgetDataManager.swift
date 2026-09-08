@@ -85,6 +85,7 @@ final class BudgetDataManager {
     /// the @Observable wrapper or MainActor isolation.
     @ObservationIgnored
     private nonisolated(unsafe) var mutationObserver: NSObjectProtocol?
+    @ObservationIgnored private nonisolated(unsafe) var bankLinkObserver: NSObjectProtocol?
 
     // MARK: - Tuning
 
@@ -112,6 +113,12 @@ final class BudgetDataManager {
                 guard let self, self.overview == nil, let cached = SnapshotCache.load(BudgetOverview.self, key: "budget_overview") else { return }
                 self.overview = cached
                 self.markStale()
+            }
+        }
+        bankLinkObserver = NotificationCenter.default.addObserver(forName: .accountLinked, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.markStale()
+                self?.scheduleDebouncedRefresh()
             }
         }
         mutationObserver = NotificationCenter.default.addObserver(
@@ -267,6 +274,7 @@ final class BudgetDataManager {
     }
 
     deinit {
+        if let bankLinkObserver { NotificationCenter.default.removeObserver(bankLinkObserver) }
         if let mutationObserver {
             NotificationCenter.default.removeObserver(mutationObserver)
         }

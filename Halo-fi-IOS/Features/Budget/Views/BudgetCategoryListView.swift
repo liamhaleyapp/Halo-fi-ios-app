@@ -239,6 +239,11 @@ struct BudgetCategoryRow: View {
                     }
                 }
                 progressBar
+                if let pending = category.pendingSpentCents {
+                    Text("Includes \(PendingBankActivity.money(pending)) pending")
+                        .font(.caption).foregroundStyle(Color.haloTextPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             pctLabel
             Image(systemName: "chevron.right")
@@ -289,7 +294,7 @@ struct BudgetCategoryRow: View {
         let limit = category.formatted["limit"] ?? "zero dollars"
         let pct = Int(category.pctUsed.rounded())
         let status = category.status.replacingOccurrences(of: "_", with: " ")
-        return "\(name): \(spent) of \(limit), \(pct) percent used. Status: \(status)."
+        return "\(name): \(spent) of \(limit), \(pct) percent used. Status: \(status)." + PendingSpendingBreakdown.spoken(posted: category.postedSpentCents, pending: category.pendingSpentCents)
     }
 }
 
