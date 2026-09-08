@@ -101,7 +101,7 @@ final class VoiceService: NSObject {
     /// Install the tap + start the engine so pre-roll audio is captured
     /// into the ring before the user even taps. Safe to call repeatedly —
     /// no-op if already prewarmed.
-    func preWarmCapture() async throws {
+    func preWarmCapture() throws {
         guard !isPrewarmed else { return }
         guard PermissionManager.shared.isMicrophonePermissionGranted else {
             // Don't fail hard — view may pre-warm before permission prompt.
@@ -156,7 +156,7 @@ final class VoiceService: NSObject {
     /// ring first so the listener receives the last ~700 ms of audio before
     /// this call — important for catching opening syllables that would
     /// otherwise be lost.
-    func startRecording() async throws {
+    func startRecording() throws {
         guard !isRecording else { return }
 
         guard PermissionManager.shared.isMicrophonePermissionGranted else {
@@ -167,7 +167,7 @@ final class VoiceService: NSObject {
         // now — startRecording remains functional without pre-warm, just
         // without the ring-buffer benefit.
         if !isPrewarmed {
-            try await preWarmCapture()
+            try preWarmCapture()
         }
 
         // Flush ring oldest → newest before flipping to live mode, so the

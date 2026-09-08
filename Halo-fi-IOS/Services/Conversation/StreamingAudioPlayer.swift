@@ -354,6 +354,7 @@ final class StreamingAudioPlayer: NSObject {
 extension StreamingAudioPlayer: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
+            guard self.audioPlayer === player else { return }
             Logger.info("StreamingAudioPlayer: Buffer finished (success=\(flag), queue=\(self.pendingBuffers.count))")
             // Advance the queue. If more buffers are waiting, plays
             // the next one. If empty AND the final audio_complete
@@ -369,6 +370,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         Task { @MainActor in
+            guard self.audioPlayer === player else { return }
             Logger.error("StreamingAudioPlayer: Decode error: \(error?.localizedDescription ?? "unknown")")
             self.audioPlayer = nil
             self.isPlaying = false

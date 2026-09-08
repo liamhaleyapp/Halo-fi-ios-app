@@ -138,11 +138,7 @@ final class AudioFeedbackService {
     // MARK: - Feedback Actions
 
     private func playStartListeningFeedback() {
-        // Single medium haptic - subtle but noticeable
-        mediumImpactGenerator.prepare()
-        mediumImpactGenerator.impactOccurred()
-
-        // Custom earcon sound
+        // The caller owns the single ready haptic through HapticEngine.
         playSound(startListeningSoundURL, volume: 0.7)
     }
 

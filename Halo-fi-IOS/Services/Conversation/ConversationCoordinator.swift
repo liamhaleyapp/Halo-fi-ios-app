@@ -83,6 +83,12 @@ final class ConversationCoordinator {
     private var isVoiceSessionActive = false
     private var agentEventTask: Task<Void, Never>?
     private var prewarmTask: Task<Void, Never>?
+    private var sttWarmupTask: Task<Void, Never>?
+    private var listenTask: Task<Void, Never>?
+    private var resumeListeningTask: Task<Void, Never>?
+    private var lifecycleID = UUID()
+    private var connectionStartedAt: TimeInterval?
+    private var greetingPlaybackRecorded = false
     /// Phase 12 — when true, connection_ack transitions us straight
     /// to .idle since no greeting will arrive. Reset on disconnect.
     private var skipGreetingForCurrentConnection = false
@@ -180,20 +186,11 @@ final class ConversationCoordinator {
     /// would restart the microphone after the session was already ended.
     private var suppressNextAutoResume = false
 
-    /// Set by `bargeIn()` immediately before stopping the player so
-    /// `handleSpeakingFinished` can skip its 400ms settling delay —
-    /// a barge-in needs to flip to listening instantly.
+    /// Distinguishes an interrupted acknowledgment from one that completed.
     private var bargeInRequested: Bool = false
 
-    /// Timestamp of when Halo's TTS most recently stopped. Used by
-    /// startListening to decide whether the pre-roll ring is at risk
-    /// of containing Halo's own voice (bled in via the speaker→mic
-    /// path even with AEC) — if TTS ended within the last ~2 seconds
-    /// we discard the ring; otherwise we keep it so the user gets
-    /// the opening-syllable head-start that pre-warm exists for.
-    /// nil = no TTS has played this session yet.
+    /// Physical playback completion, used to measure the handoff to the ready cue.
     private var lastSpeakingEndedAt: Date?
-    private let prerollContaminationWindow: TimeInterval = 2.0
 
     // MARK: - Hands-free stall-proofing + idle watchdog
     //
@@ -326,33 +323,41 @@ final class ConversationCoordinator {
         audioFeedback: AudioFeedbackService,
         transcriptStore: ConversationTranscriptStore
     ) {
+        self.streamingAudioPlayer?.onPlaybackStarted = nil
+        self.streamingAudioPlayer?.onPlaybackFinished = nil
+        self.streamingAudioPlayer?.onBufferPlaybackStarted = nil
+        self.streamingAudioPlayer?.stopAndDiscardPending()
         self.streamingAudioPlayer = streamingAudioPlayer
         self.audioFeedback = audioFeedback
         self.transcriptStore = transcriptStore
 
         // WP7 — .speaking only once the player has accepted a buffer.
         streamingAudioPlayer.onPlaybackStarted = { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                switch self.state {
-                case .processing, .idle, .connecting:
-                    self.setState(.speaking)
-                default:
-                    break
-                }
+            guard let self, self.sessionId != nil else { return }
+            switch self.state {
+            case .processing, .idle, .connecting:
+                self.setState(.speaking)
+            default:
+                break
             }
         }
         streamingAudioPlayer.onBufferPlaybackStarted = { [weak self] marker, outputEnabled in
-            guard let self,
-                  let fields = self.voiceTiming.playback(marker, at: ProcessInfo.processInfo.systemUptime,
+            guard let self else { return }
+            if marker.turnId == nil, !marker.isError, !marker.isAcknowledgment,
+               !self.greetingPlaybackRecorded, let started = self.connectionStartedAt {
+                self.greetingPlaybackRecorded = true
+                Diagnostics.send("voice_greeting_playback", [
+                    "connect_to_playback_ms": String(Int((ProcessInfo.processInfo.systemUptime - started) * 1000)),
+                    "output_enabled": String(outputEnabled)
+                ])
+            }
+            guard let fields = self.voiceTiming.playback(marker, at: ProcessInfo.processInfo.systemUptime,
                                                          outputEnabled: outputEnabled) else { return }
             Logger.info("Voice playback timing: \(fields)")
             Diagnostics.send("voice_playback", fields)
         }
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
-            Task { @MainActor in
-                self?.handleSpeakingFinished()
-            }
+            self?.handleSpeakingFinished()
         }
     }
 
@@ -383,6 +388,13 @@ final class ConversationCoordinator {
             skipGreeting && (customGreetingId?.isEmpty ?? true)
         )
 
+        lifecycleID = UUID()
+        let lifecycle = lifecycleID
+        connectionStartedAt = ProcessInfo.processInfo.systemUptime
+        greetingPlaybackRecorded = false
+        suppressNextAutoResume = false
+        lastSpeakingEndedAt = nil
+        streamingAudioPlayer?.resumeAcceptingChunks()
         setState(.connecting)
         sessionId = UUID().uuidString
 
@@ -392,64 +404,47 @@ final class ConversationCoordinator {
                 customGreetingId: customGreetingId
             )
 
-            // Start consuming events from the new stream
+            guard lifecycleID == lifecycle, !Task.isCancelled else { return }
+            // Capture this stream, never a replacement connection's stream.
+            let events = agentWebSocket.events
             agentEventTask?.cancel()
             agentEventTask = Task { [weak self] in
                 guard let self else { return }
-                for await event in self.agentWebSocket.events {
+                for await event in events {
+                    guard !Task.isCancelled, self.lifecycleID == lifecycle else { break }
                     self.handleAgentEvent(event)
                 }
             }
 
-            // Pre-warm capture pipeline so the user's first tap has no
-            // engine-spin-up / tap-install latency. Best-effort — we
-            // swallow errors because the view should still appear even
-            // if mic permission hasn't been granted yet.
-            //
-            // In hands-free we go further and START RECORDING right
-            // after pre-warm, plus wire the buffer router. That makes
-            // barge-in work even during the welcome message — without
-            // this, the mic is dormant until the first turn ends.
+            // Warm the engine without forwarding pre-cue audio to recognition.
             prewarmTask?.cancel()
             prewarmTask = Task { [weak self] in
-                guard let self else { return }
+                guard let self, self.lifecycleID == lifecycle else { return }
                 do {
-                    try await self.voiceService.preWarmCapture()
-                    try Task.checkCancellation()
-
-                    if self.conversationMode == .handsFree {
-                        // Wire the same router we use during a normal
-                        // listen turn. Once startListening fires for
-                        // the first real turn it'll re-wire with a
-                        // fresh closure — no duplicate calls.
-                        self.voiceService.onAudioBuffer = { [weak self] buffer in
-                            guard let self = self else { return }
-                            if self.isMicMuted { return }
-                            Task { @MainActor [weak self] in
-                                self?.routeAudioBuffer(buffer)
-                            }
-                        }
-                        try await self.voiceService.startRecording()
-                        if Task.isCancelled && !self.agentWebSocket.isConnected {
-                            self.voiceService.stopRecording()
-                            self.voiceService.onAudioBuffer = nil
-                            return
-                        }
-                        Logger.info("Hands-free: voice service primed for barge-in during welcome")
-                    }
+                    try self.voiceService.preWarmCapture()
                 } catch {
-                    Logger.debug("ConversationCoordinator: Pre-warm skipped: \(error)")
+                    Logger.debug("ConversationCoordinator: Pre-warm skipped")
                 }
             }
 
             startIdleWatchdog()
         } catch {
+            guard lifecycleID == lifecycle, !Task.isCancelled else { return }
             setState(.error(error.localizedDescription))
         }
     }
 
     /// Disconnect from the backend
     func disconnect() {
+        lifecycleID = UUID()
+        connectionStartedAt = nil
+        listenTask?.cancel()
+        listenTask = nil
+        resumeListeningTask?.cancel()
+        resumeListeningTask = nil
+        sttWarmupTask?.cancel()
+        sttWarmupTask = nil
+        sttService.onSessionReady = nil
         cancelSpeechFinalization()
         voiceTiming.reset()
         lastDetectedSpeechUptime = nil
@@ -495,6 +490,7 @@ final class ConversationCoordinator {
         // earlier failure path.
         audioFeedback.stopProcessingPulse()
 
+        voiceService.onAudioBuffer = nil
         voiceService.stopRecording()
         voiceService.teardownCapture()
         sttService.disconnect()
@@ -529,108 +525,80 @@ final class ConversationCoordinator {
         audioFeedback.playTabSwitchFeedback()
     }
 
-    /// Start listening (voice mode)
+    /// Start exactly one listen transition, with a ready recognizer and microphone.
     func startListening() async {
+        if let pending = listenTask { await pending.value; return }
         guard state == .idle || state == .speaking else { return }
-        guard interactionMode == .voice else { return }
-
-        // Don't start mic if audio is buffering or playing — stop it and return
-        if streamingAudioPlayer?.isPlaying == true || streamingAudioPlayer?.isBuffering == true {
-            streamingAudioPlayer?.stop()
-            setState(.idle)
-            return
+        guard interactionMode == .voice, sessionId != nil, agentWebSocket.isConnected else { return }
+        let lifecycle = lifecycleID
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.prepareListening(lifecycle: lifecycle)
         }
+        listenTask = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+        if lifecycleID == lifecycle { listenTask = nil }
+    }
 
-        // Check permission
-        let permissionManager = PermissionManager.shared
-        let status = await permissionManager.requestMicrophonePermission()
-
-        guard status == .granted else {
-            setState(.permissionNeeded)
-            return
-        }
-
-        // WP7 — hands-free keeps ONE Scribe session open for the whole
-        // conversation. If it is still ready, the next turn starts without
-        // a token fetch + handshake (which used to drop opening syllables).
-        if sttService.isConnected && sttService.isSessionReady {
-            await beginListenTurn()
-            return
-        }
-
-        // Show connecting state while establishing STT connection
+    private func prepareListening(lifecycle: UUID) async {
+        guard lifecycleID == lifecycle, !Task.isCancelled else { return }
+        if streamingAudioPlayer?.isPlaying == true || streamingAudioPlayer?.isBuffering == true { return }
         setState(.connecting)
-
+        let status = await PermissionManager.shared.requestMicrophonePermission()
+        guard lifecycleID == lifecycle, !Task.isCancelled else { return }
+        guard status == .granted else { setState(.permissionNeeded); return }
         do {
-            // Set up callback to start recording when session is ready
-            sttService.onSessionReady = { [weak self] in
-                guard let self = self else { return }
-                Task { @MainActor in
-                    await self.beginListenTurn()
-                }
-            }
-
-            // Connect to ElevenLabs STT (fetches fresh token each time)
             try await connectWithTimeout()
-
+            guard lifecycleID == lifecycle, !Task.isCancelled,
+                  state == .connecting, agentWebSocket.isConnected else { return }
+            try beginListenTurn(lifecycle: lifecycle)
         } catch {
+            guard lifecycleID == lifecycle, !Task.isCancelled else { return }
             handleVoiceSetupError(error)
         }
     }
 
-    /// One listen turn on an open STT session: wire the buffer router,
-    /// reset per-turn detection state, start the mic, announce.
-    private func beginListenTurn() async {
-        lastDetectedSpeechUptime = nil
-        do {
-            // Wire audio buffers — single closure that routes
-            // every frame based on the current conversation
-            // state. Hands-free keeps voiceService recording
-            // across listen / process / speak so we can detect
-            // barge-in (user interrupting Halo mid-response).
-            voiceService.onAudioBuffer = { [weak self] buffer in
-                guard let self = self else { return }
-                if self.isMicMuted { return }
-                Task { @MainActor [weak self] in
-                    self?.routeAudioBuffer(buffer)
-                }
-            }
-
-            // Reset silence-detection state for this turn so
-            // residual values from a prior listen can't trigger
-            // a phantom commit on the new one.
-            hasDetectedSpeechInCurrentListen = false
-            lastVoiceActivityAt = nil
-            listenStartedAt = Date()
-            lastServerCommitAt = nil
-            speechSecondsInCurrentListen = 0
-            bargeInCandidateAt = nil
-
-            // Conditionally discard the pre-roll ring. Pre-roll
-            // gives ~700 ms of head-start so the user's
-            // opening syllables aren't clipped — keep that
-            // win when it's safe. We ONLY drop the ring
-            // when Halo just spoke (within the last
-            // prerollContaminationWindow seconds), since
-            // the speaker→mic bleed during/just-after TTS
-            // can otherwise prepend Halo's last words to
-            // the user's transcript even with .voiceChat
-            // AEC. After the window, the ring has cycled
-            // past anything Halo said and contains only
-            // ambient — safe to flush.
-            if let endedAt = lastSpeakingEndedAt,
-               Date().timeIntervalSince(endedAt) < prerollContaminationWindow {
-                voiceService.discardPreroll()
-            }
-
-            // Start recording first, then signal the user
-            try await voiceService.startRecording()
-            setState(.listening)
-            audioFeedback.feedbackForStateChange(.listening)
-            isVoiceSessionActive = true
-        } catch {
-            handleVoiceSetupError(error)
+    /// Pre-connect recognition while the greeting plays. It sends no mic audio.
+    private func warmSpeechRecognition() {
+        guard interactionMode == .voice,
+              PermissionManager.shared.isMicrophonePermissionGranted,
+              sttWarmupTask == nil else { return }
+        let lifecycle = lifecycleID
+        sttWarmupTask = Task { [weak self] in
+            guard let self else { return }
+            do { try await self.connectWithTimeout() }
+            catch { Logger.debug("Speech warm-up unavailable; next listen can retry") }
+            if self.lifecycleID == lifecycle { self.sttWarmupTask = nil }
         }
+    }
+
+    private func beginListenTurn(lifecycle: UUID) throws {
+        lastDetectedSpeechUptime = nil
+        hasDetectedSpeechInCurrentListen = false
+        lastVoiceActivityAt = nil
+        lastServerCommitAt = nil
+        speechSecondsInCurrentListen = 0
+        bargeInCandidateAt = nil
+        // The ready cue defines the start of capture. Never replay audio from
+        // while the user was waiting, or Halo's last words, as a new utterance.
+        voiceService.onAudioBuffer = nil
+        voiceService.discardPreroll()
+        try voiceService.startRecording()
+        guard lifecycleID == lifecycle, !Task.isCancelled,
+              state == .connecting, sttService.isSessionReady else { return }
+        listenStartedAt = Date()
+        isVoiceSessionActive = true
+        setState(.listening)
+        audioFeedback.feedbackForStateChange(.listening)
+        voiceService.onAudioBuffer = { [weak self] buffer in
+            guard let self, self.lifecycleID == lifecycle, !self.isMicMuted else { return }
+            self.routeAudioBuffer(buffer)
+        }
+        var fields = ["session_id": sessionId ?? "", "mode": conversationMode.rawValue]
+        if let endedAt = lastSpeakingEndedAt {
+            fields["speech_end_to_ready_ms"] = String(Int(Date().timeIntervalSince(endedAt) * 1000))
+        }
+        Diagnostics.send("voice_listen_ready", fields)
     }
 
     private func handleVoiceSetupError(_ error: Error) {
@@ -640,7 +608,8 @@ final class ConversationCoordinator {
         voiceService.onAudioBuffer = nil
         isVoiceSessionActive = false
 
-        setState(.error(error.localizedDescription))
+        voiceService.stopRecording()
+        setState(.error(Self.friendlySTTError(error)))
     }
 
     // MARK: - Connect watchdog
@@ -720,9 +689,10 @@ final class ConversationCoordinator {
         let message = "I couldn't finish hearing that. Please try again."
         setState(.error(message))
         UIAccessibility.post(notification: .announcement, argument: message)
+        let lifecycle = lifecycleID
         Task { @MainActor [weak self] in
             do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            guard let self, self.state == .error(message) else { return }
+            guard let self, self.lifecycleID == lifecycle, self.state == .error(message) else { return }
             self.setState(.idle)
         }
     }
@@ -1101,6 +1071,7 @@ final class ConversationCoordinator {
     /// Internal: Send text to agent (used by both text input and voice finalization)
     private func sendTextInternal(_ message: String, spoken: Bool = true,
                                   turnEndedAt: TimeInterval? = nil, lastSpeechAt: TimeInterval? = nil) async {
+        let lifecycle = lifecycleID
         do {
             currentAgentResponseId = UUID()
             let turnId = UUID().uuidString
@@ -1131,12 +1102,10 @@ final class ConversationCoordinator {
                 streamAudio: spoken, streamText: !spoken
             )
 
-            // Delay to let the listening_stop sound finish before playing typing sound
-            try? await Task.sleep(nanoseconds: 400_000_000) // 400ms
-
-            // Play "agent typing" feedback now that message is sent (waiting for response)
-            audioFeedback.playAgentTypingFeedback()
+            // Processing feedback already began with the state transition.
+            // A delayed second cue could fire after playback or after closing.
         } catch {
+            guard lifecycleID == lifecycle, !Task.isCancelled else { return }
             setState(.error(error.localizedDescription))
         }
     }
@@ -1236,11 +1205,10 @@ final class ConversationCoordinator {
     }
 
     /// Map a conversation state to its continuous haptic (nil = none).
-    /// Listening pulses while the mic is hot; thinking pulses while
-    /// connecting or awaiting the response; every other state is silent.
+    /// A single ready cue marks listening; continuous feedback is only for waits.
+    /// Overlapping a listening loop with the ready cue made the cue ambiguous.
     private static func continuousHaptic(for state: ConversationState) -> HapticPattern? {
         switch state {
-        case .listening: return .pulseListening
         case .processing, .connecting: return .pulseThinking
         default: return nil
         }
@@ -1319,21 +1287,12 @@ final class ConversationCoordinator {
             }
         }()
         if conversationMode == .handsFree && !isMicMuted && canAutoResume {
-            let wasBargeIn = bargeInRequested
             bargeInRequested = false
-            Task { [weak self] in
-                // Skip the settling delay on barge-in — the user
-                // is already talking and waiting for the mic to
-                // pick up; any pause feels like a dropped word.
-                // For natural turn ends, 150ms gives the speaker
-                // tail + AEC engine time to settle without a
-                // perceptible gap (down from 400ms — old value
-                // felt sluggish vs ChatGPT/Gemini which resume
-                // in <100ms).
-                if !wasBargeIn {
-                    try? await Task.sleep(nanoseconds: 150_000_000)
-                }
-                await self?.startListening()
+            resumeListeningTask?.cancel()
+            let lifecycle = lifecycleID
+            resumeListeningTask = Task { [weak self] in
+                guard let self, self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                await self.startListening()
             }
             return
         }
@@ -1362,7 +1321,12 @@ final class ConversationCoordinator {
                 currentTurnId = nil
                 setState(.idle)
                 if conversationMode == .handsFree && !isMicMuted && isConnected {
-                    Task { [weak self] in await self?.startListening() }
+                    let lifecycle = lifecycleID
+                    resumeListeningTask?.cancel()
+                    resumeListeningTask = Task { [weak self] in
+                        guard let self, self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                        await self.startListening()
+                    }
                 }
             }
             return
@@ -1376,6 +1340,10 @@ final class ConversationCoordinator {
             break
 
         case .connectionAck(let ack):
+            warmSpeechRecognition()
+            if let started = connectionStartedAt {
+                Diagnostics.send("voice_connection_ready", ["connect_ms": String(Int((ProcessInfo.processInfo.systemUptime - started) * 1000))])
+            }
             if let serverSessionId = ack.sessionId ?? ack.connectionId {
                 sessionId = serverSessionId
             }
@@ -1398,8 +1366,10 @@ final class ConversationCoordinator {
                 pendingInitialMessage = nil
                 let spoken = pendingInitialSpoken
                 pendingInitialSpoken = true
+                let lifecycle = lifecycleID
                 Task { [weak self] in
-                    await self?.sendText(pending, spoken: spoken)
+                    guard let self, self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                    await self.sendText(pending, spoken: spoken)
                 }
             }
 
@@ -1476,6 +1446,12 @@ final class ConversationCoordinator {
             audioFeedback.feedbackForStateChange(.error(error.error))
 
             if AgentWebSocketManager.terminalErrorCodes.contains(error.code) {
+                listenTask?.cancel()
+                listenTask = nil
+                resumeListeningTask?.cancel()
+                resumeListeningTask = nil
+                sttWarmupTask?.cancel()
+                sttWarmupTask = nil
                 prewarmTask?.cancel()
                 prewarmTask = nil
                 idleWatchdogTask?.cancel()
@@ -1499,9 +1475,10 @@ final class ConversationCoordinator {
             // metering. Announce and auto-recover to listening, mirroring
             // the STT-error recovery path.
             if conversationMode == .handsFree && !isMicMuted {
+                let lifecycle = lifecycleID
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard !Task.isCancelled, let self, self.state == .error(error.error),
+                    guard !Task.isCancelled, let self, self.lifecycleID == lifecycle, self.state == .error(error.error),
                           self.agentWebSocket.isConnected else { return }
                     UIAccessibility.post(
                         notification: .announcement,
@@ -1600,10 +1577,12 @@ final class ConversationCoordinator {
             let userMessage = Self.friendlySTTError(error)
             self.setState(.error(userMessage))
 
-            // Auto-recover to idle after a short delay so the user can retry
+            // A delayed recovery may only affect the session that failed.
+            let lifecycle = self.lifecycleID
             Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
-                guard let self, case .error = self.state else { return }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled, let self, self.lifecycleID == lifecycle,
+                      self.state == .error(userMessage) else { return }
                 self.setState(.idle)
             }
         }
@@ -1798,6 +1777,15 @@ final class ConversationCoordinator {
     /// interruptions so a blind user always HEARS what happened instead of
     /// dropping into a silent idle state (F045 / V4).
     private func pauseAudioAndReturnToIdle(announcement: String) {
+        listenTask?.cancel()
+        listenTask = nil
+        resumeListeningTask?.cancel()
+        resumeListeningTask = nil
+        sttWarmupTask?.cancel()
+        sttWarmupTask = nil
+        prewarmTask?.cancel()
+        prewarmTask = nil
+        sttService.disconnect()
         if state == .listening {
             voiceService.stopRecording()
             voiceService.onAudioBuffer = nil

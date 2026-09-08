@@ -42,6 +42,18 @@ enum ElevenLabsSTTError: LocalizedError {
     }
 }
 
+// Transport boundary keeps readiness, cancellation and stale-socket tests real.
+protocol SpeechSocket: AnyObject {
+    var state: URLSessionTask.State { get }
+    var closeReason: Data? { get }
+    func resume()
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
+    func send(_ message: URLSessionWebSocketTask.Message) async throws
+    func receive() async throws -> URLSessionWebSocketTask.Message
+}
+
+extension URLSessionWebSocketTask: SpeechSocket {}
+
 // MARK: - STT Service
 
 @Observable
@@ -72,7 +84,13 @@ final class ElevenLabsSTTService {
     // MARK: - Private Properties
 
     private let networkService: NetworkServiceProtocol
-    private var webSocketTask: URLSessionWebSocketTask?
+    private var webSocketTask: (any SpeechSocket)?
+    private let makeSocket: (URLRequest) -> any SpeechSocket
+    private let readinessTimeout: TimeInterval
+    private var connectionGeneration = UUID()
+    private var connectTask: Task<Void, Error>?
+    private let readinessGate = TranscriptCommitGate()
+    private var setupError: Error?
     private var currentToken: STTTokenResponse?
     private var listeningTask: Task<Void, Never>?
     private(set) var isSessionReady = false  // Wait for session_started before sending audio
@@ -85,27 +103,63 @@ final class ElevenLabsSTTService {
 
     // MARK: - Initialization
 
-    init(networkService: NetworkServiceProtocol = NetworkService.shared) {
+    init(networkService: NetworkServiceProtocol = NetworkService.shared,
+         readinessTimeout: TimeInterval = 10,
+         makeSocket: @escaping (URLRequest) -> any SpeechSocket = { URLSession.shared.webSocketTask(with: $0) }) {
         self.networkService = networkService
+        self.readinessTimeout = readinessTimeout
+        self.makeSocket = makeSocket
     }
 
     // MARK: - Public API
 
-    /// Connect to ElevenLabs STT (fetches fresh token each time)
+    /// Coalesce warm-up and user requests. Return only when Scribe can hear audio.
     func connect() async throws {
-        guard !isConnected && !isConnecting else { return }
+        if isConnected && isSessionReady { return }
+        let generation = connectionGeneration
+        let task: Task<Void, Error>
+        if let pending = connectTask {
+            task = pending
+        } else {
+            isConnecting = true
+            setupError = nil
+            task = Task { try await self.openConnection(generation: generation) }
+            connectTask = task
+        }
+        do {
+            try await withTaskCancellationHandler {
+                try await task.value
+                try Task.checkCancellation()
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    guard let self, self.connectionGeneration == generation else { return }
+                    self.disconnect()
+                }
+            }
+            guard connectionGeneration == generation else { throw CancellationError() }
+            connectTask = nil
+            isConnecting = false
+        } catch {
+            if connectionGeneration == generation { disconnect() }
+            throw error
+        }
+    }
 
-        isConnecting = true
-        defer { isConnecting = false }
+    private func openConnection(generation: UUID) async throws {
 
         // 1. Fetch token from backend
         do {
-            currentToken = try await fetchSTTToken()
+            let fetched = try await fetchSTTToken()
+            try Task.checkCancellation()
+            guard connectionGeneration == generation else { throw CancellationError() }
+            currentToken = fetched
             if let config = currentToken?.config {
                 Logger.info("ElevenLabsSTT: Token fetched - format: \(config.audioFormat), sampleRate: \(config.sampleRate), language: \(config.languageCode)")
             } else {
                 Logger.info("ElevenLabsSTT: Token fetched (no config)")
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             Logger.error("ElevenLabsSTT: Token fetch failed: \(error)")
             throw ElevenLabsSTTError.tokenFetchFailed(error.localizedDescription)
@@ -142,19 +196,29 @@ final class ElevenLabsSTTService {
         var request = URLRequest(url: finalURL)
         request.timeoutInterval = 30
 
-        webSocketTask = URLSession.shared.webSocketTask(with: request)
-        webSocketTask?.resume()
-
+        let socket = makeSocket(request)
+        webSocketTask = socket
         isConnected = true
-        isSessionReady = false  // Wait for session_started
-        startListening()
-
-        Logger.info("ElevenLabsSTT: WebSocket task started, waiting for session_started")
-        onConnected?()
+        isSessionReady = false
+        let ready = await readinessGate.wait(timeout: readinessTimeout) {
+            socket.resume()
+            self.startListening()
+            self.onConnected?()
+        }
+        try Task.checkCancellation()
+        guard connectionGeneration == generation else { throw CancellationError() }
+        guard ready, isSessionReady else {
+            throw setupError ?? ElevenLabsSTTError.connectionFailed("Speech recognition did not become ready. Please try again.")
+        }
     }
 
     /// Disconnect from ElevenLabs STT immediately (no flush).
     func disconnect() {
+        connectionGeneration = UUID()
+        connectTask?.cancel()
+        connectTask = nil
+        isConnecting = false
+        readinessGate.cancel()
         // Resume any pending commit-flush wait so callers don't hang.
         commitGate.cancel()
 
@@ -235,6 +299,7 @@ final class ElevenLabsSTTService {
 
             try await task.send(.string(jsonString))
         } catch {
+            guard webSocketTask === task else { return }
             Logger.error("ElevenLabsSTT: Failed to send audio (\(pcmData.count) bytes): \(error)")
             handleConnectionError(error)
         }
@@ -306,8 +371,8 @@ final class ElevenLabsSTTService {
             Logger.debug("ElevenLabsSTT: Starting message receive loop")
 
             while !Task.isCancelled && self.isConnected {
+                guard let socket = self.webSocketTask else { break }
                 do {
-                    guard let socket = self.webSocketTask else { break }
                     let message = try await socket.receive()
                     guard !Task.isCancelled, self.webSocketTask === socket else {
                         Logger.warning("ElevenLabsSTT: WebSocket task returned nil")
@@ -318,6 +383,7 @@ final class ElevenLabsSTTService {
                         self.handleMessage(message)
                     }
                 } catch {
+                    guard !Task.isCancelled, self.webSocketTask === socket else { break }
                     // Detailed error logging
                     let nsError = error as NSError
                     Logger.error("ElevenLabsSTT: Receive error - domain: \(nsError.domain), code: \(nsError.code), description: \(error.localizedDescription)")
@@ -375,12 +441,14 @@ final class ElevenLabsSTTService {
         case .error(let event):
             commitGate.cancel()
             Logger.error("ElevenLabsSTT: Server error: \(event.error)")
-            onError?(ElevenLabsSTTError.connectionFailed(event.error))
+            handleConnectionError(ElevenLabsSTTError.connectionFailed(event.error))
 
         case .sessionStarted:
             Logger.info("ElevenLabsSTT: Session started - ready to receive audio")
             // Config is already set via the token/URL - just start sending audio
+            guard !isSessionReady else { return }
             isSessionReady = true
+            readinessGate.complete()
             onSessionReady?()
 
         case .unknown(let rawText):
@@ -404,13 +472,19 @@ final class ElevenLabsSTTService {
             Logger.error("ElevenLabsSTT: Close reason: \(closeReason)")
         }
 
+        let wasConnecting = isConnecting
+        setupError = error
+        readinessGate.cancel()
         // Clean up connection state
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
         isConnected = false
         isSessionReady = false
         listeningTask?.cancel()
         listeningTask = nil
         webSocketTask = nil
 
+        // The awaited connect reports setup failure once; no second error callback.
+        if wasConnecting { return }
         // Map close reason to a specific error
         if closeReason == "resource_exhausted" {
             onError?(ElevenLabsSTTError.resourceExhausted)

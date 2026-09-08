@@ -86,7 +86,8 @@ final class ConversationViewModel {
 
         // Wire up accessibility feedback callbacks
         store.onAgentMessageComplete = { [weak self] in
-            self?.audioFeedback.playAgentMessageCompleteFeedback()
+            guard let self, !self.coordinator.isVoiceModalPresented else { return }
+            self.audioFeedback.playAgentMessageCompleteFeedback()
         }
 
         // Connect to backend.
@@ -134,9 +135,9 @@ final class ConversationViewModel {
             await onAppear(skipGreeting: true)
             // connect() returns before connection_ack; listening needs .idle.
             for _ in 0..<60 where coordinator.state == .connecting {
-                try? await Task.sleep(nanoseconds: 50_000_000)
+                do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
             }
-            if coordinator.state == .idle {
+            if !Task.isCancelled, coordinator.state == .idle {
                 await coordinator.startListening()
             }
         }
