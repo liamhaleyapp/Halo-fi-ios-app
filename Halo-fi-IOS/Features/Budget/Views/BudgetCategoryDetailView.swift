@@ -99,7 +99,7 @@ struct BudgetCategoryDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            PendingSpendingBreakdown(posted: category.postedSpentCents, pending: category.pendingSpentCents)
+            PendingSpendingBreakdown(posted: category.postedSpentCents, pending: category.pendingSpentCents, postedColor: BudgetFormatter.color(forCategory: category.category))
             progressBar
 
             HStack {
@@ -195,26 +195,20 @@ struct BudgetCategoryDetailView: View {
     }
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            let pct = min(max(category.pctUsed / 100.0, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(.tertiarySystemBackground))
-                Capsule()
-                    .fill(BudgetFormatter.color(forCategory: category.category))
-                    .frame(width: geo.size.width * CGFloat(pct))
-            }
-        }
-        .frame(height: 8)
-        .accessibilityHidden(true) // announced via heroAccessibilityLabel
+        BudgetUsageBar(spent: category.spentCents, posted: category.postedSpentCents,
+                       pending: category.pendingSpentCents, limit: category.limitCents,
+                       color: BudgetFormatter.color(forCategory: category.category))
+            .frame(height: 8)
+            .accessibilityHidden(true)
     }
 
     private var heroAccessibilityLabel: String {
         let name = BudgetFormatter.displayName(forCategory: category.category)
-        let spent = category.formatted["spent"] ?? "zero dollars"
-        let limit = category.formatted["limit"] ?? "zero dollars"
-        let remaining = category.formatted["remaining"] ?? "zero dollars"
-        let pct = Int(category.pctUsed.rounded())
-        return "\(name) this month. Spent and pending \(spent) of \(limit) limit. \(pct) percent used. \(remaining) remaining." + PendingSpendingBreakdown.spoken(posted: category.postedSpentCents, pending: category.pendingSpentCents)
+        let spent = PendingBankActivity.money(category.postedSpentCents ?? category.spentCents)
+        let limit = PendingBankActivity.money(category.limitCents)
+        let remaining = PendingBankActivity.money(category.remainingCents)
+        let pending = category.pendingSpentCents.map { " Pending \(PendingBankActivity.money($0))." } ?? ""
+        return "\(name). Spent \(spent)." + pending + " Remaining \(remaining) of \(limit)."
     }
 
     private func limitAccessibilityLabel(canEdit: Bool) -> String {

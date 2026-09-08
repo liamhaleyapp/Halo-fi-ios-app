@@ -268,16 +268,11 @@ struct BudgetCategoryRow: View {
     }
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            let pct = min(max(category.pctUsed / 100.0, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(.tertiarySystemBackground))
-                Capsule()
-                    .fill(BudgetFormatter.color(forCategory: category.category))
-                    .frame(width: geo.size.width * CGFloat(pct))
-            }
-        }
-        .frame(height: 4)
+        BudgetUsageBar(spent: category.spentCents, posted: category.postedSpentCents,
+                       pending: category.pendingSpentCents, limit: category.limitCents,
+                       color: BudgetFormatter.color(forCategory: category.category))
+            .frame(height: 6)
+            .accessibilityHidden(true)
     }
 
     private var pctLabel: some View {
@@ -294,7 +289,7 @@ struct BudgetCategoryRow: View {
         let limit = category.formatted["limit"] ?? "zero dollars"
         let pct = Int(category.pctUsed.rounded())
         let status = category.status.replacingOccurrences(of: "_", with: " ")
-        return "\(name): \(spent) of \(limit), \(pct) percent used. Status: \(status)." + PendingSpendingBreakdown.spoken(posted: category.postedSpentCents, pending: category.pendingSpentCents)
+        return "\(name): \(spent) of \(limit), \(pct) percent used. Status: \(status)." + (category.pendingSpentCents.map { " Includes \(PendingBankActivity.money($0)) pending." } ?? "")
     }
 }
 

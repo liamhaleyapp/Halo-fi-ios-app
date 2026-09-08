@@ -72,9 +72,8 @@ enum TabSummaries {
         // countable figure against the limit, in words before numbers, and
         // the card opens the Resource monitor.
         verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
-        let accounts = VoiceOverFormatter.count(s.accountCount, singular: "account", plural: "accounts")
-        detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)) across \(accounts). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
-        if let pending = s.pending { detail += " " + pending.spokenSummary }
+        detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
+        if let pending = s.pending { detail += " Pending \(PendingBankActivity.money(pending.outflowCents))." }
         tone = s.owedCents > s.cashCents ? .watch : .positive
 
         if capabilities.showsResourceCounter, let res = s.resources {

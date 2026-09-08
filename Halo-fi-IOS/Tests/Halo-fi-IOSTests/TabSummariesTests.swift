@@ -152,7 +152,7 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
     @Test func ssiUserGetsBalanceThenResourceCounter() {
         let s = TabSummaries.money(snapshot(resources(status: "ok")), capabilities: ssiCaps)
         #expect(s.verdict == "Balance")
-        #expect(s.detail.hasPrefix("Cash 1,214 dollars across 2 accounts. Owed 1,870 dollars. Counts toward your SSI limit: 1,214 dollars of 2,000 dollars, on track."))
+        #expect(s.detail.hasPrefix("Cash 1,214 dollars. Owed 1,870 dollars. Counts toward your SSI limit: 1,214 dollars of 2,000 dollars, on track."))
         #expect(s.subline == nil)   // the gauge draws the counted figure; nothing else to draw without a projection
         #expect(s.isEstimate)
         #expect(s.tone == .positive)
@@ -257,8 +257,9 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
                                      connectionsNeedingAttention: 0, resources: nil, budgetTotal: nil,
                                      spentCents: 144600, daysLeft: nil, firstOverCategory: nil, pending: pending)
         let label = TabSummaries.money(snapshot, capabilities: UITestArchetype.noneAnswered.capabilities).spoken
-        #expect(label.contains("Pending: card and loan charges $50.00"))
-        #expect(label.contains("bank balances may already reflect holds"))
+        #expect(label.contains("Pending $50.00."))
+        #expect(!label.contains("card and loan"))
+        #expect(!label.contains("bank balances may already reflect holds"))
         #expect(!label.contains("$1,920"))
     }
 
@@ -266,5 +267,19 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         let entry = try #require(UITestArchetype.noneAnswered.overview?.pending?.transactions.first)
         let expected = try #require(Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 12)))
         #expect(entry.spokenDate == expected.formatted(.dateTime.month(.wide).day().year()))
+    }
+}
+
+
+@Suite struct MoneyBarGeometryTests {
+    @Test func noMoneyDoesNotDrawAFakeCashSegment() {
+        #expect(MoneySegmentsBar.fractions([0, 0, 0]) == [0, 0, 0])
+    }
+    @Test func pendingKeepsItsShareWhenBudgetIsExceeded() {
+        let shares = MoneySegmentsBar.fractions([12000, 3000, 0])
+        #expect(shares == [0.8, 0.2, 0])
+    }
+    @Test func refundsDoNotCreateNegativeBarWidths() {
+        #expect(MoneySegmentsBar.fractions([-500, 1000, 1000]) == [0, 0.5, 0.5])
     }
 }

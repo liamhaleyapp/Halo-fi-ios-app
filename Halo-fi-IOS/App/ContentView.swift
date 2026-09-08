@@ -35,6 +35,8 @@ struct ContentView: View {
             } else if UITestArchetype.isActive,
                let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-checkout=") }) {
                 CheckoutFixtureHost(mode: String(argument.dropFirst("--ui-test-checkout=".count)))
+            } else if UITestArchetype.isActive, ProcessInfo.processInfo.arguments.contains("--ui-test-bars-large") {
+                MainTabView().dynamicTypeSize(.accessibility5)
             } else {
                 MainTabView()
             }

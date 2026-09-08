@@ -47,22 +47,7 @@ struct BalanceHeroCard: View {
             } else {
                 cashFigure
                 cashOwedBar
-                if let pending = snapshot.pending {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Pending").font(.headline)
-                        if pending.count == 0 {
-                            Text("No pending activity reported.")
-                        } else {
-                            Text("Card and loan charges: \(PendingBankActivity.money(pending.creditOutflowCents))")
-                            Text("Other outgoing: \(PendingBankActivity.money(pending.cashOutflowCents))")
-                            Text("Incoming: \(PendingBankActivity.money(pending.incomingCents))")
-                            Text("Shown separately; bank balances may already reflect holds.").font(.callout)
-                        }
-                    }
-                    .foregroundStyle(Color.haloTextPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
+
             }
 
             if showsResources, !snapshot.isLoading, let res = snapshot.resources {
@@ -136,26 +121,15 @@ struct BalanceHeroCard: View {
     private var cashOwedBar: some View {
         let cash = max(0, snapshot.cashCents)
         let owed = max(0, snapshot.owedCents)
-        let total = max(1, cash + owed)
-        return VStack(alignment: .leading, spacing: 6) {
-            GeometryReader { geo in
-                HStack(spacing: 2) {
-                    Capsule().fill(Color.haloPositive)
-                        .frame(width: max(barHeight, geo.size.width * CGFloat(cash) / CGFloat(total)))
-                    if owed > 0 {
-                        Capsule().fill(Color.orange)
-                    }
-                }
-            }
-            .frame(height: barHeight)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) {
-                    legend(color: .haloPositive, text: "Cash \(Self.dollars(cash))")
-                    legend(color: .orange, text: "Owed \(Self.dollars(owed))")
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    legend(color: .haloPositive, text: "Cash \(Self.dollars(cash))")
-                    legend(color: .orange, text: "Owed \(Self.dollars(owed))")
+        let pending = max(0, snapshot.pending?.outflowCents ?? 0)
+        return VStack(alignment: .leading, spacing: 8) {
+            MoneySegmentsBar(amounts: [cash, owed, pending], colors: [.haloPositive, .haloNegative, .yellow], pendingIndex: 2)
+                .frame(height: barHeight)
+            VStack(alignment: .leading, spacing: 6) {
+                MoneyBarLegend(color: .haloPositive, text: "Cash \(PendingBankActivity.money(cash))")
+                MoneyBarLegend(color: .haloNegative, text: "Owed \(PendingBankActivity.money(owed))")
+                if snapshot.pending != nil {
+                    MoneyBarLegend(color: .yellow, text: "Pending \(PendingBankActivity.money(pending))", pending: true)
                 }
             }
         }
@@ -238,10 +212,10 @@ struct PendingActivityView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 Text("Pending activity").font(.title.bold()).accessibilityAddTraits(.isHeader)
-                Text("These amounts can change or disappear before they post. Bank balances may already reflect holds. Budget includes pending spending in the month shown; transfers and card payments are not spending.")
+                Text("Amounts may change or disappear before they post.")
                     .fixedSize(horizontal: false, vertical: true)
                 if let pending {
-                    Text(pending.spokenSummary).font(.headline)
+                    Text("\(pending.count) pending transactions").font(.headline)
                     ForEach(pending.transactions) { entry in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(entry.name).font(.headline)
@@ -271,12 +245,12 @@ struct PendingActivityView: View {
 struct PendingSpendingBreakdown: View {
     let posted: Int?
     let pending: Int?
+    var postedColor: Color = .haloPositive
     var body: some View {
         if let pending {
             VStack(alignment: .leading, spacing: 6) {
-                if let posted { Text("Posted: \(PendingBankActivity.money(posted))") }
-                Text("Pending: \(PendingBankActivity.money(pending))")
-                Text("Pending spending is included in the total and remaining budget.").font(.caption)
+                if let posted { MoneyBarLegend(color: postedColor, text: "Spent \(PendingBankActivity.money(posted))") }
+                MoneyBarLegend(color: .yellow, text: "Pending \(PendingBankActivity.money(pending))", pending: true)
             }
             .font(.subheadline)
             .foregroundStyle(Color.haloTextPrimary)
@@ -285,7 +259,86 @@ struct PendingSpendingBreakdown: View {
     }
     static func spoken(posted: Int?, pending: Int?) -> String {
         guard let pending else { return "" }
-        let postedLine = posted.map { " Posted \(PendingBankActivity.money($0))." } ?? ""
-        return postedLine + " Pending \(PendingBankActivity.money(pending)). Pending spending is included in the total and remaining budget."
+        let postedLine = posted.map { " Spent \(PendingBankActivity.money($0))." } ?? ""
+        return postedLine + " Pending \(PendingBankActivity.money(pending))."
+    }
+}
+
+
+/// Decorative chart; its parent supplies one concise VoiceOver label.
+/// Zero amounts have zero width. Over-budget charts normalize to total usage
+/// so pending remains visible even when posted spending exceeds the limit.
+struct MoneySegmentsBar: View {
+    let amounts: [Int]
+    let colors: [Color]
+    var pendingIndex: Int
+
+    static func fractions(_ amounts: [Int]) -> [Double] {
+        let positive = amounts.map { max(0, Double($0)) }
+        let total = positive.reduce(0, +)
+        return positive.map { total > 0 ? $0 / total : 0 }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let fractions = Self.fractions(amounts)
+            HStack(spacing: 0) {
+                ForEach(amounts.indices, id: \.self) { index in
+                    Rectangle().fill(colors[index])
+                        .overlay { if index == pendingIndex { PendingHatch() } }
+                        .frame(width: geo.size.width * fractions[index])
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.haloTextTertiary.opacity(0.25))
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Color.haloTextPrimary.opacity(0.55), lineWidth: 1))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+struct PendingHatch: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            for x in stride(from: -size.height, through: size.width, by: 7) {
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+            }
+            context.stroke(path, with: .color(.black.opacity(0.65)), lineWidth: 1)
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+}
+
+struct MoneyBarLegend: View {
+    let color: Color
+    let text: String
+    var pending = false
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            RoundedRectangle(cornerRadius: 3).fill(color)
+                .overlay { if pending { PendingHatch() } }
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.haloTextPrimary.opacity(0.55), lineWidth: 1))
+                .frame(width: 12, height: 12)
+                .accessibilityHidden(true)
+            Text(text).font(.subheadline).foregroundStyle(Color.haloTextPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+struct BudgetUsageBar: View {
+    let spent: Int
+    let posted: Int?
+    let pending: Int?
+    let limit: Int
+    var color: Color = .haloPositive
+    var body: some View {
+        MoneySegmentsBar(amounts: [posted ?? (spent - (pending ?? 0)), pending ?? 0, max(0, limit - spent)],
+                         colors: [color, .yellow, Color.haloTextTertiary.opacity(0.25)], pendingIndex: 1)
     }
 }

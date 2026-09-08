@@ -195,17 +195,19 @@ extension Font {
 struct HaloIconTile: View {
     let icon: String
     let tint: Color
+    let symbolColor: Color
     @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 44
 
-    init(icon: String, tint: Color) {
+    init(icon: String, tint: Color, symbolColor: Color = .white) {
         self.icon = icon
         self.tint = tint
+        self.symbolColor = symbolColor
     }
 
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(symbolColor)
             .frame(width: size, height: size)
             .background(
                 LinearGradient(colors: [tint, tint.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)

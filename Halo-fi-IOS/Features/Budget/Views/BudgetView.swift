@@ -560,7 +560,7 @@ private struct BudgetHeroCard: View {
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                     .foregroundColor(.haloTextPrimary)
-                Text("spent and pending of \(total.formatted["limit"] ?? "$0.00") this month")
+                Text("used of \(total.formatted["limit"] ?? "$0.00") this month")
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
             }
@@ -592,16 +592,9 @@ private struct BudgetHeroCard: View {
     }
 
     private var progressBar: some View {
-        GeometryReader { geo in
-            let pct = min(max(total.pctUsed / 100.0, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.haloTextTertiary.opacity(0.25))
-                Capsule()
-                    .fill(statusColor)
-                    .frame(width: max(barHeight, geo.size.width * CGFloat(pct)))
-            }
-        }
-        .frame(height: barHeight)
+        BudgetUsageBar(spent: total.spentCents, posted: total.postedSpentCents,
+                       pending: total.pendingSpentCents, limit: total.limitCents)
+            .frame(height: barHeight)
     }
 
     /// The state in a word; color only echoes it.
@@ -619,16 +612,16 @@ private struct BudgetHeroCard: View {
         case "over":   return .haloNegative
         case "behind": return .orange
         case "ahead":  return .haloPositive
-        default:       return .blue
+        default:       return .haloPositive
         }
     }
 
     private var accessibilityLabel: String {
-        let spent = total.formatted["spent"] ?? "zero dollars"
-        let limit = total.formatted["limit"] ?? "zero dollars"
-        let remaining = total.formatted["remaining"] ?? "zero dollars"
-        let pct = Int(total.pctUsed.rounded())
-        return "\(statusWord). Spent and pending \(spent) of \(limit) this month, \(pct) percent used, \(remaining) left." + PendingSpendingBreakdown.spoken(posted: total.postedSpentCents, pending: total.pendingSpentCents)
+        let spent = PendingBankActivity.money(total.postedSpentCents ?? total.spentCents)
+        let limit = PendingBankActivity.money(total.limitCents)
+        let remaining = PendingBankActivity.money(total.remainingCents)
+        let pending = total.pendingSpentCents.map { " Pending \(PendingBankActivity.money($0))." } ?? ""
+        return "\(statusWord). Spent \(spent)." + pending + " Remaining \(remaining) of \(limit)."
     }
 }
 
@@ -640,7 +633,7 @@ private struct NoBudgetHeroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Circle().fill(Color.blue).frame(width: 10, height: 10)
+                Circle().fill(Color.haloPositive).frame(width: 10, height: 10)
                 Text("Spending")
                     .font(.haloTitle)
                     .foregroundColor(.haloTextPrimary)
@@ -656,6 +649,9 @@ private struct NoBudgetHeroCard: View {
                     .font(.caption)
                     .foregroundColor(.haloTextSecondary)
             }
+            BudgetUsageBar(spent: spending.totalCents, posted: spending.postedCents,
+                           pending: spending.pendingCents, limit: 0)
+                .frame(height: 10)
             PendingSpendingBreakdown(posted: spending.postedCents, pending: spending.pendingCents)
             Text("No budget yet. Ask Halo to set one up.")
                 .font(.subheadline)
@@ -664,11 +660,11 @@ private struct NoBudgetHeroCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(
-            LinearGradient(colors: [Color.blue.opacity(0.18), Color.haloSecondaryBackground],
+            LinearGradient(colors: [Color.haloPositive.opacity(0.18), Color.haloSecondaryBackground],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.blue.opacity(0.25), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.haloPositive.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Spent and pending \(spending.formatted["total"] ?? "zero dollars") this month. No budget set yet." + PendingSpendingBreakdown.spoken(posted: spending.postedCents, pending: spending.pendingCents))
     }

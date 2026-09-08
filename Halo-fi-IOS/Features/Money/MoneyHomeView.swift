@@ -80,11 +80,9 @@ struct MoneyHomeView: View {
                         TabTitle("Money")
                         header
                         if let pending = budgetDataManager.overview?.pending, pending.count > 0 {
-                            NavigationLink(value: MoneyRoute.pending) {
-                                Label("Pending activity (\(pending.count))", systemImage: "clock")
-                                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                            }
-                            .accessibilityHint("Shows outstanding charges and incoming payments.")
+                            row(title: "Pending activity", icon: "clock.fill", tint: .yellow,
+                                line: VoiceOverFormatter.count(pending.count, singular: "transaction", plural: "transactions"),
+                                hint: "Opens pending transactions.", route: .pending)
                         }
                         attentionRow
                         budgetRow
@@ -429,7 +427,7 @@ struct MoneyHomeView: View {
     private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
         NavigationLink(value: route) {
             HStack(spacing: 14) {
-                HaloIconTile(icon: icon, tint: tint)
+                HaloIconTile(icon: icon, tint: tint, symbolColor: route == .pending ? .black : .white)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)

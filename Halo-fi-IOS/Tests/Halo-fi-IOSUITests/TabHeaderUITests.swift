@@ -448,6 +448,12 @@ extension TabHeaderUITests {
     func testMoneyPendingActivityOpensAndBudgetAnnouncesPending() {
         let app = launch("none_answered")
         openTab(app, "Money")
+        XCTAssertTrue(header(in: app).label.contains("Pending $50.00."))
+        XCTAssertFalse(header(in: app).label.contains("card and loan"))
+        let moneyScreenshot = XCTAttachment(screenshot: app.screenshot())
+        moneyScreenshot.name = "Simple Cash Owed Pending"
+        moneyScreenshot.lifetime = .keepAlways
+        add(moneyScreenshot)
         let pending = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pending activity'")).firstMatch
         XCTAssertTrue(pending.waitForExistence(timeout: 10))
         pending.tap()
@@ -475,5 +481,35 @@ extension TabHeaderUITests {
         budgetScreenshot.name = "Budget posted and pending"
         budgetScreenshot.lifetime = .keepAlways
         add(budgetScreenshot)
+    }
+}
+
+
+extension TabHeaderUITests {
+    func testSimpleBarsAtLargestTextSizeInDarkMode() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=none_answered", "--ui-test-bars-large", "-themeMode", "Dark"]
+        app.launch()
+        XCTAssertTrue(header(in: app).label.contains("Pending $50.00."))
+        let pending = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pending activity'")).firstMatch
+        for _ in 0..<12 {
+            if pending.exists && pending.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(pending.isHittable)
+        XCTAssertGreaterThanOrEqual(pending.frame.height, 44)
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
+        for _ in 0..<12 {
+            if row.exists && row.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(row.isHittable)
+        row.tap()
+        let summary = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Remaining $2,054.00 of $3,500.00'")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Simple budget - largest text - dark"
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 }
