@@ -766,7 +766,12 @@ struct SSIIncomeHeroCard: View {
     let income: SSIIncome
 
     var body: some View {
-        if let projectedCents = income.projectedPaymentCents {
+        if income.paymentSuspendedOverResources == true {
+            Text("Payment estimate unavailable. " + SSIIncome.estimateExplanation)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding()
+        } else if let projectedCents = income.projectedPaymentCents {
             v2Body(projectedCents: projectedCents)
         } else {
             legacyBody
@@ -786,7 +791,7 @@ struct SSIIncomeHeroCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Projected SSI this month")
+                    Text("SSI income estimate")
                         .font(.subheadline)
                         .foregroundStyle(DesignTokens.SSI.subtextBright)
                     Text(projected)
@@ -806,8 +811,8 @@ struct SSIIncomeHeroCard: View {
                     .font(.caption)
                     .foregroundStyle(DesignTokens.SSI.subtextBright)
             }
-            if let v2Note = income.v2Note {
-                Text(v2Note)
+            Group {
+                Text(SSIIncome.estimateExplanation)
                     .font(.caption2)
                     .foregroundStyle(DesignTokens.SSI.subtextSecondary)
             }
@@ -829,25 +834,25 @@ struct SSIIncomeHeroCard: View {
     /// the accessibility label doesn't speak ".00" out loud.
     private func footerNarrative(forSpeech: Bool = false) -> String? {
         if income.eligibleForCash == false {
-            return "Your check is at zero this month from high income. Confirming any Blind Work Expenses you've had could restore part of it."
+            return "The income-only estimate is zero. A free benefits counselor can explain work expenses and other eligibility rules."
         }
         guard let earnRoomCents = income.earnRoomGrossCents else { return nil }
         if earnRoomCents <= 0 {
-            return "You're past the earn-room cliff this month."
+            return "There is no additional earnings allowance in this income estimate."
         }
         let amount = forSpeech
             ? VoiceOverFormatter.dollars(earnRoomCents)
             : BudgetFormatter.cents(earnRoomCents)
-        return "You can earn about \(amount) more before your check would drop to zero."
+        return "Additional gross earnings in this income estimate: about \(amount)."
     }
 
     private func v2AccessibilityLabel(projectedCents: Int, v2Status: String) -> String {
         // Speak the headline cents as whole dollars — VoiceOver
         // saying "994 point zero zero dollars" is grating.
         let projectedSpeech = VoiceOverFormatter.dollars(projectedCents)
-        var parts = ["Projected SSI this month: \(projectedSpeech). Status: \(v2Status)."]
+        var parts = ["SSI income estimate: \(projectedSpeech). Status: \(v2Status)."]
         if let line = footerNarrative(forSpeech: true) { parts.append(line) }
-        if let v2Note = income.v2Note { parts.append(v2Note) }
+        parts.append(SSIIncome.estimateExplanation)
         return parts.joined(separator: " ")
     }
 
@@ -1056,43 +1061,6 @@ struct SSIEarnRoomHeroCard: View {
 /// (eligibleForCash == false). Many users assume losing the cash
 /// means losing Medicaid too — §8.2 of the rules engine notes this
 /// is the highest-impact thing to communicate when projected = $0.
-struct SSISpendDownBanner: View {
-    let spendDownFormatted: String?
-
-    /// Never "spend"; never a fact about the check. The estimate, the
-    /// amount over, and where to get help (hard rules, 2026-09-05).
-    private var spendDownPhrase: String {
-        if let amount = spendDownFormatted, !amount.isEmpty {
-            return "About \(amount) is over the limit. Money moved into an ABLE account or spent on needs can count differently; a free benefits counselor can walk you through it."
-        }
-        return "A free benefits counselor can walk you through what counts and what does not."
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Resources over the limit")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("Estimate: resources above $2,000 on the 1st can mean no SSI payment for that month. \(spendDownPhrase)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Resources over the limit. Estimate: resources above two thousand dollars on the first can mean no SSI payment for that month. \(spendDownPhrase)")
-    }
-}
 
 struct SSIMedicaidContinuationBanner: View {
     var body: some View {

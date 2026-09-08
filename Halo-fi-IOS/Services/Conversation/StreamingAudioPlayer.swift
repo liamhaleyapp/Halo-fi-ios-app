@@ -43,6 +43,7 @@ final class StreamingAudioPlayer: NSObject {
     /// when text arrives, so state never claims Halo is talking while the
     /// mic is still the active surface.
     var onPlaybackStarted: (() -> Void)?
+    var onBufferPlaybackStarted: ((VoicePlaybackMarker, Bool) -> Void)?
 
     /// Playback rate (0.5–2.0). Applied via AVAudioPlayer.rate when
     /// playback starts; changing it mid-playback is honored on the
@@ -65,7 +66,11 @@ final class StreamingAudioPlayer: NSObject {
     /// finishes, the next buffer in this queue is dequeued and
     /// played without any state-flip back to .idle. Empty between
     /// turns and any time we're not chunked.
-    private var pendingBuffers: [Data] = []
+    private struct QueuedAudio {
+        let data: Data
+        let marker: VoicePlaybackMarker
+    }
+    private var pendingBuffers: [QueuedAudio] = []
 
     /// True once an audio_complete with is_partial=false has landed,
     /// telling us no more buffers will arrive for this turn. When the
@@ -213,7 +218,7 @@ final class StreamingAudioPlayer: NSObject {
     /// The legacy single-buffer behavior is preserved when callers
     /// pass isFinal: true (default) and only one buffer is ever
     /// queued — the same code path runs.
-    func playAccumulatedAudio(isFinal: Bool = true) {
+    func playAccumulatedAudio(isFinal: Bool = true, turnId: String? = nil, isAcknowledgment: Bool = false, isError: Bool = false) {
         // Drop late audio_complete events for an abandoned response
         // (post-barge-in). Without this, a stale "final" audio_complete
         // for the response the user interrupted would fire
@@ -238,7 +243,8 @@ final class StreamingAudioPlayer: NSObject {
         }
 
         if !mp3Data.isEmpty {
-            pendingBuffers.append(mp3Data)
+            pendingBuffers.append(QueuedAudio(data: mp3Data,
+                marker: VoicePlaybackMarker(turnId: turnId, isAcknowledgment: isAcknowledgment, isError: isError)))
             mp3Data = Data()
         }
 
@@ -257,7 +263,7 @@ final class StreamingAudioPlayer: NSObject {
     /// initially by playAccumulatedAudio and again by the delegate
     /// when each buffer finishes.
     private func playNextBuffer() {
-        guard let nextData = pendingBuffers.first else {
+        guard let next = pendingBuffers.first else {
             // Queue empty.
             isPlaying = false
             audioPlayer = nil
@@ -272,6 +278,7 @@ final class StreamingAudioPlayer: NSObject {
         }
 
         pendingBuffers.removeFirst()
+        let nextData = next.data
         Logger.info("StreamingAudioPlayer: Playing \(nextData.count) bytes (queue=\(pendingBuffers.count) remaining)")
 
         do {
@@ -293,6 +300,8 @@ final class StreamingAudioPlayer: NSObject {
             self.audioPlayer = player
             self.isPlaying = true
             Logger.info("StreamingAudioPlayer: Playback started (\(player.duration)s, rate=\(playbackRate))")
+            onBufferPlaybackStarted?(next.marker,
+                player.volume > 0 && AVAudioSession.sharedInstance().outputVolume > 0)
             if wasIdle { onPlaybackStarted?() }
         } catch {
             Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")

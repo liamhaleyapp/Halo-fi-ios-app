@@ -81,10 +81,7 @@ final class ElevenLabsSTTService {
     private var lastUpdateTime: Date = .distantPast
     private let updateThrottleInterval: TimeInterval = 0.15 // 150ms
 
-    // Resumed when a transcript arrives with isCommitted=true. Set during
-    // commitAndDisconnect(), cleared by either the final transcript or the
-    // commit-timeout fallback. At most one outstanding continuation.
-    private var finalTranscriptContinuation: CheckedContinuation<Void, Never>?
+    private let commitGate = TranscriptCommitGate()
 
     // MARK: - Initialization
 
@@ -159,7 +156,7 @@ final class ElevenLabsSTTService {
     /// Disconnect from ElevenLabs STT immediately (no flush).
     func disconnect() {
         // Resume any pending commit-flush wait so callers don't hang.
-        resumeFinalTranscriptContinuationIfNeeded()
+        commitGate.cancel()
 
         listeningTask?.cancel()
         listeningTask = nil
@@ -175,104 +172,23 @@ final class ElevenLabsSTTService {
         onDisconnected?()
     }
 
-    /// WP7 — flush the current segment WITHOUT closing the socket. Hands-free
-    /// keeps one Scribe session open for the whole conversation so the next
-    /// turn never loses its opening syllables to a reconnect.
-    func commit() async {
-        guard isConnected, let task = webSocketTask else { return }
+    /// True only after a committed transcript, never after a timeout or disconnect.
+    func commitAndWait() async -> Bool {
+        guard isConnected, isSessionReady, let socket = webSocketTask else { return false }
         let sampleRate = currentToken?.config.sampleRate ?? 16000
-        let commitMessage: [String: Any] = [
-            "message_type": "input_audio_chunk",
-            "audio_base_64": "",
-            "commit": true,
-            "sample_rate": sampleRate
-        ]
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: commitMessage)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                try await task.send(.string(jsonString))
-                Logger.debug("ElevenLabsSTT: commit (session kept open)")
-            }
-        } catch {
-            Logger.warning("ElevenLabsSTT: commit failed: \(error)")
+        return await commitGate.wait {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "message_type": "input_audio_chunk", "audio_base_64": "",
+                "commit": true, "sample_rate": sampleRate
+            ])
+            try await socket.send(.string(String(decoding: data, as: UTF8.self)))
         }
     }
 
-    /// Send a commit signal to flush any buffered transcript, then disconnect.
-    /// This ensures speech captured right before stop isn't lost.
-    ///
-    /// Protocol: send an `input_audio_chunk` with empty audio and `commit: true`.
-    /// ElevenLabs flushes its VAD buffer and emits a final transcript
-    /// (is_committed=true). We wait up to `commitFlushTimeout` for that
-    /// final, then disconnect either way.
-    func commitAndDisconnect() async {
-        guard isConnected, let task = webSocketTask else {
-            disconnect()
-            return
-        }
-
-        let sampleRate = currentToken?.config.sampleRate ?? 16000
-        let commitMessage: [String: Any] = [
-            "message_type": "input_audio_chunk",
-            "audio_base_64": "",
-            "commit": true,
-            "sample_rate": sampleRate
-        ]
-
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: commitMessage)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                try await task.send(.string(jsonString))
-                Logger.info("ElevenLabsSTT: Sent commit message")
-            }
-        } catch {
-            Logger.error("ElevenLabsSTT: Failed to send commit: \(error)")
-            disconnect()
-            return
-        }
-
-        await waitForFinalTranscript(timeout: 2.0)
+    func commitAndDisconnect() async -> Bool {
+        let confirmed = await commitAndWait()
         disconnect()
-    }
-
-    /// Suspend until the next transcript with isCommitted=true, or until
-    /// `timeout` seconds elapse — whichever comes first.
-    private func waitForFinalTranscript(timeout: TimeInterval) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { [weak self] in
-                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                    Task { @MainActor in
-                        guard let self else {
-                            continuation.resume()
-                            return
-                        }
-                        if self.finalTranscriptContinuation != nil {
-                            // Already one outstanding — resume this one immediately
-                            // to avoid leaking. Shouldn't happen in normal flow.
-                            continuation.resume()
-                            return
-                        }
-                        self.finalTranscriptContinuation = continuation
-                    }
-                }
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-            }
-            await group.next()
-            group.cancelAll()
-        }
-        // Whichever task won, clear any dangling continuation.
-        resumeFinalTranscriptContinuationIfNeeded()
-    }
-
-    /// Resume (once) the outstanding final-transcript continuation. Safe to
-    /// call multiple times; no-op after first resume.
-    private func resumeFinalTranscriptContinuationIfNeeded() {
-        if let cont = finalTranscriptContinuation {
-            finalTranscriptContinuation = nil
-            cont.resume()
-        }
+        return confirmed
     }
 
     /// Send audio data to ElevenLabs for transcription
@@ -391,7 +307,9 @@ final class ElevenLabsSTTService {
 
             while !Task.isCancelled && self.isConnected {
                 do {
-                    guard let message = try await self.webSocketTask?.receive() else {
+                    guard let socket = self.webSocketTask else { break }
+                    let message = try await socket.receive()
+                    guard !Task.isCancelled, self.webSocketTask === socket else {
                         Logger.warning("ElevenLabsSTT: WebSocket task returned nil")
                         break
                     }
@@ -450,11 +368,12 @@ final class ElevenLabsSTTService {
                 onTranscription?(event.text, isFinal)
             }
             if isFinal {
-                // commitAndDisconnect() is waiting on this final transcript
-                resumeFinalTranscriptContinuationIfNeeded()
+                // The callback folds the final words into the draft before resuming.
+                commitGate.complete()
             }
 
         case .error(let event):
+            commitGate.cancel()
             Logger.error("ElevenLabsSTT: Server error: \(event.error)")
             onError?(ElevenLabsSTTError.connectionFailed(event.error))
 
@@ -471,6 +390,7 @@ final class ElevenLabsSTTService {
     }
 
     private func handleConnectionError(_ error: Error) {
+        commitGate.cancel()
         // Extract close reason before clearing webSocketTask
         let closeReason: String? = {
             guard let task = webSocketTask,

@@ -15,7 +15,9 @@ enum Diagnostics {
     static func send(_ event: String, _ fields: [String: String] = [:]) {
         struct Body: Encodable { let event: String; let fields: [String: String]; let app_version: String }
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?") + ")"
+        let sessionGeneration = SessionLifetime.shared.current
         Task.detached(priority: .utility) {
+            guard SessionLifetime.shared.isCurrent(sessionGeneration) else { return }
             struct Out: Codable { let ok: Bool? }
             guard let data = try? JSONEncoder().encode(Body(event: event, fields: fields, app_version: version)) else { return }
             _ = try? await NetworkService.shared.authenticatedRequest(endpoint: "/me/diagnostics", method: .POST, body: data, responseType: Out.self)

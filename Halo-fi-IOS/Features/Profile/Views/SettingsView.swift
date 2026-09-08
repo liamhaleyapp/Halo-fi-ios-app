@@ -22,6 +22,7 @@ struct SettingsView: View {
   @State private var showDeleteAccountConfirmation = false
   @State private var showDeleteAccountFinalConfirmation = false
   @State private var isDeletingAccount = false
+  @State private var deleteAccountFailed = false
 
   /// Mirrors `biometricCredentialStore.hasEnrolledCredentials` so the Toggle
   /// stays in sync. Re-read in .onAppear.
@@ -298,10 +299,15 @@ struct SettingsView: View {
         }
       }
     } message: {
-      Text("All your data, linked banks, and account history will be permanently removed. This cannot be reversed.")
+      Text("Your app access will end now. Your data and linked banks will be removed, with cleanup continuing automatically. This cannot be reversed. Account deletion does not cancel an App Store subscription.")
     }
     .loadingOverlay(isLoading: isLoggingOut, message: "Logging out...")
-    .loadingOverlay(isLoading: isDeletingAccount, message: "Deleting account...")
+    .loadingOverlay(isLoading: isDeletingAccount, message: "Requesting account deletion...")
+    .alert("Could not confirm deletion", isPresented: $deleteAccountFailed) {
+      Button("OK", role: .cancel) { }
+    } message: {
+      Text("We could not confirm your deletion request. Please try again. If the request reached us, cleanup will continue automatically.")
+    }
     .alert(item: $resetMinutesAlert) { alert in
       Alert(
         title: Text(alert.title),
@@ -514,9 +520,11 @@ struct SettingsView: View {
   private func performDeleteAccount() async {
     guard let userId = userManager.currentUser?.id else { return }
 
+    let generation = SessionLifetime.shared.current
     isDeletingAccount = true
     do {
       try await AuthService.shared.deleteAccount(userId: userId)
+      guard SessionLifetime.shared.isCurrent(generation) else { return }
       isDeletingAccount = false
 
       // Clear all local state for deleted user
@@ -528,7 +536,9 @@ struct SettingsView: View {
       UserDefaults.standard.removeObject(forKey: "last_auth_provider")
       userManager.signOut()
     } catch {
+      guard SessionLifetime.shared.isCurrent(generation) else { return }
       isDeletingAccount = false
+      deleteAccountFailed = true
       Logger.error("Failed to delete account: \(error)")
     }
   }

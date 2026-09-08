@@ -105,19 +105,26 @@ final class BankDataManager {
         }
         currentUserId = userId
         SnapshotCache.currentUserId = userId
+        // Fixture launches have no authenticated account. Do not restore
+        // disk data or start a bank request that can expire the test session
+        // and clear the profile just seeded by MainTabView.
+        guard !UITestArchetype.isActive else { return }
         Diagnostics.send("sign_in", ["restored_manual": "\(manualAccounts.count)"])
         // Last known manual accounts draw immediately; the refresh below replaces them.
         if manualAccounts.isEmpty, let cached = SnapshotCache.load([ManualAccount].self, key: "manual_accounts", userId: userId) {
             manualAccounts = cached
         }
 
+        let generation = SessionLifetime.shared.current
         Task { @MainActor in
+            guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
             // 1. Restore linked items - return value for explicit ordering
             let restoredItems = restoreLinkedItemsSync()
 
             // 2. If persistence was empty, fetch from server (includes embedded accounts)
             if restoredItems.isEmpty {
                 await fetchLinkedItemsFromServer()
+                guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
                 // fetchLinkedItemsFromServer populates accountsByItemId with embedded accounts
                 // and sets lastRefreshAt, so we can skip the rest
                 notifyConfigurationComplete()
@@ -126,6 +133,7 @@ final class BankDataManager {
 
             // 3. Restore accounts from persistence for the first paint only.
             await restoreAccounts()
+            guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
 
             // 4. Always confirm with the server (2026-09-05). /bank/multi-items
             //    is a database read (no Plaid call), and the disk copy can be
@@ -133,9 +141,11 @@ final class BankDataManager {
             //    minutes after every launch because the "recent refresh"
             //    guard skipped this.
             if !UITestArchetype.isActive { await fetchLinkedItemsFromServer() }
+            guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
 
             // 5. Anything else that is stale (guarded)
             await refreshIfStale()
+            guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
 
             // 5. Ensure accountsByItemId is populated from accounts property
             rebuildAccountsByItemId()
@@ -174,6 +184,8 @@ final class BankDataManager {
     /// Fetch linked items from server with in-flight guard
     /// Second callers await the same task instead of returning early
     private func fetchLinkedItemsFromServer() async {
+        let generation = SessionLifetime.shared.current
+        let requestedUserId = currentUserId
         // If task already in-flight, await it instead of returning early
         if let task = linkedItemsFetchTask {
             await task.value
@@ -181,18 +193,18 @@ final class BankDataManager {
         }
 
         linkedItemsFetchTask = Task {
-            defer { linkedItemsFetchTask = nil }
+            defer { if SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId { linkedItemsFetchTask = nil } }
 
             do {
                 let response = try await bankService.getLinkedItems()
+                guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId, !Task.isCancelled else { return }
 
                 // Map server items to ConnectedItem and apply userId
                 var items = response.items.map { ConnectedItem(from: $0) }
-                if let userId = currentUserId {
+                if let userId = requestedUserId {
                     items = items.map { $0.withUserId(userId) }
                 }
 
-                guard !items.isEmpty else { return }
 
                 // Extract embedded accounts from each item (keyed by internal itemId)
                 var embeddedAccountsByItemId: [String: [BankAccount]] = [:]
@@ -204,10 +216,17 @@ final class BankDataManager {
                 }
 
                 await MainActor.run {
+                    guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId else { return }
                     setLinkedItems(items)  // Sets property + persists
                     // Drop in-memory accounts for connections the server no longer lists.
                     let serverIds = Set(items.map(\.itemId))
                     accountsByItemId = accountsByItemId.filter { serverIds.contains($0.key) }
+                    if items.isEmpty {
+                        accounts = []
+                        transactions = []
+                        accountsSummary = nil
+                        transactionsByItemId = [:]
+                    }
 
                     // Populate accountsByItemId with embedded accounts (REPLACE, not merge)
                     if !embeddedAccountsByItemId.isEmpty {
@@ -223,7 +242,7 @@ final class BankDataManager {
                         Logger.success("BankDataManager: Populated \(embeddedAccountsByItemId.count) items with \(allAccounts.count) embedded accounts")
 
                         // Mark as refreshed to prevent redundant refreshIfStale
-                        if let userId = currentUserId {
+                        if let userId = requestedUserId {
                             persistence.setLastRefreshAt(Date(), for: userId)
                         }
                     }
@@ -232,22 +251,25 @@ final class BankDataManager {
                 // Keep the disk copy in step with the server: refreshAllAccounts
                 // used to be the only writer, so a bank that changed between
                 // pull-to-refreshes was restored stale on the next launch.
-                if let userId = currentUserId, let persistence = accountPersistence {
+                if let userId = requestedUserId, let persistence = accountPersistence {
                     for (itemId, list) in embeddedAccountsByItemId {
+                        guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
                         await persistence.saveAccounts(list, for: userId, itemId: itemId)
                     }
                 }
                 // Persisted accounts of retired connections would otherwise be
                 // restored on the next launch (2026-09-05).
-                if let userId = currentUserId, let persistence = accountPersistence {
+                if let userId = requestedUserId, let persistence = accountPersistence {
                     let serverIds = Set(items.map(\.itemId))
                     let onDisk = await persistence.loadAllAccounts(for: userId)
+                    guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
                     for staleId in onDisk.keys where !serverIds.contains(staleId) {
                         await persistence.clearAccounts(for: userId, itemId: staleId)
                     }
                 }
                 Logger.success("BankDataManager: Fetched \(items.count) linked items from server")
             } catch {
+                guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId else { return }
                 Logger.error("BankDataManager: Failed to fetch linked items: \(error)")
                 // Fallback: synthesize from accounts if available
                 await synthesizeLinkedItemsFromAccountsIfNeeded()
@@ -339,9 +361,11 @@ final class BankDataManager {
     }
 
     private func restoreAccounts() async {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId, let persistence = accountPersistence else { return }
 
         var accountsByItem = await persistence.loadAllAccounts(for: userId)
+        guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
         // Only items that are still linked: a retired connection's accounts
         // must never come back from disk (2026-09-05).
         if let linked = linkedItems {
@@ -523,9 +547,10 @@ final class BankDataManager {
     // MARK: - Sign Out / Clear Data
 
     func clearAllData() {
-        guard let userId = currentUserId else { return }
+        SessionLifetime.shared.invalidate { }
+        let userId = currentUserId
         Diagnostics.send("sign_out", ["manual_accounts": "\(manualAccounts.count)", "items": "\(accountsByItemId.count)"])
-        SnapshotCache.clear(userId: userId)
+        if let userId { SnapshotCache.clear(userId: userId) }
         hasCompletedInitialLoad = false
         // Manual accounts were never cleared here (2026-09-06): the review
         // account's three mock accounts followed Liam into his own account.
@@ -543,7 +568,7 @@ final class BankDataManager {
         accountsError = nil
         transactionsError = nil
         syncError = nil
-        persistence.clear(for: userId)
+        if let userId { persistence.clear(for: userId) }
         NotificationCenter.default.post(name: .userDataCleared, object: nil)
 
         // Cancel any in-flight refresh tasks
@@ -558,6 +583,7 @@ final class BankDataManager {
 
         // Clear persisted data
         Task {
+            guard let userId else { return }
             if let txnPersistence = transactionPersistence {
                 await txnPersistence.clearTransactions(for: userId)
             }
@@ -566,6 +592,13 @@ final class BankDataManager {
             }
         }
 
+        for task in inflightItemFetches.values { task.cancel() }
+        inflightItemFetches = [:]
+        inflightAllFetch?.cancel()
+        inflightAllFetch = nil
+        isLoadingAccounts = false
+        isLoadingTransactions = false
+        isSyncing = false
         currentUserId = nil
         Logger.info("BankDataManager: Cleared all bank data")
     }
@@ -697,6 +730,7 @@ final class BankDataManager {
     /// Fetches bank accounts from the API
     /// - Parameter forceRefresh: If true, bypasses cache and fetches fresh data
     func fetchAccounts(forceRefresh: Bool = false) async throws {
+        let generation = SessionLifetime.shared.current
         if !forceRefresh,
            accounts != nil,
            let lastFetched = accountsLastFetched,
@@ -706,7 +740,7 @@ final class BankDataManager {
 
         isLoadingAccounts = true
         accountsError = nil
-        defer { isLoadingAccounts = false }
+        defer { if SessionLifetime.shared.isCurrent(generation) { isLoadingAccounts = false } }
 
         do {
             Logger.info("Fetching accounts from API...")
@@ -714,13 +748,16 @@ final class BankDataManager {
 
             Logger.success("Fetched \(fetchedAccounts.count) accounts")
 
+            try SessionLifetime.shared.check(generation)
             accounts = fetchedAccounts
             accountsLastFetched = Date()
         } catch let error as BankError {
+            try SessionLifetime.shared.check(generation)
             Logger.error("BankError fetching accounts: \(error)")
             accountsError = error
             throw error
         } catch {
+            try SessionLifetime.shared.check(generation)
             Logger.error("Unknown error fetching accounts: \(error)")
             let bankError = BankError.networkError
             accountsError = bankError
@@ -738,9 +775,13 @@ final class BankDataManager {
     /// regular refresh paths so the lists stay current. Failures log
     /// but don't surface — manual accounts are non-critical.
     func refreshManualAccounts() async {
+        guard let userId = currentUserId else { return }
+        let generation = SessionLifetime.shared.current
         do {
-            manualAccounts = try await ManualAccountService.shared.list()
-            SnapshotCache.save(manualAccounts, key: "manual_accounts", userId: currentUserId)
+            let result = try await ManualAccountService.shared.list()
+            guard currentUserId == userId, SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
+            manualAccounts = result
+            SnapshotCache.save(result, key: "manual_accounts", userId: userId)
             Logger.success("BankDataManager: loaded \(manualAccounts.count) manual account(s)")
         } catch {
             Logger.warning("BankDataManager: refreshManualAccounts failed — \(error)")
@@ -825,6 +866,7 @@ final class BankDataManager {
         offset: Int? = nil,
         forceRefresh: Bool = false
     ) async throws {
+        let generation = SessionLifetime.shared.current
         let cacheKey = "\(accountId ?? "all")-\(limit ?? 0)-\(offset ?? 0)"
 
         if !forceRefresh,
@@ -837,7 +879,7 @@ final class BankDataManager {
 
         isLoadingTransactions = true
         transactionsError = nil
-        defer { isLoadingTransactions = false }
+        defer { if SessionLifetime.shared.isCurrent(generation) { isLoadingTransactions = false } }
 
         do {
             let fetchedTransactions = try await bankService.getTransactions(
@@ -846,13 +888,16 @@ final class BankDataManager {
                 offset: offset
             )
 
+            try SessionLifetime.shared.check(generation)
             transactions = fetchedTransactions
             transactionsLastFetched = Date()
             transactionsCacheKey = cacheKey
         } catch let error as BankError {
+            try SessionLifetime.shared.check(generation)
             transactionsError = error
             throw error
         } catch {
+            try SessionLifetime.shared.check(generation)
             let bankError = BankError.networkError
             transactionsError = bankError
             throw bankError
@@ -870,6 +915,7 @@ final class BankDataManager {
         itemId: String,
         limit: Int = 50
     ) async throws -> [Transaction] {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId else {
             throw BankError.unauthorized
         }
@@ -888,8 +934,10 @@ final class BankDataManager {
             if !cached.isEmpty || !needsFullSync {
                 // Trigger background refresh if stale
                 if await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                    try SessionLifetime.shared.check(generation)
                     Task { await backgroundRefreshTransactions(itemId: itemId) }
                 }
+                try SessionLifetime.shared.check(generation)
                 return cached
             }
         }
@@ -901,12 +949,15 @@ final class BankDataManager {
             // Trigger background refresh if stale
             if let persistence = transactionPersistence,
                await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                try SessionLifetime.shared.check(generation)
                 Task { await backgroundRefreshTransactions(itemId: itemId) }
             }
+            try SessionLifetime.shared.check(generation)
             return Array(filtered.prefix(limit))
         }
 
         // 3. No cache: fetch from network (blocking)
+        try SessionLifetime.shared.check(generation)
         return try await fetchAndPersistTransactions(itemId: itemId, accountId: accountId, limit: limit)
     }
 
@@ -921,16 +972,19 @@ final class BankDataManager {
         before: Date,
         limit: Int = 50
     ) async -> [Transaction] {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId, let persistence = transactionPersistence else {
             return []
         }
 
-        return await persistence.loadTransactions(
+        let result = await persistence.loadTransactions(
             for: userId,
             accountId: accountId,
             limit: limit,
             before: before
         )
+        guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return [] }
+        return result
     }
 
     /// Fetches transactions for a specific bank item
@@ -939,6 +993,7 @@ final class BankDataManager {
     ///   - forceRefresh: If true, bypasses cache and fetches fresh data
     /// - Returns: Array of transactions for that item
     func fetchTransactionsForItem(itemId: String, forceRefresh: Bool = false) async throws -> [Transaction] {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId else {
             throw BankError.unauthorized
         }
@@ -950,6 +1005,7 @@ final class BankDataManager {
                await persistence.needsRecentSync(for: userId, itemId: itemId) {
                 Task { await backgroundRefreshTransactions(itemId: itemId) }
             }
+            try SessionLifetime.shared.check(generation)
             return cached
         }
 
@@ -961,11 +1017,13 @@ final class BankDataManager {
             // indistinguishable from a wiped cache (a skipped sync used to
             // persist []), so it goes to the network instead.
             if !persisted.isEmpty {
+                try SessionLifetime.shared.check(generation)
                 transactionsByItemId[itemId] = persisted
                 // Trigger background refresh if stale
                 if await persistence.needsRecentSync(for: userId, itemId: itemId) {
                     Task { await backgroundRefreshTransactions(itemId: itemId) }
                 }
+                try SessionLifetime.shared.check(generation)
                 return persisted
             }
         }
@@ -981,19 +1039,24 @@ final class BankDataManager {
         let task = Task<[Transaction], Error> { [weak self] in
             guard let self else { return [] }
             let fetched = try await self.bankService.getTransactionsForItem(itemId: itemId)
+            try SessionLifetime.shared.check(generation)
             return await self.acceptItemTransactions(fetched, itemId: itemId, userId: userId, fullSync: true)
         }
         inflightItemFetches[itemId] = task
         defer {
-            inflightItemFetches[itemId] = nil
-            isLoadingTransactions = false
+            if SessionLifetime.shared.isCurrent(generation) {
+                inflightItemFetches[itemId] = nil
+                isLoadingTransactions = false
+            }
         }
         do {
             return try await task.value
         } catch let error as BankError {
+            try SessionLifetime.shared.check(generation)
             transactionsError = error
             throw error
         } catch {
+            try SessionLifetime.shared.check(generation)
             let bankError = BankError.networkError
             transactionsError = bankError
             throw bankError
@@ -1006,6 +1069,8 @@ final class BankDataManager {
     /// non-empty cache (the backend returns [] when a sync is skipped, and
     /// a bank with transactions does not lose them all in one sync).
     private func acceptItemTransactions(_ fetched: [Transaction], itemId: String, userId: String, fullSync: Bool) async -> [Transaction] {
+        guard currentUserId == userId, !Task.isCancelled else { return [] }
+        let generation = SessionLifetime.shared.current
         let existing = transactionsByItemId[itemId] ?? []
         if fetched.isEmpty && !existing.isEmpty {
             Logger.warning("BankDataManager: empty transaction list for item \(itemId) ignored; keeping \(existing.count) cached")
@@ -1017,6 +1082,7 @@ final class BankDataManager {
             if fullSync { await persistence.markFullSyncComplete(for: userId, itemId: itemId) }
             await persistence.markRecentSyncComplete(for: userId, itemId: itemId)
         }
+        guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return [] }
         lastTransactionSyncAt = Date()
         return fetched
     }
@@ -1028,6 +1094,7 @@ final class BankDataManager {
     /// per-institution lists (forceRefresh runs one sync per item first).
     /// Never returns an empty list while a cached one exists.
     func allTransactions(forceRefresh: Bool, limit: Int = 200) async -> [Transaction] {
+        let generation = SessionLifetime.shared.current
         if let inflight = inflightAllFetch { return await inflight.value }
         let task = Task<[Transaction], Never> { [weak self] in
             guard let self else { return [] }
@@ -1061,13 +1128,14 @@ final class BankDataManager {
                     .prefix(limit)
                     .map { $0 }
             }
+            guard SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return [] }
             if result.isEmpty, let cached = self.transactions, !cached.isEmpty { return cached }
             self.transactions = result
             self.transactionsLastFetched = Date()
             return result
         }
         inflightAllFetch = task
-        defer { inflightAllFetch = nil }
+        defer { if SessionLifetime.shared.isCurrent(generation) { inflightAllFetch = nil } }
         return await task.value
     }
 
@@ -1088,6 +1156,7 @@ final class BankDataManager {
     /// Refreshes transactions in background without blocking UI
     /// - Parameter itemId: The internal bank item UUID
     private func backgroundRefreshTransactions(itemId: String) async {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId else { return }
 
         isSyncing = true
@@ -1096,6 +1165,7 @@ final class BankDataManager {
         do {
             if inflightItemFetches[itemId] != nil { return }
             let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
+            guard SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
             _ = await acceptItemTransactions(fetchedTransactions, itemId: itemId, userId: userId, fullSync: false)
 
             Logger.debug("BankDataManager: Background refresh completed for item \(itemId)")
@@ -1114,16 +1184,18 @@ final class BankDataManager {
         accountId: String,
         limit: Int
     ) async throws -> [Transaction] {
+        let generation = SessionLifetime.shared.current
         guard let userId = currentUserId else {
             throw BankError.unauthorized
         }
 
         isLoadingTransactions = true
         transactionsError = nil
-        defer { isLoadingTransactions = false }
+        defer { if SessionLifetime.shared.isCurrent(generation) { isLoadingTransactions = false } }
 
         do {
             let fetchedTransactions = try await bankService.getTransactionsForItem(itemId: itemId)
+            try SessionLifetime.shared.check(generation)
             transactionsByItemId[itemId] = fetchedTransactions
 
             // Persist for future instant display
@@ -1138,9 +1210,11 @@ final class BankDataManager {
             let filtered = fetchedTransactions.filter { $0.accountId == accountId }
             return Array(filtered.prefix(limit))
         } catch let error as BankError {
+            try SessionLifetime.shared.check(generation)
             transactionsError = error
             throw error
         } catch {
+            try SessionLifetime.shared.check(generation)
             let bankError = BankError.networkError
             transactionsError = bankError
             throw bankError

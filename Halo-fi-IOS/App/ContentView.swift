@@ -28,9 +28,19 @@ struct ContentView: View {
     @AppStorage("themeMode") private var themeMode: String = "System"
 
     var body: some View {
-        MainTabView()
-            .dynamicTypeSize(.large ... .accessibility3)
-            .environment(\.haloHighContrast, themeMode == "High-Contrast")
+        Group {
+            #if DEBUG
+            if UITestArchetype.isActive,
+               let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-checkout=") }) {
+                CheckoutFixtureHost(mode: String(argument.dropFirst("--ui-test-checkout=".count)))
+            } else {
+                MainTabView()
+            }
+            #else
+            MainTabView()
+            #endif
+        }
+        .environment(\.haloHighContrast, themeMode == "High-Contrast")
     }
 }
 

@@ -44,7 +44,9 @@ enum BudgetAccessibilitySummary {
             // SSI users — lead with the engine's pre-baked §10
             // narration when available (Phase 6). It already
             // covers resources + projected check + 1619(b) callout.
-            if let voice = overview.ssiStatus.voiceSummary,
+            if overview.ssiStatus.income?.paymentEstimateBasis == "income_only",
+               overview.ssiStatus.income?.paymentSuspendedOverResources != true,
+               let voice = overview.ssiStatus.voiceSummary,
                !voice.isEmpty {
                 sentences.append(voice)
             } else {
@@ -86,7 +88,7 @@ enum BudgetAccessibilitySummary {
         let limit = wholeDollars(res.limitCents)
         if status == "over" {
             let overBy = wholeDollars(max(0, res.currentCents - res.limitCents))
-            return "Heads up — your countable resources are \(current), which is \(overBy) over the \(limit) limit."
+            return "Resource estimate: your countable resources are \(current), which is \(overBy) over the \(limit) limit."
         }
         let room = wholeDollars(max(0, res.limitCents - res.currentCents))
         return "Countable resources \(current), \(room) under the \(limit) limit."
@@ -94,11 +96,11 @@ enum BudgetAccessibilitySummary {
 
     private static func legacyIncomeLine(_ income: SSIIncome?) -> String? {
         guard let income else { return nil }
+        if income.paymentSuspendedOverResources == true {
+            return "Payment estimate unavailable. " + SSIIncome.estimateExplanation
+        }
         if let projected = income.projectedPaymentCents {
-            if income.eligibleForCash == false {
-                return "Your countable income is high enough that this month's SSI check would be zero."
-            }
-            return "Projected SSI payment about \(wholeDollars(projected))."
+            return "Income-only SSI estimate about \(wholeDollars(projected)). " + SSIIncome.estimateExplanation
         }
         return nil
     }

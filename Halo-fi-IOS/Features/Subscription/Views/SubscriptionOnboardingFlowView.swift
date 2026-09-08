@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import RevenueCatUI
 
 struct SubscriptionOnboardingFlowView: View {
   @Environment(\.dismiss) private var dismiss
@@ -96,24 +95,6 @@ struct SubscriptionOnboardingFlowView: View {
       }
       .navigationBarHidden(true)
     }
-    .onChange(of: subscriptionService.hasActiveSubscription) { _, newValue in
-      // Automatically proceed to next step when subscription becomes active
-      if newValue && showingSubscriptionView {
-        Task {
-          // Small delay to ensure subscription status is fully updated
-          try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-          await MainActor.run {
-            // Call completion handler if provided (for unified onboarding flow)
-            // Otherwise show Plaid onboarding
-            if let onComplete = onComplete {
-              onComplete()
-            } else {
-              showingPlaidOnboarding = true
-            }
-          }
-        }
-      }
-    }
     .navigationDestination(isPresented: $showingPlaidOnboarding) {
       PlaidOnboardingView(
         onComplete: { showingPlaidOnboarding = false },
@@ -123,35 +104,16 @@ struct SubscriptionOnboardingFlowView: View {
       .navigationBarTitleDisplayMode(.inline)
     }
     .fullScreenCover(isPresented: $showingSubscriptionView) {
-      PaywallView(displayCloseButton: false)
-        .onPurchaseCompleted { _ in
-          Task {
-            await subscriptionService.checkSubscriptionStatus()
-          }
-          if let onComplete = onComplete {
-            onComplete()
-          } else {
-            showingPlaidOnboarding = true
-          }
+      AccountSubscriptionPaywall(displayCloseButton: false) {
+        showingSubscriptionView = false
+        if let onComplete {
+          onComplete()
+        } else {
+          showingPlaidOnboarding = true
         }
-        .onRestoreCompleted { _ in
-          Task {
-            await subscriptionService.checkSubscriptionStatus()
-          }
-          if subscriptionService.hasActiveSubscription {
-            if let onComplete = onComplete {
-              onComplete()
-            } else {
-              showingPlaidOnboarding = true
-            }
-          }
-        }
-        // App Store 3.1.2(c): Terms of Use (EULA) + Privacy Policy must be
-        // reachable inside the purchase flow.
-        .safeAreaInset(edge: .bottom) {
-          SubscriptionLegalLinks()
-        }
+      }
     }
+
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Connect Bank")
     .accessibilityHint("Step 3 of 3 in the setup process")
@@ -166,12 +128,12 @@ struct SubscriptionLegalLinks: View {
   private let privacyURL = URL(string: "https://halofiapp.com/privacy")!
 
   var body: some View {
-    HStack(spacing: 20) {
-      Link("Terms of Use", destination: termsURL)
-      Link("Privacy Policy", destination: privacyURL)
+    VStack(spacing: 8) {
+      Link(destination: termsURL) { SubscriptionActionLabel("Terms of Use") }
+      Link(destination: privacyURL) { SubscriptionActionLabel("Privacy Policy") }
     }
-    .font(.footnote)
-    .foregroundStyle(.secondary)
+    .font(.body)
+    .tint(Color.primary)
     .padding(.vertical, 10)
     .frame(maxWidth: .infinity)
     .background(.thinMaterial)

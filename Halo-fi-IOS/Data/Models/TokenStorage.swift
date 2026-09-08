@@ -66,9 +66,11 @@ struct TokenStorage: TokenStorageProtocol {
   // MARK: - Clear Tokens
   
   func clearTokens() {
-    deleteFromKeychain(key: accessTokenAccount)
-    deleteFromKeychain(key: refreshTokenAccount)
-    deleteFromKeychain(key: tokenExpiryAccount)
+    SessionLifetime.shared.invalidate {
+      deleteFromKeychain(key: accessTokenAccount)
+      deleteFromKeychain(key: refreshTokenAccount)
+      deleteFromKeychain(key: tokenExpiryAccount)
+    }
   }
   
   // MARK: - Keychain Helper Methods

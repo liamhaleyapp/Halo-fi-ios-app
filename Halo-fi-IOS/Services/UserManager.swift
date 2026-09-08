@@ -15,7 +15,9 @@ extension Notification.Name {
 @Observable
 @MainActor
 final class UserManager {
-    var currentUser: User?
+    var currentUser: User? {
+        didSet { SubscriptionSession.shared.selectUser(currentUser?.id) }
+    }
     var isAuthenticated = false {
         didSet { PushRegistrar.shared.isSignedIn = isAuthenticated }
     }
@@ -281,6 +283,8 @@ final class UserManager {
     }
 
     func signIn(email: String, password: String) async throws {
+        let generation = SessionLifetime.shared.current
+        var operationGeneration = generation
         isLoading = true
 
         do {
@@ -289,16 +293,19 @@ final class UserManager {
                 password: password
             )
 
+            try SessionLifetime.shared.check(generation)
             guard let session = authResponse.session,
                   let authUser = authResponse.authUser else {
                 throw AuthError.invalidResponse
             }
 
-            tokenStorage.saveTokensWithExpiration(
-                accessToken: session.accessToken,
-                refreshToken: session.refreshToken,
-                expiresAt: session.expiresAt
-            )
+            SessionLifetime.shared.invalidate {
+                tokenStorage.saveTokensWithExpiration(
+                    accessToken: session.accessToken,
+                    refreshToken: session.refreshToken,
+                    expiresAt: session.expiresAt
+                )
+            }
 
             Logger.debug("Token expires at: \(session.expirationDate), duration: \(formatTokenDuration(session.expiresIn))")
 
@@ -311,17 +318,20 @@ final class UserManager {
             let user = createUser(from: authUser)
             applySignInState(user: user)
 
+            operationGeneration = SessionLifetime.shared.current
+            let signedInGeneration = operationGeneration
             do {
-                _ = try await Purchases.shared.logIn(user.id)
+                try await SubscriptionSession.shared.prepare()
             } catch {
                 Logger.warning("RevenueCat login failed: \(error.localizedDescription)")
             }
 
+            try SessionLifetime.shared.check(signedInGeneration)
             Task {
                 try? await fetchUserProfile()
             }
         } catch {
-            isLoading = false
+            if SessionLifetime.shared.isCurrent(operationGeneration) { isLoading = false }
             throw error
         }
     }
@@ -333,6 +343,8 @@ final class UserManager {
         firstName: String? = nil,
         lastName: String? = nil
     ) async throws {
+        let generation = SessionLifetime.shared.current
+        var operationGeneration = generation
         isLoading = true
 
         do {
@@ -344,16 +356,19 @@ final class UserManager {
                 lastName: lastName
             )
 
+            try SessionLifetime.shared.check(generation)
             guard let session = authResponse.session,
                   let authUser = authResponse.authUser else {
                 throw AuthError.invalidResponse
             }
 
-            tokenStorage.saveTokensWithExpiration(
-                accessToken: session.accessToken,
-                refreshToken: session.refreshToken,
-                expiresAt: session.expiresAt
-            )
+            SessionLifetime.shared.invalidate {
+                tokenStorage.saveTokensWithExpiration(
+                    accessToken: session.accessToken,
+                    refreshToken: session.refreshToken,
+                    expiresAt: session.expiresAt
+                )
+            }
 
             // Remember which OAuth provider was used so SignInView can show
             // only that button on subsequent sign-ins.
@@ -362,24 +377,28 @@ final class UserManager {
             let user = createUser(from: authUser)
             applySignInState(user: user)
 
+            operationGeneration = SessionLifetime.shared.current
+            let signedInGeneration = operationGeneration
             do {
-                _ = try await Purchases.shared.logIn(user.id)
+                try await SubscriptionSession.shared.prepare()
             } catch {
                 Logger.warning("RevenueCat login failed: \(error.localizedDescription)")
             }
 
+            try SessionLifetime.shared.check(signedInGeneration)
             Task {
                 try? await fetchUserProfile()
             }
         } catch {
-            isLoading = false
+            if SessionLifetime.shared.isCurrent(operationGeneration) { isLoading = false }
             throw error
         }
     }
 
     func signOut() {
         // The server stops pushing to this device.
-        Task { await PushRegistrar.shared.forget() }
+        PushRegistrar.shared.forget()
+        ReminderNotificationScheduler.shared.clearForSignOut()
         // Clear bank data first (before clearing user)
         bankDataManager?.clearAllData()
         // WP7 — the chat thread can carry balances; it leaves with the user.
@@ -390,13 +409,6 @@ final class UserManager {
         // enrolled per-device so the user can sign back in quickly. The
         // explicit Settings toggle wipes it; account deletion does too.
 
-        Task {
-            do {
-                _ = try await Purchases.shared.logOut()
-            } catch {
-                Logger.warning("RevenueCat logout failed: \(error.localizedDescription)")
-            }
-        }
 
         // Clear this user's local AI-consent mirror before dropping
         // currentUser (the key is derived from the user id). The server
@@ -1054,8 +1066,10 @@ final class UserManager {
     // MARK: - Token Management
 
     private func refreshTokensIfNeeded(refreshToken: String) async {
+        let generation = SessionLifetime.shared.current
         do {
             let response = try await authService.refreshToken(refreshToken: refreshToken)
+            try SessionLifetime.shared.check(generation)
 
             // Save new tokens
             tokenStorage.saveTokensWithExpiration(
@@ -1076,8 +1090,9 @@ final class UserManager {
 
             Logger.debug("Token refresh successful during app launch")
         } catch {
+            guard SessionLifetime.shared.isCurrent(generation) else { return }
             Logger.error("Token refresh failed during app launch: \(error.localizedDescription)")
-            signOut()
+            if NetworkService.isRejectedRefresh(error) { signOut() }
         }
     }
 }

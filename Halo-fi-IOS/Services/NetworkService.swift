@@ -12,25 +12,17 @@ import Foundation
 /// Coordinates token refresh to prevent multiple simultaneous refresh calls.
 /// Uses Swift actor for thread-safe coordination since NetworkService is not @MainActor.
 private actor TokenRefreshCoordinator {
-    private var refreshTask: Task<RefreshTokenResponse, Error>?
+    private struct Key: Hashable { let generation: UUID; let token: String }
+    private var tasks: [Key: Task<Void, Error>] = [:]
 
-    /// Ensures only one refresh happens at a time. Concurrent callers await the same task.
-    func refreshIfNeeded(
-        using refreshToken: String,
-        refreshCall: @escaping (String) async throws -> RefreshTokenResponse
-    ) async throws -> RefreshTokenResponse {
-        // If refresh already in progress, await it
-        if let existingTask = refreshTask {
-            return try await existingTask.value
-        }
-
-        // Start new refresh
-        let task = Task {
-            defer { refreshTask = nil }
-            return try await refreshCall(refreshToken)
-        }
-        refreshTask = task
-        return try await task.value
+    func refresh(using token: String, generation: UUID,
+                 operation: @escaping () async throws -> Void) async throws {
+        let key = Key(generation: generation, token: token)
+        if let task = tasks[key] { return try await task.value }
+        let task = Task { try await operation() }
+        tasks[key] = task
+        defer { tasks[key] = nil }
+        try await task.value
     }
 }
 
@@ -50,15 +42,18 @@ final class NetworkService: NetworkServiceProtocol {
     private let session: URLSession
     private let tokenStorage: TokenStorageProtocol
     private let refreshCoordinator = TokenRefreshCoordinator()
+    private let lifetime: SessionLifetime
 
     init(
         baseURL: String = "https://halofiapp-production.up.railway.app",
         session: URLSession = .shared,
-        tokenStorage: TokenStorageProtocol = TokenStorage()
+        tokenStorage: TokenStorageProtocol = TokenStorage(),
+        lifetime: SessionLifetime = .shared
     ) {
         self.baseURL = baseURL
         self.session = session
         self.tokenStorage = tokenStorage
+        self.lifetime = lifetime
     }
 
     // MARK: - Authenticated Requests
@@ -69,130 +64,87 @@ final class NetworkService: NetworkServiceProtocol {
         body: Data? = nil,
         responseType: T.Type
     ) async throws -> T {
-        // First attempt
-        do {
-            return try await performAuthenticatedRequest(
-                endpoint: endpoint,
-                method: method,
-                body: body,
-                responseType: responseType
-            )
-        } catch AuthError.tokenExpired {
-            // Attempt refresh and retry
-            guard let refreshToken = tokenStorage.getRefreshToken() else {
-                Logger.error("No refresh token available for retry")
-                throw AuthError.tokenExpired
-            }
-
-            do {
-                let refreshResponse = try await refreshCoordinator.refreshIfNeeded(
-                    using: refreshToken,
-                    refreshCall: performTokenRefresh
-                )
-
-                // Save new tokens
-                tokenStorage.saveTokensWithExpiration(
-                    accessToken: refreshResponse.accessToken,
-                    refreshToken: refreshResponse.refreshToken,
-                    expiresAt: refreshResponse.expiresAt
-                )
-
-                Logger.debug("Token refreshed successfully, retrying request")
-
-                // Retry original request with new token
-                return try await performAuthenticatedRequest(
-                    endpoint: endpoint,
-                    method: method,
-                    body: body,
-                    responseType: responseType
-                )
-            } catch {
-                Logger.error("Token refresh failed for endpoint=\(endpoint): \(error.localizedDescription) — signing out")
-                // Notify observers that session is invalid
-                await notifySessionExpired()
-                throw AuthError.tokenExpired
-            }
+        let generation = lifetime.current
+        let data = try await authenticatedData(endpoint: endpoint, method: method, body: body, generation: generation)
+        return try lifetime.withCurrent(generation) {
+            try decodeSuccessResponse(data: data, responseType: responseType)
         }
     }
-
-    /// Performs the actual authenticated request without retry logic.
-    private func performAuthenticatedRequest<T: Codable>(
-        endpoint: String,
-        method: HTTPMethod,
-        body: Data?,
-        responseType: T.Type
-    ) async throws -> T {
-        let request = try createAuthenticatedRequest(
-            endpoint: endpoint,
-            method: method,
-            body: body
-        )
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            Logger.error("Invalid HTTP response")
-            throw AuthError.networkError
-        }
-
-        Logger.networkResponse(statusCode: httpResponse.statusCode, dataSize: data.count)
-
-        if httpResponse.statusCode == 401 {
-            Logger.error("401 Unauthorized - Token expired or invalid")
-            throw AuthError.tokenExpired
-        }
-
-        return try handleResponse(data: data, httpResponse: httpResponse, responseType: T.self)
-    }
-
-    // MARK: - Authenticated raw-data requests (Phase 9 — CSV exports)
 
     func authenticatedRawDataRequest(endpoint: String) async throws -> Data {
-        do {
-            return try await performAuthenticatedRawDataRequest(endpoint: endpoint)
-        } catch AuthError.tokenExpired {
-            guard let refreshToken = tokenStorage.getRefreshToken() else {
-                Logger.error("No refresh token available for raw-data retry")
-                throw AuthError.tokenExpired
-            }
-            do {
-                let refreshResponse = try await refreshCoordinator.refreshIfNeeded(
-                    using: refreshToken,
-                    refreshCall: performTokenRefresh
-                )
-                tokenStorage.saveTokensWithExpiration(
-                    accessToken: refreshResponse.accessToken,
-                    refreshToken: refreshResponse.refreshToken,
-                    expiresAt: refreshResponse.expiresAt
-                )
-                return try await performAuthenticatedRawDataRequest(endpoint: endpoint)
-            } catch {
-                Logger.error("Token refresh failed during raw-data fetch for endpoint=\(endpoint): \(error.localizedDescription) — signing out")
-                await notifySessionExpired()
-                throw AuthError.tokenExpired
-            }
-        }
+        let generation = lifetime.current
+        return try await authenticatedData(endpoint: endpoint, method: .GET, body: nil, generation: generation)
     }
 
-    private func performAuthenticatedRawDataRequest(endpoint: String) async throws -> Data {
-        let request = try createAuthenticatedRequest(
-            endpoint: endpoint,
-            method: .GET,
-            body: nil
-        )
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            Logger.error("Invalid HTTP response on raw-data fetch")
-            throw AuthError.networkError
+    private func authenticatedData(endpoint: String, method: HTTPMethod, body: Data?, generation: UUID) async throws -> Data {
+        for attempt in 0...1 {
+            try Task.checkCancellation()
+            let request = try lifetime.withCurrent(generation) {
+                try createAuthenticatedRequest(endpoint: endpoint, method: method, body: body)
+            }
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch {
+                try lifetime.check(generation)
+                throw error
+            }
+            try lifetime.check(generation)
+            guard let http = response as? HTTPURLResponse else { throw AuthError.networkError }
+            if http.statusCode == 401 {
+                if attempt == 0 {
+                    try await refreshAfterUnauthorized(request: request, generation: generation)
+                    continue
+                }
+                await notifySessionExpired(generation: generation)
+                throw AuthError.tokenExpired
+            }
+            guard (200...299).contains(http.statusCode) else {
+                throw parseErrorResponse(data: data, statusCode: http.statusCode)
+            }
+            return data
         }
-        Logger.networkResponse(statusCode: httpResponse.statusCode, dataSize: data.count)
-        if httpResponse.statusCode == 401 {
-            throw AuthError.tokenExpired
+        throw AuthError.tokenExpired
+    }
+
+    private func refreshAfterUnauthorized(request: URLRequest, generation: UUID) async throws {
+        let refreshToken: String? = try lifetime.withCurrent(generation) {
+            // Another request in this same session may already have refreshed.
+            if let access = tokenStorage.getAccessToken(),
+               request.value(forHTTPHeaderField: "Authorization") != "Bearer \(access)" { return nil }
+            guard let token = tokenStorage.getRefreshToken() else { throw AuthError.tokenExpired }
+            return token
         }
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw parseErrorResponse(data: data, statusCode: httpResponse.statusCode)
+        guard let refreshToken else { return }
+        do {
+            try await refreshCoordinator.refresh(using: refreshToken, generation: generation) { [self] in
+                try lifetime.check(generation)
+                let response = try await performTokenRefresh(refreshToken)
+                try lifetime.withCurrent(generation) {
+                    tokenStorage.saveTokensWithExpiration(accessToken: response.accessToken,
+                        refreshToken: response.refreshToken, expiresAt: response.expiresAt)
+                }
+            }
+        } catch {
+            try lifetime.check(generation)
+            // Connectivity, server and decoding failures do not invalidate credentials.
+            if Self.isRejectedRefresh(error) {
+                await notifySessionExpired(generation: generation)
+                throw AuthError.tokenExpired
+            }
+            throw error
         }
-        return data
+        try lifetime.check(generation)
+    }
+
+    static func isRejectedRefresh(_ error: Error) -> Bool {
+        guard let auth = error as? AuthError else { return false }
+        switch auth {
+        case .invalidCredentials, .tokenExpired: return true
+        case .serverError(let status, _): return status == 400 || status == 401 || status == 403
+        default: return false
+        }
     }
 
     /// Performs token refresh via the refresh endpoint.
@@ -210,8 +162,24 @@ final class NetworkService: NetworkServiceProtocol {
 
     /// Notifies the app that the session has expired and user should be signed out.
     @MainActor
-    private func notifySessionExpired() {
+    private func notifySessionExpired(generation: UUID) {
+        guard lifetime.isCurrent(generation) else { return }
         NotificationCenter.default.post(name: .sessionExpired, object: nil)
+    }
+
+    /// Prepare sign-out cleanup while the departing account's token still
+    /// exists. Sending this request never reads or refreshes a later session.
+    func prepareDeviceRevocation(deviceToken: String) throws -> URLRequest {
+        var request = try createAuthenticatedRequest(endpoint: "/me/devices/\(deviceToken)", method: .DELETE, body: nil)
+        request.timeoutInterval = 15
+        return request
+    }
+
+    func sendDeviceRevocation(_ request: URLRequest) async throws {
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw AuthError.networkError
+        }
     }
 
     // MARK: - Public Requests (No Authentication)

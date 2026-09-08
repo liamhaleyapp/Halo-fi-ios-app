@@ -249,3 +249,69 @@ enum UITestArchetype: String, CaseIterable {
         return try? JSONDecoder().decode(BudgetOverview.self, from: Data(json.utf8))
     }
 }
+
+#if DEBUG
+import SwiftUI
+import StoreKit
+import RevenueCat
+
+/// Entirely local checkout fixture. Only reachable alongside the existing
+/// debug-only UI-test archetype flag; never sends SDK billing requests.
+final class CheckoutFixturePeriod: SKProductSubscriptionPeriod {
+    override var numberOfUnits: Int { 1 }
+    override var unit: SKProduct.PeriodUnit { .month }
+}
+
+final class CheckoutFixtureProduct: SKProduct {
+    override var productIdentifier: String { "checkout.fixture.pro" }
+    override var localizedTitle: String { "HaloFi Pro" }
+    override var localizedDescription: String { "A sample plan for checkout testing." }
+    override var price: NSDecimalNumber { NSDecimalNumber(string: "9.99") }
+    override var priceLocale: Locale { Locale(identifier: "en_US") }
+    override var subscriptionPeriod: SKProductSubscriptionPeriod? { CheckoutFixturePeriod() }
+}
+
+@MainActor
+final class CheckoutFixtureClient: SubscriptionClient {
+    var appUserID: String?
+    let mode: String
+    init(mode: String) { self.mode = mode }
+    func logIn(_ userID: String) async throws { appUserID = userID }
+    func logOut() async throws { appUserID = nil }
+    func packages() async throws -> [Package] {
+        if mode == "empty" { return [] }
+        return [Package(identifier: "fixture-pro", packageType: .monthly,
+                        storeProduct: StoreProduct(sk1Product: CheckoutFixtureProduct()),
+                        presentedOfferingContext: .init(offeringIdentifier: "fixture"), webCheckoutUrl: nil)]
+    }
+    func customerInfo() async throws -> CustomerInfo {
+        let data = Data(#"{"request_date":"2026-09-07T00:00:00Z","subscriber":{"first_seen":"2026-09-01T00:00:00Z","original_app_user_id":"checkout-fixture","subscriptions":{},"non_subscriptions":{},"entitlements":{}}}"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(CustomerInfo.self, from: data)
+    }
+    func purchase(_ package: Package) async throws -> (CustomerInfo, Bool) {
+        if mode == "pending" { throw ErrorCode.paymentPendingError }
+        return (try await customerInfo(), true)
+    }
+    func restore() async throws -> CustomerInfo {
+        if mode == "empty" { throw URLError(.notConnectedToInternet) }
+        return try await customerInfo()
+    }
+    func introEligible(_ productID: String) async -> Bool { false }
+}
+
+struct CheckoutFixtureHost: View {
+    @State private var service: SubscriptionService
+    init(mode: String) {
+        let session = SubscriptionSession(client: CheckoutFixtureClient(mode: mode), lifetime: SessionLifetime())
+        session.selectUser("checkout-fixture")
+        _service = State(initialValue: SubscriptionService(session: session, pendingChange: { _ in nil }))
+    }
+    var body: some View {
+        SubscriptionCheckoutView(service: service, onComplete: {})
+            .dynamicTypeSize(ProcessInfo.processInfo.arguments.contains("--ui-test-checkout-large") ? .accessibility5 : .large)
+    }
+}
+#endif

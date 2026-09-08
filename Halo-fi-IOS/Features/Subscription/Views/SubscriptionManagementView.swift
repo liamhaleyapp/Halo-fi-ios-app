@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import RevenueCatUI
 
 struct SubscriptionManagementView: View {
   @Environment(SubscriptionService.self) private var subscriptionService
@@ -31,10 +30,11 @@ struct SubscriptionManagementView: View {
             .accessibilityHidden(true)
 
           VStack(alignment: .leading, spacing: 4) {
-            Text("Current Plan")
+            Text(subscriptionService.statusError == nil ? "Current Plan" : "Last Known Plan")
               .font(.subheadline)
               .foregroundColor(.haloTextSecondary)
-            Text(subscriptionService.currentSubscription.displayName)
+            Text(!subscriptionService.hasActiveSubscription && subscriptionService.customerInfo == nil
+                 ? "Not available" : subscriptionService.currentSubscription.displayName)
               .font(.headline)
               .foregroundColor(.haloTextPrimary)
           }
@@ -51,13 +51,13 @@ struct SubscriptionManagementView: View {
                   .font(.caption)
                   .foregroundColor(.haloTextSecondary)
               } else {
-                Text("Renews \(renewalText)")
+                Text("\(subscriptionService.willRenew ? "Renews" : "Access until") \(renewalText)")
                   .font(.caption)
                   .foregroundColor(.haloTextSecondary)
               }
             }
           } else {
-            Text("Inactive")
+            Text(subscriptionService.customerInfo == nil ? "Not checked" : "Inactive")
               .font(.caption)
               .foregroundColor(.red)
           }
@@ -66,6 +66,15 @@ struct SubscriptionManagementView: View {
         .background(Color.haloSecondaryBackground)
         .cornerRadius(16)
         .accessibilityElement(children: .combine)
+
+        if let message = subscriptionService.statusError {
+          Text(message)
+            .foregroundColor(.haloTextPrimary)
+          Button("Retry subscription check") {
+            Task { await subscriptionService.checkSubscriptionStatus() }
+          }
+          .frame(minHeight: 44)
+        }
 
         // Primary Action
         ActionButton(
@@ -85,10 +94,11 @@ struct SubscriptionManagementView: View {
           Button {
             openSubscriptionManagement()
           } label: {
-            Text("Cancel Subscription")
+            Text("Manage App Store Subscription")
               .font(.subheadline)
               .foregroundColor(.haloTextSecondary)
           }
+          .frame(minHeight: 44)
           .padding(.top, 16)
           .accessibilityHint("Opens Apple subscription management")
         }
@@ -101,19 +111,11 @@ struct SubscriptionManagementView: View {
     .navigationTitle("Subscription")
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingPaywall) {
-      PaywallView()
-        .onPurchaseCompleted { _ in
-          Task { await subscriptionService.checkSubscriptionStatus() }
-          showingPaywall = false
-        }
-        .onRestoreCompleted { _ in
-          Task { await subscriptionService.checkSubscriptionStatus() }
-        }
-        // App Store 3.1.2(c): EULA + Privacy links in the purchase flow.
-        .safeAreaInset(edge: .bottom) {
-          SubscriptionLegalLinks()
-        }
+      AccountSubscriptionPaywall {
+        showingPaywall = false
+      }
     }
+
     .onAppear {
       Task { await subscriptionService.checkSubscriptionStatus() }
     }
@@ -130,5 +132,187 @@ struct SubscriptionManagementView: View {
   NavigationStack {
     SubscriptionManagementView()
       .environment(SubscriptionService.previewActivePro)
+  }
+}
+
+
+/// Both subscription entry points use the same account-owned checkout.
+struct AccountSubscriptionPaywall: View {
+  @Environment(SubscriptionService.self) private var subscriptionService
+  var displayCloseButton = true
+  var onComplete: () -> Void
+
+  var body: some View {
+    SubscriptionCheckoutView(service: subscriptionService,
+                             displayCloseButton: displayCloseButton, onComplete: onComplete)
+  }
+}
+
+struct SubscriptionCheckoutView: View {
+  @Environment(\.dismiss) private var dismiss
+  @State private var checkout: SubscriptionCheckout
+  private let service: SubscriptionService
+  var displayCloseButton = true
+  var onComplete: () -> Void
+  @State private var completionDelivered = false
+  @AccessibilityFocusState private var focus: Focus?
+  private enum Focus: Hashable { case heading, status }
+
+  init(service: SubscriptionService, displayCloseButton: Bool = true, onComplete: @escaping () -> Void) {
+    self.service = service
+    self._checkout = State(initialValue: SubscriptionCheckout(service: service))
+    self.displayCloseButton = displayCloseButton
+    self.onComplete = onComplete
+  }
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        Text("Choose a subscription")
+          .font(.title.bold())
+          .accessibilityAddTraits(.isHeader)
+          .accessibilityIdentifier("checkoutHeading")
+          .accessibilityFocused($focus, equals: .heading)
+
+        Text("Select a plan to review with Apple. Prices and available offers come from the App Store.")
+
+        if !checkout.loaded {
+          ProgressView("Loading subscription plans...")
+        }
+
+        if let error = checkout.catalogError {
+          Text(error)
+            .accessibilityIdentifier("checkoutCatalogError")
+          Button { Task { await checkout.load() } } label: {
+            SubscriptionActionLabel("Retry loading plans")
+          }
+            .buttonStyle(.bordered)
+            .disabled(checkout.isBusy)
+        }
+
+        ForEach(checkout.plans) { plan in
+          Button {
+            checkout.selectedID = plan.id
+          } label: {
+            VStack(alignment: .leading, spacing: 8) {
+              Text(plan.title).font(.headline)
+              Text(plan.terms).font(.body.weight(.semibold))
+              if !plan.detail.isEmpty { Text(plan.detail).font(.body) }
+              if checkout.selectedID == plan.id {
+                Text("Selected").font(.body.weight(.semibold))
+              }
+            }
+            .foregroundStyle(Color.primary)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(16)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay {
+              RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary, lineWidth: checkout.selectedID == plan.id ? 3 : 1)
+            }
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityIdentifier("checkoutPlan_\(plan.id)")
+          .accessibilityElement(children: .combine)
+          .accessibilityAddTraits(checkout.selectedID == plan.id ? [.isSelected] : [])
+          .accessibilityHint("Selects this plan. Apple will ask you to confirm before purchasing.")
+          .disabled(checkout.isBusy || checkout.awaitingConfirmation)
+        }
+
+        if !checkout.plans.isEmpty {
+          Text("Subscriptions renew automatically unless cancelled in App Store subscription settings. Apple shows the final price and any change to an existing plan before you confirm.")
+
+          Button {
+            Task { await checkout.purchase() }
+          } label: {
+            Text(checkout.selectedPlan.map { "Subscribe to \($0.title)" } ?? "Select a plan above")
+              .font(.headline)
+              .multilineTextAlignment(.center)
+              .frame(maxWidth: .infinity, minHeight: 44)
+              .padding(.vertical, 8)
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(Color(uiColor: .label))
+          .foregroundStyle(Color(uiColor: .systemBackground))
+          .accessibilityIdentifier("checkoutPurchase")
+          .disabled(!checkout.canPurchase)
+        }
+
+        if checkout.isBusy, checkout.loaded {
+          ProgressView("Checking with the App Store...")
+        }
+
+        if let message = checkout.message {
+          Text(message)
+            .accessibilityIdentifier("checkoutStatus")
+            .accessibilityFocused($focus, equals: .status)
+        }
+
+        if checkout.awaitingConfirmation {
+          Button { Task { await checkout.checkStatus() } } label: {
+            SubscriptionActionLabel("Check subscription again")
+          }
+            .buttonStyle(.bordered)
+            .disabled(checkout.isBusy)
+        }
+
+        Button { Task { await checkout.restore() } } label: {
+          SubscriptionActionLabel("Restore purchases")
+        }
+          .buttonStyle(.bordered)
+          .disabled(checkout.isBusy)
+          .accessibilityIdentifier("checkoutRestore")
+
+        SubscriptionLegalLinks()
+
+        Button { close() } label: {
+          SubscriptionActionLabel(displayCloseButton ? "Close" : "Back")
+        }
+          .buttonStyle(.bordered)
+          .accessibilityIdentifier("checkoutClose")
+      }
+      .padding(20)
+    }
+    .foregroundStyle(Color.primary)
+    .background(Color(uiColor: .systemBackground))
+    .task {
+      await checkout.load()
+      guard checkout.isCurrent else { return }
+      focus = .heading
+    }
+    .task(id: checkout.message) {
+      guard checkout.message != nil, checkout.isCurrent else { return }
+      await Task.yield()
+      focus = .status
+    }
+    .onChange(of: service.sessionRevision) { _, _ in close() }
+    .onChange(of: checkout.completed) { _, completed in
+      guard completed, checkout.isCurrent, !completionDelivered else { return }
+      completionDelivered = true
+      onComplete()
+    }
+    .onDisappear { checkout.close() }
+    .accessibilityAction(.escape) { close() }
+  }
+
+  private func close() {
+    checkout.close()
+    dismiss()
+  }
+}
+
+
+/// Size the label inside the control so its actual accessibility/hit frame,
+/// rather than only the surrounding layout, meets the minimum target size.
+struct SubscriptionActionLabel: View {
+  let title: String
+  init(_ title: String) { self.title = title }
+  var body: some View {
+    Text(title)
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: .infinity, minHeight: 44)
+      .contentShape(Rectangle())
   }
 }

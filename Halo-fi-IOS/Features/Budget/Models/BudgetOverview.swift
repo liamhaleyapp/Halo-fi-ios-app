@@ -443,15 +443,15 @@ struct SSIResources: Codable, Equatable {
 }
 
 struct SSIIncome: Codable, Equatable {
+    static let estimateExplanation = "Estimate based on recorded income and deductions. Today's balance does not determine this month's resource eligibility. Social Security makes payment decisions."
+
     let countableCents: Int
     let thresholdCents: Int
     let status: String
     let formatted: [String: String]
     let note: String
-    // Engine v2 additions — `projectedPaymentCents` is THE number to
-    // headline on the income card (the user's actual check this
-    // month). All v2 fields are nil when the legacy SGA-threshold
-    // path is serving this response, so the existing UI keeps working.
+    // Income-only estimates; these are not SSA payment determinations.
+    // Optional fields preserve decoding of older cached responses.
     let fbrCents: Int?
     let projectedPaymentCents: Int?
     let eligibleForCash: Bool?
@@ -460,10 +460,9 @@ struct SSIIncome: Codable, Equatable {
     let countableUnearnedCents: Int?
     let waterfall: SSIIncomeWaterfall?
     let v2Note: String?
-    // Resource-suspension: when true the user is over the $2,000 resource
-    // limit, so this month's check is $0 regardless of income. The income
-    // projection / earn-room is meaningless here — show spend-down guidance
-    // instead, and do NOT fall through to the §1619(b) (earnings) banner.
+    // Older servers incorrectly inferred suspension from today's balance.
+    // Keep decoding that flag so the UI can suppress those cached claims.
+    let paymentEstimateBasis: String?
     let paymentSuspendedOverResources: Bool?
     let spendDownCents: Int?
     let spendDownFormatted: String?
@@ -480,6 +479,7 @@ struct SSIIncome: Codable, Equatable {
         case countableUnearnedCents = "countable_unearned_cents"
         case waterfall
         case v2Note = "v2_note"
+        case paymentEstimateBasis = "payment_estimate_basis"
         case paymentSuspendedOverResources = "payment_suspended_over_resources"
         case spendDownCents = "spend_down_cents"
         case spendDownFormatted = "spend_down_formatted"

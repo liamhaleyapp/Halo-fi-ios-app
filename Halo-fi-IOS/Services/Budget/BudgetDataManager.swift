@@ -54,7 +54,9 @@ final class BudgetDataManager {
     }
 
     func loadCalendar(month: String?) async throws {
+        let generation = sessionGeneration
         let cal = try await CalendarService.shared.month(month)
+        guard generation == sessionGeneration else { throw CancellationError() }
         calendars[cal.month] = cal
         if month == nil { currentCalendarKey = cal.month }
     }
@@ -78,6 +80,7 @@ final class BudgetDataManager {
     private let service: BudgetServiceProtocol
     private let ssiService: SSIServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    private var sessionGeneration = UUID()
     /// Annotations needed so deinit can read this without crossing
     /// the @Observable wrapper or MainActor isolation.
     @ObservationIgnored
@@ -102,7 +105,7 @@ final class BudgetDataManager {
         }
 
         clearObserver = NotificationCenter.default.addObserver(forName: .userDataCleared, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.clearAllData() }
+            MainActor.assumeIsolated { self?.clearAllData() }
         }
         hydrateObserver = NotificationCenter.default.addObserver(forName: .bankDataConfigurationComplete, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -136,6 +139,14 @@ final class BudgetDataManager {
     /// person's budget, SSI figures, attention cards and bills must not
     /// survive into the next session.
     func clearAllData() {
+        sessionGeneration = UUID()
+        refreshTask?.cancel()
+        refreshTask = nil
+        incomeSummary = nil
+        suggestion = nil
+        isLoading = false
+        attentionGeneration += 1
+        attentionRefreshPending = false
         overview = nil
         error = nil
         lastFetched = nil
@@ -175,8 +186,11 @@ final class BudgetDataManager {
 
     func fetchSuggestion() async {
         if UITestArchetype.isActive { return }
+        let generation = sessionGeneration
         do {
-            suggestion = try await service.fetchSuggestion()
+            let result = try await service.fetchSuggestion()
+            guard generation == sessionGeneration else { return }
+            suggestion = result
         } catch {
             Logger.warning("BudgetDataManager: fetch suggestion failed: \(error)")
         }
@@ -185,7 +199,9 @@ final class BudgetDataManager {
     /// "Not this time": the card goes away until a materially different
     /// proposal appears.
     func dismissSuggestion() async throws {
+        let operationGeneration = sessionGeneration
         try await service.dismissSuggestion()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         suggestion = nil
         attentionCards.removeAll { $0.kind == "budget_suggestion" }
         attentionQueue.removeAll { $0.kind == "budget_suggestion" }
@@ -193,35 +209,43 @@ final class BudgetDataManager {
 
     /// "10% less this month" / "make it a $3,000 month".
     func scaleBudget(percent: Double? = nil, totalCents: Int? = nil) async throws {
+        let operationGeneration = sessionGeneration
         try await service.scaleBudget(percent: percent, totalCents: totalCents)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     func applySuggestion() async throws {
+        let operationGeneration = sessionGeneration
         do {
             try await service.applySuggestion()
         } catch {
             Logger.error("BudgetDataManager: apply suggestion failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await fetchSuggestion()
         announceMonthlyTotal(prefix: "Budget created.")
     }
 
     func addCategory(code: String, limitAmount: Double) async throws {
+        let operationGeneration = sessionGeneration
         do {
             try await service.addCategory(code: code, limitAmount: limitAmount)
         } catch {
             Logger.error("BudgetDataManager: add category failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
         announceMonthlyTotal(prefix: "Added \(BudgetFormatter.displayName(forCategory: code)).")
     }
 
     func deleteCategory(_ category: BudgetStatusCategory) async throws {
+        let operationGeneration = sessionGeneration
         guard let id = category.categoryId else { throw BudgetError(underlying: URLError(.badURL)) }
         do {
             try await service.deleteCategory(categoryId: id)
@@ -229,6 +253,7 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: delete category failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
         announceMonthlyTotal(prefix: "Removed \(BudgetFormatter.displayName(forCategory: category.category)).")
     }
@@ -266,17 +291,20 @@ final class BudgetDataManager {
             await existing.value
             return
         }
+        let generation = sessionGeneration
         let task = Task { [weak self] in
-            guard let self else { return }
+            guard let self, generation == self.sessionGeneration else { return }
             await self.performRefresh(userTz: userTz)
         }
         refreshTask = task
         await task.value
+        guard generation == sessionGeneration else { return }
         refreshTask = nil
         if attentionRefreshPending {
             // A card was resolved while the last fetch was in flight; pull once more.
             attentionRefreshPending = false
             if let r = try? await AttentionService.shared.fetch(userTz: userTz) {
+                guard generation == sessionGeneration else { return }
                 attentionCards = r.cards
                 attentionQueue = r.queue
                 attentionMoreCount = r.moreCount
@@ -287,6 +315,7 @@ final class BudgetDataManager {
     /// Save an income update and refresh the overview.
     /// Throws so the view can surface inline errors during editing.
     func saveMonthlyIncome(_ update: MonthlyIncomeUpdate) async throws {
+        let operationGeneration = sessionGeneration
         do {
             try await service.updateMonthlyIncome(update)
         } catch {
@@ -294,6 +323,7 @@ final class BudgetDataManager {
             throw error
         }
         // Re-pull overview so totals and sources reflect the update.
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
@@ -301,7 +331,8 @@ final class BudgetDataManager {
     /// so the new value flows through the budget-status pipeline (totals,
     /// pace classification, etc.) on the next view read.
     func saveCategoryLimit(categoryId: String, limitAmount: Double, announce: Bool = false) async throws {
-        defer { if announce { announceMonthlyTotal(prefix: "Limit updated.") } }
+        let operationGeneration = sessionGeneration
+        defer { if announce, operationGeneration == sessionGeneration { announceMonthlyTotal(prefix: "Limit updated.") } }
         do {
             try await service.updateCategoryLimit(
                 categoryId: categoryId,
@@ -311,21 +342,27 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: save category limit failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     // MARK: - Internal
 
     private func performRefresh(userTz: String?) async {
+        let generation = sessionGeneration
+        let userId = SnapshotCache.currentUserId
         isLoading = true
         error = nil
-        defer { isLoading = false }
+        defer { if generation == sessionGeneration { isLoading = false } }
 
         do {
-            overview = try await service.getOverview(userTz: userTz)
-            SnapshotCache.save(overview, key: "budget_overview")
+            let result = try await service.getOverview(userTz: userTz)
+            guard generation == sessionGeneration else { return }
+            overview = result
+            SnapshotCache.save(result, key: "budget_overview", userId: userId)
             lastFetched = Date()
         } catch {
+            guard generation == sessionGeneration else { return }
             Logger.error("BudgetDataManager: fetch overview failed: \(error)")
             self.error = BudgetError(underlying: error)
         }
@@ -340,13 +377,17 @@ final class BudgetDataManager {
         async let manualResult: Result<SSIManualDeductionsResponse, Error> = {
             do { return .success(try await ssi.fetchManualDeductions(userTz: userTz)) } catch { return .failure(error) }
         }()
-        switch await candidatesResult {
+        let candidatesValue = await candidatesResult
+        guard generation == sessionGeneration else { return }
+        switch candidatesValue {
         case .success(let response): ssiCandidates = response.candidates
         case .failure(let error):
             Logger.error("BudgetDataManager: fetch SSI candidates failed: \(error)")
             ssiCandidates = []
         }
-        switch await manualResult {
+        let manualValue = await manualResult
+        guard generation == sessionGeneration else { return }
+        switch manualValue {
         case .success(let response):
             ssiManualDeductions = response.deductions
             ssiManualTotalsCents = response.totalsCents
@@ -360,9 +401,11 @@ final class BudgetDataManager {
         // notifications are scheduled from here (deduped by reminder id).
         do {
             let response = try await ssiService.fetchReminders(userTz: userTz)
+            guard generation == sessionGeneration else { return }
             ssiReminders = response.reminders
             fieldOffice = response.fieldOffice
         } catch {
+            guard generation == sessionGeneration else { return }
             Logger.error("BudgetDataManager: fetch reminders failed: \(error)")
             ssiReminders = []
         }
@@ -372,7 +415,11 @@ final class BudgetDataManager {
         // Calendar: current month, failures isolated.
         Task { [weak self] in
             if let cal = try? await CalendarService.shared.month(nil) {
-                await MainActor.run { self?.calendars[cal.month] = cal; self?.currentCalendarKey = cal.month }
+                await MainActor.run {
+                    guard let self, generation == self.sessionGeneration else { return }
+                    self.calendars[cal.month] = cal
+                    self.currentCalendarKey = cal.month
+                }
             }
         }
         let generationAtStart = attentionGeneration
@@ -385,7 +432,9 @@ final class BudgetDataManager {
         async let billsResult: Result<RecurringResponse, Error> = {
             do { return .success(try await RecurringService.shared.bills()) } catch { return .failure(error) }
         }()
-        switch await attentionResult {
+        let attentionValue = await attentionResult
+        guard generation == sessionGeneration else { return }
+        switch attentionValue {
         case .success(let response):
             if generationAtStart == attentionGeneration {
                 attentionCards = response.cards
@@ -401,11 +450,15 @@ final class BudgetDataManager {
         case .failure(let error):
             Logger.warning("BudgetDataManager: fetch attention failed: \(error)")
         }
-        switch await incomeResult {
+        let incomeValue = await incomeResult
+        guard generation == sessionGeneration else { return }
+        switch incomeValue {
         case .success(let summary): incomeSummary = summary
         case .failure(let error): Logger.warning("BudgetDataManager: fetch income summary failed: \(error)")
         }
-        switch await billsResult {
+        let billsValue = await billsResult
+        guard generation == sessionGeneration else { return }
+        switch billsValue {
         case .success(let response): bills = response
         case .failure(let error): Logger.warning("BudgetDataManager: fetch bills failed: \(error)")
         }
@@ -413,7 +466,9 @@ final class BudgetDataManager {
 
     /// Answer "is this a bill?" — instantly on the card, then refresh.
     func confirmBill(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil) async throws {
+        let operationGeneration = sessionGeneration
         let updated = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind)
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         // The answered row moves sections immediately; the refresh confirms.
         if let b = bills {
             let streams = b.streams.map { $0.streamId == updated.streamId ? updated : $0 }
@@ -436,12 +491,14 @@ final class BudgetDataManager {
 
     /// "Not now": hide the card for a week, locally at once and on the server.
     func dismissCard(_ card: AttentionCard, days: Int = 7) async {
+        let generation = sessionGeneration
         attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
         attentionQueue.removeAll { $0.id == card.id }
         do { try await AttentionService.shared.dismiss(cardId: card.id, days: days) } catch {
             Logger.warning("BudgetDataManager: dismiss failed: \(error)")
         }
+        guard generation == sessionGeneration else { return }
         markStale()
         await refresh()
     }
@@ -478,7 +535,9 @@ final class BudgetDataManager {
     /// Returns as soon as the server has it; the refresh runs behind.
     @discardableResult
     func labelDeposit(transactionId: String, kind: IncomeKind, grossCents: Int?, employer: String?) async throws -> IncomeLabelView {
+        let operationGeneration = sessionGeneration
         let label = try await IncomeService.shared.label(transactionId: transactionId, kind: kind, grossCents: grossCents, employer: employer)
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         if let card = (attentionCards + attentionQueue).first(where: { $0.payload.transactionId == transactionId }) {
             resolveCard(card)
         } else {
@@ -491,7 +550,9 @@ final class BudgetDataManager {
     /// The paystub gross for a paycheck a rule already labeled.
     @discardableResult
     func enterGross(labelId: String, grossCents: Int) async throws -> IncomeLabelView {
+        let operationGeneration = sessionGeneration
         let label = try await IncomeService.shared.updateLabel(id: labelId, grossCents: grossCents)
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         if let card = (attentionCards + attentionQueue).first(where: { $0.payload.labelId == labelId }) {
             resolveCard(card)
         } else {
@@ -502,20 +563,26 @@ final class BudgetDataManager {
     }
 
     func updateSource(key: String, update: IncomeSourceUpdate) async throws {
+        let operationGeneration = sessionGeneration
         _ = try await IncomeService.shared.updateSource(key: key, update: update)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     func forgetSource(key: String) async throws {
+        let operationGeneration = sessionGeneration
         try await IncomeService.shared.deleteSource(key: key)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     func forgetLabel(id: String) async throws {
+        let operationGeneration = sessionGeneration
         try await IncomeService.shared.deleteLabel(id: id)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
@@ -529,6 +596,7 @@ final class BudgetDataManager {
         as type: SSIExclusionType,
         notes: String? = nil
     ) async throws {
+        let operationGeneration = sessionGeneration
         let request = SSICreateExclusionRequest(
             transactionId: candidate.transactionId,
             exclusionType: type,
@@ -541,6 +609,7 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: confirm SSI deduction failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
@@ -555,6 +624,7 @@ final class BudgetDataManager {
         notes: String? = nil,
         receipt: ManualDeductionReceiptFields = ManualDeductionReceiptFields()
     ) async throws {
+        let operationGeneration = sessionGeneration
         var request = SSICreateExclusionRequest(
             transactionId: transactionId,
             exclusionType: type,
@@ -570,6 +640,7 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: log transaction deduction failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
@@ -585,6 +656,7 @@ final class BudgetDataManager {
         notes: String? = nil,
         receipt: ManualDeductionReceiptFields = ManualDeductionReceiptFields()
     ) async throws -> SSIManualDeduction {
+        let operationGeneration = sessionGeneration
         var request = SSICreateManualDeductionRequest(
             exclusionType: type,
             amountCents: amountCents,
@@ -606,12 +678,14 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: log manual deduction failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
         return row
     }
 
     /// WP3 — attach an uploaded receipt to an existing entry.
     func attachReceipt(to deductionId: String, assetId: String) async throws {
+        let operationGeneration = sessionGeneration
         do {
             _ = try await ssiService.updateManualDeduction(
                 deductionId, SSIUpdateManualDeductionRequest(receiptAssetId: assetId, receiptPending: false)
@@ -620,11 +694,13 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: attach receipt failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     /// WP3 — rotor "Change type".
     func updateDeductionType(_ deductionId: String, to type: SSIExclusionType) async throws {
+        let operationGeneration = sessionGeneration
         do {
             _ = try await ssiService.updateManualDeduction(
                 deductionId, SSIUpdateManualDeductionRequest(exclusionType: type)
@@ -633,18 +709,21 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: change deduction type failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     /// Delete a manual deduction by row id, then refresh the
     /// overview so projected SSI updates.
     func deleteManualDeduction(_ deductionId: String) async throws {
+        let operationGeneration = sessionGeneration
         do {
             try await ssiService.deleteManualDeduction(deductionId)
         } catch {
             Logger.error("BudgetDataManager: delete manual deduction failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
@@ -653,6 +732,7 @@ final class BudgetDataManager {
     /// it. Caller is responsible for cleaning up the temp file
     /// after the share sheet dismisses.
     func exportDeductionsCSVToTempFile(year: Int, month: Int?) async throws -> URL {
+        let operationGeneration = sessionGeneration
         let data: Data
         do {
             data = try await ssiService.exportDeductionsCSV(year: year, month: month)
@@ -660,6 +740,7 @@ final class BudgetDataManager {
             Logger.error("BudgetDataManager: export CSV failed: \(error)")
             throw error
         }
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         let filename: String = {
             if let m = month {
                 return String(format: "halofi-ssi-deductions-%04d-%02d.csv", year, m)
@@ -676,6 +757,7 @@ final class BudgetDataManager {
 
     /// Attach an uploaded receipt to a confirmed bank charge (exclusion).
     func attachReceipt(toExclusion exclusionId: String, assetId: String) async throws {
+        let operationGeneration = sessionGeneration
         do {
             try await ssiService.updateExclusion(exclusionId, SSIUpdateExclusionRequest(receiptAssetId: assetId))
         } catch {
@@ -683,12 +765,15 @@ final class BudgetDataManager {
             throw error
         }
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
     }
 
     /// Download the month's SSA-795 package to a temp file for share / print.
     func packetToTempFile(month: String, filename: String) async throws -> URL {
+        let operationGeneration = sessionGeneration
         let data = try await ssiService.downloadPacket(month: month)
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         let safeName = filename.isEmpty ? "HaloFi_SSA795_\(month).pdf" : filename
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
         try data.write(to: url, options: .atomic)
@@ -696,8 +781,11 @@ final class BudgetDataManager {
     }
 
     func emailPacket(month: String, to: String? = nil) async throws -> SSIEmailPacketResponse {
+        let operationGeneration = sessionGeneration
         do {
-            return try await ssiService.emailPacket(month: month, to: to)
+            let result = try await ssiService.emailPacket(month: month, to: to)
+            guard operationGeneration == sessionGeneration else { throw CancellationError() }
+            return result
         } catch {
             Logger.error("BudgetDataManager: email packet failed: \(error)")
             throw error
@@ -706,16 +794,20 @@ final class BudgetDataManager {
 
     @discardableResult
     func markSubmitted(month: String, channel: String?, notes: String?) async throws -> SSISubmission {
+        let operationGeneration = sessionGeneration
         let row = try await ssiService.markSubmitted(month: month, channel: channel, notes: notes)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
         return row
     }
 
     @discardableResult
     func unmarkSubmitted(month: String) async throws -> SSISubmission {
+        let operationGeneration = sessionGeneration
         let row = try await ssiService.unmarkSubmitted(month: month)
         markStale()
+        guard operationGeneration == sessionGeneration else { throw CancellationError() }
         await refresh()
         return row
     }
@@ -730,12 +822,15 @@ final class BudgetDataManager {
         month: Int?,
         to: String? = nil
     ) async throws -> SSIEmailDeductionsResponse {
+        let operationGeneration = sessionGeneration
         do {
-            return try await ssiService.emailDeductionsCSV(
+            let result = try await ssiService.emailDeductionsCSV(
                 year: year,
                 month: month,
                 to: to
             )
+            guard operationGeneration == sessionGeneration else { throw CancellationError() }
+            return result
         } catch {
             Logger.error("BudgetDataManager: email CSV failed: \(error)")
             throw error

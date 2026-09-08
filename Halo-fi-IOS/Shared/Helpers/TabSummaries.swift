@@ -149,8 +149,8 @@ enum TabSummaries {
             let res = ssi?.resources
             let status = res?.effectiveStatus ?? "ok"
             var projected = ""
-            if let p = ssi?.income?.projectedPaymentCents {
-                projected = " Projected check about \(VoiceOverFormatter.dollars(p))."
+            if let income = ssi?.income, income.paymentSuspendedOverResources != true, let p = income.projectedPaymentCents {
+                projected = " Income-only SSI estimate about \(VoiceOverFormatter.dollars(p))."
             }
             let resourcesLine: String = res.map {
                 "Resources \(VoiceOverFormatter.dollars($0.currentCents)) of \(VoiceOverFormatter.dollars($0.limitCents))."

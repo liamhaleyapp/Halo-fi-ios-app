@@ -24,6 +24,11 @@ final class TabHeaderUITests: XCTestCase {
     private func header(in app: XCUIApplication) -> XCUIElement {
         let element = app.descendants(matching: .any)["screenSummaryHeader"].firstMatch
         XCTAssertTrue(element.waitForExistence(timeout: 10), "summary header not found")
+        let loaded = NSPredicate { _, _ in
+            element.exists && !element.label.hasPrefix("Loading your accounts")
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: loaded, object: nil)], timeout: 10),
+                       .completed, "summary header remained in its loading state")
         return element
     }
 
@@ -120,7 +125,7 @@ final class TabHeaderUITests: XCTestCase {
         openTab(app, "Benefits")
         let label = header(in: app).label
         XCTAssertTrue(label.hasPrefix("Your SSI is on track."), label)
-        XCTAssertTrue(label.contains("Projected check about 994 dollars"), label)
+        XCTAssertTrue(label.contains("Income-only SSI estimate about 994 dollars"), label)
     }
 
     func testBenefitsHeader_ssiUnverified_showsLockedBWE() {
@@ -286,5 +291,94 @@ final class TabHeaderUITests: XCTestCase {
         // The pushed Budget screen must render (it used to be a blank screen).
         XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 10), "Budget screen did not open")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Spent'")).firstMatch.waitForExistence(timeout: 10), "budget content missing")
+    }
+}
+
+
+extension TabHeaderUITests {
+    private func launchCheckout(_ mode: String, large: Bool = false, dark: Bool = false) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=none", "--ui-test-checkout=\(mode)"]
+        if large { app.launchArguments.append("--ui-test-checkout-large") }
+        app.launchArguments += ["-themeMode", dark ? "Dark" : "Light"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["checkoutHeading"].waitForExistence(timeout: 10))
+        return app
+    }
+
+    private func revealCheckout(_ element: XCUIElement, app: XCUIApplication) {
+        for _ in 0..<12 {
+            if element.exists && element.isHittable { return }
+            app.swipeUp()
+        }
+        XCTAssertTrue(element.exists && element.isHittable)
+    }
+
+    func testCheckoutSelectionCancellationAndVerticalActions() {
+        let app = launchCheckout("normal")
+        let plan = app.buttons["checkoutPlan_fixture-pro"]
+        XCTAssertTrue(plan.waitForExistence(timeout: 10))
+        let purchase = app.buttons["checkoutPurchase"]
+        XCTAssertFalse(purchase.isEnabled)
+        XCTAssertTrue(plan.label.contains("$9.99"))
+        XCTAssertTrue(plan.label.contains("1 month"))
+        plan.tap()
+        revealCheckout(purchase, app: app)
+        XCTAssertTrue(purchase.isEnabled)
+        XCTAssertGreaterThanOrEqual(purchase.frame.height, 44)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Checkout selected plan"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        purchase.tap()
+        let status = app.staticTexts["checkoutStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertEqual(status.label, "Purchase cancelled.")
+        revealCheckout(app.buttons["checkoutRestore"], app: app)
+        XCTAssertGreaterThanOrEqual(app.buttons["checkoutRestore"].frame.height, 44)
+        let terms = app.buttons["Terms of Use"]
+        let privacy = app.buttons["Privacy Policy"]
+        revealCheckout(privacy, app: app)
+        XCTAssertGreaterThanOrEqual(privacy.frame.minY, terms.frame.maxY)
+        XCTAssertGreaterThanOrEqual(terms.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(privacy.frame.height, 44)
+    }
+
+    func testCheckoutLargestTextDarkModeAndPendingPayment() {
+        let app = launchCheckout("pending", large: true, dark: true)
+        let plan = app.buttons["checkoutPlan_fixture-pro"]
+        XCTAssertTrue(plan.waitForExistence(timeout: 10))
+        revealCheckout(plan, app: app)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Checkout largest text dark"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        plan.tap()
+        let purchase = app.buttons["checkoutPurchase"]
+        revealCheckout(purchase, app: app)
+        purchase.tap()
+        let status = app.staticTexts["checkoutStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.label.contains("awaiting Apple approval"))
+        XCTAssertFalse(purchase.isEnabled)
+        let check = app.buttons["Check subscription again"]
+        revealCheckout(check, app: app)
+        check.tap()
+        XCTAssertTrue(status.label.contains("No active subscription"))
+        revealCheckout(app.buttons["checkoutRestore"], app: app)
+        XCTAssertTrue(app.buttons["checkoutRestore"].isEnabled)
+    }
+
+    func testCheckoutEmptyPlansStillAllowsRestoreWithHonestError() {
+        let app = launchCheckout("empty")
+        XCTAssertTrue(app.staticTexts["checkoutCatalogError"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["checkoutPurchase"].exists)
+        let restore = app.buttons["checkoutRestore"]
+        revealCheckout(restore, app: app)
+        restore.tap()
+        let status = app.staticTexts["checkoutStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertEqual(status.label, "Could not restore purchases. Please try again.")
+        XCTAssertTrue(restore.isEnabled)
     }
 }

@@ -4,7 +4,7 @@
 //
 //  The SSI resource monitor screen (WP4), grown from BudgetView's old
 //  ssiSection. Per-account counted list, excluded list with reasons,
-//  alerts, and the Watch/Act actions: Move to ABLE · Spending that counts ·
+//  alerts, and educational actions: About ABLE · Understanding resources ·
 //  Ask my counselor. Every number is an estimate and says so.
 //
 
@@ -43,12 +43,9 @@ struct ResourceMonitorView: View {
                     if let alerts = dataManager.overview?.ssiAlerts, !alerts.isEmpty {
                         ForEach(alerts) { entry in SSIAlertBanner(entry: entry) }
                     }
-                    if let income = ssi.income, income.paymentSuspendedOverResources == true {
-                        SSISpendDownBanner(spendDownFormatted: income.spendDownFormatted)
-                    }
                     countedAccounts
                     excludedList(ssi)
-                    if let income = ssi.income, income.paymentSuspendedOverResources != true {
+                    if let income = ssi.income {
                         SSIIncomeHeroCard(income: income)
                     }
                     if let next = ssi.nextSsaDeposit {
@@ -87,8 +84,8 @@ struct ResourceMonitorView: View {
             detail = "\(VoiceOverFormatter.dollars(res.currentCents)) of \(VoiceOverFormatter.dollars(res.limitCents)) counted."
             if res.effectiveStatus == "over" {
                 detail += " This could put you over the limit Social Security checks on the 1st."
-            } else if let move = res.spendOrMoveCents, move > 0 {
-                detail += " About \(VoiceOverFormatter.dollars(move)) would need to go to needs or into an ABLE account to be safely under."
+            } else {
+                detail += " This is an estimate of today's resources, not a payment decision."
             }
         }
         return ScreenReaderSummaryHeader(verdict: word, detail: detail, isEstimate: true, tone: tone)
@@ -163,9 +160,9 @@ struct ResourceMonitorView: View {
     private func actions(_ resources: SSIResources) -> some View {
         VStack(spacing: 10) {
             if userManager.benefitsProfile.hasAbleAccount == true {
-                actionButton("Move to ABLE", icon: "arrow.down.to.line.circle") { explainer = .moveToABLE }
+                actionButton("About ABLE accounts", icon: "arrow.down.to.line.circle") { explainer = .moveToABLE }
             }
-            actionButton("Spending that counts", icon: "cart") { explainer = .spendingThatCounts }
+            actionButton("Understanding resources", icon: "cart") { explainer = .spendingThatCounts }
             actionButton("Ask my counselor", icon: "person.wave.2") { InAppBrowser.open(ProfileExplainer.wipaURL) }
         }
         .padding(.top, 4)
@@ -271,28 +268,25 @@ struct MonitorActionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var explainer: ProfileExplainer {
-        let move = resources?.spendOrMoveCents ?? 0
         switch action {
         case .moveToABLE:
             return ProfileExplainer(
-                title: "Move to ABLE",
+                title: "About ABLE accounts",
                 lines: [
-                    "Money in an ABLE account is excluded from the resource limit up to 100,000 dollars.",
-                    move > 0
-                        ? "Moving about \(VoiceOverFormatter.dollars(move)) before the 1st would put you safely under the limit. Estimate."
-                        : "A transfer that posts before the 1st counts for that month's measurement.",
-                    "Yearly contributions are capped at 20,000 dollars. Transfers between your own accounts are not income.",
-                ]
+                    "ABLE accounts can have special treatment under SSI resource rules.",
+                    "An account balance or transfer alone does not determine eligibility. Contribution limits and other rules may apply.",
+                    "A free benefits counselor can explain how the rules apply to your situation.",
+                ],
+                linkTitle: "Talk to a free benefits counselor",
+                linkURL: ProfileExplainer.wipaURL
             )
         case .spendingThatCounts:
             return ProfileExplainer(
-                title: "Spending that counts",
+                title: "Understanding resources",
                 lines: [
-                    "Paying for needs before the 1st lowers what Social Security counts: rent or mortgage paid early, utilities, groceries, medical bills, a needed repair, or a prepaid bill.",
-                    move > 0
-                        ? "About \(VoiceOverFormatter.dollars(move)) would need to go to needs, or into an ABLE account, to be safely under the limit. Estimate."
-                        : "Keep receipts for anything large.",
-                    "Giving money away or selling something for less than it's worth can be treated as a transfer and cause a penalty. When in doubt, ask a counselor first.",
+                    "Social Security measures resources at the start of a month. Today's balance may differ from that amount.",
+                    "The Watch and Act labels are HaloFi reminders to review your information. They do not set a spending requirement or a different resource limit.",
+                    "A free benefits counselor can explain what counts and which records may be useful.",
                 ],
                 linkTitle: "Talk to a free benefits counselor",
                 linkURL: ProfileExplainer.wipaURL

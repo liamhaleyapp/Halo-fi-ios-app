@@ -21,7 +21,7 @@ private func resources(status: String, current: Int = 121_400, days: Int? = 27) 
     return try! JSONDecoder().decode(SSIResources.self, from: Data(json.utf8))
 }
 
-private func ssiStatus(_ res: SSIResources?) -> SSIStatus {
+private func ssiStatus(_ res: SSIResources?, legacySuspension: Bool = false) -> SSIStatus {
     let resJSON = res.map { r in
         """
         {"current_cents": \(r.currentCents), "limit_cents": \(r.limitCents), "remaining_cents": 0, "pct_used": 0,
@@ -32,7 +32,8 @@ private func ssiStatus(_ res: SSIResources?) -> SSIStatus {
     let json = """
     {"has_ssi": true, "household_size": 1, "resources": \(resJSON),
      "income": {"countable_cents": 0, "threshold_cents": 283000, "status": "safe", "formatted": {}, "note": "",
-                "fbr_cents": 99400, "projected_payment_cents": 99400},
+                "fbr_cents": 99400, "projected_payment_cents": \(legacySuspension ? 0 : 99400),
+                "payment_suspended_over_resources": \(legacySuspension)},
      "next_ssa_deposit": null, "recent_ssa_deposits": null, "overpayment_flag": false, "overpayment_reason": null,
      "month": "September 2026", "engine_version": "v2", "voice_summary": null}
     """
@@ -83,8 +84,39 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(benefits("warning").verdict == "Resources getting close")
         let ok = benefits("ok")
         #expect(ok.verdict == "Your SSI is on track")
-        #expect(ok.detail.contains("Projected check about 994 dollars"))
+        #expect(ok.detail.contains("Income-only SSI estimate about 994 dollars"))
         #expect(ok.isEstimate)
+    }
+
+    @Test func cachedResourceSuspensionDoesNotAnnounceZeroPayment() {
+        let s = TabSummaries.benefits(capabilities: ssiCaps,
+                                      ssi: ssiStatus(resources(status: "over"), legacySuspension: true),
+                                      expensesThisMonth: 0, expensesTotalCents: 0, expensesImpactCents: 0)
+        #expect(!s.detail.contains("SSI estimate"))
+        #expect(!s.spoken.contains("suspended"))
+        #expect(s.isEstimate)
+    }
+
+    @Test(arguments: [false, true])
+    func oldVoiceSummaryCannotRestoreSuspensionOrSpendingAdvice(suspended: Bool) throws {
+        let fixture = try #require(UITestArchetype.ssiBlind.overview)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(fixture)) as? [String: Any])
+        var status = try #require(json["ssi_status"] as? [String: Any])
+        var income = try #require(status["income"] as? [String: Any])
+        income["payment_suspended_over_resources"] = suspended
+        income["projected_payment_cents"] = suspended ? 0 : 99_400
+        income.removeValue(forKey: "payment_estimate_basis")
+        status["income"] = income
+        status["voice_summary"] = "Your payment is suspended. Spend three hundred dollars."
+        json["ssi_status"] = status
+        let cached = try JSONDecoder().decode(BudgetOverview.self, from: JSONSerialization.data(withJSONObject: json))
+        let spoken = try #require(BudgetAccessibilitySummary.make(overview: cached, capabilities: ssiCaps,
+                                   candidatesCount: 0, manualDeductionsCount: 0, unmatchedManualCount: 0))
+        #expect(!spoken.contains("Your payment is suspended"))
+        #expect(!spoken.contains("Spend three hundred dollars"))
+        #expect(spoken.contains(SSIIncome.estimateExplanation))
+        if suspended { #expect(spoken.contains("Payment estimate unavailable")) }
+        else { #expect(spoken.contains("Income-only SSI estimate")) }
     }
 
     @Test func otherReminderKindsDoNotOutrankResources() {

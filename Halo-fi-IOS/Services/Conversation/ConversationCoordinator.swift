@@ -68,6 +68,8 @@ final class ConversationCoordinator {
     /// it carries the same id; anything else is stale and dropped.
     private(set) var currentTurnId: String?
     private var cancelledTurnIds: [String] = []
+    private var voiceTiming = VoiceTurnTiming()
+    private var lastDetectedSpeechUptime: TimeInterval?
 
     /// True while the full-screen voice modal is on screen (from any tab).
     /// The chat thread uses it to stay silent: a VoiceOver announcement of
@@ -340,6 +342,13 @@ final class ConversationCoordinator {
                 }
             }
         }
+        streamingAudioPlayer.onBufferPlaybackStarted = { [weak self] marker, outputEnabled in
+            guard let self,
+                  let fields = self.voiceTiming.playback(marker, at: ProcessInfo.processInfo.systemUptime,
+                                                         outputEnabled: outputEnabled) else { return }
+            Logger.info("Voice playback timing: \(fields)")
+            Diagnostics.send("voice_playback", fields)
+        }
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             Task { @MainActor in
                 self?.handleSpeakingFinished()
@@ -435,6 +444,9 @@ final class ConversationCoordinator {
 
     /// Disconnect from the backend
     func disconnect() {
+        cancelSpeechFinalization()
+        voiceTiming.reset()
+        lastDetectedSpeechUptime = nil
         agentEventTask?.cancel()
         agentEventTask = nil
         prewarmTask?.cancel()
@@ -563,6 +575,7 @@ final class ConversationCoordinator {
     /// One listen turn on an open STT session: wire the buffer router,
     /// reset per-turn detection state, start the mic, announce.
     private func beginListenTurn() async {
+        lastDetectedSpeechUptime = nil
         do {
             // Wire audio buffers — single closure that routes
             // every frame based on the current conversation
@@ -659,53 +672,52 @@ final class ConversationCoordinator {
         }
     }
 
-    /// Stop listening (voice mode) - flush the tail, finalize, and send.
-    /// Called when the user explicitly ends their turn (PTT button
-    /// release or manual stop in hands-free). A plain disconnect here
-    /// shaved the last VAD window of speech: the "server VAD already
-    /// committed" assumption was false while committed_transcript
-    /// messages were being dropped as unknown, so we now explicitly
-    /// commit-flush (bounded 2s wait inside commitAndDisconnect) and
-    /// finalize AFTER the flush so the tail words land in the draft.
-    func stopListening() {
-        guard state == .listening else { return }
+    // A local stop keeps transcript callbacks active until final speech arrives.
+    // The deadline covers both queued audio sends and the final transcript wait.
+    private var finalizationTask: Task<Void, Never>?
+    private var finalizationID: UUID?
+    private var audioSendTask: Task<Void, Never>?
+    private var audioSendGeneration = UUID()
+    private var finalizationTimeoutTask: Task<Void, Never>?
 
-        // Play stop listening feedback immediately
-        audioFeedback.feedbackForStateChange(.idle)
+    func stopListening() { stopListeningAndProcess() }
 
-        // Show "processing" right away so the stop feels acknowledged
-        // while the commit flush (< 2s) completes.
-        setState(.processing)
-        audioFeedback.feedbackForStateChange(.processing)
+    private func cancelSpeechFinalization() {
+        finalizationID = nil
+        finalizationTimeoutTask?.cancel()
+        finalizationTimeoutTask = nil
+        audioSendGeneration = UUID()
+        finalizationTask?.cancel()
+        finalizationTask = nil
+        audioSendTask?.cancel()
+        audioSendTask = nil
+    }
 
-        // Reset silence detection so the next listen starts clean.
-        hasDetectedSpeechInCurrentListen = false
-        lastVoiceActivityAt = nil
-        listenStartedAt = nil
+    private func enqueueSpeechAudio(_ buffer: AVAudioPCMBuffer) {
+        let previous = audioSendTask
+        let generation = audioSendGeneration
+        audioSendTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled, let self, self.audioSendGeneration == generation else { return }
+            await self.sttService.sendAudioBuffer(buffer)
+        }
+    }
 
-        // Stop recording; keep the STT session alive for the flush.
+    private func failSpeechFinalization() {
+        cancelSpeechFinalization()
+        isVoiceSessionActive = false
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
-
-        Task { [weak self] in
-            guard let self else { return }
-            // Flush buffered audio: ElevenLabs emits the final committed
-            // transcript, which onTranscription folds into the draft via
-            // commitSegment before we finalize.
-            await self.sttService.commitAndDisconnect()
-
-            // Mark inactive AFTER the flush (onTranscription is gated on
-            // isVoiceSessionActive) — and after disconnect so the
-            // "unexpected disconnect" path doesn't fire.
-            self.isVoiceSessionActive = false
-
-            // Finalize draft (all committed segments + live remainder) and send
-            if let finalText = self.transcriptStore?.finalizeDraft(),
-               !finalText.trimmingCharacters(in: .whitespaces).isEmpty {
-                await self.sendTextInternal(finalText)
-            } else {
-                self.setState(.idle)
-            }
+        sttService.disconnect()
+        transcriptStore?.discardDraft()
+        capturedBuffers = []
+        let message = "I couldn't finish hearing that. Please try again."
+        setState(.error(message))
+        UIAccessibility.post(notification: .announcement, argument: message)
+        Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard let self, self.state == .error(message) else { return }
+            self.setState(.idle)
         }
     }
 
@@ -725,11 +737,14 @@ final class ConversationCoordinator {
 
         switch state {
         case .listening:
+            if Self.computeRMS(buffer) >= voiceActivityRMSThreshold {
+                lastDetectedSpeechUptime = ProcessInfo.processInfo.systemUptime
+            }
             // Send to STT, tap silence detection, AND accumulate the
             // raw buffer for post-turn training-data upload. The
             // upload itself runs background-detached after the turn
             // is committed — appending here is the cheap part.
-            Task { await sttService.sendAudioBuffer(buffer) }
+            enqueueSpeechAudio(buffer)
             processAudioBufferForSilenceDetection(buffer)
             capturedBuffers.append(buffer)
 
@@ -742,7 +757,7 @@ final class ConversationCoordinator {
                 // the open STT session so a partial transcript can
                 // confirm it is speech (not a cough or the TV).
                 if bargeInCandidateAt != nil, sttService.isSessionReady {
-                    Task { await sttService.sendAudioBuffer(buffer) }
+                    enqueueSpeechAudio(buffer)
                 }
             }
 
@@ -905,89 +920,72 @@ final class ConversationCoordinator {
     }
 
     /// Internal: Stop listening after committed transcript (VAD auto-stop)
-    private func stopListeningAndProcess() {
-        guard state == .listening else { return }
-
-        // Play stop listening feedback immediately
-        audioFeedback.feedbackForStateChange(.idle)
-
-        // Mark session inactive BEFORE disconnect to prevent "unexpected disconnect" warning
-        isVoiceSessionActive = false
-
-        // Reset silence detection so the next listen starts clean.
+    private func stopListeningAndProcess(serverCommitted: Bool = false) {
+        guard state == .listening, finalizationID == nil else { return }
+        let token = UUID()
+        finalizationID = token
+        let endedAt = ProcessInfo.processInfo.systemUptime
+        let lastSpeechAt = lastDetectedSpeechUptime
+        let pendingAudio = audioSendTask
+        setState(.processing)
+        audioFeedback.feedbackForStateChange(.processing)
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
         bargeInConsecutiveFrames = 0
-
-        // WP7 — hands-free keeps the Scribe session open across turns
-        // (flush only); push-to-talk keeps the original teardown so its
-        // test surface is untouched. In hands-free we also keep
-        // voiceService recording so the audio engine doesn't churn and
-        // the buffer router can detect barge-in during .speaking.
-        if conversationMode == .handsFree {
-            Task { [weak self] in await self?.sttService.commit() }
-        } else {
-            sttService.disconnect()
+        if conversationMode != .handsFree {
             voiceService.stopRecording()
             voiceService.onAudioBuffer = nil
         }
-
-        // Finalize draft and send to agent
-        if let finalText = transcriptStore?.finalizeDraft() {
-            consecutiveEmptyHandsFreeTurns = 0
-            markMeaningfulActivity()
-            setState(.processing)
-
-            Task { [weak self] in
-                await self?.sendTextInternal(finalText)
+        // Include queued socket sends in the deadline, not just the STT response.
+        finalizationTimeoutTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard let self, self.finalizationID == token else { return }
+            self.failSpeechFinalization()
+        }
+        finalizationTask = Task { [weak self] in
+            guard let self else { return }
+            await pendingAudio?.value
+            guard !Task.isCancelled, self.finalizationID == token else { return }
+            // Keep isVoiceSessionActive true while the final callback updates the draft.
+            let confirmed: Bool
+            if serverCommitted && self.transcriptStore?.hasUncommittedDraft == false {
+                confirmed = true
+            } else {
+                confirmed = await self.sttService.commitAndWait()
             }
-
-            // Snapshot + handoff for the training-data upload. We
-            // copy the array so the background task owns its own
-            // buffer list while we clear ours for the next turn —
-            // the upload is fire-and-forget and never awaits.
-            let buffersForUpload = capturedBuffers
-            capturedBuffers = []
-            recordingTurnNumber += 1
-            let turnNumber = recordingTurnNumber
-            let sessionForUpload = sessionId ?? "unknown"
-            lastUploadedTurnNumber = turnNumber
-            lastUserSendAt = Date()
-            recordingUploader.upload(
-                buffers: buffersForUpload,
-                sessionId: sessionForUpload,
-                turnNumber: turnNumber,
-                userTranscript: finalText
-            )
-        } else {
-            // Empty turn — drop any accumulated buffers so they
-            // don't leak into the next listen. (Note: empty turns are
-            // never uploaded — the uploader only fires above.)
-            capturedBuffers = []
-
-            // Hands-free: a silent .idle here kills the loop while the
-            // session keeps metering. Resume listening quietly for the
-            // first couple of empty turns; the idle watchdog is the
-            // backstop that eventually ends a truly abandoned session.
-            if conversationMode == .handsFree && !isMicMuted {
-                consecutiveEmptyHandsFreeTurns += 1
-                if consecutiveEmptyHandsFreeTurns == 2 {
-                    UIAccessibility.post(
-                        notification: .announcement,
-                        argument: "Still listening. Say something, or tap the button to end."
-                    )
-                }
-                setState(.idle)
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    await self?.startListening()
+            guard !Task.isCancelled, self.finalizationID == token else { return }
+            self.finalizationID = nil
+            self.finalizationTimeoutTask?.cancel()
+            self.finalizationTimeoutTask = nil
+            self.finalizationTask = nil
+            self.isVoiceSessionActive = false
+            if self.conversationMode != .handsFree || !confirmed {
+                self.sttService.disconnect()
+            }
+            guard confirmed, self.transcriptStore?.hasUncommittedDraft == false else {
+                self.failSpeechFinalization()
+                return
+            }
+            guard let finalText = self.transcriptStore?.finalizeDraft(),
+                  !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                self.capturedBuffers = []
+                self.setState(.idle)
+                if self.conversationMode == .handsFree && !self.isMicMuted {
+                    await self.startListening()
                 }
                 return
             }
-
-            // Empty or invalid transcript - just go idle
-            setState(.idle)
+            self.consecutiveEmptyHandsFreeTurns = 0
+            self.markMeaningfulActivity()
+            let buffers = self.capturedBuffers
+            self.capturedBuffers = []
+            self.recordingTurnNumber += 1
+            self.lastUploadedTurnNumber = self.recordingTurnNumber
+            self.lastUserSendAt = Date()
+            self.recordingUploader.upload(buffers: buffers, sessionId: self.sessionId ?? "unknown",
+                turnNumber: self.recordingTurnNumber, userTranscript: finalText)
+            await self.sendTextInternal(finalText, turnEndedAt: endedAt, lastSpeechAt: lastSpeechAt)
         }
     }
 
@@ -1068,6 +1066,14 @@ final class ConversationCoordinator {
     /// The server answers with turn_cancelled; anything still arriving
     /// for this id is dropped by handleAgentEvent.
     func cancelCurrentTurn() {
+        if finalizationID != nil {
+            cancelSpeechFinalization()
+            isVoiceSessionActive = false
+            sttService.disconnect()
+            transcriptStore?.discardDraft()
+            capturedBuffers = []
+        }
+        voiceTiming.reset()
         guard let turnId = currentTurnId else { return }
         cancelledTurnIds.append(turnId)
         if cancelledTurnIds.count > 20 { cancelledTurnIds.removeFirst(cancelledTurnIds.count - 20) }
@@ -1087,11 +1093,17 @@ final class ConversationCoordinator {
     }
 
     /// Internal: Send text to agent (used by both text input and voice finalization)
-    private func sendTextInternal(_ message: String, spoken: Bool = true) async {
+    private func sendTextInternal(_ message: String, spoken: Bool = true,
+                                  turnEndedAt: TimeInterval? = nil, lastSpeechAt: TimeInterval? = nil) async {
         do {
             currentAgentResponseId = UUID()
             let turnId = UUID().uuidString
             currentTurnId = turnId
+            voiceTiming.reset()
+            if spoken {
+                voiceTiming.begin(turnId: turnId, sentAt: ProcessInfo.processInfo.systemUptime,
+                                  endedAt: turnEndedAt, lastSpeechAt: lastSpeechAt)
+            }
 
             // We're starting a fresh turn — re-open the audio player's
             // chunk gate. If the previous turn ended via barge-in, the
@@ -1449,7 +1461,8 @@ final class ConversationCoordinator {
                let speedValue = (data["voice_speed"]?.value as? Double) ?? (data["voice_speed"]?.value as? Int).map(Double.init) {
                 streamingAudioPlayer?.playbackRate = Float(speedValue)
             }
-            playAccumulatedAudio(isFinal: !isPartial)
+            playAccumulatedAudio(isFinal: !isPartial, turnId: event.turnId, isAcknowledgment: isAck,
+                                 isError: (complete.data?["is_error"]?.value as? Bool) == true)
 
         case .error(let error):
             audioFeedback.stopProcessingPulse()
@@ -1518,18 +1531,7 @@ final class ConversationCoordinator {
                 return
             }
 
-            // WP7 — a commit with almost no speech behind it is noise
-            // (cough, door); keep listening instead of ending the turn.
-            if isFinal, self.conversationMode == .handsFree, self.state == .listening,
-               self.speechSecondsInCurrentListen < self.minSpeechDuration,
-               text.split(separator: " ").count <= 2 {
-                Logger.info("Hands-free: ignoring sub-200ms commit (\(text.count) chars)")
-                self.transcriptStore?.discardDraft()
-                self.hasDetectedSpeechInCurrentListen = false
-                self.lastVoiceActivityAt = nil
-                return
-            }
-
+            // Short answers such as "no" must reach confirmation logic.
             if isFinal {
                 // Server committed a segment. Fold it into the accumulated
                 // draft — the next partial carries ONLY the new segment's
@@ -1542,8 +1544,9 @@ final class ConversationCoordinator {
                 // + server VAD agree the user stopped); in push-to-talk
                 // the user's finger ends the turn — auto-sending here
                 // would fire mid-monologue at every ~20-25s rollover.
-                if self.conversationMode == .handsFree {
-                    self.stopListeningAndProcess()
+                if self.conversationMode == .handsFree,
+                   self.lastVoiceActivityAt.map({ Date().timeIntervalSince($0) >= 0.3 }) ?? true {
+                    self.stopListeningAndProcess(serverCommitted: true)
                 }
             } else {
                 // Partial: replaces only the current segment's text so it's
@@ -1558,6 +1561,8 @@ final class ConversationCoordinator {
             guard let self = self else { return }
 
             Logger.error("STT error: \(error.localizedDescription)")
+
+            self.cancelSpeechFinalization()
 
             // Clean up voice session
             self.voiceService.stopRecording()
@@ -1602,7 +1607,7 @@ final class ConversationCoordinator {
         }
     }
 
-    private func playAccumulatedAudio(isFinal: Bool = true) {
+    private func playAccumulatedAudio(isFinal: Bool = true, turnId: String? = nil, isAcknowledgment: Bool = false, isError: Bool = false) {
         guard !isPrivacyMode, !isMuted else {
             Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted)")
             setState(.idle)
@@ -1611,7 +1616,7 @@ final class ConversationCoordinator {
 
         // WP7 — .speaking is set by onPlaybackStarted after the player
         // accepts the buffer, not here.
-        streamingAudioPlayer?.playAccumulatedAudio(isFinal: isFinal)
+        streamingAudioPlayer?.playAccumulatedAudio(isFinal: isFinal, turnId: turnId, isAcknowledgment: isAcknowledgment, isError: isError)
     }
 
     // MARK: - Accessibility Announcements

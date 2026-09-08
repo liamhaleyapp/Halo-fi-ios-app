@@ -53,6 +53,10 @@ final class ConversationTranscriptStore {
     /// just the last segment.
     private var committedText: String = ""
 
+    var hasUncommittedDraft: Bool {
+        !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     /// committedText + current segment draft — what renders and what sends.
     private var fullDraftText: String {
         committedText.isEmpty
