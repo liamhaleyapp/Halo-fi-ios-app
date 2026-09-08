@@ -80,7 +80,7 @@ struct MoneyProfilePromptCard: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onOpen) {
-                HStack(spacing: 12) {
+                HaloRow(spacing: 12) {
                     HaloIconTile(icon: "person.text.rectangle.fill", tint: .indigo)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Finish setting up").font(.haloRowTitle).foregroundColor(.haloTextPrimary)

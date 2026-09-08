@@ -276,6 +276,21 @@ final class TabHeaderUITests: XCTestCase {
         app.buttons["Later"].tap()
     }
 
+    /// Largest accessibility text (Liam, 2026-09-08): rows stack the icon
+    /// above the words instead of squeezing them to three characters.
+    func testMoneyRowsReadableAtLargestText() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "money-large-text"; shot.lifetime = .keepAlways; add(shot)
+        let budget = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Budget.")).firstMatch
+        XCTAssertTrue(scrollTo(budget, in: app, tries: 8), "Budget row missing at large text")
+        let shot2 = XCTAttachment(screenshot: app.screenshot()); shot2.name = "money-large-text-rows"; shot2.lifetime = .keepAlways; add(shot2)
+        // The row must be wider than it is tall relative to the icon: words get the width.
+        XCTAssertGreaterThan(budget.frame.width, 300)
+    }
+
     func testAgentHeader() {
         let app = launch("none")
         openTab(app, "Agent")

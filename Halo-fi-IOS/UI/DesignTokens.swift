@@ -204,15 +204,19 @@ struct HaloIconTile: View {
         self.symbolColor = symbolColor
     }
 
+    /// Scales with text, but never past 64 pt: at the largest accessibility
+    /// sizes a 110 pt tile left three characters of width for the words.
+    private var tile: CGFloat { min(size, 64) }
+
     var body: some View {
         Image(systemName: icon)
-            .font(.system(size: size * 0.42, weight: .semibold))
+            .font(.system(size: tile * 0.42, weight: .semibold))
             .foregroundStyle(symbolColor)
-            .frame(width: size, height: size)
+            .frame(width: tile, height: tile)
             .background(
                 LinearGradient(colors: [tint, tint.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
             )
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: tile * 0.3, style: .continuous))
             .shadow(color: tint.opacity(0.35), radius: 6, y: 3)
             .accessibilityHidden(true)
     }
@@ -271,5 +275,39 @@ struct TabTitle: View {
             .padding(.bottom, 2)
             .accessibilityHidden(!spokenAsHeader)
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+
+// MARK: - Rows that survive the largest text sizes (2026-09-08)
+
+/// Icon beside the words at normal sizes; icon above the words at the
+/// accessibility sizes, where a side-by-side row leaves the text three
+/// characters wide and hyphenated ("de-posit s").
+struct HaloRow<Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var spacing: CGFloat = 14
+    @ViewBuilder let content: Content
+
+    private var layout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: spacing))
+    }
+
+    var body: some View { layout { content } }
+}
+
+/// The trailing chevron of a tappable row. Hidden at accessibility sizes
+/// (the row is a button either way; VoiceOver already says so).
+struct HaloChevron: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var body: some View {
+        if !dynamicTypeSize.isAccessibilitySize {
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.haloTextTertiary)
+                .accessibilityHidden(true)
+        }
     }
 }

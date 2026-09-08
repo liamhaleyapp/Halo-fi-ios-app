@@ -154,7 +154,7 @@ struct CalendarView: View {
             default: return "expected"
             }
         }()
-        return HStack(spacing: 14) {
+        return HaloRow {
             HaloIconTile(icon: icon, tint: tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label).font(.haloRowTitle).foregroundColor(.haloTextPrimary)

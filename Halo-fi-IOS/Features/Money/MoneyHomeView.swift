@@ -420,7 +420,7 @@ struct MoneyHomeView: View {
 
     private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
         NavigationLink(value: route) {
-            HStack(spacing: 14) {
+            HaloRow {
                 HaloIconTile(icon: icon, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -428,7 +428,7 @@ struct MoneyHomeView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                HaloChevron()
             }
             .padding(16)
             .frame(minHeight: 72)

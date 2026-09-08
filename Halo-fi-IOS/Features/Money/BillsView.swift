@@ -107,7 +107,7 @@ struct BillsView: View {
 
     private func row(_ s: RecurringStream, prompt: Bool) -> some View {
         Button { target = s } label: {
-            HStack {
+            HaloRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (s.nextExpected.map { " · next \(TabSummaries.spokenDate($0))" } ?? ""))

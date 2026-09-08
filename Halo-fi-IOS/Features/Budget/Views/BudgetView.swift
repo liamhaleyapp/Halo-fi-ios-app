@@ -126,7 +126,7 @@ struct BudgetView: View {
         }
         if overview.budgetStatus.hasBudget {
             Button { showingAdjust = true } label: {
-                HStack(spacing: 14) {
+                HaloRow {
                     HaloIconTile(icon: "slider.horizontal.3", tint: .blue)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Adjust the whole budget").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -134,7 +134,7 @@ struct BudgetView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                    HaloChevron()
                 }
                 .padding(16).frame(minHeight: 72).haloCard()
             }
@@ -202,7 +202,7 @@ struct BudgetView: View {
             let names = labels.count <= 1 ? (labels.first ?? "") : labels.dropLast().joined(separator: ", ") + " and " + labels.last!
             let line = "About \(VoiceOverFormatter.dollars(monthly)) a month goes to \(names) cards that aren't linked, so that spending isn't in these categories."
             Button { showingLinkChooser = true } label: {
-                HStack(spacing: 14) {
+                HaloRow {
                     HaloIconTile(icon: "creditcard.trianglebadge.exclamationmark", tint: .orange)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Cards HaloFi can't see").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -210,7 +210,7 @@ struct BudgetView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                    HaloChevron()
                 }
                 .padding(16)
                 .frame(minHeight: 72)
@@ -242,7 +242,7 @@ struct BudgetView: View {
             NavigationLink {
                 BillsView()
             } label: {
-                HStack(spacing: 14) {
+                HaloRow {
                     HaloIconTile(icon: "pin.fill", tint: .teal)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Fixed expenses").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -254,7 +254,7 @@ struct BudgetView: View {
                         }
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                    HaloChevron()
                 }
                 .padding(16)
                 .frame(minHeight: 72)

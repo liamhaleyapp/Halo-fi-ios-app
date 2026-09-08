@@ -559,7 +559,7 @@ private struct SettingsOptionLabel: View {
   let title: String
 
   var body: some View {
-    HStack(spacing: 16) {
+    HaloRow(spacing: 16) {
       Image(systemName: icon)
         .font(.title3)
         .foregroundColor(.blue)
@@ -572,9 +572,7 @@ private struct SettingsOptionLabel: View {
 
       Spacer()
 
-      Image(systemName: "chevron.right")
-        .font(.caption)
-        .foregroundColor(.haloTextSecondary)
+      HaloChevron()
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 14)

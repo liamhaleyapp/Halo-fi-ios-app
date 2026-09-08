@@ -239,7 +239,7 @@ struct BenefitsHomeView: View {
     }
 
     private var lockedBWERow: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HaloRow {
             HaloIconTile(icon: "lock.fill", tint: .gray)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Blind Work Expenses — locked").font(.headline).foregroundColor(.haloTextPrimary)
@@ -254,7 +254,7 @@ struct BenefitsHomeView: View {
     }
 
     private var ssdiLaneRow: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HaloRow {
             HaloIconTile(icon: "lock.fill", tint: .gray)
             VStack(alignment: .leading, spacing: 4) {
                 Text("SSDI work incentives — coming soon").font(.headline).foregroundColor(.haloTextPrimary)
@@ -352,7 +352,7 @@ struct BenefitsHomeView: View {
             ? "\(state) \(hint ?? "Opens \(title.lowercased()).")"
             : (hint ?? "Opens \(title.lowercased()).")
         return NavigationLink(value: route) {
-            HStack(spacing: 14) {
+            HaloRow {
                 HaloIconTile(icon: icon, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -363,7 +363,7 @@ struct BenefitsHomeView: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                HaloChevron()
             }
             .padding(16)
             .frame(minHeight: 72)

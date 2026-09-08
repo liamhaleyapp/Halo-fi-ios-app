@@ -166,7 +166,7 @@ struct AttentionCardView: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(alignment: .top, spacing: 14) {
+            HaloRow {
                 HaloIconTile(icon: icon, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(card.title).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
@@ -175,7 +175,7 @@ struct AttentionCardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
+                HaloChevron()
             }
             .padding(16)
             .frame(minHeight: 72)

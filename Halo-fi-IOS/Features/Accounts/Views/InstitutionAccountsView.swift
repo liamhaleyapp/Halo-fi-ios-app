@@ -224,7 +224,7 @@ struct BankAccountRow: View {
   }
 
   var body: some View {
-    HStack(spacing: 16) {
+    HaloRow(spacing: 16) {
       Image(systemName: accountIcon(for: account.type))
         .font(.title3)
         .foregroundColor(.teal)
