@@ -50,6 +50,8 @@ struct MoneySnapshot: Equatable {
     var staleCount: Int = 0
     var staleSinceSpoken: String? = nil
     var pending: PendingBankActivity? = nil
+    var investmentsCents: Int? = nil
+    var investmentAccountCount: Int = 0
 }
 
 enum TabSummaries {
@@ -71,8 +73,11 @@ enum TabSummaries {
         // card also carries the resource counter (Liam, 2026-09-04): the
         // countable figure against the limit, in words before numbers, and
         // the card opens the Resource monitor.
-        verdict = s.accountCount == 0 ? "No accounts linked" : "Balance"
+        verdict = s.accountCount == 0 && s.owedCents == 0 && s.investmentAccountCount == 0 ? "No accounts linked" : "Balance"
         detail = "Cash \(VoiceOverFormatter.dollars(s.cashCents)). Owed \(VoiceOverFormatter.dollars(s.owedCents))."
+        if s.investmentAccountCount > 0 {
+            detail += s.investmentsCents.map { " Investments \(VoiceOverFormatter.dollars($0))." } ?? " Investment balance unavailable."
+        }
         if let pending = s.pending { detail += " Pending \(PendingBankActivity.money(pending.outflowCents))." }
         tone = s.owedCents > s.cashCents ? .watch : .positive
 

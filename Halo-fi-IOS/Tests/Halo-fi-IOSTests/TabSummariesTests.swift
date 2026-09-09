@@ -283,3 +283,50 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(MoneySegmentsBar.fractions([-500, 1000, 1000]) == [0, 0.5, 0.5])
     }
 }
+
+@Suite struct InvestmentAndInstitutionTests {
+    @Test @MainActor func investmentsDoNotInflateCashAndDisappearWithoutAnInvestmentAccount() {
+        let bank = BankDataManager()
+        bank.accountsByItemId = UITestArchetype.ssiWatch.accountsByItemId
+        let investment = BankAccount(name: "Investment account", mask: "7890", type: "investment", subtype: "brokerage",
+            currentBalance: 5000, availableBalance: nil, currency: "USD", idAccount: "investment", plaidItemId: "item-3",
+            plaidAccountId: "p3", isActive: true, createdAt: nil, updatedAt: nil)
+        #expect(!bank.hasInvestmentAccounts)
+        bank.accountsByItemId["item-3"] = [investment]
+        let snapshot = MoneySnapshot.make(bank: bank, budget: BudgetDataManager())
+        #expect(snapshot.cashCents == 121400)
+        #expect(snapshot.accountCount == 1)
+        #expect(snapshot.owedCents == 187000)
+        #expect(snapshot.investmentsCents == 500000)
+        #expect(snapshot.investmentAccountCount == 1)
+        #expect(bank.hasInvestmentAccounts)
+        bank.accountsByItemId.removeValue(forKey: "item-3")
+        #expect(!bank.hasInvestmentAccounts)
+    }
+
+    @Test @MainActor func twoChaseLoginsShareOneGroupButKeepTheirAccountRoutes() {
+        var items = UITestArchetype.ssiWatch.linkedItems
+        items.append(ConnectedItem(institutionId: "ins_1", institutionName: "Chase", availableProducts: nil,
+            itemId: "item-3", userId: "uitest", plaidItemId: "plaid-3", isActive: true,
+            lastSync: nil, createdAt: nil, updatedAt: nil))
+        let groups = InstitutionGroup.grouping(items)
+        #expect(groups.count == 2)
+        let chase = groups.first { $0.name == "Chase" }!
+        #expect(Set(chase.items.map(\.itemId)) == Set(["item-1", "item-3"]))
+        let bank = BankDataManager()
+        bank.accountsByItemId = UITestArchetype.ssiWatch.accountsByItemId
+        let a = BankAccount(name: "Business", mask: "7890", type: "depository", subtype: "checking",
+            currentBalance: 100, availableBalance: nil, currency: "USD", idAccount: "business", plaidItemId: "item-3",
+            plaidAccountId: "p3", isActive: true, createdAt: nil, updatedAt: nil)
+        bank.accountsByItemId["item-3"] = [a]
+        #expect(Set(bank.accounts(in: chase).map(\.plaidItemId)) == Set(["item-1", "item-3"]))
+    }
+
+    @Test func unknownInvestmentBalanceRemainsUnknownWhenDecoded() throws {
+        let json = #"{"accounts":[{"account_id":"a","name":"Brokerage","institution":"Bank","mask":"1234","currency":"USD","balance_cents":null,"holdings":[]}],"total_cents":null,"currency":"USD","complete":false}"#
+        let result = try JSONDecoder().decode(InvestmentSummary.self, from: Data(json.utf8))
+        #expect(result.totalCents == nil)
+        #expect(result.accounts.first?.balanceCents == nil)
+        #expect(!result.complete)
+    }
+}

@@ -83,6 +83,7 @@ struct MoneyHomeView: View {
                         attentionRow
                         budgetRow
                         incomeRow
+                        if bankDataManager.hasInvestmentAccounts { investmentsRow }
                         billsRow
                         calendarRow
                         accountsRow
@@ -151,6 +152,7 @@ struct MoneyHomeView: View {
                 case .allTransactions: AllTransactionsView(initial: recentTransactions)
                 case .resourceMonitor: ResourceMonitorView()
                 case .income: IncomeView()
+                case .investments: InvestmentsView()
                 case .bills: BillsView()
                 case .calendar: CalendarView()
                 case .workExpenses: WorkExpensesView()
@@ -211,7 +213,7 @@ struct MoneyHomeView: View {
     }
 
     enum MoneyRoute: Hashable {
-        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses
+        case budget, attention, accounts, allTransactions, resourceMonitor, income, bills, calendar, workExpenses, investments
         case reconnectBank(String, String)
         case package(String?)
         case review(String)
@@ -338,6 +340,12 @@ struct MoneyHomeView: View {
                    hint: "Opens your income: payers and this month's work income.", route: .income)
     }
 
+    private var investmentsRow: some View {
+        row(title: "Investments", icon: "chart.line.uptrend.xyaxis", tint: .purple,
+            line: snapshot.investmentsCents.map { InvestmentSummary.money($0, currency: "USD") } ?? "Balance unavailable",
+            hint: "Opens your linked investment accounts and holdings.", route: .investments)
+    }
+
     // MARK: - b3. Bills row (2026-09-05)
 
     private var billsRow: some View {
@@ -387,8 +395,10 @@ struct MoneyHomeView: View {
         if items.isEmpty && manual == 0 {
             line = "No accounts yet. Link one below."
         } else {
-            let names = items.map(\.institutionName)
-            line = VoiceOverFormatter.count(snapshot.accountCount, singular: "account", plural: "accounts")
+            let groups = bankDataManager.institutionGroups
+            let names = groups.map(\.name)
+            let accountCount = groups.reduce(manual) { $0 + bankDataManager.accounts(in: $1).count }
+            line = VoiceOverFormatter.count(accountCount, singular: "account", plural: "accounts")
             if !names.isEmpty { line += " at " + names.prefix(2).joined(separator: " and ") + (names.count > 2 ? " and more" : "") }
             line += "."
             if attention > 0 { line += " \(VoiceOverFormatter.count(attention, singular: "connection needs", plural: "connections need")) attention." }
@@ -448,12 +458,12 @@ struct MoneyHomeView: View {
             .frame(minHeight: 72)
             .haloCard(tint: route == .attention && tint != .gray ? tint : nil)
             .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
         }
         .buttonStyle(HapticPlainButtonStyle())
         .id(route)
         .contentShape(Rectangle())
         .accessibilityIdentifier("moneyRow-\(title)")
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title). \(line)")
         .accessibilityHint(hint)
         .accessibilityAddTraits(.isButton)
@@ -493,6 +503,9 @@ extension MoneySnapshot {
     static func make(bank: BankDataManager, budget: BudgetDataManager) -> MoneySnapshot {
         var cash = 0.0
         var owed = 0.0
+        var investments = 0.0
+        var investmentCount = 0
+        var investmentBalancesKnown = true
         var count = 0
         // Single source: the per-institution accounts (what the Accounts page
         // lists). The flat /bank/accounts list is only a stopgap before the
@@ -525,7 +538,6 @@ extension MoneySnapshot {
         var staleCount = 0
         var earliestStale: String?
         for account in source where account.isActive && seenIds.insert(account.idAccount).inserted {
-            count += 1
             if let since = account.staleSince {
                 staleCount += 1
                 if earliestStale == nil || since < earliestStale! { earliestStale = since }
@@ -533,16 +545,25 @@ extension MoneySnapshot {
             let balance = account.currentBalance ?? 0
             if account.type.lowercased() == "credit" || account.type.lowercased() == "loan" {
                 owed += max(0, balance)
+            } else if ["investment", "brokerage"].contains(account.type.lowercased()) {
+                investments += balance
+                investmentCount += 1
+                if account.currentBalance == nil || account.currency != "USD" { investmentBalancesKnown = false }
             } else {
+                count += 1
                 cash += max(0, balance)
             }
         }
         for manual in bank.manualAccounts {
-            count += 1
             let kind = String(describing: manual.accountType).lowercased()
             if kind.contains("credit") || kind.contains("loan") {
                 owed += max(0, manual.balance)
+            } else if kind.contains("investment") || kind.contains("brokerage") {
+                investments += manual.balance
+                investmentCount += 1
+                if manual.currency != "USD" { investmentBalancesKnown = false }
             } else {
+                count += 1
                 cash += max(0, manual.balance)
             }
         }
@@ -577,7 +598,9 @@ extension MoneySnapshot {
             isLoading: bank.isInitialLoad && bank.balanceSummary == nil,
             staleCount: staleCount,
             staleSinceSpoken: earliestStale.flatMap { ISO8601DateFormatter.dateOnly.date(from: $0) }.map { $0.formatted(.dateTime.month(.wide).day()) },
-            pending: overview?.pending
+            pending: overview?.pending,
+            investmentsCents: bank.investments != nil ? bank.investments?.totalCents : (investmentBalancesKnown ? Int((investments * 100).rounded()) : nil),
+            investmentAccountCount: bank.investments?.accounts.count ?? investmentCount
         )
     }
 
@@ -597,21 +620,14 @@ struct AccountsListView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                let items = bankDataManager.linkedItems ?? []
+                let groups = bankDataManager.institutionGroups
                 ScreenReaderSummaryHeader(
-                    verdict: items.isEmpty && bankDataManager.manualAccounts.isEmpty ? "No accounts linked" : "Accounts",
-                    detail: "\(VoiceOverFormatter.count(items.count, singular: "institution", plural: "institutions")), \(VoiceOverFormatter.count(bankDataManager.manualAccounts.count, singular: "manual account", plural: "manual accounts")). Open one to see its accounts and transactions.",
+                    verdict: groups.isEmpty && bankDataManager.manualAccounts.isEmpty ? "No accounts linked" : "Accounts",
+                    detail: "\(VoiceOverFormatter.count(groups.count, singular: "institution", plural: "institutions")), \(VoiceOverFormatter.count(bankDataManager.manualAccounts.count, singular: "manual account", plural: "manual accounts")). Open one to see its accounts and transactions.",
                     tone: .neutral
                 )
-                ForEach(items, id: \.itemId) { item in
-                    NavigationLink(value: item) {
-                        AccessibleInstitutionCard(
-                            item: item,
-                            accounts: bankDataManager.accountsByItemId[item.itemId],
-                            isLoading: false
-                        )
-                    }
-                    .buttonStyle(HapticPlainButtonStyle())
+                ForEach(groups) { group in
+                    InstitutionGroupLink(group: group)
                 }
                 ForEach(bankDataManager.manualAccounts) { manual in
                     ManualAccountRow(account: manual)
@@ -708,5 +724,131 @@ struct AllTransactionsView: View {
         if forceRefresh {
             UIAccessibility.post(notification: .announcement, argument: "\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")) loaded.")
         }
+    }
+}
+
+
+struct InstitutionGroup: Identifiable {
+    let id: String
+    let items: [ConnectedItem]
+    var name: String { items.first?.institutionName ?? "Bank" }
+    static func grouping(_ items: [ConnectedItem]) -> [InstitutionGroup] {
+        Dictionary(grouping: items) { $0.institutionId.isEmpty ? $0.itemId : $0.institutionId }
+            .map { InstitutionGroup(id: $0.key, items: $0.value.sorted { $0.itemId < $1.itemId }) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+}
+
+extension BankDataManager {
+    var institutionGroups: [InstitutionGroup] {
+        InstitutionGroup.grouping(linkedItems ?? [])
+    }
+    var hasInvestmentAccounts: Bool {
+        if let investments { return (investments.linkedAccountCount ?? investments.accounts.filter { $0.source != "manual" }.count) > 0 }
+        return (accountsByItemId.values.flatMap { $0 } + (accounts ?? [])).contains { $0.isActive && ["investment", "brokerage"].contains($0.type.lowercased()) }
+    }
+    func accounts(in group: InstitutionGroup) -> [BankAccount] {
+        var seen = Set<String>()
+        return group.items.flatMap { item in
+            accountsByItemId[item.itemId] ?? (accounts ?? []).filter { $0.plaidItemId == item.itemId || $0.plaidItemId == item.plaidItemId }
+        }.filter { $0.isActive && seen.insert($0.idAccount).inserted }
+    }
+}
+
+struct InstitutionGroupLink: View {
+    let group: InstitutionGroup
+    @Environment(BankDataManager.self) private var bank
+    var body: some View {
+        if let first = group.items.first {
+            NavigationLink { InstitutionGroupAccountsView(group: group) } label: {
+                AccessibleInstitutionCard(item: first, accounts: bank.accounts(in: group), isLoading: false, connectionsNeedingAttention: group.items.filter { !$0.isActive }.count)
+            }.buttonStyle(HapticPlainButtonStyle())
+        }
+    }
+}
+
+struct InstitutionGroupAccountsView: View {
+    let group: InstitutionGroup
+    @Environment(BankDataManager.self) private var bank
+    @State private var loaded: [String: [BankAccount]] = [:]
+    @State private var error: String?
+    @AccessibilityFocusState private var focused: Bool
+    private var accounts: [BankAccount] {
+        var seen = Set<String>()
+        return group.items.flatMap { loaded[$0.itemId] ?? bank.accountsByItemId[$0.itemId] ?? [] }
+            .filter { $0.isActive && seen.insert($0.idAccount).inserted }
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("\(accounts.count) accounts").font(.headline).accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
+                ForEach(accounts) { account in
+                    NavigationLink {
+                        AccountDetailView(account: FinancialAccount(from: account, plaidItemId: account.plaidItemId), bankAccount: account)
+                    } label: { BankAccountRow(account: account) }
+                    .buttonStyle(HapticPlainButtonStyle())
+                }
+                if let error { Text(error).foregroundStyle(Color.haloTextPrimary) }
+                ForEach(Array(group.items.enumerated()), id: \.element.itemId) { index, item in
+                    VStack(alignment: .leading, spacing: 8) {
+                        if group.items.count > 1 { Text("Connection \(index + 1)").font(.headline) }
+                        UpdateSharedAccountsButton(item: item) { await load() }
+                    }
+                }
+            }.padding(20).padding(.bottom, 100).readableContentWidth()
+        }
+        .background(Color.haloBackground)
+        .navigationTitle(group.name)
+        .task { await load(); focused = true }
+        .refreshable { await load() }
+    }
+    private func load() async {
+        if UITestArchetype.isActive { return }
+        error = nil
+        for item in group.items {
+            do { loaded[item.itemId] = try await bank.fetchAccountsForItem(itemId: item.itemId).accounts }
+            catch { self.error = "Some accounts could not refresh. Pull down to try again." }
+        }
+    }
+}
+
+struct InvestmentsView: View {
+    @Environment(BankDataManager.self) private var bank
+    @State private var error: String?
+    @AccessibilityFocusState private var focused: Bool
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Investments").font(.title2.bold()).accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
+                if let summary = bank.investments {
+                    Text(summary.totalCents.map { InvestmentSummary.money($0, currency: summary.currency) } ?? "Combined balance unavailable")
+                        .font(.title.bold())
+                    Text("Latest reported values, including any manually entered investments. Holdings are part of each account balance.")
+                        .foregroundStyle(Color.haloTextSecondary)
+                    ForEach(summary.accounts) { account in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("\(account.institution), \(account.name)" + (account.mask.isEmpty ? "" : ", ending in \(account.mask)")).font(.headline).accessibilityAddTraits(.isHeader)
+                            Text(account.balanceCents.map { InvestmentSummary.money($0, currency: account.currency) } ?? "Balance unavailable")
+                            if let date = account.asOf { Text("Balance updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.caption) }
+                            if account.source == "manual" { Text("Entered manually").foregroundStyle(Color.haloTextSecondary) }
+                            else if account.holdings.isEmpty { Text("Holdings are not available from this connection yet.").foregroundStyle(Color.haloTextSecondary) }
+                            ForEach(account.holdings) { holding in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(holding.name).font(.body.weight(.semibold))
+                                    Text("\(holding.quantity.formatted()) shares or units, \(InvestmentSummary.money(holding.valueCents, currency: holding.currency))")
+                                    if let date = holding.asOf { Text("Updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.caption) }
+                                }.accessibilityElement(children: .combine)
+                            }
+                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).haloCard()
+                    }
+                } else if error == nil { ProgressView("Loading investments") }
+                if let error { Text(error); Button("Try again") { Task { await load() } } }
+            }.padding(20).padding(.bottom, 100).readableContentWidth()
+        }.background(Color.haloBackground).navigationTitle("Investments").navigationBarTitleDisplayMode(.inline)
+        .task { await load(); focused = true }.refreshable { await load() }
+    }
+    private func load() async {
+        do { try await bank.loadInvestments(); error = nil }
+        catch { self.error = "Could not refresh investments. Any displayed values are from the last successful update." }
     }
 }

@@ -13,40 +13,28 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(UserManager.self) private var userManager
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var viewModel = ConversationViewModel()
     @State private var showingVoice = false
     @State private var voicePrompt: String? = nil
     @State private var showingShortcuts = false
     @State private var showingHistory = false
+    @State private var showingConversationOptions = false
+    @State private var pendingShortcutVoice: String?
+    @State private var pendingHistory = false
+    @AccessibilityFocusState private var optionsFocus: Bool
     @State private var showingMoneyProfile = false
     @State private var hidMoneyPrompt = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                headerRow
-                if userManager.capabilities.moneyProfileRemaining > 0 && !hidMoneyPrompt {
-                    MoneyProfilePromptCard(remaining: userManager.capabilities.moneyProfileRemaining,
-                                           onOpen: { showingMoneyProfile = true },
-                                           onNotNow: { hidMoneyPrompt = true })
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    ScrollView { conversationContent }
+                } else {
+                    conversationContent
                 }
-                TranscriptView(
-                    entries: viewModel.entries,
-                    onCopyEntry: viewModel.copyEntry,
-                    isProcessing: viewModel.state == .processing
-                )
-                ShortcutsButton { showingShortcuts = true }
-                TextInputArea(
-                    text: $viewModel.textInput,
-                    state: viewModel.state,
-                    isEnabled: true,
-                    onSend: { send(viewModel.textInput) },
-                    onSwitchToVoice: { openVoice(prompt: nil) },
-                    onStopSpeaking: { viewModel.coordinator.stopSpeaking() },
-                    autoFocus: false,
-                    prominentVoice: true
-                )
             }
             .readableContentWidth()
             .background(Color(.systemBackground).ignoresSafeArea())
@@ -58,9 +46,16 @@ struct HomeView: View {
             }) {
                 ConversationView(initialPrompt: voicePrompt)
             }
-            .sheet(isPresented: $showingShortcuts) {
+            .sheet(isPresented: $showingConversationOptions, onDismiss: {
+                if pendingHistory { pendingHistory = false; showingHistory = true }
+            }) {
+                conversationOptions
+            }
+            .sheet(isPresented: $showingShortcuts, onDismiss: {
+                if let prompt = pendingShortcutVoice { pendingShortcutVoice = nil; openVoice(prompt: prompt) }
+            }) {
                 ShortcutsSheet(chips: QuickActionChip.available(benefitsLane: userManager.capabilities.showsBenefitsLane)) { chip in
-                    send(chip.prompt)
+                    if chip.id == "daily" || chip.id == "weekly" { pendingShortcutVoice = chip.prompt } else { send(chip.prompt) }
                 }
             }
             .sheet(isPresented: $showingHistory) {
@@ -97,6 +92,34 @@ struct HomeView: View {
         }
     }
 
+    private var conversationContent: some View {
+        VStack(spacing: 0) {
+                headerRow
+                if userManager.capabilities.moneyProfileRemaining > 0 && !hidMoneyPrompt {
+                    MoneyProfilePromptCard(remaining: userManager.capabilities.moneyProfileRemaining,
+                                           onOpen: { showingMoneyProfile = true },
+                                           onNotNow: { hidMoneyPrompt = true })
+                }
+                TranscriptView(
+                    entries: viewModel.entries,
+                    onCopyEntry: viewModel.copyEntry,
+                    isProcessing: viewModel.state == .processing
+                )
+                .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 240 : nil)
+                ShortcutsButton { showingShortcuts = true }
+                TextInputArea(
+                    text: $viewModel.textInput,
+                    state: viewModel.state,
+                    isEnabled: true,
+                    onSend: { send(viewModel.textInput) },
+                    onSwitchToVoice: { openVoice(prompt: nil) },
+                    onStopSpeaking: { viewModel.coordinator.stopSpeaking() },
+                    autoFocus: false,
+                    prominentVoice: true
+                )
+            }
+    }
+
     // MARK: - Pieces
 
     private var isOnline: Bool {
@@ -122,17 +145,7 @@ struct HomeView: View {
     private var headerRow: some View {
         HStack(alignment: .top, spacing: 8) {
             ScreenReaderSummaryHeader(verdict: "Halo Assistant", detail: headerDetail, tone: isOnline ? .positive : .act)
-            Menu {
-                Button { showingHistory = true } label: {
-                    Label("Previous conversations", systemImage: "clock.arrow.circlepath")
-                }
-                Button {
-                    viewModel.store.startNewSession()
-                    UIAccessibility.post(notification: .announcement, argument: "New conversation. The last one is saved under Previous conversations.")
-                } label: {
-                    Label("New conversation", systemImage: "plus.bubble")
-                }
-            } label: {
+            Button { showingConversationOptions = true } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title2)
                     .frame(width: 44, height: 44)
@@ -143,6 +156,34 @@ struct HomeView: View {
         .padding(.top, 8)
     }
 
+
+    private var conversationOptions: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Button {
+                        pendingHistory = true
+                        showingConversationOptions = false
+                    } label: {
+                        Label("Previous conversations", systemImage: "clock.arrow.circlepath")
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                    }.accessibilityFocused($optionsFocus)
+                    Button {
+                        viewModel.store.startNewSession()
+                        showingConversationOptions = false
+                        UIAccessibility.post(notification: .announcement, argument: "New conversation. The last one is saved under Previous conversations.")
+                    } label: {
+                        Label("New conversation", systemImage: "plus.bubble")
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                    }
+                }.buttonStyle(.bordered).tint(Color.haloTextPrimary).padding(20)
+            }.navigationTitle("Conversation options").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Close") { showingConversationOptions = false } } }
+                .onAppear { optionsFocus = true }
+        }
+    }
 
     // MARK: - Actions
 

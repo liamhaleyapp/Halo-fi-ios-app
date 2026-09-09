@@ -123,13 +123,16 @@ struct BalanceHeroCard: View {
         let owed = max(0, snapshot.owedCents)
         let pending = max(0, snapshot.pending?.outflowCents ?? 0)
         return VStack(alignment: .leading, spacing: 8) {
-            MoneySegmentsBar(amounts: [cash, owed, pending], colors: [.haloPositive, .haloNegative, .yellow], pendingIndex: 2)
+            MoneySegmentsBar(amounts: [cash, owed, pending, max(0, snapshot.investmentsCents ?? 0)], colors: [.haloPositive, .haloNegative, .yellow, .purple], pendingIndex: 2)
                 .frame(height: barHeight)
             VStack(alignment: .leading, spacing: 6) {
                 MoneyBarLegend(color: .haloPositive, text: "Cash \(PendingBankActivity.money(cash))")
                 MoneyBarLegend(color: .haloNegative, text: "Owed \(PendingBankActivity.money(owed))")
                 if snapshot.pending != nil {
                     MoneyBarLegend(color: .yellow, text: "Pending \(PendingBankActivity.money(pending))", pending: true)
+                }
+                if snapshot.investmentAccountCount > 0 {
+                    MoneyBarLegend(color: .purple, text: snapshot.investmentsCents.map { "Investments \(PendingBankActivity.money($0))" } ?? "Investments unavailable")
                 }
             }
         }

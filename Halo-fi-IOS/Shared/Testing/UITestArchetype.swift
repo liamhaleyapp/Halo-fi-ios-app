@@ -91,7 +91,7 @@ enum UITestArchetype: String, CaseIterable {
     }
 
     var linkedItems: [ConnectedItem] {
-        [
+        var result = [
             ConnectedItem(institutionId: "ins_1", institutionName: "Chase", availableProducts: ["transactions"],
                           itemId: "item-1", userId: "uitest", plaidItemId: "plaid-1", isActive: true,
                           lastSync: "2026-09-03T12:00:00Z", createdAt: nil, updatedAt: nil),
@@ -99,10 +99,15 @@ enum UITestArchetype: String, CaseIterable {
                           itemId: "item-2", userId: "uitest", plaidItemId: "plaid-2", isActive: true,
                           lastSync: "2026-09-03T12:00:00Z", createdAt: nil, updatedAt: nil),
         ]
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-investments") {
+            result.append(ConnectedItem(institutionId: "ins_1", institutionName: "Chase", availableProducts: ["investments"],
+                itemId: "item-3", userId: "uitest", plaidItemId: "plaid-3", isActive: true, lastSync: nil, createdAt: nil, updatedAt: nil))
+        }
+        return result
     }
 
     var accountsByItemId: [String: [BankAccount]] {
-        [
+        var result = [
             "item-1": [
                 BankAccount(name: "Chase Checking", mask: "1234", type: "depository", subtype: "checking",
                             currentBalance: 1214.00, availableBalance: 1200.00, currency: "USD",
@@ -114,6 +119,12 @@ enum UITestArchetype: String, CaseIterable {
                             idAccount: "acct-2", plaidItemId: "item-2", plaidAccountId: "p2", isActive: true, createdAt: nil, updatedAt: nil),
             ],
         ]
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-investments") {
+            result["item-3"] = [BankAccount(name: "Investment account", mask: "7890", type: "investment", subtype: "brokerage",
+                currentBalance: 5000, availableBalance: nil, currency: "USD", idAccount: "acct-3", plaidItemId: "item-3",
+                plaidAccountId: "p3", isActive: true, createdAt: nil, updatedAt: nil)]
+        }
+        return result
     }
 
     /// Attention cards for this archetype (2026-09-05): SSI users get a

@@ -51,6 +51,46 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testInvestmentBalanceAndGroupedChaseNavigation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-investments"]
+        app.launch()
+        XCTAssertTrue(header(in: app).label.contains("5,000"))
+        let investment = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Investments.'")).firstMatch
+        XCTAssertTrue(scrollTo(investment, in: app))
+        investment.tap()
+        XCTAssertTrue(app.staticTexts["Example fund"].waitForExistence(timeout: 5) || app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Example fund'")).firstMatch.exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        let accounts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Accounts.'")).firstMatch
+        XCTAssertTrue(scrollTo(accounts, in: app))
+        accounts.tap()
+        let chase = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Chase.'"))
+        XCTAssertTrue(chase.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(chase.count, 1)
+        XCTAssertTrue(chase.firstMatch.label.contains("2 accounts"))
+        chase.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["2 accounts"].waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Grouped Chase accounts"; shot.lifetime = .keepAlways; add(shot)
+    }
+
+    func testConversationOptionsWrapAtLargestTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-tab=agent", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        let options = app.buttons["Conversation options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 8))
+        options.tap()
+        let previous = app.buttons["Previous conversations"]
+        let next = app.buttons["New conversation"]
+        XCTAssertTrue(previous.waitForExistence(timeout: 5))
+        XCTAssertTrue(previous.isHittable && next.isHittable)
+        XCTAssertLessThan(previous.frame.maxY, next.frame.minY)
+        XCTAssertLessThanOrEqual(previous.frame.maxX, app.frame.maxX)
+        XCTAssertGreaterThan(previous.frame.height, 56)
+        XCTAssertTrue(app.buttons["Close"].firstMatch.isHittable)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Conversation options largest text"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     func testAccountIdentityReviewUsesLinearChoicesAndTopClose() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-account-identity"]
@@ -358,7 +398,7 @@ final class TabHeaderUITests: XCTestCase {
         row.tap()
         XCTAssertTrue(header(in: app).label.contains("unverified"))
         let subscription = app.descendants(matching: .any).matching(NSPredicate(format:
-            "label == %@", "Spotify, $10.99, Expected. Bank disconnected; payment unverified.")).firstMatch
+            "label == %@", "September 27, Spotify, $10.99, Expected. Bank disconnected; payment unverified.")).firstMatch
         XCTAssertTrue(scrollTo(subscription, in: app), "Disconnected subscription status missing from accessibility label")
         for _ in 0..<4 {
             if subscription.isHittable && subscription.frame.maxY < app.frame.height - 120 { break }
@@ -381,7 +421,7 @@ final class TabHeaderUITests: XCTestCase {
         row.tap()
         XCTAssertTrue(header(in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(header(in: app).label.hasPrefix("September 2026."), header(in: app).label)
-        let paycheck = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Paycheck from Acme Payroll, $412.00, expected.")).firstMatch
+        let paycheck = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "September 18, Paycheck from Acme Payroll, $412.00, expected.")).firstMatch
         XCTAssertTrue(scrollTo(paycheck, in: app), "paycheck item missing")
     }
 

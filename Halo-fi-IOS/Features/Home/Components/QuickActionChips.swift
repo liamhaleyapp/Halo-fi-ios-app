@@ -22,7 +22,7 @@ struct QuickActionChip: Identifiable {
         QuickActionChip(id: "how-doing", title: "How am I doing this month?", prompt: "How am I doing this month? Give me my budget and spending in plain words.", icon: "chart.bar.fill"),
         QuickActionChip(id: "where-stand", title: "Where do I stand?", prompt: "Where do I stand right now? Balances, my resource limit if I have one, and anything I should know.", icon: "location.fill"),
         QuickActionChip(id: "daily", title: "Daily snapshot", prompt: "Give me a daily snapshot of my finances — balances, any recent transactions, and anything I should know about today.", icon: "sun.max.fill"),
-        QuickActionChip(id: "weekly", title: "Weekly update", prompt: "Give me a weekly summary — how much did I spend this week, what were my biggest categories, and how am I tracking against my budget?", icon: "calendar"),
+        QuickActionChip(id: "weekly", title: "Weekly update", prompt: "Give me a weekly snapshot of my finances — current balances, spending this week, bills and subscriptions due, and expected income.", icon: "calendar"),
         QuickActionChip(id: "spending", title: "Spending check", prompt: "Do a spending check — where is my money going this month, what are my top spending categories, and are there any unusual charges?", icon: "magnifyingglass"),
         QuickActionChip(id: "log-expense", title: "Log a work expense", prompt: "I want to log a work expense.", icon: "briefcase.fill", benefitsOnly: true),
     ]

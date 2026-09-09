@@ -80,26 +80,8 @@ struct AccountsOverviewView: View {
         searchField
           .padding(.bottom, 8)
 
-        // Connected institutions section
-        if !connectedInstitutions.isEmpty {
-          Section {
-            ForEach(connectedInstitutions, id: \.itemId) { item in
-              institutionRow(item)
-            }
-          } header: {
-            sectionHeader("Connected", count: connectedInstitutions.count)
-          }
-        }
-
-        // Needs attention section
-        if !needsAttentionInstitutions.isEmpty {
-          Section {
-            ForEach(needsAttentionInstitutions, id: \.itemId) { item in
-              institutionRow(item)
-            }
-          } header: {
-            sectionHeader("Needs Attention", count: needsAttentionInstitutions.count)
-          }
+        ForEach(bankDataManager.institutionGroups.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }) { group in
+          InstitutionGroupLink(group: group)
         }
 
         // Manual accounts section (non-Plaid)

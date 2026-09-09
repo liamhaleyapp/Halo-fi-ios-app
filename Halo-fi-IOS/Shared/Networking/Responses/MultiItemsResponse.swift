@@ -14,6 +14,7 @@ struct MultiItemsResponse: Codable {
     let items: [ServerLinkedItem]
     let totalItems: Int?
     var balanceSummary: VerifiedBalanceSummary? = nil
+    var investments: InvestmentSummary? = nil
     var identityReviews: [AccountIdentityReview]? = nil
 
     enum CodingKeys: String, CodingKey {
@@ -21,6 +22,7 @@ struct MultiItemsResponse: Codable {
         case items
         case totalItems = "total_items"
         case balanceSummary = "balance_summary"
+        case investments
         case identityReviews = "identity_reviews"
     }
 }
@@ -186,5 +188,41 @@ struct AccountIdentityReview: Codable, Identifiable {
         enum CodingKeys: String, CodingKey {
             case accountId = "account_id", name, mask, institution
         }
+    }
+}
+
+
+struct InvestmentSummary: Codable {
+    let accounts: [Account]
+    let totalCents: Int?
+    let currency: String
+    let complete: Bool
+    var linkedAccountCount: Int? = nil
+    enum CodingKeys: String, CodingKey { case accounts, totalCents = "total_cents", currency, complete, linkedAccountCount = "linked_account_count" }
+    struct Account: Codable, Identifiable {
+        let accountId: String
+        let name: String
+        let institution: String
+        let mask: String
+        let currency: String
+        let balanceCents: Int?
+        let asOf: String?
+        let holdings: [Holding]
+        var source: String? = nil
+        var id: String { accountId }
+        enum CodingKeys: String, CodingKey { case accountId = "account_id", name, institution, mask, currency, balanceCents = "balance_cents", asOf = "as_of", holdings, source }
+    }
+    struct Holding: Codable, Identifiable {
+        let id: String
+        let name: String
+        let ticker: String?
+        let quantity: Double
+        let valueCents: Int
+        let currency: String
+        let asOf: String?
+        enum CodingKeys: String, CodingKey { case id, name, ticker, quantity, valueCents = "value_cents", currency, asOf = "as_of" }
+    }
+    static func money(_ cents: Int, currency: String) -> String {
+        (Double(cents) / 100).formatted(.currency(code: currency))
     }
 }

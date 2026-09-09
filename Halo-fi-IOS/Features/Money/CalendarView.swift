@@ -117,7 +117,7 @@ struct CalendarView: View {
             Text(dayTitle(day))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.haloTextSecondary)
-                .accessibilityAddTraits(.isHeader)
+                .accessibilityHidden(true)
             ForEach(Array(day.items.enumerated()), id: \.offset) { _, item in itemRow(item, day: day) }
         }
     }
@@ -163,7 +163,7 @@ struct CalendarView: View {
         .frame(minHeight: 64)
         .haloCard(tint: (item.kind == "deadline" && item.status == "due") ? .orange : (item.status == "overdue" ? .red : nil))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + (state.hasSuffix(".") ? "" : "."))
+        .accessibilityLabel("\(dayTitle(day)), \(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + (state.hasSuffix(".") ? "" : "."))
     }
 
     private func load(force: Bool = false) async {

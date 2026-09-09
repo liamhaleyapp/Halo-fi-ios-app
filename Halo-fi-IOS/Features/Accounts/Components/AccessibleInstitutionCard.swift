@@ -13,6 +13,13 @@ struct AccessibleInstitutionCard: View {
   let item: ConnectedItem
   let accounts: [BankAccount]?
   let isLoading: Bool
+  var connectionsNeedingAttention: Int? = nil
+
+  private var needsAttention: Bool { connectionsNeedingAttention.map { $0 > 0 } ?? !item.isActive }
+  private var statusLabel: String {
+    if let count = connectionsNeedingAttention, count > 0 { return "\(count) connection\(count == 1 ? "" : "s") need\(count == 1 ? "s" : "") attention" }
+    return item.isActive ? "Connected" : "Needs attention"
+  }
 
   // MARK: - Computed Properties
 
@@ -21,7 +28,7 @@ struct AccessibleInstitutionCard: View {
     label += ". " // Period for natural pause
 
     // Status
-    label += item.isActive ? "Connected" : "Needs attention"
+    label += statusLabel
 
     // Account count
     if let accounts = accounts, !accounts.isEmpty {
@@ -59,10 +66,10 @@ struct AccessibleInstitutionCard: View {
         // Status indicator
         HStack(spacing: 8) {
           Circle()
-            .fill(item.isActive ? Color.green : Color.orange)
+            .fill(needsAttention ? Color.orange : Color.green)
             .frame(width: 8, height: 8)
 
-          Text(item.isActive ? "Connected" : "Needs attention")
+          Text(statusLabel)
             .font(.caption)
             .foregroundColor(Color.haloTextSecondary)
         }

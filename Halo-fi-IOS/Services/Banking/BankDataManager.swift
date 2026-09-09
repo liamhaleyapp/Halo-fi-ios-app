@@ -17,6 +17,7 @@ final class BankDataManager {
     var accounts: [BankAccount]?
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
+    private(set) var investments: InvestmentSummary?
     private(set) var identityReviews: [AccountIdentityReview] = []
     private(set) var balanceSummary: VerifiedBalanceSummary?
 
@@ -96,6 +97,9 @@ final class BankDataManager {
         self.transactionPersistence = transactionPersistence
         self.accountPersistence = accountPersistence
         #if DEBUG
+        if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-investments") {
+            investments = InvestmentSummary(accounts: [.init(accountId: "acct-3", name: "Investment account", institution: "Chase", mask: "7890", currency: "USD", balanceCents: 500000, asOf: "2026-09-09T12:00:00Z", holdings: [.init(id: "holding-1", name: "Example fund", ticker: "TEST", quantity: 10, valueCents: 450000, currency: "USD", asOf: "2026-09-09T12:00:00Z")])], totalCents: 500000, currency: "USD", complete: true)
+        }
         if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-account-identity") {
             identityReviews = [.init(accountId: "review", name: "Checking", mask: "1234", institution: "Test Bank",
                 candidates: [.init(accountId: "existing", name: "Everyday checking", mask: "1234", institution: "Test Bank")])]
@@ -117,6 +121,7 @@ final class BankDataManager {
         // disk data or start a bank request that can expire the test session
         // and clear the profile just seeded by MainTabView.
         guard !UITestArchetype.isActive else { return }
+        investments = SnapshotCache.load(InvestmentSummary.self, key: "investments", userId: userId)
         Diagnostics.send("sign_in", ["restored_manual": "\(manualAccounts.count)"])
         // Last known manual accounts draw immediately; the refresh below replaces them.
         if manualAccounts.isEmpty, let cached = SnapshotCache.load([ManualAccount].self, key: "manual_accounts", userId: userId) {
@@ -229,6 +234,8 @@ final class BankDataManager {
 
                 await MainActor.run {
                     guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId else { return }
+                    investments = response.investments
+                    if let userId = requestedUserId, let investments { SnapshotCache.save(investments, key: "investments", userId: userId) }
                     identityReviews = response.identityReviews ?? []
                     if let summary = response.balanceSummary, summary.isValid {
                         balanceSummary = summary
@@ -583,6 +590,7 @@ final class BankDataManager {
         transactions = nil
         accountsSummary = nil
         identityReviews = []
+        investments = nil
         balanceSummary = nil
         accountsLastFetched = nil
         transactionsLastFetched = nil
@@ -821,6 +829,14 @@ final class BankDataManager {
 
     /// Sets a nickname and updates every cached copy of the account so rows
     /// and the balance card speak it at once.
+    func loadInvestments() async throws {
+        if UITestArchetype.isActive { return }
+        let generation = SessionLifetime.shared.current
+        let result: InvestmentSummary = try await NetworkService.shared.authenticatedRequest(endpoint: "/bank/investments", method: .GET, responseType: InvestmentSummary.self)
+        guard SessionLifetime.shared.isCurrent(generation) else { return }
+        investments = result
+    }
+
     func resolveIdentity(_ review: AccountIdentityReview, existingAccountId: String?) async throws {
         let generation = SessionLifetime.shared.current
         try await bankService.resolveAccountIdentity(accountId: review.accountId, existingAccountId: existingAccountId)

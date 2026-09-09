@@ -82,7 +82,7 @@ extension TranscriptEntry {
         case .agent:
             return "Halo said"
         case .system:
-            return "System"
+            return "Halo said"
         }
     }
 
@@ -133,7 +133,7 @@ extension TranscriptEntry.Speaker {
         case .agent:
             return .blue
         case .system:
-            return .orange
+            return Color.haloTextPrimary
         }
     }
 
