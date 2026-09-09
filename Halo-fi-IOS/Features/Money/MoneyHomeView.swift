@@ -76,7 +76,7 @@ struct MoneyHomeView: View {
             ZStack {
                 Color.haloBackground.ignoresSafeArea()
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    VStack(spacing: 12) {
                         TabTitle("Money")
                         header
                         attentionRow
@@ -87,6 +87,13 @@ struct MoneyHomeView: View {
                         accountsRow
                         transactionsRow
                         linkSection
+                        if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-money-changing-rows") {
+                            Button("Simulate reconnect and refresh") {
+                                budgetDataManager.attentionCards = []
+                                budgetDataManager.attentionQueue = []
+                                bankDataManager.accountsByItemId = [:]
+                            }.accessibilityIdentifier("simulateMoneyRefresh")
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -189,17 +196,17 @@ struct MoneyHomeView: View {
             .task {
                 guard !hasAppeared else { return }
                 hasAppeared = true
-                await bankDataManager.refreshIfStale()
-                // The header sums the per-institution accounts — the same
-                // source the Accounts page shows — so the figure never shifts
-                // as caches fill. First launch: load them if nothing is cached.
-                if bankDataManager.accountsByItemId.isEmpty, !(bankDataManager.linkedItems ?? []).isEmpty {
-                    await bankDataManager.forceRefresh()
-                }
-                if budgetDataManager.shouldRefresh { await budgetDataManager.refresh() }
-                await loadTransactions(forceRefresh: false)
+                // These reads share authentication, but do not depend on another tab's data.
+                async let banks: Void = bankDataManager.refreshIfStale()
+                async let budget: Void = refreshBudgetIfNeeded()
+                async let transactions: Void = loadTransactions(forceRefresh: false)
+                _ = await (banks, budget, transactions)
             }
         }
+    }
+
+    private func refreshBudgetIfNeeded() async {
+        if budgetDataManager.shouldRefresh { await budgetDataManager.refresh() }
     }
 
     enum MoneyRoute: Hashable {
@@ -282,14 +289,15 @@ struct MoneyHomeView: View {
     // screen — Liam, 2026-09-05: the main screens stay concise)
 
     private var attentionRow: some View {
-        let cards = budgetDataManager.attentionCards
-        let total = cards.count + budgetDataManager.attentionQueue.count
-        let top = cards.first ?? budgetDataManager.attentionQueue.first
+        let sections = AttentionSections(cards: budgetDataManager.attentionCards + budgetDataManager.attentionQueue)
+        let cards = sections.alerts
+        let total = cards.count
+        let top = cards.first
         // Always red when something is waiting (Liam, 2026-09-05): the row
         // has to stand apart from the tone-colored balance card above it.
         let tint: Color = top == nil ? .gray : .haloNegative
         let line: String = {
-            guard let top else { return budgetDataManager.isLoading ? "Checking…" : "Nothing right now." }
+            guard let top else { return !sections.groups.isEmpty ? "No urgent alerts. Review questions available." : (budgetDataManager.isLoading ? "Checking…" : "Nothing right now.") }
             if total == 1 { return top.title + "." }
             return "\(VoiceOverFormatter.count(total, singular: "thing", plural: "things")). First: \(top.title)."
         }()
@@ -438,8 +446,12 @@ struct MoneyHomeView: View {
             .padding(16)
             .frame(minHeight: 72)
             .haloCard(tint: route == .attention && tint != .gray ? tint : nil)
+            .contentShape(Rectangle())
         }
         .buttonStyle(HapticPlainButtonStyle())
+        .id(route)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("moneyRow-\(title)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title). \(line)")
         .accessibilityHint(hint)
@@ -552,16 +564,16 @@ extension MoneySnapshot {
         let over = overview?.budgetStatus.categories.first(where: { $0.status == "over" })
             .map { BudgetFormatter.displayName(forCategory: $0.category) }
         return MoneySnapshot(
-            cashCents: Int((cash * 100).rounded()),
-            owedCents: Int((owed * 100).rounded()),
-            accountCount: count,
+            cashCents: bank.balanceSummary?.cashCents ?? Int((cash * 100).rounded()),
+            owedCents: bank.balanceSummary?.owedCents ?? Int((owed * 100).rounded()),
+            accountCount: bank.balanceSummary?.accounts.filter { $0.kind == "cash" }.count ?? count,
             connectionsNeedingAttention: attention,
             resources: overview?.ssiStatus.resources,
             budgetTotal: overview?.budgetStatus.hasBudget == true ? overview?.budgetStatus.total : nil,
             spentCents: overview?.spending.totalCents ?? 0,
             daysLeft: daysLeft,
             firstOverCategory: over,
-            isLoading: bank.isInitialLoad && overview == nil,
+            isLoading: bank.isInitialLoad && bank.balanceSummary == nil,
             staleCount: staleCount,
             staleSinceSpoken: earliestStale.flatMap { ISO8601DateFormatter.dateOnly.date(from: $0) }.map { $0.formatted(.dateTime.month(.wide).day()) },
             pending: overview?.pending

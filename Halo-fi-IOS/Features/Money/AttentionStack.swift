@@ -13,15 +13,46 @@
 
 import SwiftUI
 
+/// Deadlines remain alerts. Questions are grouped without dropping or limiting them.
+struct AttentionSections {
+    struct Group: Identifiable {
+        let id: String
+        let title: String
+        let cards: [AttentionCard]
+    }
+    let alerts: [AttentionCard]
+    let groups: [Group]
+    init(cards: [AttentionCard]) {
+        let filingMonths = Set(cards.filter { $0.kind == "submit_package" }.compactMap { $0.payload.month })
+        var alerts: [AttentionCard] = []
+        var bills: [AttentionCard] = []
+        var income: [AttentionCard] = []
+        for card in cards {
+            let month = card.payload.month ?? card.payload.occurredOn.map { String($0.prefix(7)) }
+            let filingNeedsGross = card.kind == "wage_gross" && (month == nil || filingMonths.contains(month!))
+            if card.kind == "bill_confirm" { bills.append(card) }
+            else if (card.kind == "deposit_label" || card.kind == "wage_gross") && !filingNeedsGross { income.append(card) }
+            else { alerts.append(card) }
+        }
+        self.alerts = alerts
+        self.groups = [Group(id: "bills", title: "Review bills and subscriptions", cards: bills),
+                       Group(id: "income", title: "Review income", cards: income)].filter { !$0.cards.isEmpty }
+    }
+}
+
 struct AttentionView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     let onOpen: (AttentionCard) -> Void
     @State private var reminderCard: AttentionCard?
+    @State private var detailCard: AttentionCard?
+    @State private var showingDetail = false
 
     private var cards: [AttentionCard] { dataManager.attentionCards + dataManager.attentionQueue }
 
+    private var sections: AttentionSections { AttentionSections(cards: cards) }
+
     private var tone: ScreenReaderSummaryHeader.Tone {
-        switch cards.first?.tone {
+        switch sections.alerts.first?.tone {
         case "act": return .act
         case "watch": return .watch
         case .some: return .neutral
@@ -33,18 +64,39 @@ struct AttentionView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ScreenReaderSummaryHeader(
-                    verdict: cards.isEmpty
-                        ? "Nothing needs you right now"
-                        : VoiceOverFormatter.count(cards.count, singular: "thing needs you", plural: "things need you"),
+                    verdict: sections.alerts.isEmpty
+                        ? "No urgent alerts"
+                        : VoiceOverFormatter.count(sections.alerts.count, singular: "alert needs you", plural: "alerts need you"),
                     detail: cards.isEmpty
                         ? "New deposits, charges and deadlines show up here as they arrive."
-                        : "Most urgent first. Open one to handle it, or choose Remind me later.",
+                        : "Alerts first. Review questions below help Halo understand your finances.",
                     tone: tone
                 )
-                ForEach(cards) { card in
-                    AttentionCardView(card: card, onOpen: { onOpen(card) }, onNotNow: {
-                        reminderCard = card
-                    })
+                ForEach(sections.alerts) { card in
+                    AttentionCardView(card: card, onOpen: {
+                        if card.kind == "unlinked_card" { detailCard = card; showingDetail = true }
+                        else { onOpen(card) }
+                    }, onNotNow: { reminderCard = card })
+                }
+                if !sections.groups.isEmpty {
+                    Text("Help Halo understand your finances")
+                        .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(sections.groups) { group in
+                        NavigationLink {
+                            AttentionReviewView(groupId: group.id, title: group.title, onOpen: onOpen)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(group.title).font(.headline)
+                                Text(VoiceOverFormatter.count(group.cards.count, singular: "question", plural: "questions"))
+                            }
+                            .foregroundStyle(Color.haloTextPrimary)
+                            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                            .padding(16).haloCard()
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("attentionGroup-\(group.id)")
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -55,6 +107,18 @@ struct AttentionView: View {
         .background(Color.haloBackground.ignoresSafeArea())
         .sheet(item: $reminderCard) { card in
             AttentionReminderSheet(card: card)
+        }
+        .navigationDestination(isPresented: $showingDetail) {
+            if let card = detailCard {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(card.title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                        Text(card.line)
+                        Button("Link another account") { onOpen(card) }.frame(minHeight: 44)
+                        AttentionDetailReminder(card: card)
+                    }.padding(20).readableContentWidth()
+                }.navigationTitle("Cards HaloFi can't see").navigationBarTitleDisplayMode(.inline)
+            }
         }
         .navigationTitle("Needs your attention")
         .navigationBarTitleDisplayMode(.inline)
@@ -191,18 +255,14 @@ struct AttentionCardView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Remind me later") { onNotNow() }
         .accessibilityIdentifier("attentionCard-\(card.kind)")
-        Button("Remind me later", action: onNotNow)
-            .foregroundStyle(Color.haloTextPrimary)
-            .frame(minHeight: 44)
-            .padding(.horizontal, 16)
-            .accessibilityLabel("Remind me later about \(card.title)")
+
         }
     }
 }
 
 /// A normal sheet, with every action in reading order. No swipe or long-press
 /// gesture is required, and a failed save never announces a false dismissal.
-private struct AttentionReminderSheet: View {
+struct AttentionReminderSheet: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(\.dismiss) private var dismiss
     let card: AttentionCard
@@ -219,11 +279,14 @@ private struct AttentionReminderSheet: View {
                     delayButton("Remind me in 30 days", days: 30)
                     delayButton("Remind me in 90 days", days: 90)
                     if let errorMessage { Text(errorMessage).foregroundStyle(Color.haloNegative) }
-                    Button("Cancel") { dismiss() }.frame(minHeight: 44).disabled(isSaving)
                 }
                 .padding(20)
                 .readableContentWidth()
             }
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                CloseToolbarButton(label: "Close", hint: "Closes without changing this reminder.") { dismiss() }.disabled(isSaving)
+            } }
+            .accessibilityAction(.escape) { if !isSaving { dismiss() } }
             .navigationTitle("Remind me later")
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(isSaving)
@@ -249,5 +312,44 @@ private struct AttentionReminderSheet: View {
         }
         .buttonStyle(.bordered)
         .disabled(isSaving)
+    }
+}
+
+private struct AttentionReviewView: View {
+    @Environment(BudgetDataManager.self) private var dataManager
+    let groupId: String
+    let title: String
+    let onOpen: (AttentionCard) -> Void
+    @State private var reminderCard: AttentionCard?
+    private var cards: [AttentionCard] {
+        AttentionSections(cards: dataManager.attentionCards + dataManager.attentionQueue)
+            .groups.first { $0.id == groupId }?.cards ?? []
+    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(cards.isEmpty ? "All caught up" : VoiceOverFormatter.count(cards.count, singular: "question remaining", plural: "questions remaining"))
+                    .font(.headline).accessibilityAddTraits(.isHeader)
+                ForEach(cards) { card in
+                    AttentionCardView(card: card, onOpen: { onOpen(card) }, onNotNow: { reminderCard = card })
+                }
+            }.padding(20).readableContentWidth()
+        }
+        .background(Color.haloBackground.ignoresSafeArea())
+        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $reminderCard) { AttentionReminderSheet(card: $0) }
+    }
+}
+
+/// A discoverable reminder option inside a question, in addition to rotor and long-press actions.
+struct AttentionDetailReminder: View {
+    let card: AttentionCard?
+    @State private var showing = false
+    var body: some View {
+        if let card {
+            Button("Remind me later") { showing = true }
+                .frame(minHeight: 44)
+                .sheet(isPresented: $showing) { AttentionReminderSheet(card: card) }
+        }
     }
 }

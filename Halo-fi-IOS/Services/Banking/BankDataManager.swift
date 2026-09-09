@@ -17,6 +17,7 @@ final class BankDataManager {
     var accounts: [BankAccount]?
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
+    private(set) var balanceSummary: VerifiedBalanceSummary?
 
     /// Linked items (institutions) from Plaid - use mutation methods to modify
     private(set) var linkedItems: [ConnectedItem]?
@@ -115,6 +116,9 @@ final class BankDataManager {
             manualAccounts = cached
         }
 
+        if balanceSummary == nil, let cached = SnapshotCache.load(VerifiedBalanceSummary.self, key: "verified_balances", userId: userId), cached.isValid {
+            balanceSummary = cached
+        }
         let generation = SessionLifetime.shared.current
         Task { @MainActor in
             guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
@@ -217,6 +221,14 @@ final class BankDataManager {
 
                 await MainActor.run {
                     guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId else { return }
+                    if let summary = response.balanceSummary, summary.isValid {
+                        balanceSummary = summary
+                        if let userId = requestedUserId {
+                            SnapshotCache.save(summary, key: "verified_balances", userId: userId)
+                        }
+                    } else {
+                        balanceSummary = nil
+                    }
                     setLinkedItems(items)  // Sets property + persists
                     // Drop in-memory accounts for connections the server no longer lists.
                     let serverIds = Set(items.map(\.itemId))
@@ -561,6 +573,7 @@ final class BankDataManager {
         accounts = nil
         transactions = nil
         accountsSummary = nil
+        balanceSummary = nil
         accountsLastFetched = nil
         transactionsLastFetched = nil
         transactionsCacheKey = nil

@@ -206,6 +206,7 @@ struct DepositLabelSheet: View {
                         .accessibilityHint("Saves it as work income at the deposit amount for now. HaloFi asks again for the gross.")
                     }
 
+                    AttentionDetailReminder(card: currentCard).disabled(isSaving)
                     if let errorMessage {
                         Text(errorMessage).font(.callout).foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true)

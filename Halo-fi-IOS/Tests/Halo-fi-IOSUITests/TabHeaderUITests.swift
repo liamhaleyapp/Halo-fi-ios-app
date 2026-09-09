@@ -33,12 +33,16 @@ final class TabHeaderUITests: XCTestCase {
     }
 
     /// Lazy stacks only build what is on screen: swipe until the element exists.
-    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, tries: Int = 4) -> Bool {
+    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, tries: Int = 8) -> Bool {
         for _ in 0..<tries {
-            if element.exists { return true }
-            app.swipeUp()
+            if element.exists {
+                let y = element.frame.midY
+                let bottom = app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame.minY : app.frame.maxY
+                if element.isHittable && y > app.frame.minY + 100 && y < bottom - 10 { return true }
+                if y < app.frame.minY + 100 { app.swipeDown() } else { app.swipeUp() }
+            } else { app.swipeUp() }
         }
-        return element.exists
+        return false
     }
 
     private func openTab(_ app: XCUIApplication, _ name: String) {
@@ -89,15 +93,42 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertLessThan(app.tabBars.firstMatch.frame.minY - mic.frame.maxY, 65)
     }
 
+    func testMoneyVisibleCoordinatesAfterRowHeightChanges() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-money-changing-rows"]
+        app.launch()
+        openTab(app, "Money")
+        for pass in 0..<2 {
+            for title in ["Budget", "Income", "Bills and subscriptions", "Calendar", "Accounts", "Recent transactions"] {
+                let row = app.buttons["moneyRow-\(title)"]
+                XCTAssertTrue(scrollTo(row, in: app), title)
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.name = "Visible \(title), frame \(row.frame)"
+                screenshot.lifetime = .keepAlways
+                add(screenshot)
+                row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                let expected = title == "Bills and subscriptions" ? "Bills" : title
+                XCTAssertTrue(app.navigationBars[expected].waitForExistence(timeout: 5), "Visible \(title) opened wrong route, pass \(pass)")
+                app.navigationBars.buttons.firstMatch.tap()
+            }
+            if pass == 0 {
+                let update = app.buttons["simulateMoneyRefresh"]
+                XCTAssertTrue(scrollTo(update, in: app))
+                update.tap()
+            }
+        }
+    }
+
     func testReminderOptionsAreVisibleAndArrangedTopToBottom() {
         let app = launch("ssi_watch")
         openTab(app, "Money")
         let attention = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
         XCTAssertTrue(scrollTo(attention, in: app))
         attention.tap()
-        let reminder = app.buttons["Remind me later about Cards HaloFi can't see"]
+        let reminder = app.buttons["attentionCard-unlinked_card"]
         XCTAssertTrue(scrollTo(reminder, in: app))
-        reminder.tap()
+        reminder.press(forDuration: 1.2)
+        app.buttons["Remind me later"].tap()
         let week = app.buttons["Remind me in 1 week"]
         let month = app.buttons["Remind me in 30 days"]
         let quarter = app.buttons["Remind me in 90 days"]
@@ -109,7 +140,7 @@ final class TabHeaderUITests: XCTestCase {
         shot.name = "Accessible reminder choices"
         shot.lifetime = .keepAlways
         add(shot)
-        app.buttons["Cancel"].tap()
+        app.buttons["Close"].tap()
         XCTAssertTrue(reminder.waitForExistence(timeout: 5), "Cancel must preserve the reminder")
     }
 

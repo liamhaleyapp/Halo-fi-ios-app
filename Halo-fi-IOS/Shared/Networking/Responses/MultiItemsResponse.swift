@@ -13,11 +13,13 @@ struct MultiItemsResponse: Codable {
     let success: Bool
     let items: [ServerLinkedItem]
     let totalItems: Int?
+    var balanceSummary: VerifiedBalanceSummary? = nil
 
     enum CodingKeys: String, CodingKey {
         case success
         case items
         case totalItems = "total_items"
+        case balanceSummary = "balance_summary"
     }
 }
 
@@ -138,5 +140,24 @@ extension ConnectedItem {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+    }
+}
+
+/// The same integer-cent calculation and account breakdown used by voice.
+struct VerifiedBalanceSummary: Codable {
+    let cashCents: Int
+    let owedCents: Int
+    let accounts: [Entry]
+    let currency: String
+    struct Entry: Codable {
+        let kind: String
+        let cents: Int
+    }
+    var isValid: Bool {
+        currency == "USD" && cashCents == accounts.filter { $0.kind == "cash" }.reduce(0) { $0 + $1.cents }
+            && owedCents == accounts.filter { $0.kind == "owed" }.reduce(0) { $0 + $1.cents }
+    }
+    enum CodingKeys: String, CodingKey {
+        case cashCents = "cash_cents", owedCents = "owed_cents", accounts, currency
     }
 }

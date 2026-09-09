@@ -381,6 +381,13 @@ final class BudgetDataManager {
         error = nil
         defer { if generation == sessionGeneration { isLoading = false } }
 
+        async let overviewRead: Void = refreshOverview(userTz: userTz, generation: generation, userId: userId)
+        async let ssiRead: Void = refreshSSI(userTz: userTz, generation: generation)
+        async let attentionRead: Void = refreshAttentionData(userTz: userTz, generation: generation)
+        _ = await (overviewRead, ssiRead, attentionRead)
+    }
+
+    private func refreshOverview(userTz: String?, generation: UUID, userId: String?) async {
         do {
             let result = try await service.getOverview(userTz: userTz)
             guard generation == sessionGeneration else { return }
@@ -393,6 +400,9 @@ final class BudgetDataManager {
             self.error = BudgetError(underlying: error)
         }
 
+    }
+
+    private func refreshSSI(userTz: String?, generation: UUID) async {
         // SSI candidates + manual deductions in parallel — independent
         // endpoints, failures isolated (a candidates failure must not tank
         // the Budget view).
@@ -409,7 +419,6 @@ final class BudgetDataManager {
         case .success(let response): ssiCandidates = response.candidates
         case .failure(let error):
             Logger.error("BudgetDataManager: fetch SSI candidates failed: \(error)")
-            ssiCandidates = []
         }
         let manualValue = await manualResult
         guard generation == sessionGeneration else { return }
@@ -419,8 +428,6 @@ final class BudgetDataManager {
             ssiManualTotalsCents = response.totalsCents
         case .failure(let error):
             Logger.error("BudgetDataManager: fetch manual deductions failed: \(error)")
-            ssiManualDeductions = []
-            ssiManualTotalsCents = [:]
         }
 
         // WP6 — reminders. Non-benefit users get an empty list. Local
@@ -433,9 +440,11 @@ final class BudgetDataManager {
         } catch {
             guard generation == sessionGeneration else { return }
             Logger.error("BudgetDataManager: fetch reminders failed: \(error)")
-            ssiReminders = []
         }
 
+    }
+
+    private func refreshAttentionData(userTz: String?, generation: UUID) async {
         // Attention + income summary, in parallel, failures isolated: the
         // stack keeps its last cards when the fetch fails.
         // Calendar: current month, failures isolated.

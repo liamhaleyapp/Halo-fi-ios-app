@@ -18,6 +18,7 @@ struct BillConfirmSheet: View {
     var suggestedKind: String = "bill"
     var amountVaries: Bool = false
     var onDone: (() -> Void)? = nil
+    private var reminderCard: AttentionCard? = nil
 
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +31,7 @@ struct BillConfirmSheet: View {
         self.init(streamId: p.streamId ?? "", merchant: p.merchant ?? p.source ?? "this charge", amountCents: p.amountCents ?? 0,
                   frequencyLabel: p.frequencyLabel ?? "regularly", nextExpected: p.nextExpected,
                   suggestedKind: p.kind ?? "bill", amountVaries: p.amountVaries ?? false, onDone: onDone)
+        self.reminderCard = card
     }
 
     init(streamId: String, merchant: String, amountCents: Int, frequencyLabel: String, nextExpected: String?,
@@ -43,6 +45,7 @@ struct BillConfirmSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Is \(merchant) a \(suggestsSubscription ? "subscription" : "bill")?")
                     .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
@@ -67,11 +70,13 @@ struct BillConfirmSheet: View {
                 }
                 .buttonStyle(.bordered).disabled(isSaving)
                 .accessibilityHint("Saves that this is not a bill or subscription. It will not be asked again.")
+                AttentionDetailReminder(card: reminderCard).disabled(isSaving)
                 if let errorMessage { Text(errorMessage).font(.callout).foregroundStyle(.red) }
                 Spacer()
             }
             .padding(20)
             .readableContentWidth()
+            }
             .background(Color.haloBackground.ignoresSafeArea())
             .navigationTitle(suggestsSubscription ? "Subscription?" : "Bill?")
             .navigationBarTitleDisplayMode(.inline)

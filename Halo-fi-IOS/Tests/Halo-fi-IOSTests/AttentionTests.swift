@@ -143,3 +143,27 @@ private final class ReminderTestService: AttentionServiceProtocol {
         #expect(reconnected.statusDescription == "expected")
     }
 }
+
+@Suite struct AttentionGroupingTests {
+    private func card(_ kind: String, month: String? = nil) throws -> AttentionCard {
+        var payload: [String: String] = [:]
+        if let month { payload["month"] = month }
+        return try JSONDecoder().decode(AttentionCard.self, from: JSONSerialization.data(withJSONObject: [
+            "id": kind + (month ?? ""), "kind": kind, "priority": 30, "title": kind, "line": "Test",
+            "action_type": "open_accounts", "payload": payload, "learn": true, "tone": "learn"
+        ]))
+    }
+    @Test func filingGrossStaysUrgentAndQuestionsAreGrouped() throws {
+        let cards = try [card("bank_reconnect"), card("bill_confirm"), card("deposit_label"),
+                         card("submit_package", month: "2026-08"), card("wage_gross", month: "2026-08"),
+                         card("wage_gross", month: "2026-09")]
+        let sections = AttentionSections(cards: cards)
+        #expect(sections.alerts.count == 3)
+        #expect(sections.groups.map { $0.cards.count } == [1, 2])
+        #expect(sections.alerts.contains { $0.kind == "wage_gross" && $0.payload.month == "2026-08" })
+    }
+    @Test func verifiedBalanceRejectsInconsistentBreakdown() {
+        let summary = VerifiedBalanceSummary(cashCents: 100, owedCents: 0, accounts: [.init(kind: "cash", cents: 99)], currency: "USD")
+        #expect(!summary.isValid)
+    }
+}
