@@ -10,6 +10,10 @@
 
 import Foundation
 
+extension Notification.Name {
+    static let attentionSourceChanged = Notification.Name("AttentionSourceChanged")
+}
+
 struct AttentionCard: Codable, Equatable, Identifiable {
     struct Payload: Codable, Equatable {
         var transactionId: String?

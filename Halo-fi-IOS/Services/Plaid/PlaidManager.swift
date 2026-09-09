@@ -199,6 +199,17 @@ class PlaidManager {
   /// Handles Plaid Link events, capturing link_session_id for webhook routing
   private func handleLinkEvent(_ event: LinkEvent) {
     let eventName = String(describing: event.eventName)
+    // Fixed event names only: never send SDK metadata, account details or tokens.
+    switch event.eventName {
+    case .open: Diagnostics.send("plaid_link_opened")
+    case .openOAuth: Diagnostics.send("plaid_oauth_opened")
+    case .closeOAuth: Diagnostics.send("plaid_oauth_closed")
+    case .failOAuth: Diagnostics.send("plaid_oauth_failed")
+    case .exit: Diagnostics.send("plaid_link_exited")
+    case .handoff: Diagnostics.send("plaid_link_handoff")
+    case .error: Diagnostics.send("plaid_link_error")
+    default: break
+    }
 
     // Log error events
     if eventName.lowercased().contains("error") {

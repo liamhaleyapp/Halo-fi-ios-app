@@ -139,9 +139,9 @@ struct MainTabView: View {
             if phase == .background {
                 Self.wentToBackgroundAt = Date()
             } else if phase == .active, let since = Self.wentToBackgroundAt,
-                      Date().timeIntervalSince(since) > 10 * 60 {
+                      Date().timeIntervalSince(since) > 30 {
                 Self.wentToBackgroundAt = nil
-                Task { await refreshEverything(reason: "back after \(Int(Date().timeIntervalSince(since) / 60)) min") }
+                Task { await refreshEverything(reason: "back after \(Int(Date().timeIntervalSince(since))) sec") }
             }
         }
         .onChange(of: currentRoute) { _, newRoute in
@@ -204,6 +204,30 @@ struct MainTabView: View {
         // Phase 11 Track B — quick-action "Ask Halo" deep-link.
         // Remember which tab the request came from so the user lands
         // back there when the conversation dismisses.
+        .onReceive(NotificationCenter.default.publisher(for: VoiceNavigation.requested)) { notice in
+            guard currentRoute == .main, let destination = notice.object as? VoiceAppAction.Destination else { return }
+            let tab: MainTab
+            switch destination {
+            case .money, .budget: tab = .money
+            case .benefits: tab = .benefits
+            case .settings: tab = .settings
+            }
+            guard visibleTabs.contains(tab) else {
+                UIAccessibility.post(notification: .announcement, argument: "That section needs a benefits profile. You can set it up in Settings.")
+                return
+            }
+            conversationOriginTab = nil
+            NotificationCenter.default.post(name: VoiceNavigation.accepted, object: nil)
+            VoiceNavigation.pendingBudget = destination == .budget
+            selectedTab = tab
+            Task { @MainActor in
+                await Task.yield()
+                if destination == .budget {
+                    NotificationCenter.default.post(name: VoiceNavigation.budgetRequested, object: nil)
+                }
+                UIAccessibility.post(notification: .screenChanged, argument: nil)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { _ in
             guard currentRoute == .main else { return }
             if selectedTab != .agent {

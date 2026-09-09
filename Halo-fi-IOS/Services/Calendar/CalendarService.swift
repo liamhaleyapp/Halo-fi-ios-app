@@ -17,12 +17,37 @@ struct CalendarItem: Codable, Equatable, Identifiable {
     let confidence: String    // high | medium | about | actual | n/a
     let source: String
     let status: String        // expected | arrived | paid | due | past
+    var bankConnectionStatus: String? = nil
+    var paymentVerified: Bool? = nil
+    var verificationNote: String? = nil
     var streamId: String? = nil
     var month: String? = nil
     var date: String? = nil   // present on `next`
     var id: String { "\(kind)-\(label)-\(status)-\(cents)-\(date ?? "")" }
 
+    /// Shared wording for visible text and the single VoiceOver row.
+    var statusDescription: String {
+        if paymentVerified == false {
+            let note = verificationNote ?? (bankConnectionStatus == "disconnected"
+                ? "Bank disconnected; payment unverified."
+                : "Bank connection unavailable; payment unverified.")
+            return status == "expected" ? "Expected. " + note : note
+        }
+        switch status {
+        case "arrived": return "arrived"
+        case "paid": return "paid"
+        case "due": return "due today"
+        case "overdue": return "past due"
+        case "past": return ""
+        case "unverified": return "payment unverified"
+        default: return "expected"
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
+        case bankConnectionStatus = "bank_connection_status"
+        case paymentVerified = "payment_verified"
+        case verificationNote = "verification_note"
         case kind, label, cents, confidence, source, status, month, date
         case streamId = "stream_id"
     }

@@ -50,3 +50,96 @@ import Testing
         #expect(IncomeView.sourceLine(s) == "Work income · every 2 weeks · last gross $640.00")
     }
 }
+
+private final class ReminderTestService: AttentionServiceProtocol {
+    var fail = false
+    var saved: [(String, Int)] = []
+    func fetch(userTz: String?) async throws -> AttentionResponse { throw URLError(.notConnectedToInternet) }
+    func dismiss(cardId: String, days: Int) async throws {
+        if fail { throw URLError(.notConnectedToInternet) }
+        saved.append((cardId, days))
+    }
+}
+
+@Suite @MainActor struct AttentionLifecycleTests {
+    private func card(_ kind: String, item: String = "") throws -> AttentionCard {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": "\(kind):\(item)", "kind": kind, "priority": 50, "title": kind, "line": "Test",
+            "action_type": "open_accounts", "payload": ["item_id": item], "learn": false, "tone": "watch"
+        ])
+        return try JSONDecoder().decode(AttentionCard.self, from: data)
+    }
+
+    @Test func verifiedReconnectRemovesOnlyTheRepairedItemImmediately() throws {
+        let manager = BudgetDataManager(attentionService: ReminderTestService())
+        defer { manager.clearAllData() }
+        manager.attentionCards = [try card("bank_reconnect", item: "chase"), try card("bank_reconnect", item: "td")]
+        manager.attentionQueue = [try card("money_profile_incomplete")]
+        NotificationCenter.default.post(name: .attentionSourceChanged, object: nil,
+                                        userInfo: ["reconnected_item_id": "chase"])
+        #expect(manager.attentionCards.map { $0.payload.itemId } == ["td"])
+        #expect(manager.attentionQueue.count == 1)
+    }
+
+    @Test func verifiedProfileCompletionClearsBothListsWithoutPullToRefresh() throws {
+        let manager = BudgetDataManager(attentionService: ReminderTestService())
+        defer { manager.clearAllData() }
+        manager.attentionCards = [try card("money_profile_incomplete"), try card("bank_reconnect", item: "chase")]
+        manager.attentionQueue = [try card("profile_incomplete"), try card("unlinked_card")]
+        NotificationCenter.default.post(name: .attentionSourceChanged, object: nil,
+            userInfo: ["resolved_kinds": ["money_profile_incomplete", "profile_incomplete"]])
+        #expect(manager.attentionCards.map(\.kind) == ["bank_reconnect"])
+        #expect(manager.attentionQueue.map(\.kind) == ["unlinked_card"])
+        #expect(manager.attentionMoreCount == 1)
+    }
+
+    @Test func failedReminderSaveKeepsCardAndSuccessfulSaveHonorsDelay() async throws {
+        let service = ReminderTestService()
+        let manager = BudgetDataManager(attentionService: service)
+        defer { manager.clearAllData() }
+        let reminder = try card("unlinked_card")
+        manager.attentionCards = [reminder]
+        service.fail = true
+        let failed = await manager.dismissCard(reminder, days: 30)
+        #expect(!failed)
+        #expect(manager.attentionCards == [reminder])
+        service.fail = false
+        let saved = await manager.dismissCard(reminder, days: 90)
+        #expect(saved)
+        #expect(manager.attentionCards.isEmpty)
+        #expect(service.saved.count == 1)
+        #expect(service.saved[0].0 == reminder.id && service.saved[0].1 == 90)
+    }
+}
+
+
+@Suite struct CalendarVerificationTests {
+    private func decode(_ extra: String = "", status: String = "expected") throws -> CalendarItem {
+        let json = """
+        {"kind":"subscription","label":"Spotify","cents":1099,"confidence":"about",
+         "source":"confirmed","status":"\(status)"\(extra)}
+        """
+        return try JSONDecoder().decode(CalendarItem.self, from: Data(json.utf8))
+    }
+
+    @Test func olderServerPayloadStillDecodes() throws {
+        let item = try decode()
+        #expect(item.paymentVerified == nil)
+        #expect(item.statusDescription == "expected")
+    }
+
+    @Test func disconnectedPaymentIsExplicitInSharedVisualAndVoiceOverText() throws {
+        let item = try decode(", \"bank_connection_status\":\"disconnected\", \"payment_verified\":false")
+        #expect(item.statusDescription == "Expected. Bank disconnected; payment unverified.")
+        let past = try decode(", \"bank_connection_status\":\"disconnected\", \"payment_verified\":false", status: "unverified")
+        #expect(past.statusDescription == "Bank disconnected; payment unverified.")
+        #expect(!past.statusDescription.contains("paid"))
+    }
+
+    @Test func postedPaymentRemainsPaidAndReconnectClearsWarning() throws {
+        let posted = try decode(status: "paid")
+        #expect(posted.statusDescription == "paid")
+        let reconnected = try decode(", \"bank_connection_status\":\"connected\"")
+        #expect(reconnected.statusDescription == "expected")
+    }
+}

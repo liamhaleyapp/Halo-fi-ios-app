@@ -69,7 +69,7 @@ struct MicButton: View {
             .accessibilityAddTraits(.isButton)
 
             // Dynamic label below button
-            Text(state.displayText)
+            Text(state == .speaking ? "Tap to interrupt" : state.displayText)
                 .font(.headline)
                 .fontWeight(.medium)
                 .foregroundColor(labelColor)
@@ -198,7 +198,7 @@ struct MicButton: View {
         case .processing:
             return "Processing"
         case .speaking:
-            return "Stop speaking"
+            return "Interrupt Halo"
         default:
             return sessionInactive ? "Start conversation" : "Start listening"
         }
@@ -213,7 +213,7 @@ struct MicButton: View {
         case .processing:
             return "Please wait"
         case .speaking:
-            return "Double tap to skip this message"
+            return "Double tap to stop Halo’s answer"
         default:
             return "Double tap to start speaking to Halo"
         }
@@ -260,7 +260,7 @@ struct MicButtonCompact: View {
         case .listening:
             return "Stop listening"
         case .speaking:
-            return "Stop speaking"
+            return "Interrupt Halo"
         default:
             return prominent ? "Talk to Halo" : "Switch to voice"
         }
@@ -269,7 +269,7 @@ struct MicButtonCompact: View {
     private var accessibilityHintText: String {
         switch state {
         case .speaking:
-            return "Double tap to skip this message"
+            return "Double tap to stop Halo’s answer"
         default:
             return "Double tap to use voice input"
         }

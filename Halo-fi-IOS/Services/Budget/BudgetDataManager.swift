@@ -79,12 +79,14 @@ final class BudgetDataManager {
 
     private let service: BudgetServiceProtocol
     private let ssiService: SSIServiceProtocol
+    private let attentionService: AttentionServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var sessionGeneration = UUID()
     /// Annotations needed so deinit can read this without crossing
     /// the @Observable wrapper or MainActor isolation.
     @ObservationIgnored
     private nonisolated(unsafe) var mutationObserver: NSObjectProtocol?
+    @ObservationIgnored private nonisolated(unsafe) var attentionSourceObserver: NSObjectProtocol?
     @ObservationIgnored private nonisolated(unsafe) var bankLinkObserver: NSObjectProtocol?
 
     // MARK: - Tuning
@@ -95,10 +97,12 @@ final class BudgetDataManager {
 
     init(
         service: BudgetServiceProtocol = BudgetService.shared,
-        ssiService: SSIServiceProtocol = SSIService.shared
+        ssiService: SSIServiceProtocol = SSIService.shared,
+        attentionService: AttentionServiceProtocol = AttentionService.shared
     ) {
         self.service = service
         self.ssiService = ssiService
+        self.attentionService = attentionService
         // Cold launch: the last overview (budget, SSI resources) draws at
         // once; the first refresh replaces it (Liam, 2026-09-05).
         if let cached = SnapshotCache.load(BudgetOverview.self, key: "budget_overview") {
@@ -115,10 +119,15 @@ final class BudgetDataManager {
                 self.markStale()
             }
         }
+        attentionSourceObserver = NotificationCenter.default.addObserver(forName: .attentionSourceChanged, object: nil, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated {
+                self?.invalidateAttention(resolvedKinds: note.userInfo?["resolved_kinds"] as? [String] ?? [],
+                                          reconnectedItemId: note.userInfo?["reconnected_item_id"] as? String)
+            }
+        }
         bankLinkObserver = NotificationCenter.default.addObserver(forName: .accountLinked, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.markStale()
-                self?.scheduleDebouncedRefresh()
+                self?.invalidateAttention()
             }
         }
         mutationObserver = NotificationCenter.default.addObserver(
@@ -133,8 +142,7 @@ final class BudgetDataManager {
             let scope = (note.userInfo?["scope"] as? String) ?? "budget"
             Task { @MainActor [weak self] in
                 Logger.info("BudgetDataManager: data mutated scope=\(scope)")
-                self?.markStale()
-                self?.scheduleDebouncedRefresh()
+                self?.invalidateAttention()
             }
         }
     }
@@ -147,6 +155,8 @@ final class BudgetDataManager {
     /// survive into the next session.
     func clearAllData() {
         sessionGeneration = UUID()
+        pendingMutationRefresh?.cancel()
+        pendingMutationRefresh = nil
         refreshTask?.cancel()
         refreshTask = nil
         incomeSummary = nil
@@ -177,11 +187,13 @@ final class BudgetDataManager {
 
     private func scheduleDebouncedRefresh() {
         pendingMutationRefresh?.cancel()
+        let generation = sessionGeneration
         pendingMutationRefresh = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 600_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.refresh()
-            await self?.fetchSuggestion()
+            guard !Task.isCancelled, let self, self.sessionGeneration == generation else { return }
+            await self.refresh()
+            guard !Task.isCancelled, self.sessionGeneration == generation else { return }
+            await self.fetchSuggestion()
         }
     }
 
@@ -274,6 +286,7 @@ final class BudgetDataManager {
     }
 
     deinit {
+        if let attentionSourceObserver { NotificationCenter.default.removeObserver(attentionSourceObserver) }
         if let bankLinkObserver { NotificationCenter.default.removeObserver(bankLinkObserver) }
         if let mutationObserver {
             NotificationCenter.default.removeObserver(mutationObserver)
@@ -311,8 +324,13 @@ final class BudgetDataManager {
         if attentionRefreshPending {
             // A card was resolved while the last fetch was in flight; pull once more.
             attentionRefreshPending = false
-            if let r = try? await AttentionService.shared.fetch(userTz: userTz) {
+            let attentionAtStart = attentionGeneration
+            if let r = try? await attentionService.fetch(userTz: userTz) {
                 guard generation == sessionGeneration else { return }
+                guard attentionAtStart == attentionGeneration else {
+                    scheduleDebouncedRefresh()
+                    return
+                }
                 attentionCards = r.cards
                 attentionQueue = r.queue
                 attentionMoreCount = r.moreCount
@@ -432,7 +450,7 @@ final class BudgetDataManager {
         }
         let generationAtStart = attentionGeneration
         async let attentionResult: Result<AttentionResponse, Error> = {
-            do { return .success(try await AttentionService.shared.fetch(userTz: userTz)) } catch { return .failure(error) }
+            do { return .success(try await attentionService.fetch(userTz: userTz)) } catch { return .failure(error) }
         }()
         async let incomeResult: Result<IncomeSummary, Error> = {
             do { return .success(try await IncomeService.shared.summary(month: nil)) } catch { return .failure(error) }
@@ -497,18 +515,32 @@ final class BudgetDataManager {
 
     // MARK: - Attention + income labels (2026-09-05)
 
-    /// "Not now": hide the card for a week, locally at once and on the server.
-    func dismissCard(_ card: AttentionCard, days: Int = 7) async {
-        let generation = sessionGeneration
+    /// A verified write invalidates in-flight reads before refreshing.
+    func invalidateAttention(resolvedKinds: [String] = [], reconnectedItemId: String? = nil) {
         attentionGeneration += 1
-        attentionCards.removeAll { $0.id == card.id }
-        attentionQueue.removeAll { $0.id == card.id }
-        do { try await AttentionService.shared.dismiss(cardId: card.id, days: days) } catch {
-            Logger.warning("BudgetDataManager: dismiss failed: \(error)")
+        let resolved: (AttentionCard) -> Bool = { card in
+            resolvedKinds.contains(card.kind) ||
+                (reconnectedItemId != nil && card.kind == "bank_reconnect" && card.payload.itemId == reconnectedItemId)
         }
-        guard generation == sessionGeneration else { return }
+        attentionCards.removeAll(where: resolved)
+        attentionQueue.removeAll(where: resolved)
+        attentionMoreCount = attentionQueue.count
         markStale()
-        await refresh()
+        scheduleDebouncedRefresh()
+    }
+
+    /// Only remove the reminder after persistence succeeds. Failure leaves the
+    /// item available and lets the sheet explain that the reminder was not saved.
+    @discardableResult
+    func dismissCard(_ card: AttentionCard, days: Int = 7) async -> Bool {
+        let generation = sessionGeneration
+        do { try await attentionService.dismiss(cardId: card.id, days: days) }
+        catch { return false }
+        guard generation == sessionGeneration else { return false }
+        resolveCard(card, refresh: false)
+        attentionMoreCount = attentionQueue.count
+        scheduleDebouncedRefresh()
+        return true
     }
 
     /// A card was resolved: drop it now, promote the next learning question
@@ -518,7 +550,6 @@ final class BudgetDataManager {
     func resolveCard(_ card: AttentionCard, refresh: Bool = true) {
         attentionGeneration += 1
         attentionCards.removeAll { $0.id == card.id }
-        attentionQueue.removeAll { $0.id == card.id }
         attentionQueue.removeAll { $0.id == card.id }
         // Same payer answered → its other deposits are labeled server-side.
         if card.kind == "deposit_label", let source = card.payload.source {

@@ -38,6 +38,7 @@ final class StreamingAudioPlayer: NSObject {
     // MARK: - Callbacks
 
     var onPlaybackFinished: (() -> Void)?
+    var onPlaybackFailed: (() -> Void)?
     /// WP7 — fires when a buffer is actually accepted and playing after
     /// the player was idle. The coordinator flips to `.speaking` HERE, not
     /// when text arrives, so state never claims Halo is talking while the
@@ -71,6 +72,10 @@ final class StreamingAudioPlayer: NSObject {
         let marker: VoicePlaybackMarker
     }
     private var pendingBuffers: [QueuedAudio] = []
+    // Bounds apply to queued + accumulating encoded audio. The playing
+    // sentence is separate and cannot exceed this same per-buffer limit.
+    private static let maxBufferedBytes = 4 * 1024 * 1024
+    private static let maxPendingBuffers = 8
 
     /// True once an audio_complete with is_partial=false has landed,
     /// telling us no more buffers will arrive for this turn. When the
@@ -79,6 +84,9 @@ final class StreamingAudioPlayer: NSObject {
     /// While false, queue drains are silent — we just wait for the
     /// next buffer.
     private var isFinalQueued: Bool = false
+    /// A progress clip is not an answer. Retain this across sentence drains
+    /// until the next turn so a final frame may legitimately contain no bytes.
+    private var hasResponseAudio = false
 
     // MARK: - Audio session
 
@@ -176,8 +184,16 @@ final class StreamingAudioPlayer: NSObject {
             Logger.debug("StreamingAudioPlayer: dropping post-barge-in chunk")
             return
         }
-        guard let rawData = Data(base64Encoded: base64Audio) else {
-            Logger.error("StreamingAudioPlayer: Invalid base64 audio data")
+        guard base64Audio.utf8.count <= (Self.maxBufferedBytes + 2) / 3 * 4,
+              let rawData = Data(base64Encoded: base64Audio), !rawData.isEmpty else {
+            Logger.error("StreamingAudioPlayer: Invalid or oversized audio chunk")
+            failPlayback()
+            return
+        }
+        let queuedBytes = pendingBuffers.reduce(0) { $0 + $1.data.count }
+        guard queuedBytes + mp3Data.count + rawData.count <= Self.maxBufferedBytes else {
+            Logger.error("StreamingAudioPlayer: Playback backlog limit exceeded")
+            failPlayback()
             return
         }
         mp3Data.append(rawData)
@@ -191,9 +207,9 @@ final class StreamingAudioPlayer: NSObject {
     /// those chunks would refill mp3Data, making isBuffering report
     /// true and causing ConversationCoordinator.startListening() to
     /// bail out instead of resuming the mic.
-    func stopAndDiscardPending() {
+    func stopAndDiscardPending(notify: Bool = true) {
         isAcceptingChunks = false
-        stop()
+        stop(notify: notify)
     }
 
     /// Re-open the chunk gate. Called by ConversationCoordinator the
@@ -202,6 +218,7 @@ final class StreamingAudioPlayer: NSObject {
     /// be accepted.
     func resumeAcceptingChunks() {
         isAcceptingChunks = true
+        hasResponseAudio = false
     }
 
     /// Snapshot the accumulated MP3 buffer onto the playback queue.
@@ -242,7 +259,20 @@ final class StreamingAudioPlayer: NSObject {
             return
         }
 
+        if !isAcknowledgment && !mp3Data.isEmpty { hasResponseAudio = true }
+        // Legacy servers can send a successful final transcript after every
+        // synthesis request failed. Do not report that as successful playback.
+        if isFinal && !isAcknowledgment && !hasResponseAudio {
+            Logger.error("StreamingAudioPlayer: Final answer arrived without response audio")
+            failPlayback()
+            return
+        }
+
         if !mp3Data.isEmpty {
+            guard pendingBuffers.count < Self.maxPendingBuffers else {
+                failPlayback()
+                return
+            }
             pendingBuffers.append(QueuedAudio(data: mp3Data,
                 marker: VoicePlaybackMarker(turnId: turnId, isAcknowledgment: isAcknowledgment, isError: isError)))
             mp3Data = Data()
@@ -292,8 +322,8 @@ final class StreamingAudioPlayer: NSObject {
             // else may lower this.
             player.volume = VoiceOverPlaybackPolicy.speechGain
             guard player.prepareToPlay(), player.play() else {
-                Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer; skipping")
-                playNextBuffer()
+                Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer")
+                failPlayback()
                 return
             }
             let wasIdle = !self.isPlaying
@@ -305,12 +335,12 @@ final class StreamingAudioPlayer: NSObject {
             if wasIdle { onPlaybackStarted?() }
         } catch {
             Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")
-            playNextBuffer()
+            failPlayback()
         }
     }
 
     /// Immediately stop playback and clear state.
-    func stop() {
+    func stop(notify: Bool = true) {
         audioPlayer?.stop()
         audioPlayer = nil
         mp3Data = Data()
@@ -320,8 +350,14 @@ final class StreamingAudioPlayer: NSObject {
 
         if isPlaying || wasFinalPending {
             isPlaying = false
-            onPlaybackFinished?()
+            if notify { onPlaybackFinished?() }
         }
+    }
+
+    private func failPlayback() {
+        isAcceptingChunks = false
+        stop(notify: false)
+        onPlaybackFailed?()
     }
 
     func setMuted(_ muted: Bool) {
@@ -362,6 +398,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
             // AND we're still mid-turn (waiting for more sentences),
             // stays silent and resumes when the next buffer is
             // queued via playAccumulatedAudio.
+            if !flag { self.failPlayback(); return }
             self.audioPlayer = nil
             self.isPlaying = false
             self.playNextBuffer()
@@ -372,9 +409,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
         Task { @MainActor in
             guard self.audioPlayer === player else { return }
             Logger.error("StreamingAudioPlayer: Decode error: \(error?.localizedDescription ?? "unknown")")
-            self.audioPlayer = nil
-            self.isPlaying = false
-            self.playNextBuffer()
+            self.failPlayback()
         }
     }
 }

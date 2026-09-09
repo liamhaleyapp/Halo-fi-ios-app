@@ -429,6 +429,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             eventContinuation?.yield(.voiceStatus(payload))
         case .turnCancelled(let payload):
             eventContinuation?.yield(.turnCancelled(payload))
+        case .appAction(let payload):
+            eventContinuation?.yield(.appAction(payload))
         case .dataMutated(let payload):
             Logger.info("Data mutated: scope=\(payload.scope)")
             eventContinuation?.yield(.dataMutated(payload))
@@ -483,7 +485,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     /// the limit, fails again, and we loop forever — which the
     /// production trace from 2026-04-25 hit on MINUTE_LIMIT_REACHED.
     static let terminalErrorCodes: Set<String> = [
-        "MINUTE_LIMIT_REACHED", "SUBSCRIPTION_UNAVAILABLE", "ACCOUNT_UNAVAILABLE",
+        "MINUTE_LIMIT_REACHED", "SESSION_UNAVAILABLE", "SUBSCRIPTION_UNAVAILABLE", "ACCOUNT_UNAVAILABLE",
         "AUTHENTICATION_FAILED", "INVALID_TOKEN", "TOKEN_EXPIRED",
     ]
 

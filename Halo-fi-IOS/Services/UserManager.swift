@@ -995,6 +995,7 @@ final class UserManager {
     /// this way). So a 200 alone is not "saved": the read-back has to show
     /// the values, or this throws and the caller keeps the answers.
     func updateBenefitsProfile(_ patch: BenefitsProfilePatch) async throws {
+        let operation = SessionLifetime.shared.current
         let body = try JSONEncoder().encode(patch)
         let _: EmptyResponse = try await NetworkService.shared.authenticatedRequest(
             endpoint: APIEndpoints.User.me,
@@ -1008,10 +1009,19 @@ final class UserManager {
             Logger.warning("UserManager: benefits profile read-back failed: \(error)")
             throw BenefitsProfileError.serverUnavailable
         }
+        try SessionLifetime.shared.check(operation)
         guard benefitsProfile.reflects(patch) else {
             Logger.warning("UserManager: benefits profile PATCH accepted but not stored")
             throw BenefitsProfileError.notSaved
         }
+        var resolved = [String]()
+        if capabilities.moneyProfileRemaining == 0 { resolved.append("money_profile_incomplete") }
+        let baseComplete = benefitsProfile.workStatus != nil && benefitsProfile.blindStatus != nil
+        let ssiComplete = !capabilities.showsResourceCounter ||
+            (benefitsProfile.householdType != nil && benefitsProfile.hasAbleAccount != nil)
+        if !capabilities.showsBenefitsLane || (baseComplete && ssiComplete) { resolved.append("profile_incomplete") }
+        NotificationCenter.default.post(name: .attentionSourceChanged, object: nil,
+                                        userInfo: ["resolved_kinds": resolved])
     }
 
     private func formatTokenDuration(_ seconds: Int) -> String {

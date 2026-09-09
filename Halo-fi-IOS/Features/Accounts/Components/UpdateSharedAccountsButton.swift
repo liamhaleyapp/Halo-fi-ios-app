@@ -22,8 +22,8 @@ struct UpdateSharedAccountsButton: View {
     @SwiftUI.Environment(BankDataManager.self) private var bankDataManager
 
     @State private var isWorking = false
-    @State private var showingLink = false
-    @State private var handler: Handler?
+    @State private var activeAttempt: UUID?
+    @State private var linkPresentation: PlaidLinkPresentation?
     @State private var errorMessage: String?
 
     private var title: String { item.isActive ? "Update shared accounts" : "Reconnect \(item.institutionName)" }
@@ -48,14 +48,27 @@ struct UpdateSharedAccountsButton: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .fullScreenCover(isPresented: $showingLink) {
-            if let handler {
-                LinkController(handler: handler).ignoresSafeArea()
+        .fullScreenCover(item: $linkPresentation) { presentation in
+            NavigationStack {
+                LinkController(handler: presentation.handler)
+                    .navigationTitle("Bank sign-in")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseToolbarButton(hint: "Closes bank sign-in. You can try reconnecting again.") {
+                                closeLink()
+                            }
+                        }
+                    }
             }
+            .accessibilityAction(.escape) { closeLink() }
         }
     }
 
     private func start() {
+        guard !isWorking else { return }
+        let attempt = UUID()
+        activeAttempt = attempt
         isWorking = true
         errorMessage = nil
         let generation = SessionLifetime.shared.current
@@ -63,25 +76,32 @@ struct UpdateSharedAccountsButton: View {
             do {
                 let token = try await BankService.shared.getUpdateLinkToken(itemId: item.itemId)
                 try SessionLifetime.shared.check(generation)
+                guard activeAttempt == attempt else { return }
+                Diagnostics.send("plaid_update_token_ready")
                 plaidManager.linkToken = token
                 guard let created = plaidManager.createHandler(
                     onSuccess: { _ in Task { @MainActor in
-                        guard SessionLifetime.shared.isCurrent(generation) else { return }
+                        guard SessionLifetime.shared.isCurrent(generation), activeAttempt == attempt else { return }
                         await finish()
                     } },
                     onExit: { exit in
                         Task { @MainActor in
-                            guard SessionLifetime.shared.isCurrent(generation) else { return }
-                            showingLink = false
-                            isWorking = false
-                            if let error = exit?.error { errorMessage = "\(item.institutionName) didn't finish: \(error.errorMessage)" }
+                            guard SessionLifetime.shared.isCurrent(generation), activeAttempt == attempt else { return }
+                            closeLink()
+                            if exit?.error != nil {
+                                errorMessage = "Couldn't finish bank sign-in. Please try reconnecting again."
+                                UIAccessibility.post(notification: .announcement, argument: errorMessage)
+                            }
                         }
                     }
                 ) else { throw NSError(domain: "HaloFi.Plaid", code: 1, userInfo: [NSLocalizedDescriptionKey: "Link could not start."]) }
-                handler = created
-                showingLink = true
+                // One state value owns both presentation and its required handler.
+                // A Boolean cover can capture the earlier nil handler on first open.
+                linkPresentation = PlaidLinkPresentation(handler: created)
             } catch {
-                guard SessionLifetime.shared.isCurrent(generation) else { return }
+                guard SessionLifetime.shared.isCurrent(generation), activeAttempt == attempt else { return }
+                activeAttempt = nil
+                plaidManager.clearSession()
                 isWorking = false
                 // The server's detail can be a full Plaid error dump; log it, say one sentence.
                 Logger.error("UpdateSharedAccounts: \(error)")
@@ -91,15 +111,26 @@ struct UpdateSharedAccountsButton: View {
         }
     }
 
+    private func closeLink() {
+        activeAttempt = nil
+        linkPresentation = nil
+        plaidManager.clearSession()
+        isWorking = false
+        Diagnostics.send("plaid_update_closed")
+    }
+
     @MainActor
     private func finish() async {
-        showingLink = false
+        activeAttempt = nil
+        linkPresentation = nil
         plaidManager.clearSession()
         let generation = SessionLifetime.shared.current
         defer { if SessionLifetime.shared.isCurrent(generation) { isWorking = false } }
         do {
             try await BankService.shared.completeReconnection(itemId: item.itemId)
             try SessionLifetime.shared.check(generation)
+            NotificationCenter.default.post(name: .attentionSourceChanged, object: nil,
+                                            userInfo: ["reconnected_item_id": item.itemId])
             await bankDataManager.forceRefresh()
             try SessionLifetime.shared.check(generation)
             NotificationCenter.default.post(name: .budgetDataDidMutate, object: nil, userInfo: ["scope": "accounts"])
@@ -114,6 +145,12 @@ struct UpdateSharedAccountsButton: View {
     }
 }
 
+
+/// The cover cannot exist without the Link handler that supplies its content.
+struct PlaidLinkPresentation: Identifiable {
+    let id = UUID()
+    let handler: Handler
+}
 
 struct BankReconnectView: View {
     let itemId: String

@@ -16,6 +16,7 @@ import SwiftUI
 struct AttentionView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     let onOpen: (AttentionCard) -> Void
+    @State private var reminderCard: AttentionCard?
 
     private var cards: [AttentionCard] { dataManager.attentionCards + dataManager.attentionQueue }
 
@@ -37,17 +38,12 @@ struct AttentionView: View {
                         : VoiceOverFormatter.count(cards.count, singular: "thing needs you", plural: "things need you"),
                     detail: cards.isEmpty
                         ? "New deposits, charges and deadlines show up here as they arrive."
-                        : "Most urgent first. Open one to handle it. Not now hides it for a week.",
+                        : "Most urgent first. Open one to handle it, or choose Remind me later.",
                     tone: tone
                 )
                 ForEach(cards) { card in
                     AttentionCardView(card: card, onOpen: { onOpen(card) }, onNotNow: {
-                        Task {
-                            await dataManager.dismissCard(card)
-                            let left = cards.count
-                            UIAccessibility.post(notification: .announcement,
-                                                 argument: "Hidden for a week. " + (left == 0 ? "Nothing else needs you." : VoiceOverFormatter.count(left, singular: "thing left", plural: "things left") + "."))
-                        }
+                        reminderCard = card
                     })
                 }
             }
@@ -57,6 +53,9 @@ struct AttentionView: View {
             .readableContentWidth()
         }
         .background(Color.haloBackground.ignoresSafeArea())
+        .sheet(item: $reminderCard) { card in
+            AttentionReminderSheet(card: card)
+        }
         .navigationTitle("Needs your attention")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
@@ -165,6 +164,7 @@ struct AttentionCardView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
         Button(action: onOpen) {
             HaloRow {
                 HaloIconTile(icon: icon, tint: tint)
@@ -183,13 +183,71 @@ struct AttentionCardView: View {
         }
         .buttonStyle(HapticPlainButtonStyle())
         .contextMenu {
-            Button { onNotNow() } label: { Label("Not now", systemImage: "clock") }
+            Button { onNotNow() } label: { Label("Remind me later", systemImage: "clock") }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(card.title). \(card.line)")
         .accessibilityHint(hint)
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "Not now") { onNotNow() }
+        .accessibilityAction(named: "Remind me later") { onNotNow() }
         .accessibilityIdentifier("attentionCard-\(card.kind)")
+        Button("Remind me later", action: onNotNow)
+            .foregroundStyle(Color.haloTextPrimary)
+            .frame(minHeight: 44)
+            .padding(.horizontal, 16)
+            .accessibilityLabel("Remind me later about \(card.title)")
+        }
+    }
+}
+
+/// A normal sheet, with every action in reading order. No swipe or long-press
+/// gesture is required, and a failed save never announces a false dismissal.
+private struct AttentionReminderSheet: View {
+    @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(\.dismiss) private var dismiss
+    let card: AttentionCard
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(card.title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                    Text("Hide this reminder for a while. It returns only if it still needs attention.")
+                    delayButton("Remind me in 1 week", days: 7)
+                    delayButton("Remind me in 30 days", days: 30)
+                    delayButton("Remind me in 90 days", days: 90)
+                    if let errorMessage { Text(errorMessage).foregroundStyle(Color.haloNegative) }
+                    Button("Cancel") { dismiss() }.frame(minHeight: 44).disabled(isSaving)
+                }
+                .padding(20)
+                .readableContentWidth()
+            }
+            .navigationTitle("Remind me later")
+            .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isSaving)
+        }
+    }
+
+    private func delayButton(_ title: String, days: Int) -> some View {
+        Button {
+            isSaving = true
+            Task {
+                if await dataManager.dismissCard(card, days: days) {
+                    UIAccessibility.post(notification: .announcement, argument: "Reminder hidden for \(days) days.")
+                    dismiss()
+                } else {
+                    errorMessage = "Couldn't save that reminder. Please try again."
+                    UIAccessibility.post(notification: .announcement, argument: errorMessage)
+                }
+                isSaving = false
+            }
+        } label: {
+            Text(title).foregroundStyle(Color.haloTextPrimary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .disabled(isSaving)
     }
 }

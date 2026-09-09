@@ -122,7 +122,7 @@ enum UITestArchetype: String, CaseIterable {
     /// The month ahead for this archetype (2026-09-05).
     var calendar: CalendarMonth? {
         guard self == .ssiWatch || self == .ssiBlind else { return nil }
-        let json = """
+        var json = """
         {"month": "2026-09", "month_label": "September 2026", "today": "2026-09-05",
          "days": [
            {"date": "2026-09-01", "is_today": false, "is_past": true, "items": [
@@ -139,6 +139,12 @@ enum UITestArchetype: String, CaseIterable {
          "next": {"kind": "deadline", "label": "Hand in August work expenses", "cents": 0, "confidence": "n/a", "source": "reminder", "status": "due", "date": "2026-09-06"},
          "spoken": "September: about $412 expected in, $11 going out. Next: Hand in August work expenses, September 6. Estimate."}
         """
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-calendar-disconnected") {
+            json = json.replacingOccurrences(of: "\"stream_id\": \"spot\"", with:
+                "\"stream_id\": \"spot\", \"bank_connection_status\": \"disconnected\", \"payment_verified\": false")
+            json = json.replacingOccurrences(of: "Estimate.", with:
+                "Some tracked payments are unverified because their bank connection is unavailable. Estimate.")
+        }
         return try? JSONDecoder().decode(CalendarMonth.self, from: Data(json.utf8))
     }
 

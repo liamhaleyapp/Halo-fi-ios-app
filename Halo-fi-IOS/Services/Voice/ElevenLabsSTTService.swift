@@ -91,6 +91,9 @@ final class ElevenLabsSTTService {
     private var connectTask: Task<Void, Error>?
     private let readinessGate = TranscriptCommitGate()
     private var setupError: Error?
+    private var idleAudioTask: Task<Void, Never>?
+    private var lastAudioSentAt: TimeInterval = 0
+    private let idleAudioInterval: TimeInterval
     private var currentToken: STTTokenResponse?
     private var listeningTask: Task<Void, Never>?
     private(set) var isSessionReady = false  // Wait for session_started before sending audio
@@ -105,9 +108,11 @@ final class ElevenLabsSTTService {
 
     init(networkService: NetworkServiceProtocol = NetworkService.shared,
          readinessTimeout: TimeInterval = 10,
+         idleAudioInterval: TimeInterval = 5,
          makeSocket: @escaping (URLRequest) -> any SpeechSocket = { URLSession.shared.webSocketTask(with: $0) }) {
         self.networkService = networkService
         self.readinessTimeout = readinessTimeout
+        self.idleAudioInterval = max(0.01, idleAudioInterval)
         self.makeSocket = makeSocket
     }
 
@@ -215,6 +220,8 @@ final class ElevenLabsSTTService {
     /// Disconnect from ElevenLabs STT immediately (no flush).
     func disconnect() {
         connectionGeneration = UUID()
+        idleAudioTask?.cancel()
+        idleAudioTask = nil
         connectTask?.cancel()
         connectTask = nil
         isConnecting = false
@@ -297,6 +304,7 @@ final class ElevenLabsSTTService {
                 return
             }
 
+            lastAudioSentAt = ProcessInfo.processInfo.systemUptime
             try await task.send(.string(jsonString))
         } catch {
             guard webSocketTask === task else { return }
@@ -307,6 +315,7 @@ final class ElevenLabsSTTService {
 
     /// Send audio buffer from AVAudioEngine
     func sendAudioBuffer(_ buffer: AVAudioPCMBuffer) async {
+        let generation = connectionGeneration
         guard let channelData = buffer.floatChannelData?[0] else { return }
 
         let frameCount = Int(buffer.frameLength)
@@ -315,22 +324,18 @@ final class ElevenLabsSTTService {
 
         // Use sample rate from backend config, default to 16kHz
         let targetSampleRate = Double(currentToken?.config.sampleRate ?? 16000)
-        let resampledSamples: [Float]
-
-        if inputSampleRate != targetSampleRate {
-            resampledSamples = resampleAudio(samples, from: inputSampleRate, to: targetSampleRate)
-        } else {
-            resampledSamples = samples
-        }
-
-        // Convert float samples to 16-bit PCM
-        let pcmData = ElevenLabsAudioFrame.floatToPCM16(resampledSamples)
-
+        // Conversion runs off the UI actor; the coordinator bounds pending work.
+        let pcmData = await Task.detached(priority: .userInitiated) {
+            let converted = inputSampleRate == targetSampleRate ? samples :
+                Self.resampleAudio(samples, from: inputSampleRate, to: targetSampleRate)
+            return ElevenLabsAudioFrame.floatToPCM16(converted)
+        }.value
+        guard !Task.isCancelled, connectionGeneration == generation else { return }
         await sendAudio(pcmData)
     }
 
     /// Resample audio using linear interpolation
-    private func resampleAudio(_ samples: [Float], from inputRate: Double, to outputRate: Double) -> [Float] {
+    nonisolated private static func resampleAudio(_ samples: [Float], from inputRate: Double, to outputRate: Double) -> [Float] {
         guard inputRate != outputRate, !samples.isEmpty else { return samples }
 
         let ratio = inputRate / outputRate
@@ -449,6 +454,7 @@ final class ElevenLabsSTTService {
             guard !isSessionReady else { return }
             isSessionReady = true
             readinessGate.complete()
+            startIdleAudio()
             onSessionReady?()
 
         case .unknown(let rawText):
@@ -457,7 +463,30 @@ final class ElevenLabsSTTService {
         }
     }
 
+    /// Scribe expects an audio stream even when playback/mute gates the mic.
+    /// Keep an admitted session alive with actual zero-valued PCM, never room
+    /// audio or an empty commit. A replacement connection owns its own task.
+    private func startIdleAudio() {
+        idleAudioTask?.cancel()
+        lastAudioSentAt = ProcessInfo.processInfo.systemUptime
+        let generation = connectionGeneration
+        idleAudioTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                do { try await Task.sleep(for: .seconds(self.idleAudioInterval)) }
+                catch { return }
+                guard !Task.isCancelled, self.connectionGeneration == generation,
+                      self.isSessionReady else { return }
+                guard ProcessInfo.processInfo.systemUptime - self.lastAudioSentAt >= self.idleAudioInterval else { continue }
+                let sampleRate = self.currentToken?.config.sampleRate ?? 16000
+                await self.sendAudio(Data(repeating: 0, count: sampleRate / 10 * 2))
+            }
+        }
+    }
+
     private func handleConnectionError(_ error: Error) {
+        idleAudioTask?.cancel()
+        idleAudioTask = nil
         commitGate.cancel()
         // Extract close reason before clearing webSocketTask
         let closeReason: String? = {
@@ -473,6 +502,7 @@ final class ElevenLabsSTTService {
         }
 
         let wasConnecting = isConnecting
+        if !wasConnecting { connectionGeneration = UUID() }
         setupError = error
         readinessGate.cancel()
         // Clean up connection state

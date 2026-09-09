@@ -110,7 +110,12 @@ struct MoneyHomeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
                 openAttentionFromNotification()
             }
+            .onReceive(NotificationCenter.default.publisher(for: VoiceNavigation.budgetRequested)) { _ in
+                if VoiceNavigation.consumeBudget() { navigationPath.append(MoneyRoute.budget) }
+            }
             .onAppear {
+                if VoiceNavigation.consumeBudget() { navigationPath.append(MoneyRoute.budget) }
+
                 if ReminderNotificationScheduler.pendingAttentionOpen { openAttentionFromNotification() }
             }
             .navigationTitle("Money")
@@ -279,7 +284,7 @@ struct MoneyHomeView: View {
     private var attentionRow: some View {
         let cards = budgetDataManager.attentionCards
         let total = cards.count + budgetDataManager.attentionQueue.count
-        let top = cards.first
+        let top = cards.first ?? budgetDataManager.attentionQueue.first
         // Always red when something is waiting (Liam, 2026-09-05): the row
         // has to stand apart from the tone-colored balance card above it.
         let tint: Color = top == nil ? .gray : .haloNegative

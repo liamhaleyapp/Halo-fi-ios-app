@@ -47,6 +47,72 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testAgentComposerReturnsToBottomAfterKeyboardAndTabChange() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-tab=agent"]
+        app.launch()
+        let input = app.textViews["Message input"].firstMatch
+        let alternative = app.textFields["Message input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 8) || alternative.exists)
+        let field = input.exists ? input : alternative
+        let mic = app.buttons["Talk to Halo"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 5))
+        func record(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+            print("COMPOSER_GEOMETRY \(name) mic=\(mic.frame) tab=\(app.tabBars.firstMatch.frame) input=\(field.frame)")
+        }
+        record("Agent before keyboard")
+        XCTAssertLessThan(app.tabBars.firstMatch.frame.minY - mic.frame.maxY, 65,
+                          "Composer must sit immediately above the tab bar, not leave a keyboard-sized gap")
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        record("Agent with keyboard")
+        openTab(app, "Settings")
+        openTab(app, "Agent")
+        let dismissed = NSPredicate { _, _ in !app.keyboards.firstMatch.exists }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: dismissed, object: nil)], timeout: 5), .completed)
+        record("Agent after returning")
+        XCTAssertLessThan(app.tabBars.firstMatch.frame.minY - mic.frame.maxY, 65)
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        mic.tap()
+        let close = app.buttons["Close conversation"]
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        close.tap()
+        XCTAssertTrue(mic.waitForExistence(timeout: 8))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: dismissed, object: nil)], timeout: 5), .completed,
+                       "Opening and closing voice must clear the chat keyboard focus")
+        record("Agent after closing voice")
+        XCTAssertLessThan(app.tabBars.firstMatch.frame.minY - mic.frame.maxY, 65)
+    }
+
+    func testReminderOptionsAreVisibleAndArrangedTopToBottom() {
+        let app = launch("ssi_watch")
+        openTab(app, "Money")
+        let attention = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention.'")).firstMatch
+        XCTAssertTrue(scrollTo(attention, in: app))
+        attention.tap()
+        let reminder = app.buttons["Remind me later about Cards HaloFi can't see"]
+        XCTAssertTrue(scrollTo(reminder, in: app))
+        reminder.tap()
+        let week = app.buttons["Remind me in 1 week"]
+        let month = app.buttons["Remind me in 30 days"]
+        let quarter = app.buttons["Remind me in 90 days"]
+        XCTAssertTrue(week.waitForExistence(timeout: 5))
+        XCTAssertTrue(week.isHittable && month.isHittable && quarter.isHittable)
+        XCTAssertLessThan(week.frame.maxY, month.frame.minY)
+        XCTAssertLessThan(month.frame.maxY, quarter.frame.minY)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Accessible reminder choices"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(reminder.waitForExistence(timeout: 5), "Cancel must preserve the reminder")
+    }
+
     func testTabOrderIsMoneyBenefitsAgentSettings() {
         let app = launch("none")
         let buttons = app.tabBars.buttons
@@ -226,6 +292,30 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 10), "unlinked card missing")
         card.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'link'")).firstMatch.waitForExistence(timeout: 10), "link chooser did not open")
+    }
+
+    func testCalendarDisconnectedSubscriptionHasOneAccessibleRow() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-calendar-disconnected"]
+        app.launch()
+        openTab(app, "Money")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Calendar.'")).firstMatch
+        XCTAssertTrue(scrollTo(row, in: app))
+        row.tap()
+        XCTAssertTrue(header(in: app).label.contains("unverified"))
+        let subscription = app.descendants(matching: .any).matching(NSPredicate(format:
+            "label == %@", "Spotify, $10.99, Expected. Bank disconnected; payment unverified.")).firstMatch
+        XCTAssertTrue(scrollTo(subscription, in: app), "Disconnected subscription status missing from accessibility label")
+        for _ in 0..<4 {
+            if subscription.isHittable && subscription.frame.maxY < app.frame.height - 120 { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(subscription.isHittable)
+        XCTAssertLessThan(subscription.frame.maxY, app.frame.height - 120)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Calendar disconnected subscription"
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 
     func testMoneyCalendar_ssiWatch_listsTheMonth() {

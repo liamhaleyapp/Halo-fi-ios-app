@@ -96,8 +96,12 @@
 				"Halo-fi-IOSTests/SessionIsolationTests.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
 				"Halo-fi-IOSTests/TransactionNameFormatterTests.swift",
-				"Halo-fi-IOSTests/VoiceTurnTimingTests.swift",
 				"Halo-fi-IOSTests/TranscriptCommitGateTests.swift",
+				"Halo-fi-IOSTests/VoiceTurnTimingTests.swift",
+				"Halo-fi-IOSTests/VoiceAudioQueueTests.swift",
+				"Halo-fi-IOSTests/VoiceAppActionTests.swift",
+				"Halo-fi-IOSTests/VoiceBargeInTests.swift",
+				"Halo-fi-IOSTests/PlaidPresentationTests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITests.swift",
 				"Halo-fi-IOSUITests/Halo_fi_IOSUITestsLaunchTests.swift",
 				"Halo-fi-IOSUITests/TabHeaderUITests.swift",
@@ -115,8 +119,12 @@
 				"Halo-fi-IOSTests/SessionIsolationTests.swift",
 				"Halo-fi-IOSTests/TabSummariesTests.swift",
 				"Halo-fi-IOSTests/TransactionNameFormatterTests.swift",
-				"Halo-fi-IOSTests/VoiceTurnTimingTests.swift",
 				"Halo-fi-IOSTests/TranscriptCommitGateTests.swift",
+				"Halo-fi-IOSTests/VoiceTurnTimingTests.swift",
+				"Halo-fi-IOSTests/VoiceAudioQueueTests.swift",
+				"Halo-fi-IOSTests/VoiceAppActionTests.swift",
+				"Halo-fi-IOSTests/VoiceBargeInTests.swift",
+				"Halo-fi-IOSTests/PlaidPresentationTests.swift",
 			);
 			target = 0C39AABE2E4EBF9C00CF16A0 /* Halo-fi-IOSTests */;
 		};

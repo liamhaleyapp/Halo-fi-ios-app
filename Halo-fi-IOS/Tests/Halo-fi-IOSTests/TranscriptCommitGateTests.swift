@@ -61,6 +61,7 @@ private final class FakeSpeechSocket: SpeechSocket {
     var closeReason: Data?
     var receiver: CheckedContinuation<URLSessionWebSocketTask.Message, Error>?
     var sends = 0
+    var messages: [URLSessionWebSocketTask.Message] = []
     var deferSendFailure: CheckedContinuation<Void, Error>?
     var holdSend = false
     func resume() { state = .running }
@@ -70,6 +71,7 @@ private final class FakeSpeechSocket: SpeechSocket {
     }
     func send(_ message: URLSessionWebSocketTask.Message) async throws {
         sends += 1
+        messages.append(message)
         if holdSend { try await withCheckedThrowingContinuation { deferSendFailure = $0 } }
     }
     func receive() async throws -> URLSessionWebSocketTask.Message {
@@ -87,7 +89,7 @@ private final class FakeSpeechSocket: SpeechSocket {
 
 @MainActor
 final class SpeechReadinessTests: XCTestCase {
-    private func makeService(_ sockets: [FakeSpeechSocket], timeout: TimeInterval = 1) -> ElevenLabsSTTService {
+    private func makeService(_ sockets: [FakeSpeechSocket], timeout: TimeInterval = 1, idleInterval: TimeInterval = 5) -> ElevenLabsSTTService {
         let network = MockNetworkService()
         network.setMockResponse(STTTokenResponse(token: "test", expiresAt: nil,
             modelId: "scribe_v2_realtime", websocketUrl: "wss://speech.invalid",
@@ -95,7 +97,7 @@ final class SpeechReadinessTests: XCTestCase {
                 commitStrategy: "vad", languageCode: "en", includeTimestamps: false, contextPrompt: nil)),
             for: APIEndpoints.Agent.sttToken)
         var index = 0
-        return ElevenLabsSTTService(networkService: network, readinessTimeout: timeout) { _ in
+        return ElevenLabsSTTService(networkService: network, readinessTimeout: timeout, idleAudioInterval: idleInterval) { _ in
             let socket = sockets[index]; index += 1; return socket
         }
     }
@@ -106,6 +108,54 @@ final class SpeechReadinessTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(5))
         }
         XCTAssertTrue(condition(), "Expected asynchronous operation to reach its checkpoint")
+    }
+
+    func testIdlePlaybackSendsSilenceWithoutCommittingAndStopsOnDisconnect() async throws {
+        let socket = FakeSpeechSocket()
+        let service = makeService([socket], idleInterval: 0.03)
+        let connect = Task { try await service.connect() }
+        await waitFor { socket.receiver != nil }
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(socket.sends, 0, "No idle frames before provider readiness")
+        socket.emit(#"{"message_type":"session_started"}"#)
+        try await connect.value
+        await waitFor { socket.sends > 0 }
+        guard case .string(let json) = try XCTUnwrap(socket.messages.first),
+              let data = json.data(using: .utf8),
+              let frame = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            XCTFail("Expected PCM audio frame"); service.disconnect(); socket.finish(); return
+        }
+        XCTAssertEqual(frame["commit"] as? Bool, false)
+        let pcm = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(frame["audio_base_64"] as? String)))
+        XCTAssertEqual(pcm.count, 3200)
+        XCTAssertTrue(pcm.allSatisfy { $0 == 0 }, "Idle heartbeat must never include microphone audio")
+        service.disconnect(); socket.finish()
+        let count = socket.sends
+        try await Task.sleep(for: .milliseconds(90))
+        XCTAssertEqual(socket.sends, count)
+    }
+
+    func testIdleSendFailureEmitsOnceAndStopsKeepalive() async throws {
+        let socket = FakeSpeechSocket()
+        let service = makeService([socket], idleInterval: 0.02)
+        var failures = 0
+        service.onError = { _ in failures += 1 }
+        let connect = Task { try await service.connect() }
+        await waitFor { socket.receiver != nil }
+        socket.emit(#"{"message_type":"session_started"}"#)
+        try await connect.value
+        socket.holdSend = true
+        await waitFor { socket.deferSendFailure != nil }
+        socket.deferSendFailure?.resume(throwing: URLError(.networkConnectionLost))
+        socket.deferSendFailure = nil
+        await waitFor { failures == 1 }
+        let count = socket.sends
+        socket.finish()
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(socket.sends, count)
+        XCTAssertEqual(failures, 1)
+        XCTAssertFalse(service.isSessionReady)
+        service.disconnect()
     }
 
     func testWarmupAndListenShareHandshakeAndWaitForActualReadiness() async throws {

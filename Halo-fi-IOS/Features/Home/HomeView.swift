@@ -70,6 +70,9 @@ struct HomeView: View {
             }
             // Phase 12 — cross-tab quick actions. A prompt is sent as text;
             // no prompt means the user asked for the microphone.
+            .onReceive(NotificationCenter.default.publisher(for: VoiceNavigation.accepted)) { _ in
+                showingVoice = false
+            }
             .onReceive(NotificationCenter.default.publisher(for: .askHaloRequested)) { notification in
                 let prompt = (notification.userInfo?["prompt"] as? String) ?? ""
                 if prompt.isEmpty { openVoice(prompt: nil) } else { send(prompt) }

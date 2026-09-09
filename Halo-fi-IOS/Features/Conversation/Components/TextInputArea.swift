@@ -39,6 +39,10 @@ struct TextInputArea: View {
                     if state == .speaking {
                         onStopSpeaking?()
                     } else {
+                        // Release the composer's keyboard before presenting voice.
+                        // Otherwise the covered Agent tab can retain its keyboard
+                        // safe-area inset after the full-screen view is dismissed.
+                        isTextFieldFocused = false
                         onSwitchToVoice()
                     }
                 },
@@ -64,12 +68,16 @@ struct TextInputArea: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
-        .onAppear {
+        .task {
             guard autoFocus else { return }
-            // Auto-focus when appearing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isTextFieldFocused = true
-            }
+            // Cancel delayed focus if text mode closes before this runs.
+            do { try await Task.sleep(for: .milliseconds(100)) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            isTextFieldFocused = true
+        }
+        .onDisappear {
+            isTextFieldFocused = false
         }
     }
 
@@ -145,11 +153,11 @@ struct VoiceModeInputArea: View {
                 isEnabled: isEnabled,
                 onTap: onMicTap,
                 sessionInactive: handsFree?.isSessionActive == false,
-                appearMuted: handsFree?.isMicMuted ?? false
+                appearMuted: state != .speaking && (handsFree?.isMicMuted ?? false)
             )
 
             if let handsFree {
-                Text(!handsFree.isSessionActive ? "Tap the microphone to start" : handsFree.isMicMuted ? "Mic muted — tap mic to unmute" : "Listening — tap mic to mute")
+                Text(state == .speaking ? (handsFree.isMicMuted ? "Tap to interrupt Halo" : "Speak or tap to interrupt Halo") : !handsFree.isSessionActive ? "Tap the microphone to start" : handsFree.isMicMuted ? "Mic muted — tap mic to unmute" : state == .listening ? "Listening — tap mic to mute" : state.displayText)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .accessibilityHidden(true)

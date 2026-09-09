@@ -109,6 +109,7 @@ struct ConnectionAckPayload: Codable, Sendable {
     let connectionId: String?  // Server sends "connection_id"
     let sessionId: String?     // Some responses may use "session_id"
     let userId: String?
+    let pipelineRevision: String?
     let timestamp: String?
 
     enum CodingKeys: String, CodingKey {
@@ -118,6 +119,7 @@ struct ConnectionAckPayload: Codable, Sendable {
         case sessionId = "session_id"
         case userId = "user_id"
         case timestamp
+        case pipelineRevision = "pipeline_revision"
     }
 }
 
@@ -220,6 +222,7 @@ struct TurnCancelledPayload: Codable, Sendable {
 enum AgentEvent: Sendable {
     case turnCancelled(TurnCancelledPayload)
     case dataMutated(DataMutatedPayload)
+    case appAction(VoiceAppActionPayload)
     case connectionAck(ConnectionAckPayload)
     case streamChunk(StreamChunkPayload)
     case agentResponse(AgentResponsePayload)
@@ -241,6 +244,7 @@ enum AgentEvent: Sendable {
         case .acknowledgment(let p): return p.turnId
         case .error(let p): return p.turnId
         case .turnCancelled(let p): return p.turnId
+        case .appAction(let p): return p.turnId
         default: return nil
         }
     }
@@ -258,6 +262,7 @@ enum AgentIncomingMessage: Codable, Sendable {
     case audioComplete(AudioCompletePayload)
     case voiceStatus(VoiceStatusPayload)
     case dataMutated(DataMutatedPayload)
+    case appAction(VoiceAppActionPayload)
     case turnCancelled(TurnCancelledPayload)
     case unknown(String)
 
@@ -300,6 +305,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "voice_status":
             let payload = try VoiceStatusPayload(from: decoder)
             self = .voiceStatus(payload)
+        case "app_action":
+            self = .appAction(try VoiceAppActionPayload(from: decoder))
         case "data_mutated":
             let payload = try DataMutatedPayload(from: decoder)
             self = .dataMutated(payload)
@@ -328,6 +335,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .audioComplete(let payload):
             try payload.encode(to: encoder)
         case .voiceStatus(let payload):
+            try payload.encode(to: encoder)
+        case .appAction(let payload):
             try payload.encode(to: encoder)
         case .dataMutated(let payload):
             try payload.encode(to: encoder)

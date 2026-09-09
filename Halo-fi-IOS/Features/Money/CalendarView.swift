@@ -69,14 +69,17 @@ struct CalendarView: View {
             await load(force: true)
             UIAccessibility.post(notification: .announcement, argument: "Updated.")
         }
-        .task { await load() }
-        .onChange(of: month) { _, _ in Task { await load(); focus = true } }
+        .task { await load(force: true) }
+        .onChange(of: month) { _, _ in Task { await load(force: true); focus = true } }
     }
 
     private func summaryLine(_ cal: CalendarMonth) -> String {
         var s = "\(VoiceOverFormatter.dollars(cal.totals.expectedInCents)) expected in, \(VoiceOverFormatter.dollars(cal.totals.expectedOutCents)) going out."
         if let n = cal.next, let d = n.date {
             s += " Next: \(n.label), \(TabSummaries.spokenDate(d))."
+        }
+        if cal.days.contains(where: { $0.items.contains(where: { $0.paymentVerified == false }) }) {
+            s += " Some payments are unverified while a bank connection is unavailable."
         }
         return s
     }
@@ -144,16 +147,7 @@ struct CalendarView: View {
             }
         }()
         let amount = item.cents == 0 ? "" : (item.confidence == "about" ? "about " : "") + BudgetFormatter.cents(item.cents)
-        let state: String = {
-            switch item.status {
-            case "arrived": return "arrived"
-            case "paid": return "paid"
-            case "due": return "due today"
-            case "overdue": return "past due"
-            case "past": return ""
-            default: return "expected"
-            }
-        }()
+        let state = item.statusDescription
         return HaloRow {
             HaloIconTile(icon: icon, tint: tint)
             VStack(alignment: .leading, spacing: 2) {
@@ -161,6 +155,7 @@ struct CalendarView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text([amount, state].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.subheadline).foregroundColor(.haloTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
         }
@@ -168,7 +163,7 @@ struct CalendarView: View {
         .frame(minHeight: 64)
         .haloCard(tint: (item.kind == "deadline" && item.status == "due") ? .orange : (item.status == "overdue" ? .red : nil))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + ".")
+        .accessibilityLabel("\(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + (state.hasSuffix(".") ? "" : "."))
     }
 
     private func load(force: Bool = false) async {

@@ -7,7 +7,7 @@
 //  - Connection lifecycle
 //  - Event stream
 //  - Audio session transitions
-//  - Mutual exclusion (recording OR speaking OR typing)
+//  - Full-duplex capture and playback in hands-free mode
 //
 //  UI calls only public methods; internal services (VoiceService, AgentWebSocketManager) are private.
 //
@@ -50,7 +50,7 @@ final class ConversationCoordinator {
     // MARK: - Private Services
 
     private let voiceService: VoiceService
-    private let agentWebSocket: AgentWebSocketManager
+    private let agentWebSocket: any AgentWebSocketManagerProtocol
     private var streamingAudioPlayer: StreamingAudioPlayer?
     private var audioFeedback: AudioFeedbackService = AudioFeedbackService()
     private let sttService: ElevenLabsSTTService
@@ -69,6 +69,7 @@ final class ConversationCoordinator {
     private(set) var currentTurnId: String?
     private var cancelledTurnIds: [String] = []
     private var voiceTiming = VoiceTurnTiming()
+    private let failureSpeaker = AVSpeechSynthesizer()
     private var lastDetectedSpeechUptime: TimeInterval?
 
     /// True while the full-screen voice modal is on screen (from any tab).
@@ -84,6 +85,8 @@ final class ConversationCoordinator {
     private var agentEventTask: Task<Void, Never>?
     private var prewarmTask: Task<Void, Never>?
     private var sttWarmupTask: Task<Void, Never>?
+    private var sttRecoveryTask: Task<Void, Never>?
+    private var sttRecoveryAttempts = 0
     private var listenTask: Task<Void, Never>?
     private var resumeListeningTask: Task<Void, Never>?
     private var lifecycleID = UUID()
@@ -157,29 +160,9 @@ final class ConversationCoordinator {
     // call streamingAudioPlayer.stop() the moment we see sustained
     // voice activity above bargeInThreshold.
 
-    /// Linear RMS that must be exceeded to count as a barge-in
-    /// candidate buffer. Initially set to 0.10 (well above any AEC
-    /// bleed) but in practice .voiceChat AEC also slightly
-    /// attenuates the user's voice when both Halo and user are
-    /// speaking, so legitimate barge-in attempts often landed at
-    /// 0.04–0.06. Matching voiceActivityRMSThreshold is safe given
-    /// AEC's residual bleed sits below this floor.
-    private let bargeInRMSThreshold: Float = 0.04
+    private var bargeInDetector = VoiceBargeInDetector()
 
-    /// Number of consecutive above-threshold buffers required
-    /// before we trust the signal. Buffers arrive at roughly 50fps
-    /// so 3 frames ≈ 60ms — enough to dodge a single-buffer spike
-    /// from a click / pop / breath without making the user feel
-    /// like they need to project to interrupt.
-    private let bargeInRequiredFrames: Int = 3
-    private var bargeInConsecutiveFrames: Int = 0
-
-    /// WP7 — barge-in needs RMS AND a fresh partial transcript. Loud frames
-    /// only open a candidate window; the STT partial closes it. When no STT
-    /// session is open (push-to-talk), a longer RMS streak is the fallback.
-    private var bargeInCandidateAt: Date?
-    private let bargeInTranscriptWindow: TimeInterval = 1.5
-    private let bargeInFallbackFrames: Int = 10
+    private var interruptionAudio = VoiceInterruptionAudio<AVAudioPCMBuffer>()
 
     /// Set by pause/stop paths that stop the player deliberately. The
     /// player's "finished" callback arrives one tick later; without this it
@@ -307,10 +290,12 @@ final class ConversationCoordinator {
 
     // MARK: - Initialization
 
-    private init() {
+    // Internal construction lets protocol tests use an isolated coordinator.
+    init(agentWebSocket: (any AgentWebSocketManagerProtocol)? = nil,
+         sttService: ElevenLabsSTTService? = nil) {
         self.voiceService = VoiceService.shared
-        self.agentWebSocket = AgentWebSocketManager.shared
-        self.sttService = ElevenLabsSTTService()
+        self.agentWebSocket = agentWebSocket ?? AgentWebSocketManager.shared
+        self.sttService = sttService ?? ElevenLabsSTTService()
 
         setupNotifications()
         setupSTTCallbacks()
@@ -325,6 +310,7 @@ final class ConversationCoordinator {
     ) {
         self.streamingAudioPlayer?.onPlaybackStarted = nil
         self.streamingAudioPlayer?.onPlaybackFinished = nil
+        self.streamingAudioPlayer?.onPlaybackFailed = nil
         self.streamingAudioPlayer?.onBufferPlaybackStarted = nil
         self.streamingAudioPlayer?.stopAndDiscardPending()
         self.streamingAudioPlayer = streamingAudioPlayer
@@ -337,6 +323,7 @@ final class ConversationCoordinator {
             switch self.state {
             case .processing, .idle, .connecting:
                 self.setState(.speaking)
+                self.startInterruptionCapture()
             default:
                 break
             }
@@ -355,6 +342,9 @@ final class ConversationCoordinator {
                                                          outputEnabled: outputEnabled) else { return }
             Logger.info("Voice playback timing: \(fields)")
             Diagnostics.send("voice_playback", fields)
+        }
+        streamingAudioPlayer.onPlaybackFailed = { [weak self] in
+            self?.handleAudioDeliveryFailure("Voice audio is unavailable. Please try again later, or read the answer in chat.")
         }
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             self?.handleSpeakingFinished()
@@ -390,6 +380,7 @@ final class ConversationCoordinator {
 
         lifecycleID = UUID()
         let lifecycle = lifecycleID
+        sttRecoveryAttempts = 0
         connectionStartedAt = ProcessInfo.processInfo.systemUptime
         greetingPlaybackRecorded = false
         suppressNextAutoResume = false
@@ -437,6 +428,8 @@ final class ConversationCoordinator {
     /// Disconnect from the backend
     func disconnect() {
         lifecycleID = UUID()
+        sttRecoveryTask?.cancel()
+        sttRecoveryTask = nil
         connectionStartedAt = nil
         listenTask?.cancel()
         listenTask = nil
@@ -469,9 +462,9 @@ final class ConversationCoordinator {
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
-        bargeInConsecutiveFrames = 0
+        bargeInDetector.reset()
         bargeInRequested = false
-        bargeInCandidateAt = nil
+        interruptionAudio.reset()
         speechSecondsInCurrentListen = 0
         currentTurnId = nil
         // Drop any captured audio for the next conversation. Note we
@@ -527,6 +520,10 @@ final class ConversationCoordinator {
 
     /// Start exactly one listen transition, with a ready recognizer and microphone.
     func startListening() async {
+        if case .error = state, agentWebSocket.isConnected {
+            failureSpeaker.stopSpeaking(at: .immediate)
+            setState(.idle)
+        }
         if let pending = listenTask { await pending.value; return }
         guard state == .idle || state == .speaking else { return }
         guard interactionMode == .voice, sessionId != nil, agentWebSocket.isConnected else { return }
@@ -578,9 +575,9 @@ final class ConversationCoordinator {
         lastVoiceActivityAt = nil
         lastServerCommitAt = nil
         speechSecondsInCurrentListen = 0
-        bargeInCandidateAt = nil
-        // The ready cue defines the start of capture. Never replay audio from
-        // while the user was waiting, or Halo's last words, as a new utterance.
+        let openingAudio = interruptionAudio.takeInterruptedAudio()
+        // Normal input starts at the ready cue. Only a locally detected
+        // interruption preserves opening words from before that cue.
         voiceService.onAudioBuffer = nil
         voiceService.discardPreroll()
         try voiceService.startRecording()
@@ -594,6 +591,7 @@ final class ConversationCoordinator {
             guard let self, self.lifecycleID == lifecycle, !self.isMicMuted else { return }
             self.routeAudioBuffer(buffer)
         }
+        for buffer in openingAudio { routeAudioBuffer(buffer) }
         var fields = ["session_id": sessionId ?? "", "mode": conversationMode.rawValue]
         if let endedAt = lastSpeakingEndedAt {
             fields["speech_end_to_ready_ms"] = String(Int(Date().timeIntervalSince(endedAt) * 1000))
@@ -653,6 +651,7 @@ final class ConversationCoordinator {
     private var finalizationID: UUID?
     private var audioSendTask: Task<Void, Never>?
     private var audioSendGeneration = UUID()
+    private var queuedSpeechBuffers = VoiceAudioQueue<AVAudioPCMBuffer>()
     private var finalizationTimeoutTask: Task<Void, Never>?
 
     func stopListening() { stopListeningAndProcess() }
@@ -661,7 +660,9 @@ final class ConversationCoordinator {
         finalizationID = nil
         finalizationTimeoutTask?.cancel()
         finalizationTimeoutTask = nil
+        failureSpeaker.stopSpeaking(at: .immediate)
         audioSendGeneration = UUID()
+        queuedSpeechBuffers.removeAll()
         finalizationTask?.cancel()
         finalizationTask = nil
         audioSendTask?.cancel()
@@ -669,32 +670,62 @@ final class ConversationCoordinator {
     }
 
     private func enqueueSpeechAudio(_ buffer: AVAudioPCMBuffer) {
-        let previous = audioSendTask
+        let duration = Double(buffer.frameLength) / buffer.format.sampleRate
+        guard queuedSpeechBuffers.append(buffer, duration: duration) else {
+            // Never send a silently truncated utterance, particularly a confirmation.
+            Logger.warning("Voice audio backlog limit reached")
+            Diagnostics.send("voice_audio_overflow", ["queued_ms": String(Int(queuedSpeechBuffers.duration * 1000))])
+            failSpeechFinalization()
+            return
+        }
+        guard audioSendTask == nil else { return }
         let generation = audioSendGeneration
         audioSendTask = Task { [weak self] in
-            await previous?.value
-            guard !Task.isCancelled, let self, self.audioSendGeneration == generation else { return }
-            await self.sttService.sendAudioBuffer(buffer)
+            guard let self else { return }
+            while !Task.isCancelled, self.audioSendGeneration == generation,
+                  !self.queuedSpeechBuffers.isEmpty {
+                guard let next = self.queuedSpeechBuffers.popFirst() else { break }
+                await self.sttService.sendAudioBuffer(next)
+            }
+            if self.audioSendGeneration == generation { self.audioSendTask = nil }
         }
     }
 
-    private func failSpeechFinalization() {
+    private func handleAudioDeliveryFailure(_ message: String) {
+        // Prevent recovery tasks or late frames from restarting this failed turn.
+        lastAnnouncementTime = Date()
+        setState(.error(message))
+        sttRecoveryTask?.cancel()
+        sttRecoveryTask = nil
+        sttWarmupTask?.cancel()
+        sttWarmupTask = nil
+        listenTask?.cancel()
+        resumeListeningTask?.cancel()
         cancelSpeechFinalization()
+        cancelCurrentTurn()
         isVoiceSessionActive = false
         voiceService.stopRecording()
         voiceService.onAudioBuffer = nil
         sttService.disconnect()
-        transcriptStore?.discardDraft()
-        capturedBuffers = []
-        let message = "I couldn't finish hearing that. Please try again."
-        setState(.error(message))
-        UIAccessibility.post(notification: .announcement, argument: message)
-        let lifecycle = lifecycleID
-        Task { @MainActor [weak self] in
-            do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            guard let self, self.lifecycleID == lifecycle, self.state == .error(message) else { return }
-            self.setState(.idle)
+        streamingAudioPlayer?.stopAndDiscardPending()
+        audioFeedback.stopProcessingPulse()
+        isPlayingAcknowledgment = false
+        emitEvent(.agentFinal(message, id: currentAgentResponseId ?? UUID()))
+        currentAgentResponseId = nil
+        Diagnostics.send("voice_audio_delivery_failed", [:])
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement, argument: message)
+        } else if !isMuted && !isPrivacyMode {
+            failureSpeaker.stopSpeaking(at: .immediate)
+            failureSpeaker.speak(AVSpeechUtterance(string: message))
         }
+    }
+
+    private func failSpeechFinalization() {
+        Diagnostics.send("voice_input_finalization_failed")
+        sttService.disconnect()
+        handleRecognitionFailure(URLError(.timedOut), allowOutputToContinue: false,
+            messageOverride: "I couldn't finish hearing that. Please try again.")
     }
 
     /// State-aware router for every mic buffer. Always invoked on
@@ -724,21 +755,22 @@ final class ConversationCoordinator {
             processAudioBufferForSilenceDetection(buffer)
             capturedBuffers.append(buffer)
 
-        case .speaking:
-            // Hands-free only: watch for the user starting to talk
-            // while Halo is mid-response, and interrupt if so.
-            if conversationMode == .handsFree {
-                processAudioBufferForBargeIn(buffer)
-                // WP7 — once loud frames opened a candidate window, feed
-                // the open STT session so a partial transcript can
-                // confirm it is speech (not a cough or the TV).
-                if bargeInCandidateAt != nil, sttService.isSessionReady {
-                    enqueueSpeechAudio(buffer)
-                }
+        case .speaking, .processing:
+            guard conversationMode == .handsFree, finalizationID == nil else { return }
+            _ = interruptionAudio.append(buffer, duration: Double(buffer.frameLength) / buffer.format.sampleRate)
+            processAudioBufferForBargeIn(buffer)
+
+        case .connecting where interruptionAudio.isInterrupted:
+            // Preserve the user's words if recognition is reconnecting after
+            // local playback stopped. Never silently truncate a long request.
+            if !interruptionAudio.append(buffer, duration: Double(buffer.frameLength) / buffer.format.sampleRate) {
+                interruptionAudio.reset()
+                handleRecognitionFailure(URLError(.timedOut), allowOutputToContinue: false,
+                    messageOverride: "I couldn't keep up with that interruption. Please say it again.")
             }
 
         default:
-            // .idle / .processing / .connecting / .error: ignore the
+            // .idle / .connecting / .error: ignore the
             // frame. We keep voiceService recording in hands-free so
             // the engine doesn't go through a teardown cycle between
             // turns, but there's nothing to do with the buffer here.
@@ -746,62 +778,60 @@ final class ConversationCoordinator {
         }
     }
 
-    /// Look for sustained user voice during .speaking — signals the
-    /// user wants to interrupt Halo's response. Requires several
-    /// consecutive above-threshold frames so a single mic spike or
-    /// cough doesn't silence Halo prematurely.
-    private func processAudioBufferForBargeIn(_ buffer: AVAudioPCMBuffer) {
-        let rms = Self.computeRMS(buffer)
-
-        if rms < bargeInRMSThreshold {
-            if bargeInConsecutiveFrames > 0 {
-                Logger.debug("Barge-in: streak broken at \(bargeInConsecutiveFrames) frames (RMS=\(String(format: "%.4f", rms)))")
+    /// Capture must run during the greeting as well as subsequent answers.
+    private func startInterruptionCapture() {
+        guard conversationMode == .handsFree, !isMicMuted,
+              PermissionManager.shared.isMicrophonePermissionGranted else { return }
+        let lifecycle = lifecycleID
+        do {
+            voiceService.discardPreroll()
+            try voiceService.startRecording()
+            voiceService.onAudioBuffer = { [weak self] buffer in
+                guard let self, self.lifecycleID == lifecycle, !self.isMicMuted else { return }
+                self.routeAudioBuffer(buffer)
             }
-            bargeInConsecutiveFrames = 0
-            return
-        }
-
-        bargeInConsecutiveFrames += 1
-        Logger.debug("Barge-in: candidate frame \(bargeInConsecutiveFrames)/\(bargeInRequiredFrames) (RMS=\(String(format: "%.4f", rms)))")
-        if sttService.isConnected && sttService.isSessionReady {
-            // WP7 — transcript-gated: RMS opens (or refreshes) the window;
-            // the STT partial handler fires the actual barge-in.
-            if bargeInConsecutiveFrames >= bargeInRequiredFrames {
-                if bargeInCandidateAt == nil {
-                    Logger.info("Hands-free: barge-in candidate (RMS=\(String(format: "%.4f", rms))) — waiting for a partial transcript")
-                }
-                bargeInCandidateAt = Date()
-            }
-            return
-        }
-        // No STT session to confirm with (push-to-talk): a longer streak
-        // is the fallback so a single cough can't cut Halo off.
-        if bargeInConsecutiveFrames >= bargeInFallbackFrames {
-            bargeInConsecutiveFrames = 0
-            Logger.info("Hands-free: barge-in detected by RMS fallback (RMS=\(String(format: "%.4f", rms))) — interrupting Halo")
-            bargeIn()
+        } catch {
+            Diagnostics.send("voice_interruption_capture_failed")
+            // Playback remains usable; the explicit Stop button is still active.
         }
     }
 
-    /// Stop Halo's playback and route to listening. Triggered by
-    /// barge-in detection. The actual transition to .listening flows
-    /// through `handleSpeakingFinished` so we don't need to duplicate
-    /// startListening's setup here.
-    private func bargeIn() {
-        guard state == .speaking else { return }
-        bargeInRequested = true
-        bargeInCandidateAt = nil
-        bargeInConsecutiveFrames = 0
-        // WP7 — tell the server to stop generating / speaking this turn;
-        // late chunks for it are dropped by turn_id on the way in.
-        cancelCurrentTurn()
-        // stopAndDiscardPending: stop local playback AND drop any
-        // chunks the server is still streaming for the abandoned
-        // response. Otherwise late-arriving chunks refill the player's
-        // buffer, isBuffering flips to true, and startListening's
-        // bailout shoves the conversation back to .idle instead of
-        // routing into a fresh listen.
-        streamingAudioPlayer?.stopAndDiscardPending()
+    private func processAudioBufferForBargeIn(_ buffer: AVAudioPCMBuffer) {
+        let decision = bargeInDetector.observe(rms: Self.computeRMS(buffer),
+            duration: Double(buffer.frameLength) / buffer.format.sampleRate)
+        if decision == .interrupt {
+            Diagnostics.send("voice_barge_in", ["source": "local_audio"])
+            bargeIn(preserveOpeningAudio: true)
+        }
+    }
+
+    /// Local cancellation is synchronous and independent of provider latency.
+    /// Only this path resumes input; stopping the player must not also trigger
+    /// a playback-finished callback and schedule a competing listen transition.
+    private func bargeIn(preserveOpeningAudio: Bool) {
+        guard state == .speaking || (state == .processing && finalizationID == nil) else { return }
+        if preserveOpeningAudio { interruptionAudio.beginInterruption() }
+        else { interruptionAudio.reset() }
+        bargeInDetector.reset()
+        isPlayingAcknowledgment = false
+        cancelCurrentTurn(notifyPlaybackFinished: false)
+        streamingAudioPlayer?.stopAndDiscardPending(notify: false)
+        lastSpeakingEndedAt = Date()
+        lastAnnouncementTime = Date()
+        setState(.idle)
+        guard conversationMode == .handsFree, !isMicMuted else { return }
+        if sttService.isSessionReady {
+            setState(.connecting)
+            do { try beginListenTurn(lifecycle: lifecycleID) }
+            catch { handleVoiceSetupError(error) }
+        } else {
+            resumeListeningTask?.cancel()
+            let lifecycle = lifecycleID
+            resumeListeningTask = Task { [weak self] in
+                guard let self, self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                await self.startListening()
+            }
+        }
     }
 
     /// Per-buffer silence-detection tap for hands-free auto-commit.
@@ -908,7 +938,7 @@ final class ConversationCoordinator {
         hasDetectedSpeechInCurrentListen = false
         lastVoiceActivityAt = nil
         listenStartedAt = nil
-        bargeInConsecutiveFrames = 0
+        bargeInDetector.reset()
         if conversationMode != .handsFree {
             voiceService.stopRecording()
             voiceService.onAudioBuffer = nil
@@ -953,6 +983,7 @@ final class ConversationCoordinator {
                 return
             }
             self.consecutiveEmptyHandsFreeTurns = 0
+            self.sttRecoveryAttempts = 0
             self.markMeaningfulActivity()
             let buffers = self.capturedBuffers
             self.capturedBuffers = []
@@ -1041,7 +1072,7 @@ final class ConversationCoordinator {
     /// WP7 — cancel the turn in flight (barge-in, Stop, a new message).
     /// The server answers with turn_cancelled; anything still arriving
     /// for this id is dropped by handleAgentEvent.
-    func cancelCurrentTurn() {
+    func cancelCurrentTurn(notifyPlaybackFinished: Bool = true) {
         if finalizationID != nil {
             cancelSpeechFinalization()
             isVoiceSessionActive = false
@@ -1054,7 +1085,7 @@ final class ConversationCoordinator {
         cancelledTurnIds.append(turnId)
         if cancelledTurnIds.count > 20 { cancelledTurnIds.removeFirst(cancelledTurnIds.count - 20) }
         currentTurnId = nil
-        streamingAudioPlayer?.stopAndDiscardPending()
+        streamingAudioPlayer?.stopAndDiscardPending(notify: notifyPlaybackFinished)
         Task { [weak self] in
             guard let self else { return }
             try? await self.agentWebSocket.sendCancel(turnId: turnId)
@@ -1092,6 +1123,7 @@ final class ConversationCoordinator {
 
             let context: [String: AnyCodable] = [
                 "platform": AnyCodable("ios"),
+                "supports_app_actions": AnyCodable(true),
                 "sessionId": AnyCodable(sessionId ?? ""),
                 "timestamp": AnyCodable(Date().timeIntervalSince1970),
                 "timezone": AnyCodable(TimeZone.current.identifier),
@@ -1133,6 +1165,7 @@ final class ConversationCoordinator {
     func setMicMuted(_ muted: Bool) {
         let wasMuted = isMicMuted
         isMicMuted = muted
+        if muted { interruptionAudio.reset(); bargeInDetector.reset() }
         // On unmute, reset the silence-detection clock so the previous
         // silence accumulated while muted doesn't immediately auto-commit
         // an empty turn the moment the mic is live again. We also clear
@@ -1162,10 +1195,8 @@ final class ConversationCoordinator {
 
     /// Stop current TTS without affecting mute state (skip this message)
     func stopSpeaking() {
-        guard state == .speaking else { return }
-        cancelCurrentTurn()
-        streamingAudioPlayer?.stop()
-        setState(.idle)
+        Diagnostics.send("voice_barge_in", ["source": "button"])
+        bargeIn(preserveOpeningAudio: false)
     }
 
     /// Set privacy mode (TTS off, haptics only)
@@ -1288,6 +1319,9 @@ final class ConversationCoordinator {
         }()
         if conversationMode == .handsFree && !isMicMuted && canAutoResume {
             bargeInRequested = false
+            // A terminal frame can arrive between audio buffers while state is
+            // processing. startListening accepts idle/speaking, not processing.
+            if state == .processing { setState(.idle) }
             resumeListeningTask?.cancel()
             let lifecycle = lifecycleID
             resumeListeningTask = Task { [weak self] in
@@ -1299,7 +1333,7 @@ final class ConversationCoordinator {
 
         // Push-to-talk path (or hands-free with mute / unrecoverable
         // state): just settle to idle so the user can tap to talk.
-        if state == .speaking || state == .connecting {
+        if state == .speaking || state == .connecting || state == .processing {
             setState(.idle)
         }
     }
@@ -1308,7 +1342,7 @@ final class ConversationCoordinator {
 
     /// Handles all events from the AgentWebSocketManager event stream.
     /// Replaces the previous 7 separate callback closures with a single sequential handler.
-    private func handleAgentEvent(_ event: AgentEvent) {
+    func handleAgentEvent(_ event: AgentEvent) {
         // WP7 — anything for a cancelled or superseded turn is dropped
         // before it can touch the player or the transcript.
         // turn_cancelled is the server confirming OUR cancel, so it carries
@@ -1342,7 +1376,8 @@ final class ConversationCoordinator {
         case .connectionAck(let ack):
             warmSpeechRecognition()
             if let started = connectionStartedAt {
-                Diagnostics.send("voice_connection_ready", ["connect_ms": String(Int((ProcessInfo.processInfo.systemUptime - started) * 1000))])
+                Diagnostics.send("voice_connection_ready", ["connect_ms": String(Int((ProcessInfo.processInfo.systemUptime - started) * 1000)),
+                    "backend_pipeline": ack.pipelineRevision ?? "legacy"])
             }
             if let serverSessionId = ack.sessionId ?? ack.connectionId {
                 sessionId = serverSessionId
@@ -1423,9 +1458,9 @@ final class ConversationCoordinator {
             // Intermediate events have an empty body anyway, but this
             // double-check keeps the contract clean.
             if !isPartial {
-                if isAck || body.isEmpty {
+                if isAck {
                     isPlayingAcknowledgment = true
-                } else {
+                } else if !body.isEmpty {
                     let responseId = currentAgentResponseId ?? UUID()
                     emitEvent(.agentFinal(body, id: responseId))
                     currentAgentResponseId = nil
@@ -1441,6 +1476,10 @@ final class ConversationCoordinator {
                                  isError: (complete.data?["is_error"]?.value as? Bool) == true)
 
         case .error(let error):
+            if error.code == "AUDIO_DELIVERY_FAILED" {
+                handleAudioDeliveryFailure(error.error)
+                return
+            }
             audioFeedback.stopProcessingPulse()
             setState(.error(error.error))
             audioFeedback.feedbackForStateChange(.error(error.error))
@@ -1507,6 +1546,10 @@ final class ConversationCoordinator {
             setState(.disconnected)
             emitEvent(.errorEvent("Connection lost. Please go back and try again."))
 
+        case .appAction(let payload):
+            guard payload.action.kind == "navigate", payload.action.state == "proposed" else { return }
+            setState(.idle)
+            NotificationCenter.default.post(name: VoiceNavigation.requested, object: payload.action.target)
         case .dataMutated(let payload):
             handleDataMutated(payload)
         }
@@ -1519,19 +1562,10 @@ final class ConversationCoordinator {
         sttService.onTranscription = { [weak self] text, isFinal in
             guard let self = self else { return }
 
-            // WP7 — a partial while Halo is speaking, inside the RMS
-            // candidate window, is the barge-in confirmation.
-            if !self.isVoiceSessionActive {
-                if self.state == .speaking, !isFinal,
-                   let candidate = self.bargeInCandidateAt,
-                   Date().timeIntervalSince(candidate) < self.bargeInTranscriptWindow,
-                   !text.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Logger.info("Hands-free: barge-in confirmed by transcript — interrupting Halo")
-                    self.transcriptStore?.updateDraft(text)
-                    self.bargeIn()
-                }
-                return
-            }
+            // Only an active input turn owns transcripts. During playback we
+            // detect speech locally and replay its opening audio after stopping
+            // Halo, so delayed output/keepalive transcripts cannot trigger turns.
+            guard self.isVoiceSessionActive else { return }
 
             // Short answers such as "no" must reach confirmation logic.
             if isFinal {
@@ -1558,48 +1592,86 @@ final class ConversationCoordinator {
             }
         }
 
-        // Handle STT errors — recover gracefully to idle so the user can try again
         sttService.onError = { [weak self] error in
-            guard let self = self else { return }
+            self?.handleRecognitionFailure(error)
+        }
+        sttService.onDisconnected = { [weak self] in
+            guard let self, self.isVoiceSessionActive, self.state == .listening else { return }
+            self.handleRecognitionFailure(URLError(.networkConnectionLost))
+        }
+    }
 
-            Logger.error("STT error: \(error.localizedDescription)")
-
-            self.cancelSpeechFinalization()
-
-            // Clean up voice session
-            self.voiceService.stopRecording()
-            self.voiceService.onAudioBuffer = nil
-            self.isVoiceSessionActive = false
-            self.transcriptStore?.discardDraft()
-
-            // Show a concise, user-friendly message on the mic button.
-            // The raw NSError descriptions are too technical.
-            let userMessage = Self.friendlySTTError(error)
-            self.setState(.error(userMessage))
-
-            // A delayed recovery may only affect the session that failed.
-            let lifecycle = self.lifecycleID
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                guard !Task.isCancelled, let self, self.lifecycleID == lifecycle,
-                      self.state == .error(userMessage) else { return }
+    private func handleRecognitionFailure(_ error: Error, allowOutputToContinue: Bool = true,
+                                          messageOverride: String? = nil) {
+        let canRecover = conversationMode == .handsFree && !isMicMuted &&
+            sessionId != nil && agentWebSocket.isConnected
+        let preserveCapture = allowOutputToContinue && canRecover && finalizationID == nil &&
+            (state == .speaking || state == .processing)
+        let quotaError: Bool = {
+            guard let error = error as? ElevenLabsSTTError else { return false }
+            if case .resourceExhausted = error { return true }
+            return false
+        }()
+        let willRetry = canRecover && !quotaError && sttRecoveryAttempts < 1
+        let recoveryMessage = messageOverride ?? Self.friendlySTTError(error)
+        let phase = state == .speaking ? "speaking" : (state == .processing ? "processing" : "listening")
+        Diagnostics.send("voice_stt_failure", ["phase": phase, "preserved_capture": preserveCapture ? "1" : "0"])
+        Logger.error("STT failure: \(error.localizedDescription)")
+        cancelSpeechFinalization()
+        interruptionAudio.reset()
+        isVoiceSessionActive = false
+        transcriptStore?.discardDraft()
+        capturedBuffers = []
+        if !preserveCapture {
+            lastAnnouncementTime = Date()
+            voiceService.stopRecording()
+            voiceService.onAudioBuffer = nil
+            // A displayed input error must never leave old output playing over it.
+            cancelCurrentTurn()
+            streamingAudioPlayer?.stopAndDiscardPending()
+            resumeListeningTask?.cancel()
+            resumeListeningTask = nil
+            lastAnnouncementTime = Date() // One explicit announcement, not two.
+            setState(.error(recoveryMessage))
+            if !willRetry { UIAccessibility.post(notification: .announcement, argument: recoveryMessage) }
+        }
+        // While output continues, retain the mic for local interruption detection.
+        // One automatic recovery per successfully submitted turn prevents loops.
+        guard willRetry else { return }
+        sttRecoveryAttempts += 1
+        let lifecycle = lifecycleID
+        sttRecoveryTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            guard let self, self.lifecycleID == lifecycle, !Task.isCancelled,
+                  self.sessionId != nil, self.agentWebSocket.isConnected, !self.isMicMuted else { return }
+            if preserveCapture {
+                do { try await self.sttService.connect() }
+                catch { Diagnostics.send("voice_stt_recovery_failed") }
+            } else if self.state == .error(recoveryMessage) {
+                // VoiceOver must finish the error before capture restarts;
+                // otherwise its own words can become the next user request.
+                guard await self.announceBeforeRecognitionRecovery(recoveryMessage),
+                      self.lifecycleID == lifecycle, !Task.isCancelled,
+                      self.state == .error(recoveryMessage), !self.isMicMuted else { return }
+                self.lastAnnouncementTime = Date()
                 self.setState(.idle)
+                await self.startListening()
             }
         }
+    }
 
-        // Handle STT disconnection
-        sttService.onDisconnected = { [weak self] in
-            guard let self = self else { return }
-
-            // Only handle unexpected disconnections (not user-initiated)
-            if self.isVoiceSessionActive && self.state == .listening {
-                Logger.warning("STT disconnected unexpectedly")
-                self.voiceService.stopRecording()
-                self.voiceService.onAudioBuffer = nil
-                self.isVoiceSessionActive = false
-                self.transcriptStore?.discardDraft()
-                self.setState(.idle)
-            }
+    private func announceBeforeRecognitionRecovery(_ message: String) async -> Bool {
+        guard UIAccessibility.isVoiceOverRunning else { return true }
+        let gate = TranscriptCommitGate()
+        let observer = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.announcementDidFinishNotification, object: nil, queue: .main
+        ) { notification in
+            guard notification.userInfo?[UIAccessibility.announcementStringValueUserInfoKey] as? String == message else { return }
+            Task { @MainActor in gate.complete() }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        return await gate.wait(timeout: 8) {
+            UIAccessibility.post(notification: .announcement, argument: message)
         }
     }
 
@@ -1777,6 +1849,8 @@ final class ConversationCoordinator {
     /// interruptions so a blind user always HEARS what happened instead of
     /// dropping into a silent idle state (F045 / V4).
     private func pauseAudioAndReturnToIdle(announcement: String) {
+        sttRecoveryTask?.cancel()
+        sttRecoveryTask = nil
         listenTask?.cancel()
         listenTask = nil
         resumeListeningTask?.cancel()

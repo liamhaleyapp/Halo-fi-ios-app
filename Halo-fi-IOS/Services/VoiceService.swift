@@ -76,10 +76,9 @@ final class VoiceService: NSObject {
     private func setupAudioSession() {
         do {
             recordingSession = AVAudioSession.sharedInstance()
-            // .voiceChat enables hardware acoustic echo cancellation
-            // (AEC). Without it, the speaker output bleeds into the
-            // mic during full-duplex conversations — Halo's own voice
-            // gets transcribed as user input. .default has no AEC.
+            // .voiceChat selects the conversational audio route. Capture
+            // also enables the engine's voice-processing I/O below so
+            // speaker echo is removed before interruption detection.
             // Shared config: previously this site used a DIFFERENT
             // option set than the player, and each mismatched
             // setCategory cleared the speaker override (quiet-earpiece
@@ -114,6 +113,11 @@ final class VoiceService: NSObject {
 
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
+        // voiceChat selects routing; AVAudioEngine also needs its voice
+        // processing I/O enabled to remove speaker echo from captured input.
+        #if !targetEnvironment(simulator)
+        try inputNode.setVoiceProcessingEnabled(true)
+        #endif
         let format = inputNode.outputFormat(forBus: 0)
 
         guard format.sampleRate > 0, format.channelCount > 0 else {
