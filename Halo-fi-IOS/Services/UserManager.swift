@@ -26,6 +26,9 @@ final class UserManager {
     /// Whether we're still determining the user's destination after login
     /// While true, show a splash screen. When false, show main app or onboarding based on isOnboarded.
     var isResolvingDestination = false
+    var destinationError: String?
+    var isResolvingConsent = false
+    private var consentRestorationID = UUID()
 
     /// Server-computed feature gating (Sep-2026). Views read THIS, never
     /// raw `hasSsi` / `isBlind`. Loaded from /auth/me after login and
@@ -75,7 +78,7 @@ final class UserManager {
         await refreshCapabilities()
     }
 
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
     private let userKey = "currentUser"
     private let legacyOnboardingKey = "user_onboarding_completed"  // Legacy global key for migration
     private let tokenStorage: TokenStorageProtocol
@@ -111,11 +114,13 @@ final class UserManager {
     init(
         tokenStorage: TokenStorageProtocol = TokenStorage(),
         authService: AuthServiceProtocol = AuthService.shared,
-        biometricCredentialStore: BiometricCredentialStoreProtocol = BiometricCredentialStore()
+        biometricCredentialStore: BiometricCredentialStoreProtocol = BiometricCredentialStore(),
+        userDefaults: UserDefaults = .standard
     ) {
         self.tokenStorage = tokenStorage
         self.authService = authService
         self.biometricCredentialStore = biometricCredentialStore
+        self.userDefaults = userDefaults
         backfillFlagsFromKeychain()
         loadUserFromStorage()
         restoreOnboardingState()
@@ -146,8 +151,11 @@ final class UserManager {
         ) { [weak self] notification in
             guard let self = self else { return }
             let hasAccounts = notification.userInfo?["hasAccounts"] as? Bool ?? false
+            guard let userId = notification.userInfo?["userId"] as? String,
+                  let generation = notification.userInfo?["generation"] as? UUID else { return }
+            let confirmed = notification.userInfo?["confirmed"] as? Bool ?? false
             Task { @MainActor in
-                self.resolveDestination(hasAccounts: hasAccounts)
+                self.resolveDestination(hasAccounts: hasAccounts, confirmed: confirmed, userId: userId, generation: generation)
             }
         }
 
@@ -185,7 +193,7 @@ final class UserManager {
 
         let userOnboardingKey = onboardingKey(for: userId)
         if userDefaults.object(forKey: userOnboardingKey) != nil {
-            isOnboarded = userDefaults.bool(forKey: userOnboardingKey)
+            isOnboarded = userDefaults.bool(forKey: userOnboardingKey) || currentUser?.isOnboarded == true
         } else {
             isOnboarded = currentUser?.isOnboarded ?? false
         }
@@ -396,6 +404,10 @@ final class UserManager {
     }
 
     func signOut() {
+        isResolvingDestination = false
+        isResolvingConsent = false
+        consentRestorationID = UUID()
+        destinationError = nil
         // The server stops pushing to this device.
         PushRegistrar.shared.forget()
         ReminderNotificationScheduler.shared.clearForSignOut()
@@ -660,6 +672,8 @@ final class UserManager {
     /// Hydrate consent state from the server. Call on app launch and
     /// after sign-in so `aiConsentGranted` reflects the source of truth.
     func refreshAIConsentFromServer() async {
+        guard let requestedUserId = currentUser?.id else { return }
+        let generation = SessionLifetime.shared.current
         struct PrefsResponse: Codable {
             let ai_consent_granted_at: String?
             let ai_consent_policy_version: String?
@@ -671,6 +685,7 @@ final class UserManager {
                 body: nil,
                 responseType: PrefsResponse.self
             )
+            guard currentUser?.id == requestedUserId, SessionLifetime.shared.isCurrent(generation) else { return }
             if let grantedKey = aiConsentKey("granted") {
                 userDefaults.set(prefs.ai_consent_granted_at != nil, forKey: grantedKey)
             }
@@ -827,20 +842,17 @@ final class UserManager {
     }
 
     private func applySignInState(user: User) {
-        // Don't determine onboarding status yet - wait for account data
-        // This prevents race conditions and jarring transitions
+        // Restore known completion immediately; bank data resolves only unknown users.
 
-        currentUser = user
-        isAuthenticated = true
+        restoreAuthenticatedUser(user)
         isLoading = false
-        isResolvingDestination = true  // Show splash while we fetch account data
 
         // Mark this device as one that's seen a signed-in user. Used to skip
         // the marketing carousel after sign-out — returning users go straight
         // to SignInView. Persists across sign-outs by design.
         userDefaults.set(true, forKey: "has_signed_in_before")
 
-        Logger.info("UserManager.applySignInState: userId=\(user.id), isResolvingDestination=true")
+        Logger.info("UserManager.applySignInState: userId=\(user.id), isResolvingDestination=\(isResolvingDestination)")
 
         saveUserToStorage()
 
@@ -848,10 +860,9 @@ final class UserManager {
         // currentUser is set, so a fresh sign-in never gates on a stale or
         // absent local mirror. Previously this call had no callers, so the
         // per-user consent state was never reconciled after sign-in.
-        Task { await refreshAIConsentFromServer() }
+        if !isResolvingConsent { Task { await refreshAIConsentFromServer() } }
         // The lane (Benefits tab or not, SSI / SSDI) must be known before
         // the main tabs render; /auth/me may or may not have carried it.
-        restoreCapabilities(for: user.id)
         Task { await refreshCapabilities() }
 
         // Configure bank data manager - it will notify us when done via NotificationCenter
@@ -860,9 +871,15 @@ final class UserManager {
 
     /// Called after bank data is fetched to determine the user's destination
     /// Source of truth: if user has accounts, they've completed onboarding
-    func resolveDestination(hasAccounts: Bool) {
-        guard let userId = currentUser?.id else {
-            isResolvingDestination = false
+    func resolveDestination(hasAccounts: Bool, confirmed: Bool, userId: String, generation: UUID) {
+        guard isAuthenticated, currentUser?.id == userId, SessionLifetime.shared.isCurrent(generation) else { return }
+
+        // A known completion never becomes onboarding because a bank is slow,
+        // unavailable, disconnected, or absent from this particular response.
+        if isOnboarded { isResolvingDestination = false; destinationError = nil; return }
+        guard hasAccounts || confirmed else {
+            destinationError = "Could not finish loading your account. Please try again."
+            isResolvingDestination = true
             return
         }
 
@@ -888,7 +905,45 @@ final class UserManager {
         }
 
         isResolvingDestination = false
+        destinationError = nil
         Logger.info("UserManager.resolveDestination: Complete - isOnboarded=\(isOnboarded)")
+    }
+
+    /// Restore routing flags before publishing authentication to SwiftUI.
+    /// Used by password/social login, valid-token launch and token refresh.
+    func restoreAuthenticatedUser(_ user: User) {
+        isResolvingDestination = true
+        destinationError = nil
+        currentUser = user
+        restoreOnboardingState()
+        capabilities = .none
+        benefitsProfile = .empty
+        capabilitiesLoadedAt = nil
+        restoreCapabilities(for: user.id)
+        consentRestorationID = UUID()
+        let restorationID = consentRestorationID
+        isResolvingConsent = !aiConsentGranted
+        if isResolvingConsent {
+            Task {
+                guard currentUser?.id == user.id, consentRestorationID == restorationID else { return }
+                // Bank configuration can invalidate the previous account's
+                // generation before this task starts. Capture the new one here.
+                let generation = SessionLifetime.shared.current
+                await refreshAIConsentFromServer()
+                guard currentUser?.id == user.id, consentRestorationID == restorationID,
+                      SessionLifetime.shared.isCurrent(generation) else { return }
+                isResolvingConsent = false
+            }
+        }
+        isAuthenticated = true
+        isResolvingDestination = !isOnboarded
+    }
+
+    func retryDestinationResolution() {
+        guard let userId = currentUser?.id else { return }
+        destinationError = nil
+        isResolvingDestination = true
+        bankDataManager?.configureForUser(userId: userId)
     }
 
     private func applyProfileData(
@@ -1052,14 +1107,13 @@ final class UserManager {
         userDefaults.set(true, forKey: "has_signed_in_before")
 
         if tokenStorage.isTokenValid() {
-            currentUser = user
-            isAuthenticated = true
+            restoreAuthenticatedUser(user)
             // Cold launch: start from the last known lane, then refresh.
             // Without this the Benefits tab rendered as "not answered"
             // for every returning user until some screen refetched.
-            restoreCapabilities(for: user.id)
             Task { await refreshCapabilities() }
         } else if let refreshToken = tokenStorage.getRefreshToken() {
+            isResolvingDestination = true
             Task {
                 await refreshTokensIfNeeded(refreshToken: refreshToken)
             }
@@ -1091,11 +1145,11 @@ final class UserManager {
             // Restore user from storage (user data doesn't change, just tokens)
             if let data = userDefaults.data(forKey: userKey),
                let user = try? JSONDecoder().decode(User.self, from: data) {
-                currentUser = user
-                isAuthenticated = true
-                restoreCapabilities(for: user.id)
-                await refreshCapabilities()
+                restoreAuthenticatedUser(user)
+                Task { await refreshCapabilities() }
                 bankDataManager?.configureForUser(userId: user.id)
+            } else {
+                isResolvingDestination = false
             }
 
             Logger.debug("Token refresh successful during app launch")
@@ -1103,6 +1157,7 @@ final class UserManager {
             guard SessionLifetime.shared.isCurrent(generation) else { return }
             Logger.error("Token refresh failed during app launch: \(error.localizedDescription)")
             if NetworkService.isRejectedRefresh(error) { signOut() }
+            else { isResolvingDestination = false }
         }
     }
 }

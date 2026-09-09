@@ -232,3 +232,58 @@ struct InvestmentSummary: Codable {
         (Double(cents) / 100).formatted(.currency(code: currency))
     }
 }
+
+/// Account values are the portfolio total; holdings must never be added again.
+struct InvestmentAllocation {
+    struct Segment: Identifiable {
+        let id: String
+        let label: String
+        let cents: Int
+    }
+    static func total(_ amounts: [Int]) -> Int? {
+        var result = 0
+        for amount in amounts {
+            let next = result.addingReportingOverflow(amount)
+            guard !next.overflow else { return nil }
+            result = next.partialValue
+        }
+        return result
+    }
+    static func segments(_ values: [Segment], limit: Int = 5) -> [Segment] {
+        guard limit > 0, values.allSatisfy({ $0.cents >= 0 }), total(values.map(\.cents)) != nil else { return [] }
+        let ordered = values.filter { $0.cents > 0 }.sorted {
+            $0.cents == $1.cents ? $0.id < $1.id : $0.cents > $1.cents
+        }
+        guard ordered.count > limit else { return ordered }
+        let remainder = Array(ordered.dropFirst(limit))
+        return Array(ordered.prefix(limit)) + [.init(id: "allocation-other", label: "Other (\(remainder.count))", cents: total(remainder.map(\.cents))!)]
+    }
+}
+
+extension InvestmentSummary {
+    var verifiedTotalCents: Int? {
+        guard complete, accounts.allSatisfy({ $0.balanceCents != nil && $0.currency == currency }),
+              let sum = InvestmentAllocation.total(accounts.compactMap(\.balanceCents)), sum == totalCents else { return nil }
+        return sum
+    }
+    var allocation: [InvestmentAllocation.Segment] {
+        guard verifiedTotalCents != nil else { return [] }
+        return InvestmentAllocation.segments(accounts.map { .init(id: $0.id, label: $0.displayName, cents: $0.balanceCents!) })
+    }
+    var sortedAccounts: [Account] {
+        accounts.sorted {
+            if $0.displayName != $1.displayName { return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+            return $0.id < $1.id
+        }
+    }
+}
+
+extension InvestmentSummary.Account {
+    var displayName: String { "\(institution) · \(name)" + (mask.isEmpty ? "" : " · \(mask)") }
+    var spokenName: String { "\(institution), \(name)" + (mask.isEmpty ? "" : ", ending in \(mask)") }
+    var formattedBalance: String { balanceCents.map { InvestmentSummary.money($0, currency: currency) } ?? "Balance unavailable" }
+    var holdingsAllocation: [InvestmentAllocation.Segment] {
+        guard holdings.allSatisfy({ $0.currency == currency }) else { return [] }
+        return InvestmentAllocation.segments(holdings.map { .init(id: $0.id, label: $0.ticker ?? $0.name, cents: $0.valueCents) })
+    }
+}

@@ -819,37 +819,155 @@ struct InvestmentsView: View {
     @AccessibilityFocusState private var focused: Bool
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Investments").font(.title2.bold()).accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
+            VStack(alignment: .leading, spacing: 20) {
                 if let summary = bank.investments {
-                    Text(summary.totalCents.map { InvestmentSummary.money($0, currency: summary.currency) } ?? "Combined balance unavailable")
-                        .font(.title.bold())
-                    Text("Latest reported values, including any manually entered investments. Holdings are part of each account balance.")
-                        .foregroundStyle(Color.haloTextSecondary)
-                    ForEach(summary.accounts) { account in
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("\(account.institution), \(account.name)" + (account.mask.isEmpty ? "" : ", ending in \(account.mask)")).font(.headline).accessibilityAddTraits(.isHeader)
-                            Text(account.balanceCents.map { InvestmentSummary.money($0, currency: account.currency) } ?? "Balance unavailable")
-                            if let date = account.asOf { Text("Balance updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.caption) }
-                            if account.source == "manual" { Text("Entered manually").foregroundStyle(Color.haloTextSecondary) }
-                            else if account.holdings.isEmpty { Text("Holdings are not available from this connection yet.").foregroundStyle(Color.haloTextSecondary) }
-                            ForEach(account.holdings) { holding in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(holding.name).font(.body.weight(.semibold))
-                                    Text("\(holding.quantity.formatted()) shares or units, \(InvestmentSummary.money(holding.valueCents, currency: holding.currency))")
-                                    if let date = holding.asOf { Text("Updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.caption) }
-                                }.accessibilityElement(children: .combine)
+                    InvestmentPortfolioCard(summary: summary).accessibilityFocused($focused)
+                    if summary.accounts.isEmpty {
+                        Text("No investment accounts to show yet.").foregroundStyle(Color.haloTextSecondary)
+                    } else {
+                        Text("Accounts").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                        ForEach(summary.sortedAccounts) { account in
+                            NavigationLink {
+                                InvestmentAccountView(accountId: account.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(account.institution).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                                    Text(account.name).font(.headline)
+                                    if !account.mask.isEmpty { Text("Ending in \(account.mask)").font(.caption).foregroundStyle(Color.haloTextSecondary) }
+                                    Text(account.formattedBalance).font(.title2.bold()).lineLimit(account.balanceCents == nil ? nil : 1).minimumScaleFactor(0.4)
+                                    Text("\(account.holdings.count) \(account.holdings.count == 1 ? "holding" : "holdings") · View account").font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(16).haloCard()
                             }
-                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).haloCard()
+                            .buttonStyle(HapticPlainButtonStyle())
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(account.spokenName). \(account.formattedBalance). \(account.holdings.count) holdings.")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityHint("Opens investment account and holdings.")
+                            .accessibilityIdentifier("investment-account-\(account.id)")
+                        }
                     }
                 } else if error == nil { ProgressView("Loading investments") }
-                if let error { Text(error); Button("Try again") { Task { await load() } } }
+                if let error { Text(error); Button("Try again") { Task { await load() } }.frame(minHeight: 44) }
             }.padding(20).padding(.bottom, 100).readableContentWidth()
         }.background(Color.haloBackground).navigationTitle("Investments").navigationBarTitleDisplayMode(.inline)
         .task { await load(); focused = true }.refreshable { await load() }
     }
     private func load() async {
         do { try await bank.loadInvestments(); error = nil }
-        catch { self.error = "Could not refresh investments. Any displayed values are from the last successful update." }
+        catch { self.error = "Could not refresh investments. Displayed values are from the last successful update." }
+    }
+}
+
+struct InvestmentPortfolioCard: View {
+    let summary: InvestmentSummary
+    @ScaledMetric(relativeTo: .largeTitle) private var figureSize: CGFloat = 40
+    private var amount: String { summary.verifiedTotalCents.map { InvestmentSummary.money($0, currency: summary.currency) } ?? "Combined value unavailable" }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Portfolio value").font(.headline)
+            if summary.verifiedTotalCents != nil {
+                Text(amount).font(.haloDisplay(figureSize)).lineLimit(1).minimumScaleFactor(0.35)
+            } else {
+                Text(amount).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Across \(summary.accounts.count) investment \(summary.accounts.count == 1 ? "account" : "accounts")")
+                .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+            if !summary.allocation.isEmpty {
+                InvestmentAllocationGraphic(segments: summary.allocation, currency: summary.currency)
+            } else if !summary.accounts.isEmpty && summary.verifiedTotalCents == nil {
+                Text("See each account below for available values.").font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+            }
+            Text("Latest reported balances").font(.caption).foregroundStyle(Color.haloTextSecondary)
+        }
+        .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [Color.purple.opacity(0.12), Color.haloSecondaryBackground], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.purple.opacity(0.4), lineWidth: 1))
+        .foregroundStyle(Color.haloTextPrimary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Portfolio value. \(amount). Across \(summary.accounts.count) investment accounts. Latest reported balances. Account breakdown below.")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("investment-portfolio-summary")
+    }
+}
+
+/// The legend is visual; the same names and amounts are spoken by the account
+/// or holding rows immediately below, so VoiceOver doesn't repeat the portfolio.
+struct InvestmentAllocationGraphic: View {
+    let segments: [InvestmentAllocation.Segment]
+    let currency: String
+    @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 14
+    private let colors: [Color] = [.purple, .teal, .blue, .pink, .orange, .gray]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MoneySegmentsBar(amounts: segments.map(\.cents), colors: Array(colors.prefix(segments.count)), pendingIndex: -1)
+                .frame(height: barHeight)
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                MoneyBarLegend(color: colors[index], text: "\(segment.label) · \(InvestmentSummary.money(segment.cents, currency: currency))")
+            }
+        }.accessibilityHidden(true)
+    }
+}
+
+struct InvestmentAccountView: View {
+    let accountId: String
+    @Environment(BankDataManager.self) private var bank
+    @State private var search = ""
+    @State private var error: String?
+    @AccessibilityFocusState private var focused: Bool
+    private var account: InvestmentSummary.Account? { bank.investments?.accounts.first { $0.id == accountId } }
+    private var holdings: [InvestmentSummary.Holding] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (account?.holdings ?? []).filter { query.isEmpty || $0.name.localizedStandardContains(query) || ($0.ticker?.localizedStandardContains(query) ?? false) }
+            .sorted { $0.valueCents == $1.valueCents ? $0.id < $1.id : $0.valueCents > $1.valueCents }
+    }
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                if let account {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(account.spokenName).font(.title2.bold()).accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
+                        Text(account.formattedBalance).font(.largeTitle.bold()).lineLimit(account.balanceCents == nil ? nil : 1).minimumScaleFactor(0.4)
+                        if let date = account.asOf { Text("Updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.subheadline).foregroundStyle(Color.haloTextSecondary) }
+                        if account.source == "manual" { Text("Entered manually").font(.subheadline) }
+                    }.padding(20).frame(maxWidth: .infinity, alignment: .leading).haloCard()
+                    if !account.holdingsAllocation.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Holdings breakdown").font(.headline)
+                            InvestmentAllocationGraphic(segments: account.holdingsAllocation, currency: account.currency)
+                            Text("Holdings are included in your account value.").font(.caption).foregroundStyle(Color.haloTextSecondary)
+                        }.padding(16).haloCard().accessibilityHidden(true)
+                    }
+                    Text("Holdings (\(account.holdings.count))").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                    if account.holdings.count > 8 {
+                        TextField("Search holdings", text: $search)
+                            .textFieldStyle(.roundedBorder).submitLabel(.search).autocorrectionDisabled()
+                            .accessibilityLabel("Search holdings by name or symbol")
+                            .accessibilityIdentifier("investment-holdings-search")
+                        if !search.isEmpty { Button("Clear search") { search = "" }.frame(minHeight: 44) }
+                    }
+                    if holdings.isEmpty {
+                        Text(search.isEmpty ? "Holdings are not available for this account yet." : "No matching holdings.").foregroundStyle(Color.haloTextSecondary)
+                    }
+                    ForEach(holdings) { holding in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(holding.name).font(.headline)
+                            if let ticker = holding.ticker { Text(ticker).font(.subheadline).foregroundStyle(Color.haloTextSecondary) }
+                            Text(InvestmentSummary.money(holding.valueCents, currency: holding.currency)).font(.title3.bold())
+                            Text("\(holding.quantity.formatted()) shares or units").font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                            if let date = holding.asOf { Text("Updated \(TabSummaries.spokenDate(String(date.prefix(10))))").font(.caption).foregroundStyle(Color.haloTextSecondary) }
+                        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).haloCard()
+                        .accessibilityElement(children: .combine)
+                    }
+                } else { Text("This investment account is no longer available.") }
+                if let error { Text(error) }
+            }.padding(20).padding(.bottom, 80).readableContentWidth()
+        }.background(Color.haloBackground).navigationTitle("Investment account").navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .onAppear { focused = true }
+        .refreshable {
+            do { try await bank.loadInvestments(); error = nil }
+            catch { self.error = "Could not refresh this account. Displayed values are from the last successful update." }
+        }
     }
 }

@@ -330,3 +330,39 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(!result.complete)
     }
 }
+
+@Suite struct InvestmentAllocationTests {
+    private func account(_ id: String, cents: Int? = 100, currency: String = "USD") -> InvestmentSummary.Account {
+        .init(accountId: id, name: "Brokerage", institution: "Bank", mask: id, currency: currency,
+              balanceCents: cents, asOf: nil, holdings: [.init(id: id, name: "Fund", ticker: nil, quantity: 1, valueCents: 100, currency: currency, asOf: nil)])
+    }
+    @Test func manyAccountsKeepAnExactTotalAndBoundedChart() {
+        let accounts = (1...12).map { account(String($0), cents: $0 * 100) }
+        let summary = InvestmentSummary(accounts: accounts, totalCents: 7800, currency: "USD", complete: true)
+        #expect(summary.verifiedTotalCents == 7800)
+        #expect(summary.allocation.count == 6)
+        #expect(summary.allocation.last?.label == "Other (7)")
+        #expect(summary.allocation.map(\.cents).reduce(0, +) == 7800)
+        #expect(summary.sortedAccounts.count == 12)
+    }
+    @Test func missingMixedCurrencyAndInconsistentTotalsHaveNoCombinedChart() {
+        for summary in [
+            InvestmentSummary(accounts: [account("a", cents: nil)], totalCents: nil, currency: "USD", complete: false),
+            InvestmentSummary(accounts: [account("a"), account("b", currency: "CAD")], totalCents: 200, currency: "USD", complete: true),
+            InvestmentSummary(accounts: [account("a")], totalCents: 200, currency: "USD", complete: true)
+        ] {
+            #expect(summary.verifiedTotalCents == nil)
+            #expect(summary.allocation.isEmpty)
+        }
+    }
+    @Test func holdingsAreNotAddedToAccountValueAndNegativePositionsAreNotDistorted() {
+        let summary = InvestmentSummary(accounts: [account("a")], totalCents: 100, currency: "USD", complete: true)
+        #expect(summary.verifiedTotalCents == 100)
+        #expect(summary.allocation.first?.cents == 100)
+        let negative = InvestmentSummary(accounts: [account("a", cents: -100)], totalCents: -100, currency: "USD", complete: true)
+        #expect(negative.verifiedTotalCents == -100)
+        #expect(negative.allocation.isEmpty)
+        #expect(InvestmentAllocation.total([Int.max, 1]) == nil)
+        #expect(InvestmentAllocation.segments([.init(id: "a", label: "a", cents: 0)]).isEmpty)
+    }
+}

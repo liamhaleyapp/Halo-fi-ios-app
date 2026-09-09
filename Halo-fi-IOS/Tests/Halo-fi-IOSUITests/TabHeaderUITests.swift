@@ -51,6 +51,33 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testInvestmentPortfoliosAndHoldingsAtLargestTextSize() { checkInvestmentPortfolio(largeText: true) }
+    func testInvestmentPortfoliosAndHoldingsAtStandardTextSize() { checkInvestmentPortfolio(largeText: false) }
+
+    private func checkInvestmentPortfolio(largeText: Bool) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-investment-portfolios"]
+        if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+        app.launch()
+        let investments = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Investments.'")).firstMatch
+        XCTAssertTrue(scrollTo(investments, in: app, tries: 16))
+        investments.tap()
+        let summary = app.descendants(matching: .any)["investment-portfolio-summary"].firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        let overview = XCTAttachment(screenshot: app.screenshot()); overview.name = largeText ? "Investment portfolio largest text" : "Investment portfolio"; overview.lifetime = .keepAlways; add(overview)
+        let account = app.buttons["investment-account-portfolio-1"]
+        XCTAssertTrue(scrollTo(account, in: app, tries: 16))
+        XCTAssertLessThanOrEqual(account.frame.maxX, app.frame.maxX)
+        account.tap()
+        let search = app.textFields["investment-holdings-search"]
+        XCTAssertTrue(scrollTo(search, in: app, tries: 16))
+        search.tap(); search.typeText("FUND12")
+        app.toolbars.buttons["Done"].firstMatch.exists ? app.toolbars.buttons["Done"].firstMatch.tap() : app.swipeUp()
+        let match = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Example fund 12'")).firstMatch
+        XCTAssertTrue(scrollTo(match, in: app))
+        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = largeText ? "Investment holdings largest text" : "Investment holdings"; detail.lifetime = .keepAlways; add(detail)
+    }
+
     func testInvestmentBalanceAndGroupedChaseNavigation() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-investments"]
@@ -59,7 +86,11 @@ final class TabHeaderUITests: XCTestCase {
         let investment = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Investments.'")).firstMatch
         XCTAssertTrue(scrollTo(investment, in: app))
         investment.tap()
-        XCTAssertTrue(app.staticTexts["Example fund"].waitForExistence(timeout: 5) || app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Example fund'")).firstMatch.exists)
+        let investmentAccount = app.buttons["investment-account-acct-3"]
+        XCTAssertTrue(scrollTo(investmentAccount, in: app))
+        investmentAccount.tap()
+        XCTAssertTrue(scrollTo(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Example fund'")).firstMatch, in: app))
+        app.navigationBars.buttons.firstMatch.tap()
         app.navigationBars.buttons.firstMatch.tap()
         let accounts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Accounts.'")).firstMatch
         XCTAssertTrue(scrollTo(accounts, in: app))

@@ -74,10 +74,10 @@ struct MainTabView: View {
         if UITestArchetype.isActive {
             return .main
         }
-        if !userManager.isAuthenticated {
-            return .loggedOut
-        } else if userManager.isResolvingDestination {
+        if userManager.isResolvingDestination || userManager.isResolvingConsent {
             return .resolving
+        } else if !userManager.isAuthenticated {
+            return .loggedOut
         } else if !userManager.isOnboarded {
             return .onboarding
         } else if !userManager.aiConsentGranted {
@@ -298,7 +298,7 @@ struct MainTabView: View {
             OnboardingView()
                 .viewTransition(.fade)
         case .resolving:
-            PostLoginSplashView()
+            PostLoginSplashView(error: userManager.destinationError, onRetry: userManager.retryDestinationResolution)
                 .viewTransition(.fade)
         case .onboarding:
             UnifiedOnboardingFlowView()

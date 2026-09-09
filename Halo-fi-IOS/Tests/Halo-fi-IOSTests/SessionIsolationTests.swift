@@ -831,3 +831,122 @@ extension SessionIsolationTests {
         XCTAssertFalse(AgentWebSocketManager.terminalErrorCodes.contains("PROCESSING_ERROR"))
     }
 }
+
+private struct NoDestinationBiometrics: BiometricCredentialStoreProtocol {
+    var hasEnrolledCredentials: Bool { false }
+    func save(_ credentials: BiometricCredentials) throws { }
+    func read(reason: String) async throws -> BiometricCredentials { throw BiometricCredentialError.notFound }
+    func clear() { }
+}
+
+@MainActor
+final class DestinationRestorationTests: XCTestCase {
+    private var defaults: UserDefaults!
+    private var suiteName: String!
+    override func setUp() {
+        super.setUp()
+        suiteName = "destination-tests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)!
+    }
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        super.tearDown()
+    }
+    private func manager() -> UserManager {
+        UserManager(tokenStorage: MockTokenStorage(), authService: MockAuthService(),
+                    biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
+    }
+    private func user(_ id: String = "returning", completed: Bool = false) -> User {
+        User(id: id, email: "test@example.invalid", firstName: "Test", isOnboarded: completed)
+    }
+    func testAllAuthenticationPathsRestoreSavedCompletionBeforeRouting() {
+        defaults.set(true, forKey: "user_onboarding_completed_returning")
+        let manager = manager()
+        manager.restoreAuthenticatedUser(user())
+        XCTAssertTrue(manager.isAuthenticated)
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertFalse(manager.isResolvingDestination)
+        XCTAssertEqual(manager.currentUser?.isOnboarded, true)
+        manager.resolveDestination(hasAccounts: false, confirmed: false, userId: "returning", generation: SessionLifetime.shared.current)
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertNil(manager.destinationError)
+    }
+    func testStoredUserCompletionSurvivesMissingOrOlderFalseFlag() {
+        defaults.set(false, forKey: "user_onboarding_completed_returning")
+        let manager = manager()
+        manager.restoreAuthenticatedUser(user(completed: true))
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertFalse(manager.isResolvingDestination)
+    }
+    func testUnknownDestinationWaitsAndFailedReadDoesNotStartOnboarding() {
+        let manager = manager()
+        manager.restoreAuthenticatedUser(user("new"))
+        XCTAssertTrue(manager.isResolvingDestination)
+        manager.resolveDestination(hasAccounts: false, confirmed: false, userId: "new", generation: SessionLifetime.shared.current)
+        XCTAssertTrue(manager.isResolvingDestination)
+        XCTAssertNotNil(manager.destinationError)
+        manager.resolveDestination(hasAccounts: false, confirmed: true, userId: "new", generation: SessionLifetime.shared.current)
+        XCTAssertFalse(manager.isResolvingDestination)
+        XCTAssertFalse(manager.isOnboarded)
+        XCTAssertNil(manager.destinationError)
+    }
+    func testAccountSwitchAndExpiredGenerationCannotResolveNewSession() {
+        let manager = manager()
+        manager.restoreAuthenticatedUser(user("A", completed: true))
+        manager.restoreAuthenticatedUser(user("B"))
+        manager.resolveDestination(hasAccounts: true, confirmed: true, userId: "A", generation: SessionLifetime.shared.current)
+        manager.resolveDestination(hasAccounts: true, confirmed: true, userId: "B", generation: UUID())
+        XCTAssertFalse(manager.isOnboarded)
+        XCTAssertTrue(manager.isResolvingDestination)
+        manager.resolveDestination(hasAccounts: true, confirmed: true, userId: "B", generation: SessionLifetime.shared.current)
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertFalse(manager.isResolvingDestination)
+    }
+}
+
+private struct DestinationRefreshAuth: AuthServiceProtocol {
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
+        .init(success: true, accessToken: "test-access", refreshToken: "test-refresh", tokenType: "bearer", expiresIn: 3600)
+    }
+    func login(email: String, password: String) async throws -> LoginResponse { throw AuthError.notImplemented }
+    func socialLogin(provider: String, idToken: String, nonce: String?, firstName: String?, lastName: String?) async throws -> LoginResponse { throw AuthError.notImplemented }
+    func register(firstName: String, lastName: String, email: String, phone: String, password: String, dateOfBirth: Date?) async throws -> SignupResponse { throw AuthError.notImplemented }
+    func getUserProfile() async throws -> UserProfileResponse { throw AuthError.notImplemented }
+    func updateUserProfile(request: UpdateUserProfileRequest) async throws -> UserProfileResponse { throw AuthError.notImplemented }
+    func logout(accessToken: String) async throws { }
+    func deleteAccount(userId: String) async throws { }
+}
+
+extension DestinationRestorationTests {
+    func testConsentRestorationSurvivesPreviousBankSessionBeingCleared() async throws {
+        let manager = manager()
+        manager.restoreAuthenticatedUser(user("B", completed: true))
+        XCTAssertTrue(manager.isResolvingConsent)
+        // configureForUser clears the previous bank session synchronously.
+        SessionLifetime.shared.invalidate { }
+        for _ in 0..<1000 {
+            if !manager.isResolvingConsent { break }
+            await Task.yield()
+        }
+        XCTAssertFalse(manager.isResolvingConsent)
+        XCTAssertTrue(manager.isOnboarded)
+    }
+
+    func testExpiredTokenLaunchNeverPublishesReturningUserAsOnboarding() async throws {
+        defaults.set(try JSONEncoder().encode(user(completed: true)), forKey: "currentUser")
+        defaults.set(true, forKey: "user_onboarding_completed_returning")
+        let storage = MockTokenStorage()
+        storage.saveTokens(accessToken: "expired", refreshToken: "refresh", expiresIn: -10)
+        let manager = UserManager(tokenStorage: storage, authService: DestinationRefreshAuth(),
+                                  biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
+        XCTAssertTrue(manager.isResolvingDestination)
+        for _ in 0..<1000 {
+            if manager.isAuthenticated { break }
+            await Task.yield()
+        }
+        XCTAssertTrue(manager.isAuthenticated)
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertFalse(manager.isResolvingDestination)
+        XCTAssertTrue(storage.isTokenValid())
+    }
+}

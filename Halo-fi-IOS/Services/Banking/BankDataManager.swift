@@ -80,6 +80,7 @@ final class BankDataManager {
 
     /// In-flight guard for refresh to prevent duplicate refresh storms
     private var refreshTask: Task<Void, Never>?
+    private var linkedItemsReadSucceeded = false
 
     // MARK: - Initialization
 
@@ -99,6 +100,15 @@ final class BankDataManager {
         #if DEBUG
         if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-investments") {
             investments = InvestmentSummary(accounts: [.init(accountId: "acct-3", name: "Investment account", institution: "Chase", mask: "7890", currency: "USD", balanceCents: 500000, asOf: "2026-09-09T12:00:00Z", holdings: [.init(id: "holding-1", name: "Example fund", ticker: "TEST", quantity: 10, valueCents: 450000, currency: "USD", asOf: "2026-09-09T12:00:00Z")])], totalCents: 500000, currency: "USD", complete: true)
+        }
+        if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-investment-portfolios") {
+            let accounts: [InvestmentSummary.Account] = (1...8).map { index in
+                let holdings: [InvestmentSummary.Holding] = (1...12).map { n in
+                    .init(id: "holding-\(index)-\(n)", name: "Example fund \(n)", ticker: "FUND\(n)", quantity: Double(n * 3), valueCents: n * 10000, currency: "USD", asOf: "2026-09-09T12:00:00Z")
+                }
+                return .init(accountId: "portfolio-\(index)", name: index == 1 ? "Individual brokerage" : "Retirement \(index)", institution: index < 4 ? "Chase" : "Investment Bank", mask: "100\(index)", currency: "USD", balanceCents: index * 1000000, asOf: "2026-09-09T12:00:00Z", holdings: holdings)
+            }
+            investments = InvestmentSummary(accounts: accounts, totalCents: 36000000, currency: "USD", complete: true)
         }
         if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-account-identity") {
             identityReviews = [.init(accountId: "review", name: "Checking", mask: "1234", institution: "Test Bank",
@@ -144,7 +154,7 @@ final class BankDataManager {
                 guard SessionLifetime.shared.isCurrent(generation), currentUserId == userId else { return }
                 // fetchLinkedItemsFromServer populates accountsByItemId with embedded accounts
                 // and sets lastRefreshAt, so we can skip the rest
-                notifyConfigurationComplete()
+                notifyConfigurationComplete(userId: userId, generation: generation)
                 return
             }
 
@@ -168,20 +178,22 @@ final class BankDataManager {
             rebuildAccountsByItemId()
 
             // 6. Notify UserManager that configuration is complete
-            notifyConfigurationComplete()
+            notifyConfigurationComplete(userId: userId, generation: generation)
         }
     }
 
     /// Posts notification that bank data configuration is complete
     /// Used by UserManager to determine onboarding destination
-    private func notifyConfigurationComplete() {
+    private func notifyConfigurationComplete(userId: String, generation: UUID) {
+        guard currentUserId == userId, SessionLifetime.shared.isCurrent(generation) else { return }
         hasCompletedInitialLoad = true
-        let hasAccounts = !accountsByItemId.isEmpty || (accounts?.isEmpty == false)
+        let hasAccounts = !accountsByItemId.isEmpty || (accounts?.isEmpty == false) || !manualAccounts.isEmpty || linkedItems?.isEmpty == false
         Logger.info("BankDataManager: Configuration complete, hasAccounts=\(hasAccounts)")
         NotificationCenter.default.post(
             name: .bankDataConfigurationComplete,
             object: nil,
-            userInfo: ["hasAccounts": hasAccounts]
+            userInfo: ["hasAccounts": hasAccounts, "confirmed": linkedItemsReadSucceeded,
+                       "userId": userId, "generation": generation]
         )
     }
 
@@ -211,10 +223,13 @@ final class BankDataManager {
 
         linkedItemsFetchTask = Task {
             defer { if SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId { linkedItemsFetchTask = nil } }
+            linkedItemsReadSucceeded = false
 
             do {
                 let response = try await bankService.getLinkedItems()
                 guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId, !Task.isCancelled else { return }
+                guard response.success else { throw AuthError.invalidResponse }
+                linkedItemsReadSucceeded = true
 
                 // Map server items to ConnectedItem and apply userId
                 var items = response.items.map { ConnectedItem(from: $0) }
@@ -580,6 +595,7 @@ final class BankDataManager {
         Diagnostics.send("sign_out", ["manual_accounts": "\(manualAccounts.count)", "items": "\(accountsByItemId.count)"])
         if let userId { SnapshotCache.clear(userId: userId) }
         hasCompletedInitialLoad = false
+        linkedItemsReadSucceeded = false
         // Manual accounts were never cleared here (2026-09-06): the review
         // account's three mock accounts followed Liam into his own account.
         manualAccounts = []
