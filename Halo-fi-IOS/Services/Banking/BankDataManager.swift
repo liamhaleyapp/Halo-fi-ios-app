@@ -590,6 +590,7 @@ final class BankDataManager {
         transactions = nil
         accountsSummary = nil
         identityReviews = []
+        lastLinkNotice = nil
         investments = nil
         balanceSummary = nil
         accountsLastFetched = nil
@@ -844,6 +845,7 @@ final class BankDataManager {
         // Do not let a read started before the decision reinstall the old snapshot.
         if let pending = linkedItemsFetchTask { await pending.value }
         await fetchLinkedItemsFromServer()
+        if identityReviews.isEmpty { lastLinkNotice = nil }
     }
 
     func setNickname(_ nickname: String, for account: BankAccount) async throws {

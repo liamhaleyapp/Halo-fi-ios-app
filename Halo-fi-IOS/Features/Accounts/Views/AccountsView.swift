@@ -370,18 +370,31 @@ struct ManualAccountRow: View {
 
 /// Linear, explicit choices. Weak account metadata never silently combines money.
 struct AccountIdentityReviewSection: View {
+  var institution: String? = nil
   @Environment(BankDataManager.self) private var bankDataManager
   @State private var selected: AccountIdentityReview?
+  private var reviews: [AccountIdentityReview] {
+    bankDataManager.identityReviews.filter { review in
+      institution.map { review.institution.caseInsensitiveCompare($0) == .orderedSame } ?? true
+    }
+  }
 
   var body: some View {
-    if !bankDataManager.identityReviews.isEmpty {
+    if reviews.isEmpty, institution == nil, let notice = bankDataManager.lastLinkNotice {
+      VStack(alignment: .leading, spacing: 12) {
+        Text(notice).foregroundStyle(Color.haloTextPrimary)
+        Button("Dismiss connection update") { bankDataManager.lastLinkNotice = nil }
+          .frame(minHeight: 44)
+      }.padding()
+    }
+    if !reviews.isEmpty {
       VStack(alignment: .leading, spacing: 12) {
         Text("Account review needed").font(.headline).accessibilityAddTraits(.isHeader)
-        Text("Totals may be incomplete until these accounts are checked for duplicates.")
+        Text("Your bank shared these accounts. Confirm whether they are existing or different accounts to include their balances and transaction history without counting twice.")
           .foregroundStyle(Color.haloTextSecondary)
-        ForEach(bankDataManager.identityReviews) { review in
+        ForEach(reviews) { review in
           Button { selected = review } label: {
-            Text("Review \(review.institution) \(review.name), ending in \(review.mask)")
+            Text("\(review.institution) \(review.name), ending in \(review.mask). Needs confirmation.")
               .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
               .contentShape(Rectangle())
           }
@@ -402,15 +415,20 @@ struct AccountIdentityReviewSheet: View {
   @Environment(BankDataManager.self) private var bankDataManager
   @State private var saving = false
   @State private var error: String?
+  @AccessibilityFocusState private var titleFocused: Bool
 
   var body: some View {
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
-          Text("Is this an existing account?").font(.title2).accessibilityAddTraits(.isHeader)
+          Text("Is this an existing account?").font(.title2).accessibilityAddTraits(.isHeader).accessibilityFocused($titleFocused)
           Text("You linked \(review.institution) \(review.name), ending in \(review.mask). Confirm whether it is one of the accounts below or a different account.")
           Text("Existing accounts keep their history and use the refreshed balance once.")
             .foregroundStyle(Color.haloTextSecondary)
+          if !review.candidates.isEmpty {
+            Text("If this is an existing account, its newer transaction history will become available when you confirm the match.")
+              .foregroundStyle(Color.haloTextSecondary)
+          }
           ForEach(review.candidates) { candidate in
             Button { resolve(candidate.accountId) } label: {
               Text("Same account as \(candidate.institution) \(candidate.name), ending in \(candidate.mask)")
@@ -434,6 +452,7 @@ struct AccountIdentityReviewSheet: View {
       .background(Color.haloBackground)
       .navigationTitle("Review account")
       .navigationBarTitleDisplayMode(.inline)
+      .task { titleFocused = true }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           CloseToolbarButton(label: "Close", hint: "Leaves this account for review later.") { dismiss() }

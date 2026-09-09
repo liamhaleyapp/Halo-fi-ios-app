@@ -782,6 +782,7 @@ struct InstitutionGroupAccountsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("\(accounts.count) accounts").font(.headline).accessibilityAddTraits(.isHeader).accessibilityFocused($focused)
+                AccountIdentityReviewSection(institution: group.name)
                 ForEach(accounts) { account in
                     NavigationLink {
                         AccountDetailView(account: FinancialAccount(from: account, plaidItemId: account.plaidItemId), bankAccount: account)
@@ -799,7 +800,7 @@ struct InstitutionGroupAccountsView: View {
         }
         .background(Color.haloBackground)
         .navigationTitle(group.name)
-        .task { await load(); focused = true }
+        .task(id: bank.identityReviews.map(\.id)) { await load(); focused = true }
         .refreshable { await load() }
     }
     private func load() async {

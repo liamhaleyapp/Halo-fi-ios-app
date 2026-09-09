@@ -182,3 +182,29 @@ private final class ReminderTestService: AttentionServiceProtocol {
         #expect(cached.identityReviews?.count == 1)
     }
 }
+
+@Suite struct BankLinkProgressTests {
+    private func item(_ id: String = "chase", sync: String? = "new-sync") -> ConnectedItem {
+        ConnectedItem(institutionId: "ins_chase", institutionName: "Chase", availableProducts: nil,
+                      itemId: id, userId: "test", plaidItemId: id, isActive: true,
+                      lastSync: sync, createdAt: nil, updatedAt: nil)
+    }
+    @Test func existingAccountsDoNotFinishANewLink() {
+        #expect(!BankLinkProgress.isReady(items: [], initialSyncs: [:], connected: 4, reviews: 0, expected: 2))
+        #expect(!BankLinkProgress.isReady(items: [item(sync: "old")], initialSyncs: ["chase": "old"], connected: 4, reviews: 0, expected: 2))
+        #expect(!BankLinkProgress.isReady(items: [item()], initialSyncs: [:], connected: 4, reviews: 0, expected: 2,
+                                        selectedIds: ["new-card", "copy"], observedIds: ["old-card", "other-card"]))
+    }
+    @Test func reviewAccountsCountAsReceivedButNotAsExtraMoney() {
+        #expect(BankLinkProgress.isReady(items: [item()], initialSyncs: [:], connected: 1, reviews: 1, expected: 2,
+                                       selectedIds: ["new-card", "copy"], observedIds: ["new-card", "copy"]))
+        #expect(!BankLinkProgress.isReady(items: [item()], initialSyncs: [:], connected: 1, reviews: 0, expected: 2))
+        #expect(BankLinkProgress.reviewNotice(institution: "Chase", count: 1).contains("history"))
+    }
+    @Test func providerIdentitySurvivesEmbeddedResponseAndReviewDecoding() throws {
+        let account = try JSONDecoder().decode(ServerEmbeddedAccount.self, from: Data(#"{"account_id":"internal","plaid_account_id":"provider","name":"Card","mask":"1364","type":"credit","subtype":"credit card","balance":12}"#.utf8))
+        #expect(account.toBankAccount(plaidItemId: "item").plaidAccountId == "provider")
+        let review = try JSONDecoder().decode(AccountIdentityReview.self, from: Data(#"{"account_id":"internal","plaid_account_id":"provider","item_id":"item","name":"Card","mask":"1364","institution":"Chase","candidates":[]}"#.utf8))
+        #expect(review.itemId == "item" && review.plaidAccountId == "provider")
+    }
+}

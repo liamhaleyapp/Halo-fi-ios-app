@@ -23,6 +23,7 @@ class PlaidOnboardingViewModel {
   /// True when the linked-accounts check failed — the intro screen must say
   /// "couldn't confirm your linked accounts" instead of implying none exist.
   var linkedStateUnconfirmed = false
+  private var linkStartSyncs: [String: String] = [:]
   
   var isLoading: Bool {
     plaidManager.isCreatingLinkToken || isCompletingLinking
@@ -48,6 +49,8 @@ class PlaidOnboardingViewModel {
     // Prevent multiple invocations (e.g., double-taps or view reappearing)
     guard !isLoading && !hasStartedFlow else { return }
     hasStartedFlow = true
+    linkStartSyncs = Dictionary(uniqueKeysWithValues: (bankDataManager.linkedItems ?? []).map { ($0.itemId, $0.lastSync ?? "") })
+    bankDataManager.lastLinkNotice = nil
 
     Task {
       do {
@@ -207,16 +210,34 @@ class PlaidOnboardingViewModel {
     let retryDelayMs: UInt64 = 1_000_000_000 // 1 s → ~30 s window
 
     var accountsFound = false
+    let institution = linkSuccess.metadata.institution.name
+    let expected = linkSuccess.metadata.accounts.count
+    let selectedIds = Set(linkSuccess.metadata.accounts.map(\.id))
+    var matchingItems: [ConnectedItem] = []
+    var reviewCount = 0
+    var connectedCount = 0
 
     for attempt in 1...maxRetries {
       Logger.debug("PlaidOnboardingVM: Polling for accounts (attempt \(attempt)/\(maxRetries))")
 
       // forceRefresh fetches linked items from server + accounts for each item
       await bankDataManager.forceRefresh()
-      let accounts = bankDataManager.accounts
-
-      if let accounts = accounts, !accounts.isEmpty {
-        Logger.success("PlaidOnboardingVM: Found \(accounts.count) accounts on attempt \(attempt)")
+      matchingItems = (bankDataManager.linkedItems ?? []).filter {
+        $0.institutionName.caseInsensitiveCompare(institution) == .orderedSame
+      }
+      reviewCount = bankDataManager.identityReviews.filter {
+        $0.institution.caseInsensitiveCompare(institution) == .orderedSame
+      }.count
+      connectedCount = matchingItems.reduce(0) { total, item in
+        total + (bankDataManager.accountsByItemId[item.itemId] ?? []).filter(\.isActive).count
+      }
+      let observedIds = Set(matchingItems.flatMap { bankDataManager.accountsByItemId[$0.itemId] ?? [] }.map(\.plaidAccountId))
+        .union(bankDataManager.identityReviews.filter { $0.institution.caseInsensitiveCompare(institution) == .orderedSame }.compactMap(\.plaidAccountId))
+      // Existing accounts from another bank (or an earlier Chase sync) do
+      // not prove that this Link callback has been processed by the server.
+      if BankLinkProgress.isReady(items: matchingItems, initialSyncs: linkStartSyncs,
+                                  connected: connectedCount, reviews: reviewCount, expected: expected,
+                                  selectedIds: selectedIds, observedIds: observedIds) {
         accountsFound = true
         NotificationCenter.default.post(name: .accountLinked, object: nil)
         break
@@ -233,19 +254,8 @@ class PlaidOnboardingViewModel {
 
       if accountsFound {
         Logger.success("PlaidOnboardingVM: Accounts found, completing onboarding")
-        // Compare what Plaid Link showed the user with what the backend
-        // stored. Andrew picked two Chase accounts and one arrived
-        // (2026-09-05); before this the app just said "connected".
-        let expected = linkSuccess.metadata.accounts.count
-        let institution = linkSuccess.metadata.institution.name
-        let stored = (bankDataManager.accounts ?? []).count
-        let items = bankDataManager.linkedItems ?? []
-        let institutionStored = items.contains { $0.institutionName.caseInsensitiveCompare(institution) == .orderedSame }
-        if expected > 0, !institutionStored || stored < expected {
-          let line = institutionStored
-            ? "HaloFi received fewer accounts from \(institution) than you picked. Open Accounts and link \(institution) again if one is missing."
-            : "\(institution) did not finish connecting. Please link it again."
-          Logger.warning("PlaidOnboardingVM: link shortfall — expected \(expected) from \(institution), stored \(stored), institution present: \(institutionStored)")
+        if reviewCount > 0 {
+          let line = BankLinkProgress.reviewNotice(institution: institution, count: reviewCount)
           UIAccessibility.post(notification: .announcement, argument: line)
           bankDataManager.lastLinkNotice = line
         }
@@ -256,16 +266,15 @@ class PlaidOnboardingViewModel {
         } else {
           onDismiss?()
         }
-      } else if bankDataManager.linkedItems?.isEmpty == false {
+      } else if !matchingItems.isEmpty {
         // The item row exists — the link succeeded; only the account/
         // transaction sync is still running. Treat as success and say so,
         // instead of telling the user nothing connected (which led to a
         // duplicate re-link).
         Logger.info("PlaidOnboardingVM: Linked item present but accounts not yet synced — completing with sync notice")
-        UIAccessibility.post(
-          notification: .announcement,
-          argument: "Bank connected. Still syncing transactions. Your accounts will appear shortly."
-        )
+        let line = "Still checking the accounts shared by \(institution). Open Accounts to review connection status."
+        bankDataManager.lastLinkNotice = line
+        UIAccessibility.post(notification: .announcement, argument: line)
         userManager.completeOnboarding()
 
         if let onComplete = onComplete {
@@ -425,5 +434,23 @@ class PlaidOnboardingViewModel {
     }
     // Otherwise: confirmed empty. Don't auto-start Plaid — let the user
     // see the intro and tap the button.
+  }
+}
+
+
+/// Link completion must observe this bank syncing, not merely any cached account.
+struct BankLinkProgress {
+  static func isReady(items: [ConnectedItem], initialSyncs: [String: String], connected: Int, reviews: Int, expected: Int,
+                      selectedIds: Set<String> = [], observedIds: Set<String> = []) -> Bool {
+    if !selectedIds.isEmpty { return selectedIds.isSubset(of: observedIds) }
+    let observed = items.contains { item in
+      guard let sync = item.lastSync, !sync.isEmpty else { return false }
+      return initialSyncs[item.itemId] != sync
+    }
+    return observed && connected + reviews >= max(1, expected)
+  }
+
+  static func reviewNotice(institution: String, count: Int) -> String {
+    "\(institution) connected. \(count) \(count == 1 ? "account needs" : "accounts need") confirmation. Open Account review needed to include their balances and history without counting twice."
   }
 }

@@ -78,6 +78,7 @@ struct ServerEmbeddedAccount: Codable {
     let subtype: String
     let balance: Double?
     var nickname: String? = nil
+    var plaidAccountId: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id"
@@ -87,6 +88,7 @@ struct ServerEmbeddedAccount: Codable {
         case subtype
         case balance
         case nickname
+        case plaidAccountId = "plaid_account_id"
     }
 
     /// Convert to full BankAccount model
@@ -101,7 +103,7 @@ struct ServerEmbeddedAccount: Codable {
             currency: "USD",  // Default, not provided in embedded response
             idAccount: accountId,
             plaidItemId: plaidItemId,
-            plaidAccountId: accountId,  // Use accountId as plaidAccountId
+            plaidAccountId: plaidAccountId ?? accountId,
             isActive: true,
             createdAt: nil,
             updatedAt: nil
@@ -175,9 +177,13 @@ struct AccountIdentityReview: Codable, Identifiable {
     let mask: String
     let institution: String
     let candidates: [Candidate]
+    var itemId: String? = nil
+    var plaidAccountId: String? = nil
     var id: String { accountId }
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id", name, mask, institution, candidates
+        case itemId = "item_id"
+        case plaidAccountId = "plaid_account_id"
     }
     struct Candidate: Codable, Identifiable {
         let accountId: String
