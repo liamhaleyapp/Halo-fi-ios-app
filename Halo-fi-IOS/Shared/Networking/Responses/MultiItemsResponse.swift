@@ -14,12 +14,14 @@ struct MultiItemsResponse: Codable {
     let items: [ServerLinkedItem]
     let totalItems: Int?
     var balanceSummary: VerifiedBalanceSummary? = nil
+    var identityReviews: [AccountIdentityReview]? = nil
 
     enum CodingKeys: String, CodingKey {
         case success
         case items
         case totalItems = "total_items"
         case balanceSummary = "balance_summary"
+        case identityReviews = "identity_reviews"
     }
 }
 
@@ -149,6 +151,7 @@ struct VerifiedBalanceSummary: Codable {
     let owedCents: Int
     let accounts: [Entry]
     let currency: String
+    var identityReviews: [AccountIdentityReview]? = nil
     struct Entry: Codable {
         let kind: String
         let cents: Int
@@ -159,5 +162,29 @@ struct VerifiedBalanceSummary: Codable {
     }
     enum CodingKeys: String, CodingKey {
         case cashCents = "cash_cents", owedCents = "owed_cents", accounts, currency
+        case identityReviews = "identity_reviews"
+    }
+}
+
+
+struct AccountIdentityReview: Codable, Identifiable {
+    let accountId: String
+    let name: String
+    let mask: String
+    let institution: String
+    let candidates: [Candidate]
+    var id: String { accountId }
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id", name, mask, institution, candidates
+    }
+    struct Candidate: Codable, Identifiable {
+        let accountId: String
+        let name: String
+        let mask: String
+        let institution: String
+        var id: String { accountId }
+        enum CodingKeys: String, CodingKey {
+            case accountId = "account_id", name, mask, institution
+        }
     }
 }

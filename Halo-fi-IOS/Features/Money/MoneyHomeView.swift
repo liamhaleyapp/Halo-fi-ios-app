@@ -79,6 +79,7 @@ struct MoneyHomeView: View {
                     VStack(spacing: 12) {
                         TabTitle("Money")
                         header
+                        AccountIdentityReviewSection()
                         attentionRow
                         budgetRow
                         incomeRow

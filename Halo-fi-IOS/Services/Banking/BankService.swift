@@ -325,6 +325,15 @@ final class BankService: BankServiceProtocol {
     /// This allows webhooks to identify which user connected accounts
     /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
     /// Names an account the user's way; an empty string clears it.
+    func resolveAccountIdentity(accountId: String, existingAccountId: String?) async throws {
+        struct Result: Codable { let success: Bool }
+        let body = try JSONSerialization.data(withJSONObject: ["existing_account_id": existingAccountId as Any? ?? NSNull()])
+        let result: Result = try await NetworkService.shared.authenticatedRequest(
+            endpoint: "/bank/accounts/\(accountId)/identity-review", method: .POST,
+            body: body, responseType: Result.self)
+        guard result.success else { throw BankError.multiConnectFailed("Could not confirm this account.") }
+    }
+
     func setAccountNickname(accountId: String, nickname: String) async throws -> BankAccount {
         struct Body: Encodable { let nickname: String? }
         struct Out: Codable { let account: BankAccount }

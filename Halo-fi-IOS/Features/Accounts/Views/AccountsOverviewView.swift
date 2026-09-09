@@ -75,6 +75,7 @@ struct AccountsOverviewView: View {
   private var institutionsList: some View {
     ScrollView {
       LazyVStack(spacing: 12) {
+        AccountIdentityReviewSection()
         // Search field
         searchField
           .padding(.bottom, 8)

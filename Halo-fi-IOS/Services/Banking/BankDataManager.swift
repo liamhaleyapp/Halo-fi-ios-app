@@ -17,6 +17,7 @@ final class BankDataManager {
     var accounts: [BankAccount]?
     var transactions: [Transaction]?
     var accountsSummary: BankAccountsResponse?
+    private(set) var identityReviews: [AccountIdentityReview] = []
     private(set) var balanceSummary: VerifiedBalanceSummary?
 
     /// Linked items (institutions) from Plaid - use mutation methods to modify
@@ -94,6 +95,12 @@ final class BankDataManager {
         self.bankService = bankService
         self.transactionPersistence = transactionPersistence
         self.accountPersistence = accountPersistence
+        #if DEBUG
+        if UITestArchetype.isActive && ProcessInfo.processInfo.arguments.contains("--ui-test-account-identity") {
+            identityReviews = [.init(accountId: "review", name: "Checking", mask: "1234", institution: "Test Bank",
+                candidates: [.init(accountId: "existing", name: "Everyday checking", mask: "1234", institution: "Test Bank")])]
+        }
+        #endif
     }
 
     // MARK: - User Session Management
@@ -118,6 +125,7 @@ final class BankDataManager {
 
         if balanceSummary == nil, let cached = SnapshotCache.load(VerifiedBalanceSummary.self, key: "verified_balances", userId: userId), cached.isValid {
             balanceSummary = cached
+            identityReviews = cached.identityReviews ?? []
         }
         let generation = SessionLifetime.shared.current
         Task { @MainActor in
@@ -221,6 +229,7 @@ final class BankDataManager {
 
                 await MainActor.run {
                     guard SessionLifetime.shared.isCurrent(generation), currentUserId == requestedUserId else { return }
+                    identityReviews = response.identityReviews ?? []
                     if let summary = response.balanceSummary, summary.isValid {
                         balanceSummary = summary
                         if let userId = requestedUserId {
@@ -573,6 +582,7 @@ final class BankDataManager {
         accounts = nil
         transactions = nil
         accountsSummary = nil
+        identityReviews = []
         balanceSummary = nil
         accountsLastFetched = nil
         transactionsLastFetched = nil
@@ -811,6 +821,15 @@ final class BankDataManager {
 
     /// Sets a nickname and updates every cached copy of the account so rows
     /// and the balance card speak it at once.
+    func resolveIdentity(_ review: AccountIdentityReview, existingAccountId: String?) async throws {
+        let generation = SessionLifetime.shared.current
+        try await bankService.resolveAccountIdentity(accountId: review.accountId, existingAccountId: existingAccountId)
+        guard SessionLifetime.shared.isCurrent(generation) else { return }
+        // Do not let a read started before the decision reinstall the old snapshot.
+        if let pending = linkedItemsFetchTask { await pending.value }
+        await fetchLinkedItemsFromServer()
+    }
+
     func setNickname(_ nickname: String, for account: BankAccount) async throws {
         let updated = try await bankService.setAccountNickname(accountId: account.idAccount, nickname: nickname)
         await MainActor.run {

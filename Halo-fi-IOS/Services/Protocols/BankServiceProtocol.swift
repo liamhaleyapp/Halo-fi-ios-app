@@ -71,11 +71,16 @@ protocol BankServiceProtocol {
     /// - Parameter sessionId: The link_session_id from Plaid Link onEvent callback
     func registerLinkSession(sessionId: String) async throws
     func setAccountNickname(accountId: String, nickname: String) async throws -> BankAccount
+    func resolveAccountIdentity(accountId: String, existingAccountId: String?) async throws
 }
 
 // MARK: - Default Parameters Extension
 
 extension BankServiceProtocol {
+    func resolveAccountIdentity(accountId: String, existingAccountId: String?) async throws {
+        throw BankError.multiConnectFailed("Account identity review is unavailable.")
+    }
+
     func getTransactions(
         accountId: String? = nil,
         limit: Int? = nil,

@@ -167,3 +167,18 @@ private final class ReminderTestService: AttentionServiceProtocol {
         #expect(!summary.isValid)
     }
 }
+
+
+@Suite struct AccountIdentityResponseTests {
+    @Test func oldResponsesRemainCompatible() throws {
+        let response = try JSONDecoder().decode(MultiItemsResponse.self, from: Data(#"{"success":true,"items":[]}"#.utf8))
+        #expect(response.identityReviews == nil)
+    }
+    @Test func partialSummaryRetainsReviewWhenCached() throws {
+        let json = #"{"cash_cents":100,"owed_cents":0,"currency":"USD","accounts":[{"kind":"cash","cents":100}],"identity_reviews":[{"account_id":"new","name":"Checking","mask":"1234","institution":"Test","candidates":[]}]}"#
+        let summary = try JSONDecoder().decode(VerifiedBalanceSummary.self, from: Data(json.utf8))
+        let cached = try JSONDecoder().decode(VerifiedBalanceSummary.self, from: JSONEncoder().encode(summary))
+        #expect(cached.isValid)
+        #expect(cached.identityReviews?.count == 1)
+    }
+}

@@ -51,6 +51,29 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testAccountIdentityReviewUsesLinearChoicesAndTopClose() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-account-identity"]
+        app.launch()
+        let review = app.buttons["reviewAccount-review"]
+        XCTAssertTrue(scrollTo(review, in: app))
+        review.tap()
+        let same = app.buttons["Same account as Test Bank Everyday checking, ending in 1234"]
+        let different = app.buttons["This is a different account"]
+        let close = app.buttons["Close"].firstMatch
+        XCTAssertTrue(same.waitForExistence(timeout: 5))
+        XCTAssertTrue(different.isHittable)
+        XCTAssertLessThan(same.frame.maxY, different.frame.minY)
+        XCTAssertLessThan(close.frame.maxY, same.frame.minY)
+        XCTAssertLessThan(close.frame.midX, app.frame.midX)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Account identity review"
+        shot.lifetime = .keepAlways
+        add(shot)
+        close.tap()
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+    }
+
     func testAgentComposerReturnsToBottomAfterKeyboardAndTabChange() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-tab=agent"]

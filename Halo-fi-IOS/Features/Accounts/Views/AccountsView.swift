@@ -21,6 +21,7 @@ struct AccountsView: View {
   var body: some View {
     ScrollView {
       VStack(spacing: 16) {
+        AccountIdentityReviewSection()
         LinkNewAccountSection {
           showingLinkNewAccount = true
         }
@@ -364,4 +365,94 @@ struct ManualAccountRow: View {
 #Preview {
   AccountsView()
     .environment(BankDataManager())
+}
+
+
+/// Linear, explicit choices. Weak account metadata never silently combines money.
+struct AccountIdentityReviewSection: View {
+  @Environment(BankDataManager.self) private var bankDataManager
+  @State private var selected: AccountIdentityReview?
+
+  var body: some View {
+    if !bankDataManager.identityReviews.isEmpty {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Account review needed").font(.headline).accessibilityAddTraits(.isHeader)
+        Text("Totals may be incomplete until these accounts are checked for duplicates.")
+          .foregroundStyle(Color.haloTextSecondary)
+        ForEach(bankDataManager.identityReviews) { review in
+          Button { selected = review } label: {
+            Text("Review \(review.institution) \(review.name), ending in \(review.mask)")
+              .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+              .contentShape(Rectangle())
+          }
+          .accessibilityIdentifier("reviewAccount-\(review.id)")
+          .accessibilityHint("Choose whether this is an existing account or a different account.")
+        }
+      }
+      .padding()
+      .background(Color.haloSecondaryBackground, in: RoundedRectangle(cornerRadius: 16))
+      .sheet(item: $selected) { review in AccountIdentityReviewSheet(review: review) }
+    }
+  }
+}
+
+struct AccountIdentityReviewSheet: View {
+  let review: AccountIdentityReview
+  @Environment(\.dismiss) private var dismiss
+  @Environment(BankDataManager.self) private var bankDataManager
+  @State private var saving = false
+  @State private var error: String?
+
+  var body: some View {
+    NavigationStack {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          Text("Is this an existing account?").font(.title2).accessibilityAddTraits(.isHeader)
+          Text("You linked \(review.institution) \(review.name), ending in \(review.mask). Confirm whether it is one of the accounts below or a different account.")
+          Text("Existing accounts keep their history and use the refreshed balance once.")
+            .foregroundStyle(Color.haloTextSecondary)
+          ForEach(review.candidates) { candidate in
+            Button { resolve(candidate.accountId) } label: {
+              Text("Same account as \(candidate.institution) \(candidate.name), ending in \(candidate.mask)")
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+          }
+          Button { resolve(nil) } label: {
+            Text("This is a different account")
+              .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+              .contentShape(Rectangle())
+          }
+          if saving { ProgressView("Updating accounts") }
+          if let error { Text(error).foregroundStyle(Color.haloTextPrimary).accessibilityLabel("Could not update accounts. \(error)") }
+        }
+        .padding(20)
+        .disabled(saving)
+        .buttonStyle(.bordered)
+        .tint(Color.haloTextPrimary)
+      }
+      .background(Color.haloBackground)
+      .navigationTitle("Review account")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          CloseToolbarButton(label: "Close", hint: "Leaves this account for review later.") { dismiss() }
+        }
+      }
+    }
+  }
+
+  private func resolve(_ existingId: String?) {
+    saving = true
+    error = nil
+    Task {
+      do {
+        try await bankDataManager.resolveIdentity(review, existingAccountId: existingId)
+        dismiss()
+      } catch {
+        self.error = error.localizedDescription
+      }
+      saving = false
+    }
+  }
 }
