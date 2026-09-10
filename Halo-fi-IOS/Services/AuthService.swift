@@ -119,15 +119,7 @@ final class AuthService: AuthServiceProtocol {
     // MARK: - Refresh Token
 
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
-        let request = RefreshTokenRequest(refreshToken: refreshToken)
-        let requestBody = try JSONEncoder().encode(request)
-
-        return try await networkService.publicRequest(
-            endpoint: "/auth/refresh-token",
-            method: .POST,
-            body: requestBody,
-            responseType: RefreshTokenResponse.self
-        )
+        try await networkService.refreshSession(refreshToken: refreshToken)
     }
 
     // MARK: - Get User Profile

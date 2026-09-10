@@ -29,54 +29,75 @@ struct WeeklySpendableCard: View {
     let data: WeeklySpendable
     var onReview: () -> Void
 
+    @ScaledMetric(relativeTo: .largeTitle) private var figureSize: CGFloat = 40
+    @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 10
+
+    private var tone: Color {
+        if data.status == "shortfall" || (data.overCents ?? 0) > 0 { return .haloNegative }
+        return data.amountCents == nil ? .haloTextSecondary : .haloPositive
+    }
+
+    var previewAmount: String {
+        if data.status == "shortfall" { return "Short by \(Self.money(data.shortfallCents ?? 0))" }
+        if let amount = data.amountCents { return Self.wholeDollars(amount) }
+        return data.status == "setup_required" ? "Set up your weekly plan" : "Estimate unavailable"
+    }
+
+    var resetLabel: String? {
+        guard let days = data.daysUntilReset, data.amountCents != nil else { return nil }
+        return days == 1 ? "Resets tomorrow" : "Resets in \(days) days"
+    }
+
+    var previewSummary: String {
+        (["Safe to spend this week", previewAmount, resetLabel,
+          (data.warnings ?? []).isEmpty ? nil : "Review bank data before spending"]
+            .compactMap { $0 }).joined(separator: ". ")
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Safe to spend this week")
-                    .font(.headline).accessibilityAddTraits(.isHeader)
-                if let cents = data.amountCents {
-                    Text(data.status == "shortfall" ? "Short by \(Self.money(data.shortfallCents ?? 0))" : Self.wholeDollars(cents))
-                        .font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
-                    if let days = data.daysUntilReset {
-                        Text("Resets in \(days) \(days == 1 ? "day" : "days")")
-                            .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
-                    }
+        Button(action: onReview) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Circle().fill(tone).frame(width: 10, height: 10)
+                    Text("Safe to spend this week").font(.haloTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    HaloChevron()
+                }
+                Text(previewAmount)
+                    .font(data.amountCents == nil ? .headline : .haloDisplay(figureSize))
+                    .fixedSize(horizontal: false, vertical: true)
+                if data.amountCents != nil {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.haloTextSecondary.opacity(0.18))
-                            Capsule().fill((data.overCents ?? 0) > 0 ? DesignTokens.ToneText.act : DesignTokens.ToneText.positive)
+                            Capsule().fill(data.status == "shortfall" || (data.overCents ?? 0) > 0
+                                ? DesignTokens.ToneText.act : DesignTokens.ToneText.positive)
                                 .frame(width: geometry.size.width * data.progress)
                         }
-                    }.frame(height: 12).accessibilityHidden(true)
-                    Text((data.overCents ?? 0) > 0
-                         ? "\(Self.money(data.overCents ?? 0)) over this week"
-                         : "\(Self.money(data.weeklySpentCents ?? 0)) spent of \(Self.money(data.weeklyAllowanceCents ?? 0))")
-                        .font(.subheadline)
-                    Text("\(Self.wholeDollars(data.monthRemainingCents ?? 0)) left in your \(data.month ?? "monthly") variable spending plan")
-                        .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
-                    if data.prorated == true {
-                        Text("Your first month starts from your setup date.").font(.footnote).foregroundStyle(Color.haloTextSecondary)
+                    }.frame(height: barHeight)
+                    if let resetLabel {
+                        Text(resetLabel).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
                     }
-                    ForEach(data.warnings ?? [], id: \.self) { warning in
-                        Text(warning).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    Text(data.spokenSummary).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                }
+                if !(data.warnings ?? []).isEmpty {
+                    Text("Review bank data before spending").font(.subheadline)
+                        .foregroundStyle(DesignTokens.ToneText.act)
                 }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(data.spokenSummary)
-
-            Button(action: onReview) {
-                Label(data.status == "setup_required" ? "Set up safe to spend" : "Review spending plan", systemImage: "slider.horizontal.3")
-                    .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(Color.haloTextPrimary)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityHint("Review the calculation, monthly amount and fixed bills.")
+            .foregroundStyle(Color.haloTextPrimary)
+            .padding(18)
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .background(LinearGradient(colors: [tone.opacity(0.18), Color.haloSecondaryBackground],
+                startPoint: .topLeading, endPoint: .bottomTrailing))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(tone.opacity(0.25), lineWidth: 1))
         }
-        .padding(20).haloCard()
+        .buttonStyle(HapticPlainButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(previewSummary)
+        .accessibilityHint("Opens your spending plan and calculation.")
     }
 
     static func money(_ cents: Int) -> String { (Double(cents)/100).formatted(.currency(code: "USD")) }
@@ -104,6 +125,15 @@ struct SpendableSetupSheet: View {
         NavigationStack {
             Form {
                 if let setup {
+                    if let value = dataManager.overview?.spendable {
+                        Section("This week") {
+                            Text(value.spokenSummary).fixedSize(horizontal: false, vertical: true)
+                            if let spent = value.weeklySpentCents, let allowance = value.weeklyAllowanceCents {
+                                Text("\(WeeklySpendableCard.money(spent)) spent of \(WeeklySpendableCard.money(allowance)) this week.")
+                            }
+                            ForEach(value.warnings ?? [], id: \.self) { Text($0) }
+                        }
+                    }
                     if let value = dataManager.overview?.spendable, let cap = value.cashCapCents {
                         Section("Your calculation") {
                             Text("\(WeeklySpendableCard.money(value.fixedCents ?? 0)) reserved each month for fixed bills.")

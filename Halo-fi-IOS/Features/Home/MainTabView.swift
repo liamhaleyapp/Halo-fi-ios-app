@@ -136,6 +136,9 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             guard !UITestArchetype.isActive else { return }
+            if phase == .active, !userManager.isAuthenticated, userManager.destinationError != nil {
+                userManager.retryDestinationResolution()
+            }
             if phase == .background {
                 Self.wentToBackgroundAt = Date()
             } else if phase == .active, let since = Self.wentToBackgroundAt,

@@ -12,17 +12,18 @@ import Foundation
 /// Coordinates token refresh to prevent multiple simultaneous refresh calls.
 /// Uses Swift actor for thread-safe coordination since NetworkService is not @MainActor.
 private actor TokenRefreshCoordinator {
-    private struct Key: Hashable { let generation: UUID; let token: String }
-    private var tasks: [Key: Task<Void, Error>] = [:]
+    static let shared = TokenRefreshCoordinator()
+    private struct Key: Hashable { let generation: UUID; let endpoint: String }
+    private var tasks: [Key: Task<RefreshTokenResponse, Error>] = [:]
 
-    func refresh(using token: String, generation: UUID,
-                 operation: @escaping () async throws -> Void) async throws {
-        let key = Key(generation: generation, token: token)
+    func refresh(generation: UUID, endpoint: String,
+                 operation: @escaping () async throws -> RefreshTokenResponse) async throws -> RefreshTokenResponse {
+        let key = Key(generation: generation, endpoint: endpoint)
         if let task = tasks[key] { return try await task.value }
         let task = Task { try await operation() }
         tasks[key] = task
         defer { tasks[key] = nil }
-        try await task.value
+        return try await task.value
     }
 }
 
@@ -41,7 +42,7 @@ final class NetworkService: NetworkServiceProtocol {
     private let baseURL: String
     private let session: URLSession
     private let tokenStorage: TokenStorageProtocol
-    private let refreshCoordinator = TokenRefreshCoordinator()
+    private let refreshCoordinator = TokenRefreshCoordinator.shared
     private let lifetime: SessionLifetime
 
     init(
@@ -97,7 +98,8 @@ final class NetworkService: NetworkServiceProtocol {
                     try await refreshAfterUnauthorized(request: request, generation: generation)
                     continue
                 }
-                await notifySessionExpired(generation: generation)
+                // An endpoint's 401 does not prove the refresh session is invalid.
+                // Preserve credentials; only explicit refresh rejection signs out.
                 throw AuthError.tokenExpired
             }
             guard (200...299).contains(http.statusCode) else {
@@ -117,34 +119,49 @@ final class NetworkService: NetworkServiceProtocol {
             return token
         }
         guard let refreshToken else { return }
+        _ = try await refreshSession(refreshToken: refreshToken)
+        try lifetime.check(generation)
+    }
+
+    /// Shared by launch restoration and every NetworkService instance.
+    func refreshSession(refreshToken: String) async throws -> RefreshTokenResponse {
+        let generation = lifetime.current
         do {
-            try await refreshCoordinator.refresh(using: refreshToken, generation: generation) { [self] in
-                try lifetime.check(generation)
-                let response = try await performTokenRefresh(refreshToken)
+            let response = try await refreshCoordinator.refresh(generation: generation, endpoint: baseURL) { [self] in
+                // Read inside the coordinated operation so a queued caller cannot
+                // send an obsolete token after another request rotated it.
+                let currentToken = try lifetime.withCurrent(generation) {
+                    guard let token = tokenStorage.getRefreshToken() else { throw AuthError.networkError }
+                    return token
+                }
+                let response = try await performTokenRefresh(currentToken)
+                guard response.success, !response.accessToken.isEmpty, !response.refreshToken.isEmpty,
+                      response.expiresIn > 0 else { throw AuthError.invalidResponse }
                 try lifetime.withCurrent(generation) {
-                    tokenStorage.saveTokensWithExpiration(accessToken: response.accessToken,
+                    try tokenStorage.persistTokens(accessToken: response.accessToken,
                         refreshToken: response.refreshToken, expiresAt: response.expiresAt)
                 }
+                return response
             }
+            try lifetime.check(generation)
+            return response
         } catch {
             try lifetime.check(generation)
-            // Connectivity, server and decoding failures do not invalidate credentials.
             if Self.isRejectedRefresh(error) {
                 await notifySessionExpired(generation: generation)
-                throw AuthError.tokenExpired
+            } else {
+                AuthSessionDiagnostics.record(.refreshDeferred)
             }
             throw error
         }
-        try lifetime.check(generation)
     }
 
     static func isRejectedRefresh(_ error: Error) -> Bool {
         guard let auth = error as? AuthError else { return false }
-        switch auth {
-        case .invalidCredentials, .tokenExpired: return true
-        case .serverError(let status, _): return status == 400 || status == 401 || status == 403
-        default: return false
+        if case .serverError(let status, let detail) = auth {
+            return status == 401 && detail == "session_invalid"
         }
+        return false
     }
 
     /// Performs token refresh via the refresh endpoint.
@@ -164,7 +181,9 @@ final class NetworkService: NetworkServiceProtocol {
     @MainActor
     private func notifySessionExpired(generation: UUID) {
         guard lifetime.isCurrent(generation) else { return }
-        NotificationCenter.default.post(name: .sessionExpired, object: nil)
+        AuthSessionDiagnostics.record(.refreshRejected)
+        Logger.warning("auth_session_ended reason=refresh_rejected")
+        NotificationCenter.default.post(name: .sessionExpired, object: nil, userInfo: ["generation": generation])
     }
 
     /// Prepare sign-out cleanup while the departing account's token still

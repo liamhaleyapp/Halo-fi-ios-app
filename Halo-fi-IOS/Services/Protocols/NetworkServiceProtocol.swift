@@ -10,6 +10,8 @@ import Foundation
 /// Protocol defining network request operations.
 /// Enables dependency injection and mocking for tests.
 protocol NetworkServiceProtocol {
+    func refreshSession(refreshToken: String) async throws -> RefreshTokenResponse
+
     /// Performs an authenticated HTTP request with the current access token.
     /// - Parameters:
     ///   - endpoint: The API endpoint path (e.g., "/api/v1/users/me")
@@ -53,6 +55,12 @@ protocol NetworkServiceProtocol {
 // MARK: - Default Parameter Extensions
 
 extension NetworkServiceProtocol {
+    func refreshSession(refreshToken: String) async throws -> RefreshTokenResponse {
+        try await publicRequest(endpoint: "/auth/refresh-token", method: .POST,
+            body: JSONEncoder().encode(RefreshTokenRequest(refreshToken: refreshToken)),
+            responseType: RefreshTokenResponse.self)
+    }
+
     func authenticatedRequest<T: Codable>(
         endpoint: String,
         method: HTTPMethod = .GET,

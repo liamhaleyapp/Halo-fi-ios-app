@@ -163,8 +163,10 @@ final class UserManager {
             forName: .sessionExpired,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notice in
+            guard let generation = notice.userInfo?["generation"] as? UUID else { return }
             Task { @MainActor in
+                guard SessionLifetime.shared.isCurrent(generation) else { return }
                 self?.handleSessionExpired()
             }
         }
@@ -307,8 +309,8 @@ final class UserManager {
                 throw AuthError.invalidResponse
             }
 
-            SessionLifetime.shared.invalidate {
-                tokenStorage.saveTokensWithExpiration(
+            try SessionLifetime.shared.invalidate {
+                try tokenStorage.persistTokens(
                     accessToken: session.accessToken,
                     refreshToken: session.refreshToken,
                     expiresAt: session.expiresAt
@@ -370,8 +372,8 @@ final class UserManager {
                 throw AuthError.invalidResponse
             }
 
-            SessionLifetime.shared.invalidate {
-                tokenStorage.saveTokensWithExpiration(
+            try SessionLifetime.shared.invalidate {
+                try tokenStorage.persistTokens(
                     accessToken: session.accessToken,
                     refreshToken: session.refreshToken,
                     expiresAt: session.expiresAt
@@ -404,6 +406,7 @@ final class UserManager {
     }
 
     func signOut() {
+        AuthSessionDiagnostics.record(.signedOut)
         isResolvingDestination = false
         isResolvingConsent = false
         consentRestorationID = UUID()
@@ -940,6 +943,12 @@ final class UserManager {
     }
 
     func retryDestinationResolution() {
+        if !isAuthenticated {
+            guard !restoringSession else { return }
+            destinationError = nil
+            loadUserFromStorage()
+            return
+        }
         guard let userId = currentUser?.id else { return }
         destinationError = nil
         isResolvingDestination = true
@@ -1096,6 +1105,8 @@ final class UserManager {
         }
     }
 
+    private var restoringSession = false
+
     private func loadUserFromStorage() {
         guard let data = userDefaults.data(forKey: userKey),
               let user = try? JSONDecoder().decode(User.self, from: data) else {
@@ -1118,8 +1129,10 @@ final class UserManager {
                 await refreshTokensIfNeeded(refreshToken: refreshToken)
             }
         } else {
-            clearUserFromStorage()
-            tokenStorage.clearTokens()
+            // Keychain may be temporarily unavailable (for example, locked).
+            // Never delete credentials merely because they could not be read.
+            isResolvingDestination = true
+            destinationError = "We couldn’t restore your sign-in. Unlock your device and try again."
         }
     }
 
@@ -1130,17 +1143,15 @@ final class UserManager {
     // MARK: - Token Management
 
     private func refreshTokensIfNeeded(refreshToken: String) async {
+        guard !restoringSession else { return }
+        restoringSession = true
+        defer { restoringSession = false }
         let generation = SessionLifetime.shared.current
         do {
-            let response = try await authService.refreshToken(refreshToken: refreshToken)
+            _ = try await authService.refreshToken(refreshToken: refreshToken)
             try SessionLifetime.shared.check(generation)
-
-            // Save new tokens
-            tokenStorage.saveTokensWithExpiration(
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expiresAt: response.expiresAt
-            )
+            // NetworkService persists once inside the shared refresh operation.
+            destinationError = nil
 
             // Restore user from storage (user data doesn't change, just tokens)
             if let data = userDefaults.data(forKey: userKey),
@@ -1152,12 +1163,18 @@ final class UserManager {
                 isResolvingDestination = false
             }
 
+            AuthSessionDiagnostics.record(.restorationSucceeded)
             Logger.debug("Token refresh successful during app launch")
         } catch {
             guard SessionLifetime.shared.isCurrent(generation) else { return }
             Logger.error("Token refresh failed during app launch: \(error.localizedDescription)")
             if NetworkService.isRejectedRefresh(error) { signOut() }
-            else { isResolvingDestination = false }
+            else {
+                AuthSessionDiagnostics.record(.restorationDeferred)
+                Logger.warning("auth_restore_deferred reason=temporary_failure")
+                isResolvingDestination = true
+                destinationError = "We couldn’t reconnect to your account. Your sign-in is saved. Please try again."
+            }
         }
     }
 }

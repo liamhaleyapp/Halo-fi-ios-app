@@ -1,6 +1,7 @@
 import XCTest
 import RevenueCat
 import StoreKit
+import Security
 @testable import Halo_fi_IOS
 
 private final class SessionStubProtocol: URLProtocol {
@@ -904,9 +905,17 @@ final class DestinationRestorationTests: XCTestCase {
     }
 }
 
+private final class LaunchRefreshFailure {
+    var error: Error? = AuthError.networkError
+}
+
 private struct DestinationRefreshAuth: AuthServiceProtocol {
+    var failure: LaunchRefreshFailure? = nil
+    var storage: TokenStorageProtocol? = nil
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
-        .init(success: true, accessToken: "test-access", refreshToken: "test-refresh", tokenType: "bearer", expiresIn: 3600)
+        if let error = failure?.error { throw error }
+        try storage?.persistTokens(accessToken: "test-access", refreshToken: "test-refresh", expiresAt: Int(Date().timeIntervalSince1970) + 3600)
+        return .init(success: true, accessToken: "test-access", refreshToken: "test-refresh", tokenType: "bearer", expiresIn: 3600)
     }
     func login(email: String, password: String) async throws -> LoginResponse { throw AuthError.notImplemented }
     func socialLogin(provider: String, idToken: String, nonce: String?, firstName: String?, lastName: String?) async throws -> LoginResponse { throw AuthError.notImplemented }
@@ -937,7 +946,7 @@ extension DestinationRestorationTests {
         defaults.set(true, forKey: "user_onboarding_completed_returning")
         let storage = MockTokenStorage()
         storage.saveTokens(accessToken: "expired", refreshToken: "refresh", expiresIn: -10)
-        let manager = UserManager(tokenStorage: storage, authService: DestinationRefreshAuth(),
+        let manager = UserManager(tokenStorage: storage, authService: DestinationRefreshAuth(storage: storage),
                                   biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
         XCTAssertTrue(manager.isResolvingDestination)
         for _ in 0..<1000 {
@@ -983,5 +992,139 @@ final class VoiceReviewConfigurationTests: XCTestCase {
         let payload = #"{"kind":"navigate","action_id":"t","state":"proposed","target":"investments","receipt":"Open investments."}"#
         let action = try JSONDecoder().decode(VoiceAppAction.self, from: Data(payload.utf8))
         XCTAssertEqual(action.target, .investments)
+    }
+}
+
+
+extension SessionIsolationTests {
+    func testLaunchAndOtherNetworkInstanceShareRefresh() async throws {
+        let (first, store, lifetime, session) = makeService()
+        defer { session.invalidateAndCancel() }
+        let second = NetworkService(baseURL: "https://review.invalid", session: session, tokenStorage: store, lifetime: lifetime)
+        let refresh = refresh
+        var refreshCalls = 0
+        SessionStubProtocol.handler = { request in
+            XCTAssertEqual(request.url!.path, "/auth/refresh-token")
+            refreshCalls += 1
+            Thread.sleep(forTimeInterval: 0.05)
+            return (200, refresh)
+        }
+        async let launch = AuthService(networkService: first).refreshToken(refreshToken: "A-refresh")
+        async let concurrent = second.refreshSession(refreshToken: "A-refresh")
+        _ = try await (launch, concurrent)
+        XCTAssertEqual(refreshCalls, 1)
+        XCTAssertEqual(store.refreshToken, "A-new-refresh")
+    }
+
+    func testOnlyExplicitRefreshRejectionEndsSession() {
+        XCTAssertTrue(NetworkService.isRejectedRefresh(AuthError.serverError(401, "session_invalid")))
+        for status in [400, 401, 403, 429, 500, 502, 503] {
+            XCTAssertFalse(NetworkService.isRejectedRefresh(AuthError.serverError(status, "temporary error")))
+        }
+        XCTAssertFalse(NetworkService.isRejectedRefresh(AuthError.tokenExpired))
+    }
+
+    func testRepeatedResourceUnauthorizedDoesNotEraseRefreshedSession() async throws {
+        let (service, store, _, session) = makeService()
+        defer { session.invalidateAndCancel() }
+        let refresh = refresh
+        let expired = expectation(description: "No forced logout")
+        expired.isInverted = true
+        let observer = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: nil) { _ in expired.fulfill() }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        SessionStubProtocol.handler = { request in
+            request.url!.path == "/auth/refresh-token" ? (200, refresh) : (401, "{}")
+        }
+        do {
+            let _: Reply = try await service.authenticatedRequest(endpoint: "/resource", responseType: Reply.self)
+            XCTFail("Expected request failure")
+        } catch AuthError.tokenExpired { }
+        XCTAssertEqual(store.refreshToken, "A-new-refresh")
+        await fulfillment(of: [expired], timeout: 0.1)
+    }
+
+    func testRefreshOutageRetainsBothCredentials() async throws {
+        let (service, store, _, session) = makeService()
+        defer { session.invalidateAndCancel() }
+        SessionStubProtocol.handler = { request in
+            request.url!.path == "/auth/refresh-token" ? (503, #"{"detail":"Try again"}"#) : (401, "{}")
+        }
+        do {
+            let _: Reply = try await service.authenticatedRequest(endpoint: "/resource", responseType: Reply.self)
+            XCTFail("Expected outage")
+        } catch AuthError.serverError(let status, _) { XCTAssertEqual(status, 503) }
+        XCTAssertEqual(store.accessToken, "A-old")
+        XCTAssertEqual(store.refreshToken, "A-refresh")
+    }
+}
+
+@MainActor
+final class SessionCredentialStorageTests: XCTestCase {
+    func testLegacyCredentialsMigrateAndUpdatesSurviveNewStorageInstance() throws {
+        let service = "halofi-session-test-\(UUID().uuidString)"
+        let storage = TokenStorage(service: service)
+        defer { storage.clearTokens() }
+        for (key, data) in [("accessToken", Data("old-access".utf8)), ("refreshToken", Data("old-refresh".utf8)),
+                            ("tokenExpiry", try JSONEncoder().encode(Date().addingTimeInterval(3600)))] {
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service, kSecAttrAccount as String: key, kSecValueData as String: data]
+            XCTAssertEqual(SecItemAdd(query as CFDictionary, nil), errSecSuccess)
+        }
+        XCTAssertEqual(storage.getRefreshToken(), "old-refresh")
+        try storage.persistTokens(accessToken: "new-access", refreshToken: "new-refresh", expiresAt: Int(Date().timeIntervalSince1970) + 3600)
+        let restored = TokenStorage(service: service)
+        XCTAssertEqual(restored.getAccessToken(), "new-access")
+        XCTAssertEqual(restored.getRefreshToken(), "new-refresh")
+        XCTAssertTrue(restored.isTokenValid())
+        try restored.persistTokens(accessToken: "third-access", refreshToken: "third-refresh", expiresAt: 1)
+        XCTAssertEqual(storage.getAccessToken(), "third-access")
+        XCTAssertEqual(storage.getRefreshToken(), "third-refresh")
+        XCTAssertFalse(storage.isTokenValid())
+        storage.clearTokens()
+        XCTAssertNil(restored.getRefreshToken())
+    }
+
+    func testInvalidReplacementPreservesExistingPair() throws {
+        let storage = TokenStorage(service: "halofi-session-test-\(UUID().uuidString)")
+        defer { storage.clearTokens() }
+        try storage.persistTokens(accessToken: "valid", refreshToken: "valid-refresh", expiresAt: 123)
+        XCTAssertThrowsError(try storage.persistTokens(accessToken: "", refreshToken: "", expiresAt: 123))
+        XCTAssertEqual(storage.getAccessToken(), "valid")
+        XCTAssertEqual(storage.getRefreshToken(), "valid-refresh")
+    }
+}
+
+
+extension DestinationRestorationTests {
+    func testLaunchOutageStaysOnRetryableRestorationAndRecovers() async throws {
+        let user = User(id: "retry-user", email: "test@example.invalid", firstName: "Test", isOnboarded: true)
+        defaults.set(try JSONEncoder().encode(user), forKey: "currentUser")
+        let store = MockTokenStorage()
+        store.saveTokens(accessToken: "expired", refreshToken: "saved-refresh", expiresIn: -1)
+        let failure = LaunchRefreshFailure()
+        let manager = UserManager(tokenStorage: store, authService: DestinationRefreshAuth(failure: failure),
+            biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertFalse(manager.isAuthenticated)
+        XCTAssertTrue(manager.isResolvingDestination, "Must not route to sign-in")
+        XCTAssertNotNil(manager.destinationError)
+        XCTAssertEqual(store.refreshToken, "saved-refresh")
+        XCTAssertNotNil(defaults.data(forKey: "currentUser"))
+        failure.error = nil
+        manager.retryDestinationResolution()
+        for _ in 0..<30 { await Task.yield() }
+        XCTAssertTrue(manager.isAuthenticated)
+        XCTAssertTrue(manager.isOnboarded)
+        XCTAssertNil(manager.destinationError)
+    }
+
+    func testUnreadableCredentialsDoNotDeleteStoredUser() throws {
+        let user = User(id: "locked", email: "test@example.invalid", firstName: "Test", isOnboarded: true)
+        defaults.set(try JSONEncoder().encode(user), forKey: "currentUser")
+        let manager = UserManager(tokenStorage: MockTokenStorage(), authService: DestinationRefreshAuth(),
+            biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
+        XCTAssertTrue(manager.isResolvingDestination)
+        XCTAssertNotNil(manager.destinationError)
+        XCTAssertNotNil(defaults.data(forKey: "currentUser"))
     }
 }

@@ -33,8 +33,17 @@ protocol TokenStorageProtocol {
     ///   - expiresAt: Unix timestamp when the access token expires
     func saveTokensWithExpiration(accessToken: String, refreshToken: String, expiresAt: Int)
 
+    func persistTokens(accessToken: String, refreshToken: String, expiresAt: Int) throws
+
     /// Removes all stored tokens from secure storage.
     func clearTokens()
+}
+
+extension TokenStorageProtocol {
+    func persistTokens(accessToken: String, refreshToken: String, expiresAt: Int) throws {
+        saveTokensWithExpiration(accessToken: accessToken, refreshToken: refreshToken, expiresAt: expiresAt)
+        guard getAccessToken() == accessToken, getRefreshToken() == refreshToken else { throw AuthError.invalidResponse }
+    }
 }
 
 // MARK: - Mock Implementation for Testing

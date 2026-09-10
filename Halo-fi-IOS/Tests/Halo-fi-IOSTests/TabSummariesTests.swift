@@ -33,6 +33,18 @@ final class SpendableUITests: XCTestCase {
         XCTAssertEqual(data.spokenSummary,"Refresh your bank accounts first.")
     }
 
+    func testPreviewIsBriefAndKeepsDetailsInside() throws {
+        let card = WeeklySpendableCard(data: try sample(), onReview: {})
+        XCTAssertEqual(card.previewSummary, "Safe to spend this week. $523. Resets in 4 days")
+        XCTAssertFalse(card.previewSummary.contains("September"))
+        var unavailable = try sample()
+        unavailable.amountCents = nil
+        XCTAssertTrue(WeeklySpendableCard(data: unavailable, onReview: {}).previewSummary.contains("Estimate unavailable"))
+        unavailable.amountCents = 0
+        unavailable.warnings = ["Data is stale"]
+        XCTAssertTrue(WeeklySpendableCard(data: unavailable, onReview: {}).previewSummary.contains("Review bank data"))
+    }
+
     func testEditorRejectsPartialNumbersAndParsesLocaleCents() {
         let us = Locale(identifier: "en_US")
         XCTAssertEqual(SpendableSetupSheet.cents("5,000.25",locale:us),500025)
@@ -59,7 +71,8 @@ final class SpendableUITests: XCTestCase {
                     .frame(width:393).background(scheme == .dark ? Color.black : Color.white))
                 renderer.scale = 2
                 let picture = try XCTUnwrap(renderer.uiImage)
-                XCTAssertGreaterThan(picture.size.height,180)
+                XCTAssertGreaterThan(picture.size.height, 44)
+                if size == .large { XCTAssertLessThan(picture.size.height, 230, "Budget preview stays compact") }
                 let path = FileManager.default.temporaryDirectory.appendingPathComponent("spendable-\(scheme)-\(size).png")
                 try picture.pngData()?.write(to:path)
                 print("SPENDABLE_RENDER: \(path.path)")
