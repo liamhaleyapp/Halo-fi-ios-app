@@ -40,7 +40,7 @@ final class ConversationCoordinator {
     /// via `setConversationMode(_:)` so the view model can keep the
     /// coordinator in sync with @AppStorage. Defaults to push-to-talk
     /// to match historical behavior for users who never opted in.
-    private(set) var conversationMode: ConversationMode = .pushToTalk
+    private(set) var conversationMode: ConversationMode = .handsFree
 
     // MARK: - Event Stream
 
@@ -147,7 +147,7 @@ final class ConversationCoordinator {
 
     /// WP7 — commits shorter than this are treated as noise (a cough, a
     /// door) and the turn keeps listening.
-    private let minSpeechDuration: TimeInterval = 0.2
+    private var minSpeechDuration: TimeInterval = 0.2
     private var speechSecondsInCurrentListen: TimeInterval = 0
 
     // MARK: - Hands-free barge-in
@@ -1124,6 +1124,8 @@ final class ConversationCoordinator {
             let context: [String: AnyCodable] = [
                 "platform": AnyCodable("ios"),
                 "supports_app_actions": AnyCodable(true),
+                "app_action_destinations": AnyCodable(["money", "budget", "benefits", "settings", "accounts", "transactions", "calendar", "income", "bills", "investments", "attention"]),
+                "conversation_thread_id": AnyCodable(transcriptStore?.currentSessionId.uuidString ?? ""),
                 "sessionId": AnyCodable(sessionId ?? ""),
                 "timestamp": AnyCodable(Date().timeIntervalSince1970),
                 "timezone": AnyCodable(TimeZone.current.identifier),
@@ -1559,6 +1561,16 @@ final class ConversationCoordinator {
 
     private func setupSTTCallbacks() {
         // Handle transcription updates (partial and committed)
+        sttService.onConfiguration = { [weak self] config in
+            guard let self else { return }
+            if let mode = config.conversationMode {
+                self.setConversationMode(ConversationMode.from(mode))
+                UserDefaults.standard.set(self.conversationMode.rawValue, forKey: "conversationMode")
+            }
+            if let ms = config.minSpeechMs {
+                self.minSpeechDuration = min(1.0, max(0.1, Double(ms) / 1000))
+            }
+        }
         sttService.onTranscription = { [weak self] text, isFinal in
             guard let self = self else { return }
 

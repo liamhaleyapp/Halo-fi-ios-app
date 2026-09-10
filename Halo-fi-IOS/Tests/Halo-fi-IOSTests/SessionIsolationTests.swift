@@ -950,3 +950,38 @@ extension DestinationRestorationTests {
         XCTAssertTrue(storage.isTokenValid())
     }
 }
+
+final class VoiceReviewConfigurationTests: XCTestCase {
+    func testSavedModeIsPreservedAndMissingModeMatchesServer() {
+        XCTAssertEqual(ConversationMode.from(nil), .handsFree)
+        XCTAssertEqual(ConversationMode.from("invalid"), .handsFree)
+        XCTAssertEqual(ConversationMode.from("push_to_talk"), .pushToTalk)
+        XCTAssertEqual(ConversationMode.from("hands_free"), .handsFree)
+    }
+
+    func testEffectiveSTTConfigurationAndLegacyResponseDecode() throws {
+        let base = #"{"token":"fixture","model_id":"scribe_v2_realtime","websocket_url":"wss://example.invalid","config":{"audio_format":"pcm_16000","sample_rate":16000,"commit_strategy":"vad","language_code":"en","include_timestamps":false}}"#
+        let legacy = try JSONDecoder().decode(STTTokenResponse.self, from: Data(base.utf8))
+        XCTAssertNil(legacy.config.conversationMode)
+        XCTAssertNil(legacy.config.minSpeechMs)
+        let updated = base.replacingOccurrences(of: #""include_timestamps":false"#, with: #""include_timestamps":false,"conversation_mode":"hands_free","min_speech_ms":300"#)
+        let effective = try JSONDecoder().decode(STTTokenResponse.self, from: Data(updated.utf8))
+        XCTAssertEqual(effective.config.conversationMode, "hands_free")
+        XCTAssertEqual(effective.config.minSpeechMs, 300)
+    }
+
+    @MainActor
+    func testNavigationConsumesOneDestinationAndClearsOldBudgetRequest() {
+        VoiceNavigation.pendingBudget = true
+        VoiceNavigation.pendingDestination = .transactions
+        XCTAssertEqual(VoiceNavigation.consumeDestination(), .transactions)
+        XCTAssertNil(VoiceNavigation.consumeDestination())
+        XCTAssertFalse(VoiceNavigation.pendingBudget)
+    }
+
+    func testNewNavigationDestinationDecodes() throws {
+        let payload = #"{"kind":"navigate","action_id":"t","state":"proposed","target":"investments","receipt":"Open investments."}"#
+        let action = try JSONDecoder().decode(VoiceAppAction.self, from: Data(payload.utf8))
+        XCTAssertEqual(action.target, .investments)
+    }
+}

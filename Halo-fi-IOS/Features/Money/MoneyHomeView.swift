@@ -120,10 +120,10 @@ struct MoneyHomeView: View {
                 openAttentionFromNotification()
             }
             .onReceive(NotificationCenter.default.publisher(for: VoiceNavigation.budgetRequested)) { _ in
-                if VoiceNavigation.consumeBudget() { navigationPath.append(MoneyRoute.budget) }
+                openVoiceDestination()
             }
             .onAppear {
-                if VoiceNavigation.consumeBudget() { navigationPath.append(MoneyRoute.budget) }
+                openVoiceDestination()
 
                 if ReminderNotificationScheduler.pendingAttentionOpen { openAttentionFromNotification() }
             }
@@ -210,6 +210,23 @@ struct MoneyHomeView: View {
 
     private func refreshBudgetIfNeeded() async {
         if budgetDataManager.shouldRefresh { await budgetDataManager.refresh() }
+    }
+
+    private func openVoiceDestination() {
+        guard let destination = VoiceNavigation.consumeDestination() else { return }
+        let route: MoneyRoute
+        switch destination {
+        case .budget: route = .budget
+        case .accounts: route = .accounts
+        case .transactions: route = .allTransactions
+        case .calendar: route = .calendar
+        case .income: route = .income
+        case .bills: route = .bills
+        case .investments: route = .investments
+        case .attention: route = .attention
+        default: return
+        }
+        navigationPath.append(route)
     }
 
     enum MoneyRoute: Hashable {
@@ -676,6 +693,79 @@ struct WorkExpenseRowAction: ViewModifier {
     }
 }
 
+/// Search results stay separate from the Money feed cache. A late response
+/// cannot replace a newer query or cross an authenticated session boundary.
+@Observable @MainActor
+final class TransactionSearchStore {
+    private(set) var query = ""
+    private(set) var results: [Transaction] = []
+    private(set) var isLoading = false
+    private(set) var hasMore = false
+    private(set) var error: String?
+    private var offset = 0
+    private var requestID = UUID()
+    private let debounce: Duration
+    private let fetch: (String, Int) async throws -> TransactionsResponse
+
+    init(debounce: Duration = .milliseconds(300),
+         fetch: @escaping (String, Int) async throws -> TransactionsResponse = { query, offset in
+             #if DEBUG
+             if UITestArchetype.isActive { return UITestArchetype.transactionSearchPage(query: query, offset: offset) }
+             #endif
+             return try await BankService.shared.searchTransactions(query: query, offset: offset)
+         }) {
+        self.debounce = debounce
+        self.fetch = fetch
+    }
+
+    func search(_ text: String) async {
+        requestID = UUID()
+        let request = requestID
+        let generation = SessionLifetime.shared.current
+        query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        results = []; offset = 0; hasMore = false; error = nil
+        isLoading = !query.isEmpty
+        guard !query.isEmpty else { return }
+        defer { if requestID == request { isLoading = false } }
+        do {
+            try await Task.sleep(for: debounce)
+            try Task.checkCancellation()
+            guard request == requestID, SessionLifetime.shared.isCurrent(generation) else { return }
+            let page = try await fetch(query, 0)
+            guard request == requestID, SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
+            results = page.transactions
+            offset = page.transactions.count
+            hasMore = page.hasMore
+        } catch is CancellationError { }
+        catch {
+            guard request == requestID, SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
+            self.error = "Could not search transactions. Please try again."
+        }
+    }
+
+    func loadMore() async {
+        guard hasMore, !isLoading else { return }
+        let request = requestID
+        let generation = SessionLifetime.shared.current
+        isLoading = true; error = nil
+        defer { if requestID == request { isLoading = false } }
+        do {
+            let page = try await fetch(query, offset)
+            guard request == requestID, SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
+            var seen = Set(results.map(\.idTransaction))
+            results += page.transactions.filter { seen.insert($0.idTransaction).inserted }
+            offset += page.transactions.count
+            hasMore = page.hasMore && !page.transactions.isEmpty
+        } catch is CancellationError { }
+        catch {
+            guard request == requestID, SessionLifetime.shared.isCurrent(generation), !Task.isCancelled else { return }
+            self.error = "Could not load more matches. Please try again."
+        }
+    }
+
+    func cancel() { requestID = UUID(); isLoading = false }
+}
+
 struct AllTransactionsView: View {
     var initial: [Transaction] = []
 
@@ -684,15 +774,34 @@ struct AllTransactionsView: View {
     @State private var transactions: [Transaction] = []
     @State private var isLoading = false
     @State private var hasLoaded = false
+    @State private var searchText = ""
+    @State private var search = TransactionSearchStore()
+    private var searching: Bool { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var displayed: [Transaction] { searching ? search.results : transactions }
+    private var resultSummary: String {
+        if searching {
+            if search.isLoading && search.results.isEmpty { return "Searching transactions…" }
+            if search.error != nil && search.results.isEmpty { return "Search unavailable" }
+            let count = VoiceOverFormatter.count(search.results.count, singular: "match", plural: "matches")
+            return "\(count)\(search.hasMore ? " loaded; more available" : ""), newest first"
+        }
+        return "\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")), newest first"
+    }
 
     var body: some View {
         List {
             Section {
-                if transactions.isEmpty {
-                    Text(isLoading ? "Loading transactions…" : "No transactions yet. Pull down to refresh.")
+                if searching, let error = search.error {
+                    Text(error).foregroundColor(.haloTextSecondary)
+                    Button("Try search again") {
+                        Task { if search.results.isEmpty { await search.search(searchText) } else { await search.loadMore() } }
+                    }.frame(minHeight: 44)
+                } else if displayed.isEmpty {
+                    Text(searching ? (search.isLoading ? "Searching…" : "No matching transactions. Try a different name or description.")
+                         : (isLoading ? "Loading transactions…" : "No transactions yet. Pull down to refresh."))
                         .foregroundColor(.haloTextSecondary)
                 }
-                ForEach(transactions, id: \.idTransaction) { txn in
+                ForEach(displayed, id: \.idTransaction) { txn in
                     NavigationLink {
                         TransactionDetailView(transaction: txn)
                     } label: {
@@ -700,20 +809,37 @@ struct AllTransactionsView: View {
                     }
                     .modifier(WorkExpenseRowAction(enabled: userManager.capabilities.showsBenefitsLane, transaction: txn))
                 }
+                if searching && search.hasMore {
+                    Button(search.isLoading ? "Loading more matches…" : "Load more matches") { Task { await search.loadMore() } }
+                        .disabled(search.isLoading).frame(minHeight: 44)
+                }
             } header: {
-                Text("\(VoiceOverFormatter.count(transactions.count, singular: "transaction", plural: "transactions")), newest first")
+                Text(resultSummary).accessibilityAddTraits(.isHeader).accessibilityIdentifier("transactionSearchSummary")
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Recent transactions")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search merchant or description")
+        .onChange(of: searchText) { _, value in
+            if value.count > 100 { searchText = String(value.prefix(100)) }
+        }
+        .task(id: searchText) { await search.search(searchText) }
+        .onDisappear { search.cancel() }
+        .onChange(of: search.isLoading) { _, loading in
+            if !loading && searching && UIAccessibility.isVoiceOverRunning {
+                UIAccessibility.post(notification: .announcement, argument: search.error ?? resultSummary)
+            }
+        }
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
             transactions = initial
             await load(forceRefresh: false)
         }
-        .refreshable { await load(forceRefresh: true) }
+        .refreshable {
+            if searching { await search.search(searchText) } else { await load(forceRefresh: true) }
+        }
     }
 
     private func load(forceRefresh: Bool) async {

@@ -22,6 +22,8 @@ struct STTTokenResponse: Codable {
         let languageCode: String
         let includeTimestamps: Bool
         let contextPrompt: String?
+        var conversationMode: String? = nil
+        var minSpeechMs: Int? = nil
 
         enum CodingKeys: String, CodingKey {
             case audioFormat = "audio_format"
@@ -30,6 +32,8 @@ struct STTTokenResponse: Codable {
             case languageCode = "language_code"
             case includeTimestamps = "include_timestamps"
             case contextPrompt = "context_prompt"
+            case conversationMode = "conversation_mode"
+            case minSpeechMs = "min_speech_ms"
         }
     }
 

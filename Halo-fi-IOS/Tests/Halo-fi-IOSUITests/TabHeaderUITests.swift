@@ -51,6 +51,34 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testRecentTransactionsSearchShowsMatchesAndEmptyState() {
+        let app = launch("ssi_watch")
+        let recent = app.buttons["moneyRow-Recent transactions"]
+        XCTAssertTrue(scrollTo(recent, in: app))
+        recent.tap()
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertTrue(field.isHittable)
+        field.tap()
+        field.typeText("workspace\n")
+        let summary = app.staticTexts["transactionSearchSummary"].firstMatch
+        let matches = NSPredicate(format: "label CONTAINS '2 matches'")
+        expectation(for: matches, evaluatedWith: summary)
+        waitForExpectations(timeout: 8)
+        XCTAssertTrue(app.staticTexts["Google Workspace"].firstMatch.exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Transaction search results"; shot.lifetime = .keepAlways; add(shot)
+        app.staticTexts["Google Workspace"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.buttons["Clear text"].tap()
+        field.typeText("nomatch\n")
+        let empty = app.staticTexts["No matching transactions. Try a different name or description."]
+        XCTAssertTrue(empty.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Google Workspace"].firstMatch.exists)
+    }
+
     func testInvestmentPortfoliosAndHoldingsAtLargestTextSize() { checkInvestmentPortfolio(largeText: true) }
     func testInvestmentPortfoliosAndHoldingsAtStandardTextSize() { checkInvestmentPortfolio(largeText: false) }
 

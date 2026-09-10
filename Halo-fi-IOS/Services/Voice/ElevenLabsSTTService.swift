@@ -80,6 +80,7 @@ final class ElevenLabsSTTService {
 
     /// Called when session is ready to receive audio (session_started received)
     var onSessionReady: (() -> Void)?
+    var onConfiguration: ((STTTokenResponse.STTConfig) -> Void)?
 
     // MARK: - Private Properties
 
@@ -159,6 +160,7 @@ final class ElevenLabsSTTService {
             guard connectionGeneration == generation else { throw CancellationError() }
             currentToken = fetched
             if let config = currentToken?.config {
+                onConfiguration?(config)
                 Logger.info("ElevenLabsSTT: Token fetched - format: \(config.audioFormat), sampleRate: \(config.sampleRate), language: \(config.languageCode)")
             } else {
                 Logger.info("ElevenLabsSTT: Token fetched (no config)")

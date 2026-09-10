@@ -162,6 +162,18 @@ final class BankService: BankServiceProtocol {
         }
     }
 
+    /// Searches stored history on the server, retaining pagination metadata.
+    func searchTransactions(query: String, offset: Int) async throws -> TransactionsResponse {
+        var components = URLComponents(string: APIEndpoints.Bank.transactions)!
+        components.queryItems = [URLQueryItem(name: "q", value: query),
+                                URLQueryItem(name: "limit", value: "50"),
+                                URLQueryItem(name: "offset", value: String(offset))]
+        do {
+            return try await networkService.authenticatedRequest(endpoint: components.string!, method: .GET,
+                body: nil, responseType: TransactionsResponse.self)
+        } catch { throw convertToBankError(error) }
+    }
+
     // MARK: - Get Transactions for Item
     /// Fetches transactions for a specific bank item
     /// - Parameter itemId: The internal bank item UUID (not plaid_item_id)

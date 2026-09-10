@@ -35,3 +35,60 @@ import Testing
         #expect(TransactionNameFormatter.clean(long).count <= TransactionNameFormatter.maxLength)
     }
 }
+
+
+@Suite @MainActor struct TransactionSearchTests {
+    private func page(_ name: String) -> TransactionsResponse {
+        UITestArchetype.transactionSearchPage(query: name, offset: 0)
+    }
+
+    @Test func staleSearchCannotReplaceANewerQueryOrClear() async throws {
+        var pending: CheckedContinuation<TransactionsResponse, Error>?
+        let oldPage = page("workspace")
+        let newPage = page("uber")
+        let store = TransactionSearchStore(debounce: .zero) { query, _ in
+            if query == "workspace" { return try await withCheckedThrowingContinuation { pending = $0 } }
+            return newPage
+        }
+        let first = Task { await store.search("workspace") }
+        while pending == nil { await Task.yield() }
+        await store.search("uber")
+        #expect(store.results.map(\.name) == newPage.transactions.map(\.name))
+        pending?.resume(returning: oldPage)
+        await first.value
+        #expect(store.query == "uber")
+        #expect(store.results.map(\.name) == newPage.transactions.map(\.name))
+        await store.search("  ")
+        #expect(store.results.isEmpty && !store.isLoading && store.error == nil)
+    }
+
+    @Test func paginationPreservesResultsOnFailureAndRetriesSameOffset() async {
+        let all = page("workspace").transactions
+        var offsets: [Int] = []
+        let store = TransactionSearchStore(debounce: .zero) { _, offset in
+            offsets.append(offset)
+            if offsets.count == 2 { throw URLError(.notConnectedToInternet) }
+            return TransactionsResponse(added: 0, cursor: nil, hasMore: offset == 0,
+                transactions: offset == 0 ? [all[0]] : [all[1]])
+        }
+        await store.search("workspace")
+        await store.loadMore()
+        #expect(store.results.count == 1 && store.error != nil && store.hasMore)
+        await store.loadMore()
+        #expect(offsets == [0, 1, 1])
+        #expect(store.results.count == 2 && !store.hasMore && store.error == nil)
+    }
+
+    @Test func cancellingBeforeDebounceAvoidsTheRequest() async {
+        var called = false
+        let store = TransactionSearchStore(debounce: .seconds(60)) { _, _ in
+            called = true
+            return TransactionsResponse(added: 0, cursor: nil, hasMore: false, transactions: [])
+        }
+        let task = Task { await store.search("workspace") }
+        await Task.yield()
+        task.cancel()
+        await task.value
+        #expect(!called && !store.isLoading && store.error == nil)
+    }
+}

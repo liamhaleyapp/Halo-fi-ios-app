@@ -26,12 +26,10 @@ enum ConversationMode: String, CaseIterable, Sendable {
     case handsFree = "hands_free"
 
     /// Defensive fallback used when the backend or AppStorage returns
-    /// a value we don't recognize. We default to push-to-talk because
-    /// that's the historical behavior — users who never opted in
-    /// should see no change.
+    /// a value we do not recognize. Match the server and preferences UI.
     static func from(_ raw: String?) -> ConversationMode {
         guard let raw, let mode = ConversationMode(rawValue: raw) else {
-            return .pushToTalk
+            return .handsFree
         }
         return mode
     }

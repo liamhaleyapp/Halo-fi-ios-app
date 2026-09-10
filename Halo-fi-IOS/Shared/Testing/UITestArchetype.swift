@@ -376,3 +376,19 @@ struct BankIntroFixtureHost: View {
     }
 }
 #endif
+
+#if DEBUG
+extension UITestArchetype {
+    static func transactionSearchPage(query: String, offset: Int) -> TransactionsResponse {
+        let data = Data("""
+        [{"id_transaction":"search-1","account_id":"acct-1","name":"GOOGLE WORKSPACE","merchant_name":"Google Workspace","amount":8.40,"currency":"USD","transaction_date":"2026-09-01","pending":false,"is_active":true,"created_at":"2026-09-01","updated_at":"2026-09-01"},
+         {"id_transaction":"search-2","account_id":"acct-1","name":"GOOGLE WORKSPACE EXTRA","merchant_name":"Google Workspace","amount":12,"currency":"USD","transaction_date":"2026-09-08","pending":true,"is_active":true,"created_at":"2026-09-08","updated_at":"2026-09-08"},
+         {"id_transaction":"search-3","account_id":"acct-1","name":"UBER TRIP","merchant_name":"Uber","amount":25,"currency":"USD","transaction_date":"2026-09-09","pending":false,"is_active":true,"created_at":"2026-09-09","updated_at":"2026-09-09"}]
+        """.utf8)
+        let all = (try? JSONDecoder().decode([Transaction].self, from: data)) ?? []
+        let matches = all.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.displayName.localizedCaseInsensitiveContains(query) }
+            .sorted { $0.transactionDate > $1.transactionDate }
+        return TransactionsResponse(added: 0, cursor: nil, hasMore: false, transactions: Array(matches.dropFirst(offset)))
+    }
+}
+#endif

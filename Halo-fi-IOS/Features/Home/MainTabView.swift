@@ -208,7 +208,7 @@ struct MainTabView: View {
             guard currentRoute == .main, let destination = notice.object as? VoiceAppAction.Destination else { return }
             let tab: MainTab
             switch destination {
-            case .money, .budget: tab = .money
+            case .money, .budget, .accounts, .transactions, .calendar, .income, .bills, .investments, .attention: tab = .money
             case .benefits: tab = .benefits
             case .settings: tab = .settings
             }
@@ -218,11 +218,12 @@ struct MainTabView: View {
             }
             conversationOriginTab = nil
             NotificationCenter.default.post(name: VoiceNavigation.accepted, object: nil)
+            VoiceNavigation.pendingDestination = tab == .money && destination != .money ? destination : nil
             VoiceNavigation.pendingBudget = destination == .budget
             selectedTab = tab
             Task { @MainActor in
                 await Task.yield()
-                if destination == .budget {
+                if VoiceNavigation.pendingDestination != nil {
                     NotificationCenter.default.post(name: VoiceNavigation.budgetRequested, object: nil)
                 }
                 UIAccessibility.post(notification: .screenChanged, argument: nil)
