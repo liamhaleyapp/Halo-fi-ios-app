@@ -45,6 +45,21 @@ final class SpendableUITests: XCTestCase {
         XCTAssertTrue(WeeklySpendableCard(data: unavailable, onReview: {}).previewSummary.contains("Review bank data"))
     }
 
+    func testLowEstimateIncludesCashLimitedZeroAndNearExhaustion() throws {
+        var value = try sample()
+        XCTAssertFalse(value.isLow)
+        value.amountCents = 0
+        value.weeklySpentCents = 0
+        XCTAssertTrue(value.isLow, "Cash-limited zero must not look healthy")
+        XCTAssertEqual(value.progress, 0, "The bar must not invent spending")
+        value.amountCents = 1000
+        value.weeklySpentCents = 69000
+        XCTAssertTrue(value.isLow)
+        XCTAssertEqual(value.progress, 69000.0 / 70000, accuracy: 0.00001)
+        value.amountCents = nil
+        XCTAssertFalse(value.isLow, "Unavailable is not zero")
+    }
+
     func testEditorRejectsPartialNumbersAndParsesLocaleCents() {
         let us = Locale(identifier: "en_US")
         XCTAssertEqual(SpendableSetupSheet.cents("5,000.25",locale:us),500025)

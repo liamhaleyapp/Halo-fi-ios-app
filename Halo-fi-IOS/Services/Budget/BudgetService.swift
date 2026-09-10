@@ -114,7 +114,12 @@ final class BudgetService: BudgetServiceProtocol {
     }
 
     func getSpendableSetup() async throws -> SpendableSetup {
-        try await networkService.authenticatedRequest(endpoint: spendableSetupEndpoint, method: .GET,
+        if let fixture = UITestArchetype.spendableFixture, let settings = fixture.settings {
+            // Exercise the real loading UI without contacting a user's backend.
+            try await Task.sleep(for: .seconds(2))
+            return SpendableSetup(settings: settings, revision: "fixture", suggestedIncomeCents: 450000, candidates: [])
+        }
+        return try await networkService.authenticatedRequest(endpoint: spendableSetupEndpoint, method: .GET,
             body: nil, responseType: SpendableSetup.self)
     }
 

@@ -61,6 +61,12 @@ enum UITestArchetype: String, CaseIterable {
 
     static var isActive: Bool { current != nil }
 
+    static var spendableFixture: WeeklySpendable? {
+        guard isActive, ProcessInfo.processInfo.arguments.contains("--ui-test-spendable") else { return nil }
+        let json = #"{"status":"ready","amount_cents":60000,"weekly_allowance_cents":70000,"weekly_spent_cents":10000,"month_remaining_cents":240000,"cash_cap_cents":180000,"fixed_cents":150000,"bills_reserved_cents":150000,"card_reserve_cents":20000,"days_until_reset":4,"warnings":[],"settings":{"base_cents":450000,"savings_cents":10000,"reset_weekday":0,"bills":[{"id":"rent","label":"Rent","amount_cents":150000,"frequency":"MONTHLY","due_on":"2026-10-01"}],"confirmed":true}}"#
+        return try? JSONDecoder().decode(WeeklySpendable.self, from: Data(json.utf8))
+    }
+
     var capabilities: UserCapabilities {
         switch self {
         case .none:
@@ -264,7 +270,16 @@ enum UITestArchetype: String, CaseIterable {
          "ssi_profile": {"is_blind": \(self == .ssiBlind || self == .ssiWatch || self == .both), "has_able_account": false, "able_balance_cents": null, "burial_fund_cents": null},
          "ssi_alerts": [], "alerts": [], "as_of_utc": "2026-09-03T12:00:00Z"}
         """
-        return try? JSONDecoder().decode(BudgetOverview.self, from: Data(json.utf8))
+        var overview = try? JSONDecoder().decode(BudgetOverview.self, from: Data(json.utf8))
+        if let fixture = Self.spendableFixture {
+            overview?.spendable = fixture
+        }
+        if Self.isActive, ProcessInfo.processInfo.arguments.contains("--ui-test-fixed-expenses") {
+            overview?.fixedExpenses = FixedExpenses(monthlyCents: 150000, billCents: 150000,
+                subscriptionCents: 0, count: 1, billCount: 1, subscriptionCount: 0,
+                variesCount: 0, items: [], spentThisMonthCents: 150000, unansweredCount: 0)
+        }
+        return overview
     }
 }
 

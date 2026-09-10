@@ -72,6 +72,13 @@ struct WeeklySpendable: Codable, Equatable {
         case billsReservedCents = "bills_reserved_cents", cardReserveCents = "card_reserve_cents"
         case resetOn = "reset_on", daysUntilReset = "days_until_reset"
     }
+    /// A zero or nearly exhausted estimate needs attention even when the monthly
+    /// plan is healthy and only the cash reserve limits what can be spent.
+    var isLow: Bool {
+        if status == "shortfall" || (overCents ?? 0) > 0 { return true }
+        guard let amountCents else { return false }
+        return amountCents <= 0 || Double(amountCents) <= Double(max(0, weeklyAllowanceCents ?? 0)) * 0.1
+    }
     var progress: Double {
         guard let allowance = weeklyAllowanceCents, allowance > 0 else { return (weeklySpentCents ?? 0) > 0 ? 1 : 0 }
         return min(1, max(0, Double(weeklySpentCents ?? 0) / Double(allowance)))

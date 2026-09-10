@@ -27,13 +27,14 @@ import SwiftUI
 
 struct WeeklySpendableCard: View {
     let data: WeeklySpendable
-    var onReview: () -> Void
+    var onReview: (() -> Void)? = nil
+    var showsDetails = false
 
     @ScaledMetric(relativeTo: .largeTitle) private var figureSize: CGFloat = 40
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 10
 
     private var tone: Color {
-        if data.status == "shortfall" || (data.overCents ?? 0) > 0 { return .haloNegative }
+        if data.isLow { return .haloNegative }
         return data.amountCents == nil ? .haloTextSecondary : .haloPositive
     }
 
@@ -55,14 +56,37 @@ struct WeeklySpendableCard: View {
     }
 
     var body: some View {
-        Button(action: onReview) {
+        Group {
+            if let onReview {
+                Button(action: onReview) { content }
+                    .buttonStyle(HapticPlainButtonStyle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(previewSummary)
+                    .accessibilityHint("Opens your spending plan and calculation.")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("weekly-spendable-button")
+            } else {
+                content
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(previewSummary + (showsDetails ? ". " + spendingLabel : ""))
+                    .accessibilityIdentifier("weekly-spendable-summary")
+            }
+        }
+    }
+
+    private var spendingLabel: String {
+        guard let spent = data.weeklySpentCents, let allowance = data.weeklyAllowanceCents else { return "" }
+        return "\(Self.money(spent)) spent of \(Self.money(allowance)) this week."
+    }
+
+    private var content: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Circle().fill(tone).frame(width: 10, height: 10)
                     Text("Safe to spend this week").font(.haloTitle)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    HaloChevron()
+                    if onReview != nil { HaloChevron() }
                 }
                 Text(previewAmount)
                     .font(data.amountCents == nil ? .headline : .haloDisplay(figureSize))
@@ -71,11 +95,13 @@ struct WeeklySpendableCard: View {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.haloTextSecondary.opacity(0.18))
-                            Capsule().fill(data.status == "shortfall" || (data.overCents ?? 0) > 0
-                                ? DesignTokens.ToneText.act : DesignTokens.ToneText.positive)
+                            Capsule().fill(data.isLow ? DesignTokens.ToneText.act : DesignTokens.ToneText.positive)
                                 .frame(width: geometry.size.width * data.progress)
                         }
                     }.frame(height: barHeight)
+                    if showsDetails && !spendingLabel.isEmpty {
+                        Text(spendingLabel).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                    }
                     if let resetLabel {
                         Text(resetLabel).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
                     }
@@ -93,16 +119,80 @@ struct WeeklySpendableCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(tone.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(HapticPlainButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(previewSummary)
-        .accessibilityHint("Opens your spending plan and calculation.")
     }
 
     static func money(_ cents: Int) -> String { (Double(cents)/100).formatted(.currency(code: "USD")) }
     static func wholeDollars(_ cents: Int) -> String {
         (max(0,cents)/100).formatted(.currency(code: "USD").precision(.fractionLength(0)))
+    }
+}
+
+private struct SpendableSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let tint: Color
+    let content: () -> Content
+
+    init(_ title: String, icon: String, tint: Color, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title; self.icon = icon; self.tint = tint; self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                HaloIconTile(icon: icon, tint: tint).accessibilityHidden(true)
+                Text(title).font(.haloTitle).fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            content()
+        }
+        .foregroundStyle(Color.haloTextPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .haloCard(tint: tint)
+    }
+}
+
+struct SpendableCalculationCard: View {
+    let data: WeeklySpendable
+
+    var body: some View {
+        if let cap = data.cashCapCents {
+            SpendableSection("Your calculation", icon: "chart.bar.fill", tint: .teal) {
+                if cap < max(0, (data.weeklyAllowanceCents ?? 0) - (data.weeklySpentCents ?? 0)) {
+                    Text("Your linked cash limits this week's estimate to \(WeeklySpendableCard.money(data.amountCents ?? 0)) after reserves.")
+                        .font(.headline)
+                }
+                calculationRow("Monthly plan remaining", cents: data.monthRemainingCents)
+                calculationRow("Fixed bills each month", cents: data.fixedCents)
+                calculationRow("Reserved for unpaid bills", cents: data.billsReservedCents)
+                calculationRow("Reserved for cards, including pending", cents: data.cardReserveCents)
+                calculationRow("Cash left after reserves", cents: cap)
+                Text("Safe to spend is the smallest of your remaining weekly allowance, monthly plan and cash after reserves. The bar fills as you use your weekly allowance.")
+                    .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                if (data.bufferCents ?? 0) > 0 {
+                    calculationRow("Month-end buffer", cents: data.bufferCents)
+                }
+                ForEach(data.warnings ?? [], id: \.self) { warning in
+                    Text(warning).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                }
+            }
+        } else if data.amountCents == nil || !(data.warnings ?? []).isEmpty {
+            SpendableSection("About this estimate", icon: "info.circle.fill", tint: .indigo) {
+                Text(data.spokenSummary).font(.subheadline)
+                ForEach(data.warnings ?? [], id: \.self) { Text($0).font(.subheadline) }
+            }
+        }
+    }
+
+    @ViewBuilder private func calculationRow(_ title: String, cents: Int?) -> some View {
+        if let cents {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                Text(WeeklySpendableCard.money(cents)).font(.headline)
+            }.accessibilityElement(children: .combine)
+        }
     }
 }
 
@@ -123,111 +213,108 @@ struct SpendableSetupSheet: View {
     private let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     var body: some View {
         NavigationStack {
-            Form {
-                if let setup {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // The already-loaded estimate stays visible while editable settings load.
                     if let value = dataManager.overview?.spendable {
-                        Section("This week") {
-                            Text(value.spokenSummary).fixedSize(horizontal: false, vertical: true)
-                            if let spent = value.weeklySpentCents, let allowance = value.weeklyAllowanceCents {
-                                Text("\(WeeklySpendableCard.money(spent)) spent of \(WeeklySpendableCard.money(allowance)) this week.")
+                        WeeklySpendableCard(data: value, showsDetails: true)
+                        SpendableCalculationCard(data: value)
+                    }
+                    if let setup {
+                        SpendableSection("Your monthly plan", icon: "calendar", tint: .indigo) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Monthly amount")
+                                TextField("Dollars", text: $base).keyboardType(.decimalPad)
+                                    .accessibilityLabel("Monthly budget amount in dollars")
                             }
-                            ForEach(value.warnings ?? [], id: \.self) { Text($0) }
-                        }
-                    }
-                    if let value = dataManager.overview?.spendable, let cap = value.cashCapCents {
-                        Section("Your calculation") {
-                            Text("\(WeeklySpendableCard.money(value.fixedCents ?? 0)) reserved each month for fixed bills.")
-                            Text("\(WeeklySpendableCard.money(cap)) available after unpaid bills, card balances and your savings commitment.")
-                            Text("We show the smaller of this cash amount and your remaining weekly allowance. The monthly plan is divided by the actual days in the month.")
-                            if (value.bufferCents ?? 0) > 0 {
-                                Text("\(WeeklySpendableCard.money(value.bufferCents ?? 0)) held in your month-end buffer.")
+                            Text("Use your expected monthly income or choose your own amount. Confirming saves this amount until you change it.")
+                                .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                            if setup.suggestedIncomeCents > 0 {
+                                Button("Use income estimate: \(WeeklySpendableCard.money(setup.suggestedIncomeCents))") {
+                                    base = Self.input(setup.suggestedIncomeCents)
+                                }.frame(minHeight: 44)
                             }
+                            VStack(alignment: .leading) {
+                                Text("Savings commitment (optional)")
+                                TextField("Dollars", text: $savings).keyboardType(.decimalPad)
+                                    .accessibilityLabel("Optional monthly savings commitment in dollars")
+                            }
+                            Picker("Week resets on", selection: $weekday) {
+                                ForEach(0..<7) { day in Text(weekdays[day]).tag(day) }
+                            }.disabled(setup.revision != nil)
+                            Text(setup.revision == nil
+                                 ? "Choose Monday or the weekday you usually receive your income."
+                                 : "The reset day stays fixed to preserve your weekly spending history.")
+                                .font(.footnote).foregroundStyle(Color.haloTextSecondary)
                         }
-                    }
-                    Section {
-                        VStack(alignment: .leading) {
-                            Text("Monthly amount")
-                            TextField("Dollars", text: $base).keyboardType(.decimalPad)
-                                .accessibilityLabel("Monthly budget amount in dollars")
-                        }
-                        Text("Use your expected monthly income or choose your own amount. Confirming saves this amount until you change it.")
-                            .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
-                        if setup.suggestedIncomeCents > 0 {
-                            Button("Use income estimate: \(WeeklySpendableCard.money(setup.suggestedIncomeCents))") {
-                                base = Self.input(setup.suggestedIncomeCents)
-                            }.frame(minHeight: 44)
-                        }
-                        VStack(alignment: .leading) {
-                            Text("Savings commitment (optional)")
-                            TextField("Dollars", text: $savings).keyboardType(.decimalPad)
-                                .accessibilityLabel("Optional monthly savings commitment in dollars")
-                        }
-                        Picker("Week resets on", selection: $weekday) {
-                            ForEach(0..<7) { day in Text(weekdays[day]).tag(day) }
-                        }.disabled(setup.revision != nil)
-                        Text(setup.revision == nil
-                             ? "Choose Monday or the weekday you usually receive your income."
-                             : "The reset day stays fixed to preserve your weekly spending history.")
-                            .font(.footnote).foregroundStyle(Color.haloTextSecondary)
-                    } header: { Text("Your monthly plan") }
 
-                    Section {
-                        Text("Include rent, utilities, subscriptions and loan payments you must make. Leave groceries and other day-to-day purchases out. Review each amount and due date before confirming.")
-                            .font(.subheadline)
-                        ForEach(bills) { bill in
-                            Button { editingBill = bill } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(bill.label).font(.headline)
-                                    Text("\(WeeklySpendableCard.money(bill.amountCents)), \(bill.cadence). Due \(Self.readableDate(bill.dueOn)).")
-                                        .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
-                                }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                            }.accessibilityElement(children: .combine)
-                                .accessibilityHint("Edit this fixed bill or remove it from the plan.")
-                        }
-                        Button("Add a fixed bill", systemImage: "plus") {
-                            editingBill = SpendableBill(id: UUID().uuidString, label: "", amountCents: 0,
-                                frequency: "MONTHLY", dueOn: Self.dateString(Date()))
-                        }.frame(minHeight: 48)
-                    } header: { Text("Fixed bills — \(bills.count)") }
-
-                    let candidates = setup.candidates.filter { candidate in
-                        !bills.contains { $0.streamId == candidate.streamId } && !excludedStreams.contains(candidate.streamId ?? "")
-                    }
-                    if !candidates.isEmpty {
-                        Section("Detected bills to review") {
-                            Text("These are suggestions. They do not affect your allowance until you add and confirm them. If one matches a manual bill, edit that bill and link the detected bill there.")
+                        SpendableSection("Fixed bills — \(bills.count)", icon: "pin.fill", tint: .teal) {
+                            Text("Include rent, utilities, subscriptions and loan payments you must make. Leave groceries and other day-to-day purchases out. Review each amount and due date before confirming.")
                                 .font(.subheadline)
-                            ForEach(candidates) { bill in
+                            ForEach(bills) { bill in
                                 Button { editingBill = bill } label: {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(bill.label).font(.headline)
                                         Text("\(WeeklySpendableCard.money(bill.amountCents)), \(bill.cadence). Due \(Self.readableDate(bill.dueOn)).")
                                             .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
-                                    }.frame(minHeight: 48)
+                                    }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                                 }.accessibilityElement(children: .combine)
-                                    .accessibilityHint("Review this suggestion before adding it as a fixed bill.")
+                                    .accessibilityHint("Edit this fixed bill or remove it from the plan.")
+                            }
+                            Button("Add a fixed bill", systemImage: "plus") {
+                                editingBill = SpendableBill(id: UUID().uuidString, label: "", amountCents: 0,
+                                    frequency: "MONTHLY", dueOn: Self.dateString(Date()))
+                            }.frame(minHeight: 48)
+                        }
+
+                        let candidates = setup.candidates.filter { candidate in
+                            !bills.contains { $0.streamId == candidate.streamId } && !excludedStreams.contains(candidate.streamId ?? "")
+                        }
+                        if !candidates.isEmpty {
+                            SpendableSection("Detected bills to review", icon: "checklist", tint: .orange) {
+                                Text("These are suggestions. They do not affect your allowance until you add and confirm them. If one matches a manual bill, edit that bill and link the detected bill there.")
+                                    .font(.subheadline)
+                                ForEach(candidates) { bill in
+                                    Button { editingBill = bill } label: {
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(bill.label).font(.headline)
+                                            Text("\(WeeklySpendableCard.money(bill.amountCents)), \(bill.cadence). Due \(Self.readableDate(bill.dueOn)).")
+                                                .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                                        }.frame(minHeight: 48)
+                                    }.accessibilityElement(children: .combine)
+                                        .accessibilityHint("Review this suggestion before adding it as a fixed bill.")
+                                }
                             }
                         }
-                    }
-                    Section {
-                        if !excludedStreams.isEmpty {
-                            Button("Review bills previously marked not fixed") { excludedStreams = [] }
-                                .frame(minHeight: 44)
+                        SpendableSection("Review and save", icon: "checkmark.circle.fill", tint: .blue) {
+                            if !excludedStreams.isEmpty {
+                                Button("Review bills previously marked not fixed") { excludedStreams = [] }
+                                    .frame(minHeight: 44)
+                            }
+                            Text("Unused weekly allowance goes into a month-end buffer. Overspending reduces later weeks. Fixed bill payments are excluded from weekly spending when HaloFi can match them.")
+                            Text("We reserve full reported card balances, including pending card charges. Investments are excluded. This is an estimate using your confirmed plan and linked account data.")
+                            if let error { Text(error).foregroundStyle(Color.haloNegative).accessibilityLabel("Error. \(error)") }
+                            Button(saving ? "Saving…" : "Confirm monthly amount and fixed bills") { save() }
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                                .buttonStyle(.borderedProminent)
+                                .disabled(saving || Self.cents(base) == nil || Self.cents(savings) == nil)
                         }
-                        Text("Unused weekly allowance goes into a month-end buffer. Overspending reduces later weeks. Fixed bill payments are excluded from weekly spending when HaloFi can match them.")
-                        Text("We reserve full reported card balances, including pending card charges. Investments are excluded. This is an estimate using your confirmed plan and linked account data.")
-                        if let error { Text(error).foregroundStyle(Color.haloNegative).accessibilityLabel("Error. \(error)") }
-                        Button(saving ? "Saving…" : "Confirm monthly amount and fixed bills") { save() }
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                            .disabled(saving || Self.cents(base) == nil || Self.cents(savings) == nil)
+                    } else if let error {
+                        SpendableSection("Settings unavailable", icon: "exclamationmark.circle", tint: .orange) {
+                            Text(error).foregroundStyle(Color.haloTextSecondary)
+                            Button("Try again") { Task { await load() } }.frame(minHeight: 44)
+                        }
+                    } else {
+                        SpendableSection("Your plan settings", icon: "slider.horizontal.3", tint: .indigo) {
+                            Text("Loading settings…").foregroundStyle(Color.haloTextSecondary)
+                        }
                     }
-                } else if let error {
-                    Text(error)
-                    Button("Try again") { Task { await load() } }
-                } else {
-                    ProgressView("Loading your spending plan")
                 }
+                .textFieldStyle(.roundedBorder)
+                .padding(20)
+                .readableContentWidth()
             }
+            .background(Color.haloBackground)
             .navigationTitle("Safe to spend")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -267,7 +354,10 @@ struct SpendableSetupSheet: View {
             weekday = value.settings.resetWeekday
             bills = value.settings.bills
             excludedStreams = value.settings.excludedStreamIds ?? []
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            guard !Task.isCancelled, owner == dataManager.spendableSessionID else { return }
+            self.error = error.localizedDescription
+        }
     }
     private func save() {
         guard let amount = Self.cents(base), let saved = Self.cents(savings), let setup, let sessionID else { return }
@@ -406,7 +496,7 @@ struct BudgetView: View {
                 Color.haloBackground.ignoresSafeArea()
 
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    VStack(spacing: 12) {
                         if let overview = dataManager.overview {
                             monthSubtitle(overview)
                             heroCard(overview)
@@ -598,12 +688,14 @@ struct BudgetView: View {
     @ViewBuilder
     private func fixedExpensesCard(_ overview: BudgetOverview) -> some View {
         if let spendable = overview.spendable, let settings = spendable.settings, let fixed = spendable.fixedCents {
-            Button { showingSpendableSetup = true } label: {
+            NavigationLink {
+                BillsView()
+            } label: {
                 HaloRow {
                     HaloIconTile(icon: "pin.fill", tint: .teal)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Fixed expenses").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
-                        Text("\(WeeklySpendableCard.money(fixed)) a month across \(settings.bills.count) confirmed bills")
+                        Text("\(WeeklySpendableCard.money(fixed)) a month across \(VoiceOverFormatter.count(settings.bills.count, singular: "confirmed bill", plural: "confirmed bills"))")
                             .font(.subheadline).foregroundColor(.haloTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -612,8 +704,10 @@ struct BudgetView: View {
                 }.padding(16).frame(minHeight: 72).haloCard(tint: .teal)
             }.buttonStyle(HapticPlainButtonStyle())
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Fixed expenses. \(VoiceOverFormatter.dollarsAndCents(fixed)) a month across \(settings.bills.count) confirmed bills.")
-                .accessibilityHint("Review the fixed bills used in your safe-to-spend plan.")
+                .accessibilityLabel("Fixed expenses. \(VoiceOverFormatter.dollarsAndCents(fixed)) a month across \(VoiceOverFormatter.count(settings.bills.count, singular: "confirmed bill", plural: "confirmed bills")).")
+                .accessibilityHint("Opens bills and subscriptions. Edit your weekly plan's reserved bills in Safe to spend.")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("budget-fixed-expenses")
         } else if let fx = overview.fixedExpenses {
             let spent = overview.spending.totalCents
             let variable = max(0, spent - fx.spentThisMonthCents)
@@ -649,6 +743,8 @@ struct BudgetView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Fixed expenses. \(line)" + (fx.count > 0 ? " \(second)" : ""))
             .accessibilityHint("Opens bills and subscriptions. Everything else this month is variable spending.")
+            .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("budget-fixed-expenses")
         }
     }
 

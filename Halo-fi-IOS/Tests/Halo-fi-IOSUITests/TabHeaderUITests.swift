@@ -51,6 +51,56 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testFixedExpensesOpensBillsWithAndWithoutSpendingPlan() {
+        for hasPlan in [false, true] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-fixed-expenses"]
+            if hasPlan { app.launchArguments.append("--ui-test-spendable") }
+            app.launch()
+            let budget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
+            XCTAssertTrue(scrollTo(budget, in: app))
+            budget.tap()
+            let fixed = app.descendants(matching: .any)["budget-fixed-expenses"].firstMatch
+            XCTAssertTrue(scrollTo(fixed, in: app))
+            // Tap the visible row's coordinates to catch mismatched hit regions.
+            fixed.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            XCTAssertTrue(app.navigationBars["Bills"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.navigationBars["Safe to spend"].exists)
+            app.terminate()
+        }
+    }
+
+    func testSpendableDetailShowsSummaryWhileSettingsLoadAndCloses() {
+        checkSpendableDetail(largeText: false)
+    }
+
+    func testSpendableDetailAtLargestTextInDarkMode() {
+        checkSpendableDetail(largeText: true)
+    }
+
+    private func checkSpendableDetail(largeText: Bool) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-archetype=ssi_watch", "--ui-test-spendable", "-themeMode", largeText ? "Dark" : "Light"]
+        if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+        app.launch()
+        let budget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Budget.'")).firstMatch
+        XCTAssertTrue(scrollTo(budget, in: app))
+        budget.tap()
+        let preview = app.descendants(matching: .any)["weekly-spendable-button"].firstMatch
+        XCTAssertTrue(scrollTo(preview, in: app))
+        preview.tap()
+        let summary = app.descendants(matching: .any)["weekly-spendable-summary"].firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 1))
+        XCTAssertTrue(summary.label.contains("$600"))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = largeText ? "Safe to spend largest text dark" : "Safe to spend detail"; shot.lifetime = .keepAlways; add(shot)
+        let monthly = app.textFields["Monthly budget amount in dollars"]
+        XCTAssertTrue(scrollTo(monthly, in: app, tries: 18))
+        XCTAssertEqual(monthly.value as? String, "4500.00")
+        app.navigationBars.buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 5))
+    }
+
     func testRecentTransactionsSearchShowsMatchesAndEmptyState() {
         let app = launch("ssi_watch")
         let recent = app.buttons["moneyRow-Recent transactions"]
