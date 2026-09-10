@@ -27,9 +27,10 @@ struct BudgetOverview: Codable, Equatable {
     /// Fixed vs variable (2026-09-05): confirmed bills + subscriptions.
     var fixedExpenses: FixedExpenses? = nil
     var pending: PendingBankActivity? = nil
+    var spendable: WeeklySpendable? = nil
 
     enum CodingKeys: String, CodingKey {
-        case month, period, spending, pending
+        case month, period, spending, pending, spendable
         case budgetStatus = "budget_status"
         case monthlyIncome = "monthly_income"
         case ssiStatus = "ssi_status"
@@ -38,6 +39,95 @@ struct BudgetOverview: Codable, Equatable {
         case alerts
         case asOfUtc = "as_of_utc"
         case fixedExpenses = "fixed_expenses"
+    }
+}
+
+struct WeeklySpendable: Codable, Equatable {
+    let status: String
+    var amountCents: Int?
+    var weeklyAllowanceCents: Int?
+    var weeklySpentCents: Int?
+    var monthRemainingCents: Int?
+    var shortfallCents: Int?
+    var overCents: Int?
+    var bufferCents: Int?
+    var cashCapCents: Int?
+    var fixedCents: Int?
+    var billsReservedCents: Int?
+    var cardReserveCents: Int?
+    var resetOn: String?
+    var daysUntilReset: Int?
+    var month: String?
+    var warnings: [String]?
+    var summary: String?
+    var message: String?
+    var prorated: Bool?
+    var settings: SpendableSettings?
+    enum CodingKeys: String, CodingKey {
+        case status, month, warnings, summary, message, prorated, settings
+        case amountCents = "amount_cents", weeklyAllowanceCents = "weekly_allowance_cents"
+        case weeklySpentCents = "weekly_spent_cents", monthRemainingCents = "month_remaining_cents"
+        case shortfallCents = "shortfall_cents", overCents = "over_cents", bufferCents = "buffer_cents"
+        case cashCapCents = "cash_cap_cents", fixedCents = "fixed_cents"
+        case billsReservedCents = "bills_reserved_cents", cardReserveCents = "card_reserve_cents"
+        case resetOn = "reset_on", daysUntilReset = "days_until_reset"
+    }
+    var progress: Double {
+        guard let allowance = weeklyAllowanceCents, allowance > 0 else { return (weeklySpentCents ?? 0) > 0 ? 1 : 0 }
+        return min(1, max(0, Double(weeklySpentCents ?? 0) / Double(allowance)))
+    }
+    var spokenSummary: String {
+        summary ?? message ?? "Your safe-to-spend estimate is unavailable. Please try again."
+    }
+}
+
+struct SpendableBill: Codable, Equatable, Identifiable {
+    var id: String
+    var label: String
+    var amountCents: Int
+    var frequency: String
+    var dueOn: String
+    var streamId: String?
+    enum CodingKeys: String, CodingKey {
+        case id, label, frequency
+        case amountCents = "amount_cents", dueOn = "due_on", streamId = "stream_id"
+    }
+    var cadence: String {
+        switch frequency {
+        case "WEEKLY": return "weekly"
+        case "BIWEEKLY": return "every two weeks"
+        case "SEMI_MONTHLY": return "twice a month"
+        case "QUARTERLY": return "every three months"
+        case "ANNUALLY": return "yearly"
+        default: return "monthly"
+        }
+    }
+}
+
+struct SpendableSettings: Codable, Equatable {
+    var baseCents: Int
+    var savingsCents: Int
+    var resetWeekday: Int
+    var bills: [SpendableBill]
+    var confirmed: Bool = true
+    var expectedRevision: String?
+    var excludedStreamIds: [String]?
+    enum CodingKeys: String, CodingKey {
+        case bills, confirmed
+        case baseCents = "base_cents", savingsCents = "savings_cents"
+        case resetWeekday = "reset_weekday", expectedRevision = "expected_revision"
+        case excludedStreamIds = "excluded_stream_ids"
+    }
+}
+
+struct SpendableSetup: Codable {
+    var settings: SpendableSettings
+    var revision: String?
+    var suggestedIncomeCents: Int
+    var candidates: [SpendableBill]
+    enum CodingKeys: String, CodingKey {
+        case settings, revision, candidates
+        case suggestedIncomeCents = "suggested_income_cents"
     }
 }
 

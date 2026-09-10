@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Halo_fi_IOS
 
 final class VoiceBargeInTests: XCTestCase {
@@ -99,6 +100,59 @@ private final class InterruptionAgentSocket: AgentWebSocketManagerProtocol {
 
 @MainActor
 final class ConversationInterruptionTests: XCTestCase {
+    func testWorkflowActivityRequiresCurrentTurnAndDoesNotChangeVoiceState() async throws {
+        let coordinator = ConversationCoordinator(agentWebSocket: InterruptionAgentSocket(),
+            sttService: ElevenLabsSTTService(networkService: MockNetworkService()))
+        let player = StreamingAudioPlayer()
+        try await startAnswer(coordinator, player)
+        let turn = try XCTUnwrap(coordinator.currentTurnId)
+        coordinator.handleAgentEvent(.workflowActivity(.init(type: "workflow_activity", workflow: "expense",
+            phase: "working", message: "Checking expense details.", turnId: "stale")))
+        XCTAssertNil(coordinator.workflowActivity)
+        coordinator.handleAgentEvent(.workflowActivity(.init(type: "workflow_activity", workflow: "expense",
+            phase: "working", message: "Checking expense details.", turnId: turn)))
+        XCTAssertEqual(coordinator.workflowActivity?.phase, "working")
+        XCTAssertEqual(coordinator.state, .speaking)
+        coordinator.cancelCurrentTurn()
+        XCTAssertEqual(coordinator.workflowActivity?.phase, "interrupted")
+        coordinator.handleAgentEvent(.workflowActivity(.init(type: "workflow_activity", workflow: "expense",
+            phase: "saved", message: "Saved.", turnId: turn)))
+        XCTAssertEqual(coordinator.workflowActivity?.phase, "interrupted")
+        coordinator.disconnect()
+        XCTAssertNil(coordinator.workflowActivity)
+    }
+
+    func testWorkflowCardRendersAtLargestDynamicTypeInBothAppearances() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let activity = WorkflowActivityPayload(type: "workflow_activity", workflow: "expense",
+                phase: "needs_confirmation", message: "Review the expense details and confirm to save.", turnId: "render")
+            let renderer = ImageRenderer(content: WorkflowActivityCard(activity: activity)
+                .environment(\.colorScheme, scheme)
+                .environment(\.dynamicTypeSize, .accessibility5)
+                .frame(width: 393)
+                .background(scheme == .dark ? Color.black : Color.white))
+            renderer.scale = 2
+            let image = try XCTUnwrap(renderer.uiImage)
+            XCTAssertGreaterThan(image.size.height, 100)
+            XCTAssertLessThan(image.size.height, 500)
+            let path = FileManager.default.temporaryDirectory.appendingPathComponent("workflow-\(scheme).png")
+            try image.pngData()?.write(to: path)
+            print("WORKFLOW_RENDER: \(path.path)")
+        }
+    }
+
+    func testWorkflowPayloadRoundTripsWithoutFinancialSpeechOrExtraEvents() throws {
+        let data = Data(#"{"type":"workflow_activity","workflow":"budget","phase":"needs_confirmation","message":"Review your proposal.","turn_id":"turn-1"}"#.utf8)
+        let message = try JSONDecoder().decode(AgentIncomingMessage.self, from: data)
+        guard case .workflowActivity(let activity) = message else { return XCTFail("Missing activity") }
+        XCTAssertEqual(activity.accessibleText, "Budget. Review your proposal.")
+        XCTAssertTrue(activity.isSupported)
+        XCTAssertFalse(activity.isWorking)
+        let decoded = try JSONDecoder().decode(AgentIncomingMessage.self, from: JSONEncoder().encode(message))
+        guard case .workflowActivity(let roundTrip) = decoded else { return XCTFail("Round trip failed") }
+        XCTAssertEqual(roundTrip.turnId, "turn-1")
+    }
+
     private func responseAudio() -> Data {
         var data = Data()
         func ascii(_ text: String) { data.append(contentsOf: text.utf8) }
@@ -164,6 +218,91 @@ final class ConversationInterruptionTests: XCTestCase {
         XCTAssertFalse(player.isPlaying, "Late cancelled speech must not restart playback")
         await Task.yield()
         XCTAssertEqual(socket.cancelled, [turn])
+        coordinator.disconnect()
+    }
+}
+
+
+extension ConversationInterruptionTests {
+    func testMicMuteDuringReplyDoesNotCancelPlaybackOrTurn() async throws {
+        let socket = InterruptionAgentSocket()
+        let coordinator = ConversationCoordinator(agentWebSocket: socket,
+            sttService: ElevenLabsSTTService(networkService: MockNetworkService()))
+        let player = StreamingAudioPlayer()
+        try await startAnswer(coordinator, player)
+        let turn = coordinator.currentTurnId
+        coordinator.setMicMuted(true)
+        XCTAssertTrue(coordinator.isMicMuted)
+        XCTAssertEqual(coordinator.currentTurnId, turn)
+        XCTAssertEqual(coordinator.state, .speaking)
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertTrue(socket.cancelled.isEmpty)
+        coordinator.setMuted(true)
+        XCTAssertTrue(player.isPlaying, "Speaker mute is volume, not cancellation")
+        XCTAssertEqual(coordinator.currentTurnId, turn)
+        coordinator.setMuted(false)
+        coordinator.disconnect()
+    }
+
+    func testMicButtonDuringProcessingOnlyMutesInput() async throws {
+        let socket = InterruptionAgentSocket()
+        let coordinator = ConversationCoordinator(agentWebSocket: socket,
+            sttService: ElevenLabsSTTService(networkService: MockNetworkService()))
+        coordinator.setInteractionMode(.text)
+        coordinator.setConversationMode(.handsFree)
+        await coordinator.sendText("Fixture question")
+        let turn = coordinator.currentTurnId
+        XCTAssertEqual(coordinator.state, .processing)
+        let viewModel = ConversationViewModel(coordinator: coordinator)
+        viewModel.toggleMicButton()
+        await Task.yield()
+        XCTAssertTrue(coordinator.isMicMuted)
+        XCTAssertEqual(coordinator.currentTurnId, turn)
+        XCTAssertEqual(coordinator.state, .processing)
+        XCTAssertTrue(socket.cancelled.isEmpty)
+        coordinator.disconnect()
+    }
+
+    func testReconnectReplacesStaleErrorAndDiscardsOldPlayback() async throws {
+        let socket = InterruptionAgentSocket()
+        let coordinator = ConversationCoordinator(agentWebSocket: socket,
+            sttService: ElevenLabsSTTService(networkService: MockNetworkService()))
+        let player = StreamingAudioPlayer()
+        try await startAnswer(coordinator, player)
+        coordinator.handleAgentEvent(.reconnecting)
+        XCTAssertEqual(coordinator.state, .connecting)
+        XCTAssertNil(coordinator.currentTurnId)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertFalse(player.isBuffering)
+        coordinator.handleAgentEvent(.sessionResumed)
+        XCTAssertEqual(coordinator.state, .idle)
+        coordinator.disconnect()
+    }
+}
+
+
+extension ConversationInterruptionTests {
+    func testSpeakerMutedWhileProcessingStillCompletesTheAudioPipeline() async throws {
+        let socket = InterruptionAgentSocket()
+        let coordinator = ConversationCoordinator(agentWebSocket: socket,
+            sttService: ElevenLabsSTTService(networkService: MockNetworkService()))
+        let player = StreamingAudioPlayer()
+        coordinator.configure(streamingAudioPlayer: player, audioFeedback: AudioFeedbackService(), transcriptStore: ConversationTranscriptStore())
+        coordinator.setInteractionMode(.text)
+        let ack = try JSONDecoder().decode(ConnectionAckPayload.self,
+            from: Data(#"{"type":"connection_ack","message":"Connected","connection_id":"interruption-test"}"#.utf8))
+        coordinator.handleAgentEvent(.connectionAck(ack))
+        await coordinator.sendText("Fixture question")
+        let turn = try XCTUnwrap(coordinator.currentTurnId)
+        coordinator.setMuted(true)
+        player.appendAudioChunk(responseAudio().base64EncodedString())
+        let frame: [String: Any] = ["type": "audio_complete", "message": "Fixture answer.", "turn_id": turn]
+        let complete = try JSONDecoder().decode(AudioCompletePayload.self, from: JSONSerialization.data(withJSONObject: frame))
+        coordinator.handleAgentEvent(.audioComplete(complete))
+        XCTAssertTrue(player.isPlaying, "Muting before audio arrives must not strand the turn")
+        XCTAssertEqual(coordinator.state, .speaking)
+        XCTAssertEqual(coordinator.currentTurnId, turn)
+        XCTAssertTrue(socket.cancelled.isEmpty)
         coordinator.disconnect()
     }
 }

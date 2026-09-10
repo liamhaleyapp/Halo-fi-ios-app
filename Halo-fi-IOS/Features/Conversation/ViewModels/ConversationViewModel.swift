@@ -155,18 +155,15 @@ final class ConversationViewModel {
         if isHandsFree {
             Task {
                 switch state {
-                case .speaking:
-                    coordinator.stopSpeaking()
-                case .listening:
+                case .speaking, .processing, .connecting, .listening:
                     coordinator.setMicMuted(!coordinator.isMicMuted)
-                case .idle, .disconnected:
-                    // No live session: the big button IS "Start conversation".
+                case .idle, .disconnected, .error:
                     if !isSessionActive {
-                        await toggleSession()
+                        coordinator.disconnect()
+                        await coordinator.connect()
                         return
                     }
-                    if coordinator.isMicMuted { coordinator.setMicMuted(false) }
-                    await coordinator.startListening()
+                    coordinator.setMicMuted(!coordinator.isMicMuted)
                 default:
                     break
                 }

@@ -82,6 +82,18 @@ final class BudgetDataManager {
     private let attentionService: AttentionServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var sessionGeneration = UUID()
+    private var overviewGeneration = 0
+    private var overviewRefreshPending = false
+    var spendableSessionID: UUID { sessionGeneration }
+
+    func saveSpendable(_ settings: SpendableSettings, sessionID: UUID) async throws {
+        guard sessionID == sessionGeneration else { throw CancellationError() }
+        try await BudgetService.shared.saveSpendableSetup(settings)
+        guard sessionID == sessionGeneration else { throw CancellationError() }
+        markStale()
+        await refresh()
+        guard sessionID == sessionGeneration else { throw CancellationError() }
+    }
     /// Annotations needed so deinit can read this without crossing
     /// the @Observable wrapper or MainActor isolation.
     @ObservationIgnored
@@ -154,6 +166,8 @@ final class BudgetDataManager {
     /// person's budget, SSI figures, attention cards and bills must not
     /// survive into the next session.
     func clearAllData() {
+        overviewGeneration += 1
+        overviewRefreshPending = false
         sessionGeneration = UUID()
         pendingMutationRefresh?.cancel()
         pendingMutationRefresh = nil
@@ -301,6 +315,8 @@ final class BudgetDataManager {
     }
 
     func markStale() {
+        overviewGeneration += 1
+        if refreshTask != nil { overviewRefreshPending = true }
         lastFetched = nil
     }
 
@@ -321,6 +337,11 @@ final class BudgetDataManager {
         await task.value
         guard generation == sessionGeneration else { return }
         refreshTask = nil
+        if overviewRefreshPending {
+            overviewRefreshPending = false
+            await refresh(userTz: userTz)
+            return
+        }
         if attentionRefreshPending {
             // A card was resolved while the last fetch was in flight; pull once more.
             attentionRefreshPending = false
@@ -388,14 +409,15 @@ final class BudgetDataManager {
     }
 
     private func refreshOverview(userTz: String?, generation: UUID, userId: String?) async {
+        let revision = overviewGeneration
         do {
             let result = try await service.getOverview(userTz: userTz)
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, revision == overviewGeneration else { return }
             overview = result
             SnapshotCache.save(result, key: "budget_overview", userId: userId)
             lastFetched = Date()
         } catch {
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, revision == overviewGeneration else { return }
             Logger.error("BudgetDataManager: fetch overview failed: \(error)")
             self.error = BudgetError(underlying: error)
         }

@@ -139,6 +139,7 @@ struct VoiceModeInputArea: View {
     /// "Listening" status label appears below. The conversation is
     /// ended via the X close button in the header — no separate
     /// End button needed.
+    var onInterrupt: (() -> Void)? = nil
     var handsFree: HandsFreeOptions? = nil
 
     struct HandsFreeOptions {
@@ -153,14 +154,16 @@ struct VoiceModeInputArea: View {
                 isEnabled: isEnabled,
                 onTap: onMicTap,
                 sessionInactive: handsFree?.isSessionActive == false,
-                appearMuted: state != .speaking && (handsFree?.isMicMuted ?? false)
+                appearMuted: handsFree?.isMicMuted ?? false,
+                microphoneOnly: handsFree != nil
             )
 
-            if let handsFree {
-                Text(state == .speaking ? (handsFree.isMicMuted ? "Tap to interrupt Halo" : "Speak or tap to interrupt Halo") : !handsFree.isSessionActive ? "Tap the microphone to start" : handsFree.isMicMuted ? "Mic muted — tap mic to unmute" : state == .listening ? "Listening — tap mic to mute" : state.displayText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .accessibilityHidden(true)
+            if handsFree != nil {
+                if (state == .speaking || state == .processing), let onInterrupt {
+                    Button("Interrupt Halo", action: onInterrupt)
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Stops this answer so you can ask another question.")
+                }
             } else {
                 ModeToggleButton(
                     mode: .voice,

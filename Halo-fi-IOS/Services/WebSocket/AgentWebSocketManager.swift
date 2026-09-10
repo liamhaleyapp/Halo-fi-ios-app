@@ -85,8 +85,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     private let tokenStorage: TokenStorageProtocol
     private var sessionId: String?
     private var concurrentSessionRetries = 0
-    private let maxConcurrentSessionRetries = 3
-    private let maxReconnectAttempts = 5
+    private let maxConcurrentSessionRetries = 5
+    private let maxReconnectAttempts = 6
 
     /// Cumulative reconnect attempts across the current connect() session.
     /// Reset only by an explicit user-initiated connect() OR by a connection
@@ -101,6 +101,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
     /// The single listener task. Cancelled on disconnect, replaced on connect.
     private var listenerTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
+    private var hasBeenAdmitted = false
 
     /// Phase 12 — set by quick-action button flows that send a
     /// pre-prompt the moment the WS opens. Persisted so auto-
@@ -127,6 +129,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             throw AgentWebSocketError.missingToken
         }
 
+        hasBeenAdmitted = false
+        heartbeatTask?.cancel()
         // Tear down any existing connection cleanly
         listenerTask?.cancel()
         listenerTask = nil
@@ -154,7 +158,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         // takes precedence over skip_greeting; the backend ignores
         // skip_greeting when greeting=<id> is set.
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        var items: [URLQueryItem] = []
+        var items: [URLQueryItem] = [URLQueryItem(name: "client_heartbeat", value: "true")]
         if let customGreetingId, !customGreetingId.isEmpty {
             items.append(URLQueryItem(name: "greeting", value: customGreetingId))
         } else if skipGreeting {
@@ -173,6 +177,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
         // Create WebSocket connection
         var request = URLRequest(url: url)
+        request.timeoutInterval = 300
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let webSocketTask = URLSession.shared.webSocketTask(with: request)
         webSocketConnection = WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>(
@@ -199,6 +204,28 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         Logger.info("AgentWebSocket: Disconnecting")
 
         internalState = .disconnectedIntentionally
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        let closingListener = listenerTask
+        listenerTask = nil
+        // Signal end before the graceful WebSocket close handshake. The server
+        // can release admission immediately instead of waiting for TCP teardown.
+        if let closing = webSocketConnection {
+            let id = currentSessionId
+            Task {
+                let deadline = Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    if !Task.isCancelled { closing.close() }
+                }
+                defer { deadline.cancel() }
+                try? await closing.send(ClientMessagePayload(message: "", sessionId: id, type: "end_session"))
+                closing.close()
+                closingListener?.cancel()
+            }
+            webSocketConnection = nil
+        } else {
+            closingListener?.cancel()
+        }
 
         listenerTask?.cancel()
         listenerTask = nil
@@ -219,6 +246,11 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         // === Phase 1: Listen ===
         await listenPhase(generation: gen)
 
+        // A replaced listener must not cancel its replacement's heartbeat.
+        if generation == gen {
+            heartbeatTask?.cancel()
+            heartbeatTask = nil
+        }
         // === Phase 2: Reconnect (only if still current and not intentional) ===
         guard isCurrentGeneration(gen) else {
             Logger.info("AgentWebSocket: Listener exiting (stale generation)")
@@ -303,6 +335,8 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             let attempt = cumulativeReconnectAttempts
             internalState = .reconnecting(generation: gen, attempt: attempt)
 
+            lastError = nil
+            eventContinuation?.yield(.reconnecting)
             // Announce for VoiceOver
             UIAccessibility.post(
                 notification: .announcement,
@@ -325,10 +359,6 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             do {
                 try await performReconnect(generation: gen)
                 Logger.info("AgentWebSocket: Reconnected successfully")
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: "Reconnected. You can continue your conversation."
-                )
                 // Re-enter listen phase with the same generation. If it
                 // survives stableConnectionThreshold, the next call to
                 // reconnectPhase will reset cumulativeReconnectAttempts.
@@ -356,8 +386,10 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         }
 
         var urlComponents = URLComponents(string: "\(baseURL)/agent/ws")
-        var items: [URLQueryItem] = []
-        if let id = customInitialGreetingId, !id.isEmpty {
+        var items: [URLQueryItem] = [URLQueryItem(name: "client_heartbeat", value: "true")]
+        if hasBeenAdmitted {
+            items.append(URLQueryItem(name: "skip_greeting", value: "true"))
+        } else if let id = customInitialGreetingId, !id.isEmpty {
             // Honor the original custom greeting on reconnect — same
             // reason as the skip flag below.
             items.append(URLQueryItem(name: "greeting", value: id))
@@ -377,6 +409,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
 
         // Token via Authorization header (see connect()).
         var request = URLRequest(url: url)
+        request.timeoutInterval = 300
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let webSocketTask = URLSession.shared.webSocketTask(with: request)
         webSocketConnection = WebSocketConnection<AgentIncomingMessage, ClientMessagePayload>(
@@ -429,6 +462,9 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             eventContinuation?.yield(.voiceStatus(payload))
         case .turnCancelled(let payload):
             eventContinuation?.yield(.turnCancelled(payload))
+        case .workflowActivity(let payload):
+            eventContinuation?.yield(.workflowActivity(payload))
+
         case .appAction(let payload):
             eventContinuation?.yield(.appAction(payload))
         case .dataMutated(let payload):
@@ -440,8 +476,25 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
     }
 
     private func handleConnectionAck(_ ack: ConnectionAckPayload, generation gen: UInt64) {
+        let recovered = hasBeenAdmitted
+        hasBeenAdmitted = true
         concurrentSessionRetries = 0
+        lastError = nil
         internalState = .connected(generation: gen)
+        heartbeatTask?.cancel()
+        let connection = webSocketConnection
+        heartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.isCurrentGeneration(gen), self.isConnected else { return }
+                do {
+                    try await connection?.send(ClientMessagePayload(message: "", type: "heartbeat"))
+                    try await Task.sleep(for: .seconds(10))
+                } catch {
+                    if !Task.isCancelled { connection?.close() }
+                    return
+                }
+            }
+        }
         currentSessionId = ack.connectionId ?? ack.sessionId
         connectionAckMessage = "\(ack.message) - Session: \(currentSessionId ?? "none")"
         Logger.info("Connection acknowledged: \(ack.message)")
@@ -452,6 +505,10 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             Logger.debug("User ID: \(userId)")
         }
         eventContinuation?.yield(.connectionAck(ack))
+        if recovered {
+            eventContinuation?.yield(.sessionResumed)
+            UIAccessibility.post(notification: .announcement, argument: "Reconnected.")
+        }
     }
 
     private func handleStreamChunk(_ chunk: StreamChunkPayload) {
@@ -495,7 +552,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
             concurrentSessionRetries += 1
             Logger.info("AgentWebSocket: Concurrent session detected, closing connection to trigger reconnect (attempt \(concurrentSessionRetries)/\(maxConcurrentSessionRetries))")
             // Yield the error so the coordinator knows what happened
-            eventContinuation?.yield(.error(error))
+            eventContinuation?.yield(.reconnecting)
             // Close connection — this causes receive() to throw,
             // which naturally falls through to the reconnect phase
             webSocketConnection?.close()
@@ -524,7 +581,7 @@ final class AgentWebSocketManager: AgentWebSocketManagerProtocol {
         // to setState(.error). The .disconnected* states get set
         // via isConnected=false, which is reflected in the UI's
         // "Disconnected" header.
-        if Self.terminalErrorCodes.contains(error.code) {
+        if Self.terminalErrorCodes.contains(error.code) || error.code == "CONCURRENT_SESSION" {
             Logger.info("AgentWebSocket: Terminal error \(error.code) — stopping reconnect loop")
             internalState = .disconnectedIntentionally
             isConnected = false

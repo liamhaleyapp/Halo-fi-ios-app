@@ -197,6 +197,27 @@ struct VoiceStatusPayload: Codable, Sendable {
     let data: [String: AnyCodable]?
 }
 
+/// Real handler milestones, correlated to the current turn. No generated financial text.
+struct WorkflowActivityPayload: Codable, Sendable {
+    let type: String
+    let workflow: String
+    let phase: String
+    let message: String
+    let turnId: String?
+    enum CodingKeys: String, CodingKey { case type, workflow, phase, message; case turnId = "turn_id" }
+    var title: String { workflow == "expense" ? "Work expense" : "Budget" }
+    var isWorking: Bool { phase == "working" }
+    var isSupported: Bool {
+        ["expense", "budget"].contains(workflow) &&
+        ["working", "needs_input", "needs_confirmation", "saved", "cancelled", "failed", "interrupted"].contains(phase)
+    }
+    var accessibleText: String { title + ". " + message }
+    func interrupted() -> Self {
+        Self(type: type, workflow: workflow, phase: "interrupted",
+             message: "Speech interrupted. Check the app for any completed changes.", turnId: turnId)
+    }
+}
+
 // MARK: - Agent Events (emitted via AsyncStream)
 
 /// WP5 — server-side write happened: `{"type":"data_mutated","scope":"budget|income|accounts"}`.
@@ -222,6 +243,7 @@ struct TurnCancelledPayload: Codable, Sendable {
 enum AgentEvent: Sendable {
     case turnCancelled(TurnCancelledPayload)
     case dataMutated(DataMutatedPayload)
+    case workflowActivity(WorkflowActivityPayload)
     case appAction(VoiceAppActionPayload)
     case connectionAck(ConnectionAckPayload)
     case streamChunk(StreamChunkPayload)
@@ -232,6 +254,8 @@ enum AgentEvent: Sendable {
     case voiceStatus(VoiceStatusPayload)
     case error(ErrorPayload)
     case permanentDisconnect
+    case reconnecting
+    case sessionResumed
 
     /// WP7 — the turn this event belongs to (nil for session-level events
     /// such as the greeting, connection_ack, data_mutated).
@@ -244,6 +268,7 @@ enum AgentEvent: Sendable {
         case .acknowledgment(let p): return p.turnId
         case .error(let p): return p.turnId
         case .turnCancelled(let p): return p.turnId
+        case .workflowActivity(let p): return p.turnId
         case .appAction(let p): return p.turnId
         default: return nil
         }
@@ -262,6 +287,7 @@ enum AgentIncomingMessage: Codable, Sendable {
     case audioComplete(AudioCompletePayload)
     case voiceStatus(VoiceStatusPayload)
     case dataMutated(DataMutatedPayload)
+    case workflowActivity(WorkflowActivityPayload)
     case appAction(VoiceAppActionPayload)
     case turnCancelled(TurnCancelledPayload)
     case unknown(String)
@@ -305,6 +331,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case "voice_status":
             let payload = try VoiceStatusPayload(from: decoder)
             self = .voiceStatus(payload)
+        case "workflow_activity":
+            self = .workflowActivity(try WorkflowActivityPayload(from: decoder))
         case "app_action":
             self = .appAction(try VoiceAppActionPayload(from: decoder))
         case "data_mutated":
@@ -335,6 +363,8 @@ enum AgentIncomingMessage: Codable, Sendable {
         case .audioComplete(let payload):
             try payload.encode(to: encoder)
         case .voiceStatus(let payload):
+            try payload.encode(to: encoder)
+        case .workflowActivity(let payload):
             try payload.encode(to: encoder)
         case .appAction(let payload):
             try payload.encode(to: encoder)

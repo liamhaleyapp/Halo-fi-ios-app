@@ -72,10 +72,10 @@ struct ConversationView: View {
             TranscriptView(
                 entries: viewModel.entries,
                 onCopyEntry: viewModel.copyEntry,
-                isProcessing: viewModel.state == .processing
+                isProcessing: viewModel.state == .processing,
+                activity: viewModel.coordinator.workflowActivity,
+                hideEntriesFromVoiceOver: shouldHideTranscriptFromVoiceOver
             )
-            .accessibilityElement(children: shouldHideTranscriptFromVoiceOver ? .ignore : .contain)
-            .accessibilityHidden(shouldHideTranscriptFromVoiceOver)
 
             // Input area (voice or text mode)
             inputArea
@@ -137,9 +137,10 @@ struct ConversationView: View {
                     : nil
             VoiceModeInputArea(
                 state: viewModel.state,
-                isEnabled: viewModel.isMicEnabled || (viewModel.isHandsFree && !viewModel.isSessionActive),
+                isEnabled: viewModel.isHandsFree || viewModel.isMicEnabled,
                 onMicTap: viewModel.toggleMicButton,
                 onSwitchToText: viewModel.switchToTextMode,
+                onInterrupt: { viewModel.coordinator.stopSpeaking() },
                 handsFree: handsFree
             )
             .background(Color(.systemBackground))

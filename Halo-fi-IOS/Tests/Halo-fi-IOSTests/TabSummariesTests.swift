@@ -9,7 +9,64 @@
 
 import Foundation
 import Testing
+import XCTest
+import SwiftUI
 @testable import Halo_fi_IOS
+
+@MainActor
+final class SpendableUITests: XCTestCase {
+    private func sample() throws -> WeeklySpendable {
+        try JSONDecoder().decode(WeeklySpendable.self, from: Data(#"{"status":"ready","amount_cents":52399,"weekly_allowance_cents":70000,"weekly_spent_cents":17601,"month_remaining_cents":182399,"days_until_reset":4,"month":"September","warnings":[],"summary":"You have $523 left to spend this week. Your week resets in 4 days. $1,823 remains in your September variable spending plan."}"#.utf8))
+    }
+
+    func testAmountFloorsAndProgressUsesWeeklySpending() throws {
+        let data = try sample()
+        XCTAssertEqual(data.amountCents, 52399)
+        XCTAssertEqual(data.progress, 0.251442857, accuracy: 0.00001)
+        XCTAssertTrue(data.spokenSummary.contains("$523"))
+        XCTAssertFalse(data.spokenSummary.contains("$524"))
+    }
+
+    func testUnavailableResponseDoesNotBecomeZero() throws {
+        let data = try JSONDecoder().decode(WeeklySpendable.self, from: Data(#"{"status":"unavailable","message":"Refresh your bank accounts first."}"#.utf8))
+        XCTAssertNil(data.amountCents)
+        XCTAssertEqual(data.spokenSummary,"Refresh your bank accounts first.")
+    }
+
+    func testEditorRejectsPartialNumbersAndParsesLocaleCents() {
+        let us = Locale(identifier: "en_US")
+        XCTAssertEqual(SpendableSetupSheet.cents("5,000.25",locale:us),500025)
+        XCTAssertEqual(SpendableSetupSheet.cents("0",locale:us),0)
+        for invalid in ["500oops","1,23","-1","NaN","10.009","", "1000001"] {
+            XCTAssertNil(SpendableSetupSheet.cents(invalid,locale:us),invalid)
+        }
+        XCTAssertEqual(SpendableSetupSheet.cents("5000,25",locale:Locale(identifier:"de_DE")),500025)
+    }
+
+    func testPlanEncodesRevisionAndConfirmation() throws {
+        let settings = SpendableSettings(baseCents:500000,savingsCents:0,resetWeekday:0,bills:[],expectedRevision:"revision-1")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String:Any])
+        XCTAssertEqual(json["base_cents"] as? Int,500000)
+        XCTAssertEqual(json["expected_revision"] as? String,"revision-1")
+        XCTAssertEqual(json["confirmed"] as? Bool,true)
+    }
+
+    func testCardRendersInBothAppearancesAtLargestType() throws {
+        for scheme in [ColorScheme.light,.dark] {
+            for size in [DynamicTypeSize.large,.accessibility5] {
+                let renderer = ImageRenderer(content: WeeklySpendableCard(data:try sample(),onReview:{})
+                    .environment(\.colorScheme,scheme).environment(\.dynamicTypeSize,size)
+                    .frame(width:393).background(scheme == .dark ? Color.black : Color.white))
+                renderer.scale = 2
+                let picture = try XCTUnwrap(renderer.uiImage)
+                XCTAssertGreaterThan(picture.size.height,180)
+                let path = FileManager.default.temporaryDirectory.appendingPathComponent("spendable-\(scheme)-\(size).png")
+                try picture.pngData()?.write(to:path)
+                print("SPENDABLE_RENDER: \(path.path)")
+            }
+        }
+    }
+}
 
 private func resources(status: String, current: Int = 121_400, days: Int? = 27) -> SSIResources {
     let json = """

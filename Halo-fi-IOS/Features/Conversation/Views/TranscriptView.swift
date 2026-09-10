@@ -17,13 +17,17 @@ struct TranscriptView: View {
     let entries: [TranscriptEntry]
     let onCopyEntry: ((TranscriptEntry) -> Void)?
     var isProcessing: Bool = false
+    var activity: WorkflowActivityPayload?
+    var hideEntriesFromVoiceOver: Bool = false
 
     @State private var isAtBottom = true
 
-    init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil, isProcessing: Bool = false) {
+    init(entries: [TranscriptEntry], onCopyEntry: ((TranscriptEntry) -> Void)? = nil, isProcessing: Bool = false, activity: WorkflowActivityPayload? = nil, hideEntriesFromVoiceOver: Bool = false) {
         self.entries = entries
         self.onCopyEntry = onCopyEntry
         self.isProcessing = isProcessing
+        self.activity = activity
+        self.hideEntriesFromVoiceOver = hideEntriesFromVoiceOver
     }
 
     var body: some View {
@@ -35,15 +39,22 @@ struct TranscriptView: View {
                         LazyVStack(spacing: 16) {
                             ForEach(entries) { entry in
                                 TranscriptBlock(entry: entry)
+                                    .accessibilityHidden(hideEntriesFromVoiceOver)
                                     .id(entry.id)
                                     .onTapGesture(count: 2) {
                                         onCopyEntry?(entry)
                                     }
                             }
 
+                            if let activity {
+                                WorkflowActivityCard(activity: activity)
+                                    .id("workflow-activity")
+                            }
+
                             // Typing indicator when processing
-                            if isProcessing {
+                            if isProcessing && activity == nil {
                                 TypingIndicator()
+                                    .accessibilityHidden(hideEntriesFromVoiceOver)
                                     .id("typing")
                             }
 
@@ -85,9 +96,12 @@ struct TranscriptView: View {
                         // Scroll to typing indicator when it appears
                         if newValue && isAtBottom {
                             withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo("typing", anchor: .bottom)
+                                proxy.scrollTo("bottom", anchor: .bottom)
                             }
                         }
+                    }
+                    .onChange(of: activity?.phase) { _, _ in
+                        if isAtBottom { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                     .onAppear {
                         // Scroll to bottom on appear
@@ -117,7 +131,7 @@ struct TranscriptView: View {
                 }
 
                 // Empty state
-                if entries.isEmpty {
+                if entries.isEmpty && activity == nil {
                     emptyState
                 }
             }
@@ -234,5 +248,27 @@ struct TypingIndicator: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { animating = true }
         .accessibilityLabel("Halo is typing")
+    }
+}
+
+/// One stable accessible element. Halo speaks the detailed result; this card
+/// deliberately makes no automatic announcements while a microphone is open.
+struct WorkflowActivityCard: View {
+    let activity: WorkflowActivityPayload
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(activity.title, systemImage: activity.phase == "saved" ? "checkmark.circle.fill" : "list.bullet.rectangle")
+                .font(.headline)
+            Text(activity.message).font(.body).fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Color.primary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.35), lineWidth: 1))
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(activity.accessibleText)
+        .accessibilityIdentifier("voice.workflowActivity")
     }
 }

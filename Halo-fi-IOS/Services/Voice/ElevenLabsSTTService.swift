@@ -201,7 +201,9 @@ final class ElevenLabsSTTService {
         Logger.info("ElevenLabsSTT: Connecting to \(url.host ?? "unknown")")
 
         var request = URLRequest(url: finalURL)
-        request.timeoutInterval = 30
+        // Recognition is a long-lived socket, not a thirty-second HTTP fetch.
+        // The readiness watchdog and idle-audio loop own setup/liveness.
+        request.timeoutInterval = 300
 
         let socket = makeSocket(request)
         webSocketTask = socket

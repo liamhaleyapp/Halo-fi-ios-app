@@ -24,6 +24,7 @@ struct MicButton: View {
     /// of the state-driven appearance. Lets the user tell at a glance
     /// that tapping will affect their mic, not Halo's flow.
     var appearMuted: Bool = false
+    var microphoneOnly: Bool = false
 
     @State private var pulseAnimation = false
 
@@ -69,7 +70,7 @@ struct MicButton: View {
             .accessibilityAddTraits(.isButton)
 
             // Dynamic label below button
-            Text(state == .speaking ? "Tap to interrupt" : state.displayText)
+            Text(microphoneOnly && !sessionInactive && !isError ? (appearMuted ? "Microphone muted" : state.displayText) : state.displayText)
                 .font(.headline)
                 .fontWeight(.medium)
                 .foregroundColor(labelColor)
@@ -167,6 +168,7 @@ struct MicButton: View {
 
     private var iconName: String {
         if appearMuted { return "mic.slash.fill" }
+        if microphoneOnly && !sessionInactive { return "mic.fill" }
         switch state {
         case .listening:
             return "waveform"
@@ -190,7 +192,10 @@ struct MicButton: View {
         }
     }
 
+    private var isError: Bool { if case .error = state { return true }; return false }
+
     private var accessibilityLabel: String {
+        if microphoneOnly && !sessionInactive && !isError { return appearMuted ? "Unmute microphone" : "Mute microphone" }
         if appearMuted { return "Mic muted" }
         switch state {
         case .listening:
@@ -205,6 +210,7 @@ struct MicButton: View {
     }
 
     private var accessibilityHint: String {
+        if microphoneOnly && !sessionInactive && !isError { return "Changes only your microphone. Halo will continue answering." }
         if appearMuted { return "Double tap to unmute your microphone" }
         if sessionInactive && state != .listening && state != .speaking { return "Double tap to connect and start listening." }
         switch state {

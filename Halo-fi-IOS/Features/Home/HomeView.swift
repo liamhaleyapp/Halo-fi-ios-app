@@ -103,7 +103,8 @@ struct HomeView: View {
                 TranscriptView(
                     entries: viewModel.entries,
                     onCopyEntry: viewModel.copyEntry,
-                    isProcessing: viewModel.state == .processing
+                    isProcessing: viewModel.state == .processing,
+                    activity: viewModel.coordinator.workflowActivity
                 )
                 .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 240 : nil)
                 ShortcutsButton { showingShortcuts = true }

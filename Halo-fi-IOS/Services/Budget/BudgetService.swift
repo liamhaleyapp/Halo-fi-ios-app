@@ -108,6 +108,22 @@ struct MonthlyIncomeUpdate: Encodable, Equatable {
 final class BudgetService: BudgetServiceProtocol {
     static let shared = BudgetService()
 
+    private var spendableSetupEndpoint: String {
+        let tz = TimeZone.current.identifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "America/New_York"
+        return "/budget/spendable/setup?user_tz=\(tz)"
+    }
+
+    func getSpendableSetup() async throws -> SpendableSetup {
+        try await networkService.authenticatedRequest(endpoint: spendableSetupEndpoint, method: .GET,
+            body: nil, responseType: SpendableSetup.self)
+    }
+
+    func saveSpendableSetup(_ settings: SpendableSettings) async throws {
+        struct Saved: Codable { let revision: String }
+        let _: Saved = try await networkService.authenticatedRequest(endpoint: spendableSetupEndpoint, method: .PUT,
+            body: try JSONEncoder().encode(settings), responseType: Saved.self)
+    }
+
     private let networkService: NetworkServiceProtocol
 
     init(networkService: NetworkServiceProtocol = NetworkService.shared) {

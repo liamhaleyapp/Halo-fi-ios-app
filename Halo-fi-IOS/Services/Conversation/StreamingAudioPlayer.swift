@@ -248,17 +248,6 @@ final class StreamingAudioPlayer: NSObject {
 
         if isFinal { isFinalQueued = true }
 
-        guard !isMuted else {
-            Logger.info("StreamingAudioPlayer: Skipping playback (muted)")
-            mp3Data = Data()
-            pendingBuffers.removeAll()
-            if isFinal {
-                isFinalQueued = false
-                onPlaybackFinished?()
-            }
-            return
-        }
-
         if !isAcknowledgment && !mp3Data.isEmpty { hasResponseAudio = true }
         // Legacy servers can send a successful final transcript after every
         // synthesis request failed. Do not report that as successful playback.
@@ -320,7 +309,7 @@ final class StreamingAudioPlayer: NSObject {
             // gain unless VoiceOver is running AND the user chose to duck
             // or mute Halo under it (VoiceOverPlaybackPolicy). Nothing
             // else may lower this.
-            player.volume = VoiceOverPlaybackPolicy.speechGain
+            player.volume = isMuted ? 0 : VoiceOverPlaybackPolicy.speechGain
             guard player.prepareToPlay(), player.play() else {
                 Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer")
                 failPlayback()
@@ -362,7 +351,7 @@ final class StreamingAudioPlayer: NSObject {
 
     func setMuted(_ muted: Bool) {
         isMuted = muted
-        if muted { stop() }
+        audioPlayer?.volume = muted ? 0 : VoiceOverPlaybackPolicy.speechGain
     }
 
     // MARK: - VoiceOver ducking
@@ -379,7 +368,7 @@ final class StreamingAudioPlayer: NSObject {
     }
 
     @objc private func handleVoiceOverStatusChange() {
-        let gain = VoiceOverPlaybackPolicy.speechGain
+        let gain: Float = isMuted ? 0 : VoiceOverPlaybackPolicy.speechGain
         audioPlayer?.volume = gain
         Logger.info("StreamingAudioPlayer: VoiceOver \(VoiceOverPlaybackPolicy.isVoiceOverRunning ? "on" : "off") — speech gain \(gain)")
     }

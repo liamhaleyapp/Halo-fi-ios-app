@@ -27,6 +27,7 @@ final class ConversationCoordinator {
 
     private(set) var state: ConversationState = .idle
     private(set) var sessionId: String?
+    private(set) var workflowActivity: WorkflowActivityPayload?
     /// Mutes Halo's spoken responses (TTS playback). Distinct from
     /// `isMicMuted` which only affects the user's mic input.
     private(set) var isMuted: Bool = false
@@ -427,6 +428,7 @@ final class ConversationCoordinator {
 
     /// Disconnect from the backend
     func disconnect() {
+        workflowActivity = nil
         lifecycleID = UUID()
         sttRecoveryTask?.cancel()
         sttRecoveryTask = nil
@@ -1073,6 +1075,7 @@ final class ConversationCoordinator {
     /// The server answers with turn_cancelled; anything still arriving
     /// for this id is dropped by handleAgentEvent.
     func cancelCurrentTurn(notifyPlaybackFinished: Bool = true) {
+        if workflowActivity?.isWorking == true { workflowActivity = workflowActivity?.interrupted() }
         if finalizationID != nil {
             cancelSpeechFinalization()
             isVoiceSessionActive = false
@@ -1106,6 +1109,7 @@ final class ConversationCoordinator {
         do {
             currentAgentResponseId = UUID()
             let turnId = UUID().uuidString
+            workflowActivity = nil
             currentTurnId = turnId
             voiceTiming.reset()
             if spoken {
@@ -1151,12 +1155,8 @@ final class ConversationCoordinator {
         // Propagate to streaming audio player
         streamingAudioPlayer?.setMuted(muted)
 
-        // Stop speaking immediately if muted
-        if muted && state == .speaking {
-            cancelCurrentTurn()
-            streamingAudioPlayer?.stop()
-            setState(.idle)
-        }
+        // Speaker mute changes output volume only. The reply still completes;
+        // explicit interruption is a separate action.
     }
 
     /// Hands-free mic mute. Doesn't tear down STT — the WebSocket
@@ -1178,6 +1178,9 @@ final class ConversationCoordinator {
             lastVoiceActivityAt = nil
             hasDetectedSpeechInCurrentListen = false
             listenStartedAt = Date()
+            if state == .idle && agentWebSocket.isConnected {
+                Task { await self.startListening() }
+            }
         }
     }
 
@@ -1436,6 +1439,26 @@ final class ConversationCoordinator {
             streamingAudioPlayer?.appendAudioChunk(chunk.audio)
 
         case .audioComplete(let complete):
+            if event.turnId == nil, !complete.isAck,
+               (complete.data?["is_error"]?.value as? Bool) != true,
+               interactionMode == .voice, conversationMode == .handsFree,
+               !sttService.isSessionReady, !greetingPlaybackRecorded {
+                let lifecycle = lifecycleID
+                resumeListeningTask?.cancel()
+                resumeListeningTask = Task { [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.connectWithTimeout()
+                        guard self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                        self.handleAgentEvent(event)
+                    } catch {
+                        guard self.lifecycleID == lifecycle, !Task.isCancelled else { return }
+                        self.streamingAudioPlayer?.stopAndDiscardPending(notify: false)
+                        self.handleVoiceSetupError(error)
+                    }
+                }
+                return
+            }
             // Backend now emits intermediate audio_complete events on
             // every sentence boundary (data.is_partial == true) so the
             // client plays each sentence as it lands instead of waiting
@@ -1478,6 +1501,7 @@ final class ConversationCoordinator {
                                  isError: (complete.data?["is_error"]?.value as? Bool) == true)
 
         case .error(let error):
+            if workflowActivity?.isWorking == true { workflowActivity = workflowActivity?.interrupted() }
             if error.code == "AUDIO_DELIVERY_FAILED" {
                 handleAudioDeliveryFailure(error.error)
                 return
@@ -1544,9 +1568,40 @@ final class ConversationCoordinator {
             // the app) but we deliberately drop it here.
             break
 
+        case .reconnecting:
+            if workflowActivity?.isWorking == true { workflowActivity = workflowActivity?.interrupted() }
+            resumeListeningTask?.cancel(); resumeListeningTask = nil
+            sttRecoveryTask?.cancel(); sttRecoveryTask = nil
+            cancelSpeechFinalization()
+            isVoiceSessionActive = false
+            isPlayingAcknowledgment = false
+            currentAgentResponseId = nil
+            transcriptStore?.discardDraft()
+            currentTurnId = nil
+            audioFeedback.stopProcessingPulse()
+            streamingAudioPlayer?.stopAndDiscardPending(notify: false)
+            voiceService.onAudioBuffer = nil
+            voiceService.stopRecording()
+            sttService.disconnect()
+            listenTask?.cancel(); listenTask = nil
+            sttWarmupTask?.cancel(); sttWarmupTask = nil
+            setState(.connecting)
+        case .sessionResumed:
+            streamingAudioPlayer?.resumeAcceptingChunks()
+            setState(.idle)
+            let lifecycle = lifecycleID
+            resumeListeningTask?.cancel()
+            resumeListeningTask = Task { [weak self] in
+                guard let self, self.lifecycleID == lifecycle, !self.isMicMuted else { return }
+                await self.startListening()
+            }
         case .permanentDisconnect:
             setState(.disconnected)
             emitEvent(.errorEvent("Connection lost. Please go back and try again."))
+
+        case .workflowActivity(let payload):
+            guard let activeTurn = currentTurnId, payload.turnId == activeTurn, payload.isSupported else { return }
+            workflowActivity = payload
 
         case .appAction(let payload):
             guard payload.action.kind == "navigate", payload.action.state == "proposed" else { return }
@@ -1696,8 +1751,8 @@ final class ConversationCoordinator {
     }
 
     private func playAccumulatedAudio(isFinal: Bool = true, turnId: String? = nil, isAcknowledgment: Bool = false, isError: Bool = false) {
-        guard !isPrivacyMode, !isMuted else {
-            Logger.info("ConversationCoordinator: Skipping audio - privacy=\(isPrivacyMode), muted=\(isMuted)")
+        guard !isPrivacyMode else {
+            Logger.info("ConversationCoordinator: Skipping audio for privacy mode")
             setState(.idle)
             return
         }
