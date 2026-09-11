@@ -36,6 +36,12 @@ struct AccountDetailView: View {
           .padding(.top, 20)
           .padding(.bottom, 24)
 
+        if let id = account.plaidItemId,
+           let item = bankDataManager.linkedItems?.first(where: { $0.itemId == id || $0.plaidItemId == id }) {
+          DisclosureGroup("Connection management") {
+            UpdateSharedAccountsButton(item: item) { await loadTransactions(forceRefresh: true) }
+          }.padding(.horizontal, 20).padding(.bottom, 12)
+        }
         contentView
       }
     }

@@ -933,9 +933,9 @@ extension DestinationRestorationTests {
         XCTAssertTrue(manager.isResolvingConsent)
         // configureForUser clears the previous bank session synchronously.
         SessionLifetime.shared.invalidate { }
-        for _ in 0..<1000 {
-            if !manager.isResolvingConsent { break }
-            await Task.yield()
+        let consentDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while manager.isResolvingConsent && ContinuousClock.now < consentDeadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertFalse(manager.isResolvingConsent)
         XCTAssertTrue(manager.isOnboarded)
@@ -1104,7 +1104,10 @@ extension DestinationRestorationTests {
         let failure = LaunchRefreshFailure()
         let manager = UserManager(tokenStorage: store, authService: DestinationRefreshAuth(failure: failure),
             biometricCredentialStore: NoDestinationBiometrics(), userDefaults: defaults)
-        for _ in 0..<30 { await Task.yield() }
+        let outageDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while manager.destinationError == nil && ContinuousClock.now < outageDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertFalse(manager.isAuthenticated)
         XCTAssertTrue(manager.isResolvingDestination, "Must not route to sign-in")
         XCTAssertNotNil(manager.destinationError)
@@ -1112,7 +1115,10 @@ extension DestinationRestorationTests {
         XCTAssertNotNil(defaults.data(forKey: "currentUser"))
         failure.error = nil
         manager.retryDestinationResolution()
-        for _ in 0..<30 { await Task.yield() }
+        let recoveryDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !manager.isAuthenticated && ContinuousClock.now < recoveryDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertTrue(manager.isAuthenticated)
         XCTAssertTrue(manager.isOnboarded)
         XCTAssertNil(manager.destinationError)

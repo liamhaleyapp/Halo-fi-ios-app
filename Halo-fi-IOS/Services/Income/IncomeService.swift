@@ -104,7 +104,24 @@ struct IncomeSource: Codable, Equatable, Identifiable {
     }
 }
 
+struct IncomeActivityItem: Codable, Equatable, Identifiable {
+    let id: String
+    let transactionId: String
+    let source: String
+    let occurredOn: String
+    let amountCents: Int
+    let kind: String
+    let classification: String
+    enum CodingKeys: String, CodingKey {
+        case id, source, kind, classification
+        case transactionId = "transaction_id", occurredOn = "occurred_on", amountCents = "amount_cents"
+    }
+}
+
 struct IncomeSummary: Codable, Equatable {
+    var paychecksNeedingTaxReview: Int? = nil
+    var incomeItems: [IncomeActivityItem]? = nil
+    var totalIncomeCents: Int? = nil
     struct Employer: Codable, Equatable, Identifiable {
         let employer: String
         let grossCents: Int
@@ -129,6 +146,8 @@ struct IncomeSummary: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case month, sources, labels
+        case paychecksNeedingTaxReview = "paychecks_needing_tax_review"
+        case incomeItems = "income_items", totalIncomeCents = "total_income_cents"
         case workIncome = "work_income"
         case workIncomeGrossCents = "work_income_gross_cents"
         case workIncomeNetCents = "work_income_net_cents"
@@ -191,6 +210,14 @@ final class IncomeService: IncomeServiceProtocol {
             endpoint: APIEndpoints.Income.label(id), method: .PATCH,
             body: try JSONEncoder().encode(PatchBody(gross_cents: grossCents)), responseType: LabelOut.self
         )
+        return out.label
+    }
+
+    func confirmTaxes(id: String, taxesCents: Int) async throws -> IncomeLabelView {
+        struct Taxes: Encodable { let taxes_cents: Int }
+        let out: LabelOut = try await NetworkService.shared.authenticatedRequest(
+            endpoint: APIEndpoints.Income.label(id), method: .PATCH,
+            body: try JSONEncoder().encode(Taxes(taxes_cents: taxesCents)), responseType: LabelOut.self)
         return out.label
     }
 

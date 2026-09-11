@@ -251,7 +251,7 @@ final class StreamingAudioPlayer: NSObject {
         if !isAcknowledgment && !mp3Data.isEmpty { hasResponseAudio = true }
         // Legacy servers can send a successful final transcript after every
         // synthesis request failed. Do not report that as successful playback.
-        if isFinal && !isAcknowledgment && !hasResponseAudio {
+        if isFinal && !isAcknowledgment && !hasResponseAudio && !isMuted {
             Logger.error("StreamingAudioPlayer: Final answer arrived without response audio")
             failPlayback()
             return

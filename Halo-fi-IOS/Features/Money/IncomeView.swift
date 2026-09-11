@@ -1,195 +1,109 @@
-//
-//  IncomeView.swift
-//  Halo-fi-IOS
-//
-//  Money → Income (Liam, 2026-09-05): what HaloFi has learned about the
-//  user's money in — payers and their cadence, this month's work income
-//  gross and net, paychecks still missing a gross, the deposits labeled so
-//  far — plus the self-reported paycheck and benefit amounts.
-//
-
 import SwiftUI
 
 struct IncomeView: View {
-    @Environment(BudgetDataManager.self) private var dataManager
     @Environment(UserManager.self) private var userManager
-
-    @State private var grossTarget: IncomeLabelView?
+    @Environment(BudgetDataManager.self) private var dataManager
+    @State private var month = CalendarView.currentMonthKey()
+    @State private var loaded: IncomeSummary?
+    @State private var error: String?
     @State private var sourceTarget: IncomeSource?
-    @State private var forgetTarget: IncomeLabelView?
-    @State private var relabelTarget: IncomeLabelView?
+    @State private var grossTarget: IncomeLabelView?
+    @State private var relabelTarget: IncomeActivityItem?
+    @State private var showSources = false
     @State private var showingEditor = false
-    @State private var summaryLoaded = false
-
-    private var summary: IncomeSummary? { dataManager.incomeSummary }
-
+    private var summary: IncomeSummary? { loaded?.month == month ? loaded : (month == CalendarView.currentMonthKey() ? dataManager.incomeSummary : nil) }
     var body: some View {
         List {
             Section {
-                header
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-            }
-
-            if let s = summary, !s.labels.filter({ $0.needsGross }).isEmpty {
-                Section {
-                    ForEach(s.labels.filter { $0.needsGross }) { label in
-                        Button { grossTarget = label } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Paycheck from \(label.employer ?? label.source)").font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
-                                    Text("\(DepositLabelSheet.spokenDate(label.occurredOn)), \(BudgetFormatter.cents(label.netCents)) after taxes").font(.caption).foregroundColor(.haloTextSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundColor(.haloTextTertiary).accessibilityHidden(true)
-                            }
-                            .frame(minHeight: 44)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityHint("Asks for the gross on the paystub.")
-                    }
-                } header: {
-                    Text("Paystub gross still needed")
+                HStack {
+                    Button("Previous month") { shift(-1) }.frame(minHeight: 44)
+                    Spacer()
+                    Button("Next month") { shift(1) }.frame(minHeight: 44)
+                        .disabled(month >= CalendarView.currentMonthKey())
                 }
+                Text(month).font(.headline).accessibilityAddTraits(.isHeader)
+                if let s = summary {
+                    ScreenReaderSummaryHeader(verdict: "Income received", detail: s.totalIncomeCents.map { BudgetFormatter.cents($0) + " identified this month." } ?? "Refreshing income…", tone: .neutral)
+                    if let items = s.incomeItems {
+                        if items.isEmpty { Text("No income identified this month.") }
+                        ForEach(items) { item in
+                            NavigationLink { detail(item) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.source).font(.headline)
+                                    Text(BudgetFormatter.cents(item.amountCents)).font(.title2.bold())
+                                    Text(DepositLabelSheet.spokenDate(item.occurredOn)).font(.subheadline)
+                                }.frame(minHeight: 56)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(DepositLabelSheet.spokenDate(item.occurredOn)), \(item.source), \(VoiceOverFormatter.dollars(item.amountCents)).")
+                            .accessibilityHint("Opens income details and classification.")
+                        }
+                    }
+                    if userManager.capabilities.expenseType == .bwe, let count = s.paychecksNeedingTaxReview, count > 0 {
+                        Text("\(count) paychecks need tax withholding reviewed. Open a paycheck to enter its paystub taxes.").font(.subheadline)
+                    }
+                    if s.paychecksNeedingGross > 0 {
+                        Text("\(s.paychecksNeedingGross) paychecks need gross wages for reporting. Open a paycheck to add its paystub amount.")
+                    }
+                } else { ProgressView("Loading income…") }
+                if let error { Text(error).foregroundStyle(DesignTokens.ToneText.act) }
             }
-
             Section {
-                if let s = summary, !s.sources.isEmpty {
-                    ForEach(s.sources) { source in
+                DisclosureGroup("Manage income sources", isExpanded: $showSources) {
+                    ForEach(summary?.sources ?? []) { source in
                         Button { sourceTarget = source } label: {
-                            HStack {
-                                Image(systemName: (IncomeKind(rawValue: source.kind) ?? .other).icon)
-                                    .foregroundColor(.indigo).frame(width: 28).accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(source.employer ?? source.sourceKey.capitalized).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary)
-                                    Text(Self.sourceLine(source)).font(.caption).foregroundColor(.haloTextSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(.haloTextTertiary).accessibilityHidden(true)
-                            }
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(source.employer ?? source.sourceKey.capitalized). \(Self.sourceLine(source))")
-                        .accessibilityHint("Edits this payer: what it is, how often it pays, expected gross and take-home.")
-                        .accessibilityAddTraits(.isButton)
-                    }
-                } else {
-                    Text(summaryLoaded
-                         ? "Nothing learned yet. When a deposit arrives, the Money tab asks what it was, once per payer."
-                         : "Loading…")
-                        .foregroundColor(.haloTextSecondary)
-                }
-            } header: {
-                Text("Payers HaloFi remembers")
-            } footer: {
-                Text("One row per payer, learned from the deposits you answered about. Tap a payer to set how often it pays and what to expect; that becomes your budget's income. \"I'm not sure\" answers are not remembered. Nothing here is sent to Social Security.")
-            }
-
-            if let s = summary, !s.labels.isEmpty {
-                Section {
-                    ForEach(s.labels.sorted { $0.occurredOn > $1.occurredOn }) { label in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(label.source).font(.body).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                Text("\(DepositLabelSheet.spokenDate(label.occurredOn)) · \((IncomeKind(rawValue: label.kind) ?? .other).title)\(label.grossCents.map { " · gross \(BudgetFormatter.cents($0))" } ?? "")")
-                                    .font(.caption).foregroundColor(.haloTextSecondary)
-                            }
-                            Spacer()
-                            Text(BudgetFormatter.cents(label.netCents)).font(.body.weight(.semibold))
-                        }
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                        .onTapGesture { if label.kind == "unsure" { relabelTarget = label } }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityHint(label.kind == "unsure" ? "Double tap to answer what this deposit was." : "")
-                        .accessibilityAddTraits(label.kind == "unsure" ? .isButton : [])
-                        .accessibilityAction(named: "Forget this label") { forgetTarget = label }
-                        .swipeActions {
-                            Button(role: .destructive) { forgetTarget = label } label: { Label("Forget", systemImage: "trash") }
+                            VStack(alignment: .leading) {
+                                Text(source.employer ?? source.sourceKey.capitalized).font(.headline)
+                                Text(Self.sourceLine(source)).font(.subheadline)
+                            }.frame(minHeight: 48)
                         }
                     }
-                } header: {
-                    Text("Deposits this month")
-                } footer: {
-                    Text("Each deposit you answered about this month, with your answer. Tap an \"I'm not sure\" deposit to answer it now.")
+                    Button("Edit planned income and benefits") { showingEditor = true }.frame(minHeight: 44)
                 }
-            }
-
-            Section {
-                Button { showingEditor = true } label: {
-                    Label("Benefit amounts and other fields", systemImage: "pencil")
-                        .frame(minHeight: 44)
-                }
-                .accessibilityHint("Opens the benefit amounts editor.")
-            } footer: {
-                Text("Estimate for education only — Social Security makes all actual decisions.")
             }
         }
         .navigationTitle("Income")
-        .navigationBarTitleDisplayMode(.large)
-        .refreshable {
-            await dataManager.refresh()
-            UIAccessibility.post(notification: .announcement, argument: "Updated.")
+        .task(id: month) { await load() }
+        .refreshable { await load() }
+        .sheet(item: $sourceTarget, onDismiss: { Task { await load() } }) { IncomeSourceEditorSheet(source: $0) }
+        .sheet(item: $grossTarget, onDismiss: { Task { await load() } }) { label in
+            DepositLabelSheet(mode: .gross(labelId: label.id, employer: label.employer ?? label.source, netCents: label.netCents, lastGrossCents: label.grossCents, occurredOn: label.occurredOn))
         }
-        .task {
-            if dataManager.incomeSummary == nil { await dataManager.refresh() }
-            summaryLoaded = true
+        .sheet(item: $relabelTarget, onDismiss: { Task { await load() } }) { item in
+            DepositLabelSheet(mode: .label(transactionId: item.transactionId, source: item.source, amountCents: item.amountCents, occurredOn: item.occurredOn))
         }
-        .sheet(item: $grossTarget) { label in
-            DepositLabelSheet(mode: .gross(labelId: label.id, employer: label.employer ?? label.source, netCents: label.netCents,
-                                           lastGrossCents: summary?.sources.first { $0.sourceKey == label.sourceKey }?.lastGrossCents,
-                                           occurredOn: label.occurredOn))
-        }
-        .sheet(isPresented: $showingEditor, onDismiss: { Task { await dataManager.refresh() } }) { IncomeEditorView() }
-        .sheet(item: $relabelTarget) { label in
-            DepositLabelSheet(mode: .label(transactionId: label.transactionId, source: label.source,
-                                           amountCents: label.netCents, occurredOn: label.occurredOn))
-        }
-        .confirmationDialog("Forget this label?", isPresented: Binding(get: { forgetTarget != nil }, set: { if !$0 { forgetTarget = nil } }), titleVisibility: .visible) {
-            Button("Forget", role: .destructive) {
-                guard let label = forgetTarget else { return }
-                forgetTarget = nil
-                Task {
-                    do {
-                        try await dataManager.forgetLabel(id: label.id)
-                        UIAccessibility.post(notification: .announcement, argument: "Forgotten. \(label.source) will be asked about again.")
-                    } catch {
-                        UIAccessibility.post(notification: .announcement, argument: "Couldn't forget it. \(error.localizedDescription)")
-                    }
-                }
-            }
-            Button("Keep", role: .cancel) { forgetTarget = nil }
-        } message: {
-            Text("The deposit goes back to unlabeled and any taxes-withheld expense from it is removed.")
-        }
-        .sheet(item: $sourceTarget) { source in IncomeSourceEditorSheet(source: source) }
+        .sheet(isPresented: $showingEditor) { IncomeEditorView() }
     }
-
-    private var header: some View {
-        let s = summary
-        let gross = s?.workIncomeGrossCents ?? 0
-        let line: String = {
-            guard let s, !s.workIncome.isEmpty else {
-                return "No work income labeled this month yet."
+    private func detail(_ item: IncomeActivityItem) -> some View {
+        List {
+            Text(item.source).font(.title2.bold())
+            Text(BudgetFormatter.cents(item.amountCents)).font(.largeTitle.bold())
+            Text(DepositLabelSheet.spokenDate(item.occurredOn))
+            Text((IncomeKind(rawValue: item.kind) ?? .other).title)
+            Text(item.classification == "confirmed" ? "Classification confirmed by you." : "Identified from bank data. Review if this looks wrong.")
+            Button("Change classification") { relabelTarget = item }.frame(minHeight: 44)
+            if let label = summary?.labels.first(where: { $0.transactionId == item.transactionId }), label.kind == "work_income" {
+                Text(label.grossCents.map { "Gross wages: " + BudgetFormatter.cents($0) } ?? "Gross wages needed from your paystub.")
+                Button("Review gross wages") { grossTarget = label }.frame(minHeight: 44)
+                PaystubTaxEditor(label: label) { Task { await load(); await dataManager.refresh() } }
             }
-            let employers = s.workIncome.map(\.employer).joined(separator: ", ")
-            var text = "Work income this month: \(BudgetFormatter.cents(gross)) gross from \(employers)"
-            if s.paychecksNeedingGross > 0 {
-                text += ", \(VoiceOverFormatter.count(s.paychecksNeedingGross, singular: "paycheck", plural: "paychecks")) still counted at net"
-            }
-            return text + "."
-        }()
-        return ScreenReaderSummaryHeader(
-            verdict: gross > 0 ? "Income" : "Income, nothing labeled yet",
-            detail: line + (s?.benefitCents ?? 0 > 0 ? " Benefit deposits: \(BudgetFormatter.cents(s!.benefitCents))." : ""),
-            isEstimate: (s?.paychecksNeedingGross ?? 0) > 0,
-            tone: .neutral
-        )
+        }.navigationTitle("Income details")
     }
-
+    private func shift(_ delta: Int) {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM"
+        if let date = f.date(from: month), let moved = Calendar.current.date(byAdding: .month, value: delta, to: date) { month = f.string(from: moved) }
+    }
+    private func load() async {
+        if UITestArchetype.isActive { return }
+        let requested = month
+        let generation = SessionLifetime.shared.current
+        do {
+            let result = try await IncomeService.shared.summary(month: requested)
+            try SessionLifetime.shared.check(generation)
+            guard !Task.isCancelled, month == requested else { return }
+            loaded = result; error = nil
+        } catch is CancellationError {} catch { self.error = "Could not load income. Pull to retry." }
+    }
     static func sourceLine(_ s: IncomeSource) -> String {
         var parts: [String] = [(IncomeKind(rawValue: s.kind) ?? .other).title]
         if let cadence = s.cadenceDays {
@@ -204,5 +118,36 @@ struct IncomeView: View {
         if let g = s.lastGrossCents { parts.append("last gross \(BudgetFormatter.cents(g))") }
         else if let n = s.lastNetCents { parts.append("last \(BudgetFormatter.cents(n))") }
         return parts.joined(separator: " · ")
+    }
+}
+
+
+private struct PaystubTaxEditor: View {
+    let label: IncomeLabelView
+    let onSaved: () -> Void
+    @State private var amount = ""
+    @State private var saving = false
+    @State private var message: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tax withholding").font(.headline)
+            Text("Enter income tax, Social Security and Medicare taxes from this paystub. Do not include insurance or retirement deductions.").font(.subheadline)
+            TextField("Tax withholding in dollars", text: $amount).keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Tax withholding in dollars")
+            Button("Confirm tax withholding") {
+                guard let cents = SpendablePlanEditor.cents(amount) else { return }
+                saving = true
+                Task {
+                    do {
+                        _ = try await IncomeService.shared.confirmTaxes(id: label.id, taxesCents: cents)
+                        message = "Tax withholding saved. Attach the paystub to the work-expense entry if applicable."
+                        onSaved()
+                    } catch { message = error.localizedDescription }
+                    saving = false
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
+            }.disabled(saving || SpendablePlanEditor.cents(amount) == nil || label.grossCents == nil).frame(minHeight: 44)
+            if let message { Text(message).font(.callout) }
+        }.onAppear { if let cents = label.taxesCents { amount = String(format: "%.2f", Double(cents)/100) } }
     }
 }

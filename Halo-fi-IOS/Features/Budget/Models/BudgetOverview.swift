@@ -48,6 +48,12 @@ struct WeeklySpendable: Codable, Equatable {
     var weeklyAllowanceCents: Int?
     var weeklySpentCents: Int?
     var monthRemainingCents: Int?
+    var baseCents: Int?
+    var savingsCents: Int?
+    var monthlyPoolCents: Int?
+    var monthlyAllocatedCents: Int?
+    var monthSpentCents: Int?
+    var carriedOverspendingCents: Int?
     var shortfallCents: Int?
     var overCents: Int?
     var bufferCents: Int?
@@ -65,6 +71,9 @@ struct WeeklySpendable: Codable, Equatable {
     var settings: SpendableSettings?
     enum CodingKeys: String, CodingKey {
         case status, month, warnings, summary, message, prorated, settings
+        case baseCents = "base_cents", savingsCents = "savings_cents"
+        case monthlyPoolCents = "monthly_pool_cents", monthlyAllocatedCents = "monthly_allocated_cents"
+        case monthSpentCents = "month_spent_cents", carriedOverspendingCents = "carried_overspending_cents"
         case amountCents = "amount_cents", weeklyAllowanceCents = "weekly_allowance_cents"
         case weeklySpentCents = "weekly_spent_cents", monthRemainingCents = "month_remaining_cents"
         case shortfallCents = "shortfall_cents", overCents = "over_cents", bufferCents = "buffer_cents"
@@ -89,6 +98,7 @@ struct WeeklySpendable: Codable, Equatable {
 }
 
 struct SpendableBill: Codable, Equatable, Identifiable {
+    var transactionIds: [String]? = nil
     var id: String
     var label: String
     var amountCents: Int
@@ -97,6 +107,7 @@ struct SpendableBill: Codable, Equatable, Identifiable {
     var streamId: String?
     enum CodingKeys: String, CodingKey {
         case id, label, frequency
+        case transactionIds = "transaction_ids"
         case amountCents = "amount_cents", dueOn = "due_on", streamId = "stream_id"
     }
     var cadence: String {

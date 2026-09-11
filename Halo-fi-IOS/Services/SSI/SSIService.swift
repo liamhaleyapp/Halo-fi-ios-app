@@ -185,6 +185,9 @@ struct SSISubmissionsResponse: Codable, Equatable {
 }
 
 struct SSIPacketSummary: Codable, Equatable {
+    var wagesMissingGross: Int? = nil
+    var reviewStatus: String? = nil
+    var reviewIssues: [String]? = nil
     let month: String
     let monthLabel: String
     let filename: String
@@ -207,6 +210,7 @@ struct SSIPacketSummary: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case month, filename, submission, disclaimer
+        case wagesMissingGross = "wages_missing_gross", reviewStatus = "review_status", reviewIssues = "review_issues"
         case monthLabel = "month_label"
         case wageCount = "wage_count"
         case wagesGrossCents = "wages_gross_cents"

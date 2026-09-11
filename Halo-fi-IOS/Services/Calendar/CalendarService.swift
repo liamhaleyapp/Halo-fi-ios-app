@@ -11,6 +11,7 @@
 import Foundation
 
 struct CalendarItem: Codable, Equatable, Identifiable {
+    var highlight: String? = nil
     let kind: String          // income | bill | subscription | deadline
     let label: String
     let cents: Int
@@ -48,7 +49,7 @@ struct CalendarItem: Codable, Equatable, Identifiable {
         case bankConnectionStatus = "bank_connection_status"
         case paymentVerified = "payment_verified"
         case verificationNote = "verification_note"
-        case kind, label, cents, confidence, source, status, month, date
+        case kind, label, cents, confidence, source, status, highlight, month, date
         case streamId = "stream_id"
     }
 }
@@ -94,7 +95,7 @@ final class CalendarService {
     func month(_ month: String? = nil, userTz: String? = TimeZone.current.identifier) async throws -> CalendarMonth {
         var endpoint = "/me/calendar"
         var parts: [String] = []
-        if let month { parts.append("month=\(month)") }
+        if let month { parts.append("month=\(month)") } else { parts.append("upcoming=true") }
         if let tz = userTz, let enc = tz.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { parts.append("user_tz=\(enc)") }
         if !parts.isEmpty { endpoint += "?" + parts.joined(separator: "&") }
         return try await NetworkService.shared.authenticatedRequest(endpoint: endpoint, method: .GET, body: nil, responseType: CalendarMonth.self)

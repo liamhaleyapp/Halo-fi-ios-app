@@ -65,7 +65,7 @@ final class TabHeaderUITests: XCTestCase {
             // Tap the visible row's coordinates to catch mismatched hit regions.
             fixed.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             XCTAssertTrue(app.navigationBars["Bills"].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.navigationBars["Safe to spend"].exists)
+            XCTAssertFalse(app.navigationBars["Spendable"].exists)
             app.terminate()
         }
     }
@@ -94,10 +94,28 @@ final class TabHeaderUITests: XCTestCase {
         XCTAssertTrue(summary.label.contains("$600"))
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = largeText ? "Safe to spend largest text dark" : "Safe to spend detail"; shot.lifetime = .keepAlways; add(shot)
+        XCTAssertFalse(app.textFields["Monthly budget amount in dollars"].exists)
+        let edit = app.descendants(matching: .any)["spendable-edit-plan"].firstMatch
+        XCTAssertTrue(scrollTo(edit, in: app, tries: 18))
+        let breakdown = XCTAttachment(screenshot: app.screenshot())
+        breakdown.name = largeText ? "Breakdown largest text" : "How we got this number"
+        breakdown.lifetime = .keepAlways; add(breakdown)
+        edit.tap()
         let monthly = app.textFields["Monthly budget amount in dollars"]
         XCTAssertTrue(scrollTo(monthly, in: app, tries: 18))
         XCTAssertEqual(monthly.value as? String, "4500.00")
-        app.navigationBars.buttons["Close"].tap()
+        app.navigationBars["Edit spending plan"].buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["Spendable"].waitForExistence(timeout: 5))
+        if !largeText {
+            let addBill = app.descendants(matching: .any)["spendable-add-bill"].firstMatch
+            XCTAssertTrue(scrollTo(addBill, in: app, tries: 18))
+            addBill.tap()
+            XCTAssertTrue(app.navigationBars["Review fixed bill"].waitForExistence(timeout: 8))
+            XCTAssertTrue(app.textFields["Fixed bill name"].exists)
+            app.navigationBars["Review fixed bill"].buttons["Close"].tap()
+            app.navigationBars["Fixed bills"].buttons["Close"].tap()
+        }
+        app.navigationBars["Spendable"].buttons["Close"].tap()
         XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 5))
     }
 

@@ -67,7 +67,7 @@ struct InstitutionAccountsView: View {
             AccountDetailView(account: FinancialAccount(from: account, plaidItemId: item.plaidItemId), bankAccount: account)
               .environment(bankDataManager)
           } label: {
-            BankAccountRow(account: account)
+            BankAccountRow(account: account, institution: item.institutionName, lastSync: item.lastSync, connected: item.isActive)
           }
           .buttonStyle(HapticPlainButtonStyle())
           .accessibilityAction(named: account.nickname?.isEmpty == false ? "Change nickname" : "Add a nickname") { nicknameTarget = account }
@@ -203,9 +203,23 @@ struct InstitutionAccountsView: View {
 
 struct BankAccountRow: View {
   let account: BankAccount
+  var institution: String? = nil
+  var lastSync: String? = nil
+  var connected: Bool = true
+  private var updateDescription: String {
+    guard let lastSync else { return "Update time unavailable" }
+    let stamp = lastSync.replacingOccurrences(of: " ", with: "T")
+    let utc = stamp.range(of: "(Z|[+-][0-9]{2}:?[0-9]{2})$", options: .regularExpression) == nil ? stamp + "Z" : stamp
+    let parser = ISO8601DateFormatter()
+    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var date = parser.date(from: utc)
+    if date == nil { parser.formatOptions = [.withInternetDateTime]; date = parser.date(from: utc) }
+    guard let date else { return "Update time unavailable" }
+    return "Last updated " + date.formatted(date: .abbreviated, time: .shortened)
+  }
 
   private var accessibilityLabel: String {
-    var label = account.displayName
+    var label = [institution, account.displayName, account.subtype.isEmpty ? account.type : account.subtype].compactMap { $0 }.joined(separator: ", ")
     if account.nickname?.isEmpty == false { label += ", \(account.name)" }
 
     if !account.mask.isEmpty {
@@ -213,13 +227,16 @@ struct BankAccountRow: View {
     }
 
     // Use appropriate wording based on account type
-    if account.type.lowercased() == "credit" {
+    if account.currentBalance == nil {
+      label += ", Balance unavailable"
+    } else if account.type.lowercased() == "credit" {
       label += ", Amount owed \(CurrencyFormatter.format(abs(account.currentBalance ?? 0), currency: account.currency))"
     } else {
       label += ", Balance \(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))"
     }
     if let since = account.staleSpoken { label += ", not updating since \(since)" }
 
+    label += ", " + (connected ? "Connected. " : "Disconnected. ") + updateDescription
     return label
   }
 
@@ -266,7 +283,7 @@ struct BankAccountRow: View {
 
       Spacer()
 
-      Text(CurrencyFormatter.format(account.currentBalance ?? 0, currency: account.currency))
+      Text(account.currentBalance.map { CurrencyFormatter.format($0, currency: account.currency) } ?? "Unavailable")
         .font(.body)
         .fontWeight(.medium)
         .foregroundColor((account.currentBalance ?? 0) >= 0 ? Color.haloPositive : Color.haloNegative)
@@ -280,7 +297,7 @@ struct BankAccountRow: View {
     .padding(.vertical, 16)
     .background(Color.haloSecondaryBackground)
     .cornerRadius(16)
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilityLabel)
     .accessibilityHint("Opens this account: balance, transactions, and its nickname.")
   }

@@ -41,6 +41,14 @@ enum MainTab: Int, CaseIterable, Identifiable {
 }
 
 struct MainTabView: View {
+    init() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor { traits in traits.userInterfaceStyle == .dark ? .black : .systemBackground }
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+
     @Environment(UserManager.self) private var userManager
     @Environment(SubscriptionService.self) private var subscriptionService
     @Environment(BankDataManager.self) private var bankDataManager
@@ -337,6 +345,8 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             ForEach(visibleTabs) { tab in
                 tabRoot(tab)
+                    .toolbarBackground(Color.haloBackground, for: .tabBar)
+                    .toolbarBackground(.visible, for: .tabBar)
                     .tabItem { tabLabel(tab) }
                     .tag(tab)
             }

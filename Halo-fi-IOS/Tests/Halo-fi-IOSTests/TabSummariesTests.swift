@@ -35,7 +35,7 @@ final class SpendableUITests: XCTestCase {
 
     func testPreviewIsBriefAndKeepsDetailsInside() throws {
         let card = WeeklySpendableCard(data: try sample(), onReview: {})
-        XCTAssertEqual(card.previewSummary, "Safe to spend this week. $523. Resets in 4 days")
+        XCTAssertEqual(card.previewSummary, "Spendable this week. $523.99. Resets in 4 days")
         XCTAssertFalse(card.previewSummary.contains("September"))
         var unavailable = try sample()
         unavailable.amountCents = nil
@@ -62,12 +62,12 @@ final class SpendableUITests: XCTestCase {
 
     func testEditorRejectsPartialNumbersAndParsesLocaleCents() {
         let us = Locale(identifier: "en_US")
-        XCTAssertEqual(SpendableSetupSheet.cents("5,000.25",locale:us),500025)
-        XCTAssertEqual(SpendableSetupSheet.cents("0",locale:us),0)
+        XCTAssertEqual(SpendablePlanEditor.cents("5,000.25",locale:us),500025)
+        XCTAssertEqual(SpendablePlanEditor.cents("0",locale:us),0)
         for invalid in ["500oops","1,23","-1","NaN","10.009","", "1000001"] {
-            XCTAssertNil(SpendableSetupSheet.cents(invalid,locale:us),invalid)
+            XCTAssertNil(SpendablePlanEditor.cents(invalid,locale:us),invalid)
         }
-        XCTAssertEqual(SpendableSetupSheet.cents("5000,25",locale:Locale(identifier:"de_DE")),500025)
+        XCTAssertEqual(SpendablePlanEditor.cents("5000,25",locale:Locale(identifier:"de_DE")),500025)
     }
 
     func testPlanEncodesRevisionAndConfirmation() throws {
@@ -266,7 +266,7 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
 
 @Suite struct ResourceAlertBannerTests {
     @Test func silentWhileOnTrack() {
-        #expect(ResourceAlertBanner.copy(for: resources(status: "ok")) == nil)
+        #expect(ResourceAlertBanner.copy(for: resources(status: "ok")) != nil)
     }
 
     @Test func wordsCarryTheState() {

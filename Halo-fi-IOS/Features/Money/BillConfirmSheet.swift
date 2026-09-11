@@ -22,6 +22,7 @@ struct BillConfirmSheet: View {
 
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(\.dismiss) private var dismiss
+    @State private var cancellationDate = Date()
     @State private var isSaving = false
     @State private var errorMessage: String?
     @AccessibilityFocusState private var focused: Bool
@@ -40,6 +41,8 @@ struct BillConfirmSheet: View {
         self.frequencyLabel = frequencyLabel; self.nextExpected = nextExpected
         self.suggestedKind = suggestedKind; self.amountVaries = amountVaries; self.onDone = onDone
     }
+
+    private var stream: RecurringStream? { dataManager.bills?.streams.first { $0.streamId == streamId } }
 
     private var suggestsSubscription: Bool { suggestedKind == "subscription" }
 
@@ -71,6 +74,18 @@ struct BillConfirmSheet: View {
                 .buttonStyle(.bordered).disabled(isSaving)
                 .accessibilityHint("Saves that this is not a bill or subscription. It will not be asked again.")
                 AttentionDetailReminder(card: reminderCard).disabled(isSaving)
+                if let stream {
+                    Text(stream.forecastLine).font(.body)
+                    if stream.cancelledOn == nil {
+                        DatePicker("Cancellation effective date", selection: $cancellationDate, displayedComponents: .date)
+                        Button("I cancelled this") { recordCancellation(stream, undo: false) }
+                            .frame(minHeight: 48).disabled(isSaving)
+                            .accessibilityHint("Records your cancellation and stops future forecasts. Does not cancel with the company.")
+                    } else {
+                        Button("Undo cancellation") { recordCancellation(stream, undo: true) }
+                            .frame(minHeight: 48).disabled(isSaving)
+                    }
+                }
                 if let errorMessage { Text(errorMessage).font(.callout).foregroundStyle(.red) }
                 Spacer()
             }
@@ -95,6 +110,20 @@ struct BillConfirmSheet: View {
         .disabled(isSaving)
         .accessibilityHint("Saves it as a \(kind). HaloFi remembers this payee on every account.")
         if prominent { button.buttonStyle(.borderedProminent) } else { button.buttonStyle(.bordered) }
+    }
+
+    private func recordCancellation(_ stream: RecurringStream, undo: Bool) {
+        isSaving = true
+        Task {
+            do {
+                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+                _ = try await RecurringService.shared.setCancellation(stream: stream, date: undo ? nil : f.string(from: cancellationDate))
+                await dataManager.refresh()
+                UIAccessibility.post(notification: .announcement, argument: undo ? "Cancellation undone." : "Cancellation recorded.")
+                onDone?(); dismiss()
+            } catch { errorMessage = error.localizedDescription }
+            isSaving = false
+        }
     }
 
     private func answer(_ isBill: Bool, kind: String? = nil) {

@@ -37,7 +37,7 @@ struct ResourceAlertBanner: View {
         case "warning":
             return Copy(title: "Getting close to your SSI resource limit", line: "\(current) of \(limit).\(measures) Estimate.", tone: .watch)
         default:
-            return nil
+            return Copy(title: "SSI resources", line: "\(current) of \(limit).\(measures) Estimate.", tone: .neutral)
         }
     }
 

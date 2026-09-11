@@ -53,7 +53,7 @@ struct TransactionRow: View {
     }
 
     if let accountLabel {
-      label += ", from \(accountLabel)"
+      label += ", from \(accountLabel.replacingOccurrences(of: "••", with: "ending in "))"
     }
 
     return label

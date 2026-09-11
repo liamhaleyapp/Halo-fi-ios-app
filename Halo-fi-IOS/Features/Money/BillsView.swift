@@ -12,13 +12,14 @@ struct BillsView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @State private var target: RecurringStream?
     @State private var loaded = false
+    @State private var showHistory = false
 
     private var bills: RecurringResponse? { dataManager.bills }
-    private var confirmed: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == true } ?? [] }
+    private var confirmed: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == true && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } ?? [] }
     private var confirmedBills: [RecurringStream] { confirmed.filter { !$0.isSubscription } }
     private var confirmedSubscriptions: [RecurringStream] { confirmed.filter { $0.isSubscription } }
-    private var unanswered: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == nil } ?? [] }
-    private var declined: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == false } ?? [] }
+    private var unanswered: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == nil && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } ?? [] }
+    private var declined: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == false || $0.forecastStatus == "cancelled" || $0.forecastStatus == "interrupted" } ?? [] }
     private var statementPayments: [StatementPayment] { bills?.statementPayments ?? [] }
 
     var body: some View {
@@ -52,11 +53,13 @@ struct BillsView: View {
             } header: { Text("Subscriptions") } footer: { Text("Streaming, software, memberships. Tap one to change its kind.") }
             if !declined.isEmpty {
                 Section {
-                    ForEach(declined) { s in row(s, prompt: false) }
-                } header: { Text("Not bills or subscriptions") } footer: { Text("Tap to change an answer.") }
+                    DisclosureGroup("Review hidden or stopped payments", isExpanded: $showHistory) {
+                        ForEach(declined) { s in row(s, prompt: false) }
+                    }
+                } header: { Text("History") } footer: { Text("Tap to change an answer.") }
             }
             Section {
-                Text("Estimate for education only — Social Security makes all actual decisions.")
+                Text("Expected payments are based on recorded activity. Open an item to review its last charge or record a cancellation.")
                     .font(.caption).foregroundColor(.haloTextSecondary)
             }
         }
@@ -110,7 +113,7 @@ struct BillsView: View {
             HaloRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (s.nextExpected.map { " · next \(TabSummaries.spokenDate($0))" } ?? ""))
+                    Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (" · " + s.forecastLine))
                         .font(.caption).foregroundColor(.haloTextSecondary)
                 }
                 Spacer()
@@ -123,7 +126,7 @@ struct BillsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (s.nextExpected.map { ", next \(TabSummaries.spokenDate($0))" } ?? "") + (prompt ? ". Not answered." : (s.userConfirmed == true ? ". Counted as a \(s.kindWord)." : ". Not a bill or subscription.")))
+        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (", " + s.forecastLine) + (prompt ? ". Not answered." : (s.userConfirmed == true ? ". Counted as a \(s.kindWord)." : ". Not a bill or subscription.")))
         .accessibilityHint(prompt ? "Asks whether this is a bill, a subscription, or neither." : "Changes the answer.")
         .accessibilityAddTraits(.isButton)
     }

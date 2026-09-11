@@ -22,18 +22,19 @@ struct CalendarView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                monthNav(cal?.month ?? month ?? Self.currentMonthKey(), label: cal?.monthLabel)
+                monthNav(month ?? Self.currentMonthKey(), label: month == nil ? "Next 30 days" : cal?.monthLabel)
+                if month != nil { Button("Next 30 days") { month = nil }.frame(minHeight: 44) }
                 if let cal {
                     ScreenReaderSummaryHeader(
                         verdict: cal.monthLabel,
-                        detail: cal.spoken ?? summaryLine(cal),
-                        isEstimate: true,
+                        detail: summaryLine(cal),
+                        isEstimate: false,
                         tone: .neutral,
                         visualDetail: summaryLine(cal)
                     )
                     .accessibilityFocused($focus)
                     if cal.days.isEmpty {
-                        Text("Nothing confirmed for this month yet. Answer the deposit and bill questions on the Money tab and they show up here.")
+                        Text("No payments confirmed for these dates. Review your income and bills to add expected activity.")
                             .font(.subheadline).foregroundColor(.haloTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(16).frame(maxWidth: .infinity, alignment: .leading).haloCard()
@@ -41,22 +42,11 @@ struct CalendarView: View {
                     ForEach(cal.days) { day in
                         daySection(day)
                     }
-                    Text("Estimate. Built from what you confirmed; Social Security makes all actual decisions.")
-                        .font(.caption).foregroundColor(.haloTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if userManager.capabilities.showsBenefitsLane {
-                        Button { InAppBrowser.open(ProfileExplainer.wipaURL) } label: {
-                            Label("Talk to a free benefits counselor", systemImage: "person.wave.2")
-                                .font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 56)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityHint("Opens the free counselor finder inside HaloFi.")
-                    }
                 } else if let errorMessage {
                     Text(errorMessage).font(.callout).foregroundStyle(DesignTokens.ToneText.act)
                     Button("Try again") { Task { await load() } }.buttonStyle(.bordered).frame(minHeight: 44)
                 } else {
-                    ProgressView("Building your month…")
+                    ProgressView("Loading upcoming payments…")
                 }
             }
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 100)
@@ -153,7 +143,10 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text([amount, state].filter { !$0.isEmpty }.joined(separator: " · "))
+                Text(dayTitle(day)).font(.subheadline)
+                Text(amount).font(.title2.bold()).foregroundColor(.haloTextPrimary)
+                if let highlight = item.highlight { Text(highlight).font(.headline) }
+                Text(state)
                     .font(.subheadline).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

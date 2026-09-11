@@ -21,12 +21,13 @@ struct UpdateSharedAccountsButton: View {
     @SwiftUI.Environment(PlaidManager.self) private var plaidManager
     @SwiftUI.Environment(BankDataManager.self) private var bankDataManager
 
+    @State private var showDisconnect = false
     @State private var isWorking = false
     @State private var activeAttempt: UUID?
     @State private var linkPresentation: PlaidLinkPresentation?
     @State private var errorMessage: String?
 
-    private var title: String { item.isActive ? "Update shared accounts" : "Reconnect \(item.institutionName)" }
+    private var title: String { item.isActive ? "Manage accounts shared with HaloFi" : "Reconnect \(item.institutionName)" }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -41,11 +42,39 @@ struct UpdateSharedAccountsButton: View {
             .accessibilityHint(item.isActive
                                ? "Opens \(item.institutionName) so you can add or remove the accounts it shares with HaloFi."
                                : "Opens \(item.institutionName) to sign in again.")
+            if item.isActive {
+                Button("Disconnect this bank connection", role: .destructive) { showDisconnect = true }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .disabled(isWorking)
+                    .accessibilityHint("Opens a confirmation. This stops updates for accounts on this connection.")
+            }
             if let errorMessage {
                 Text(errorMessage)
                     .font(.callout)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .sheet(isPresented: $showDisconnect) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Disconnect \(item.institutionName)?").font(.title2.bold())
+                    Text("This stops bank updates for all accounts on this connection. To change which accounts are shared, use Manage accounts instead.")
+                    Button("Disconnect", role: .destructive) {
+                        isWorking = true
+                        Task {
+                            do {
+                                try await bankDataManager.disconnectBank(itemId: item.itemId)
+                                showDisconnect = false
+                                await onUpdated()
+                            } catch { errorMessage = error.localizedDescription; showDisconnect = false }
+                            isWorking = false
+                        }
+                    }.buttonStyle(.borderedProminent).disabled(isWorking)
+                    Spacer()
+                }.padding(20).background(Color.haloBackground)
+                .navigationTitle("Bank connection").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { showDisconnect = false } } }
             }
         }
         .fullScreenCover(item: $linkPresentation) { presentation in
@@ -54,7 +83,7 @@ struct UpdateSharedAccountsButton: View {
                     .navigationTitle("Bank sign-in")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItem(placement: .cancellationAction) {
                             CloseToolbarButton(hint: "Closes bank sign-in. You can try reconnecting again.") {
                                 closeLink()
                             }

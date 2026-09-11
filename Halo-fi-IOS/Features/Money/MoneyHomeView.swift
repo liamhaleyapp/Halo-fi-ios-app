@@ -350,7 +350,7 @@ struct MoneyHomeView: View {
                 if s.paychecksNeedingGross > 0 { text += " \(VoiceOverFormatter.count(s.paychecksNeedingGross, singular: "paystub gross", plural: "paystub grosses")) needed." }
                 return text
             }
-            if !s.sources.isEmpty { return "\(VoiceOverFormatter.count(s.sources.count, singular: "payer", plural: "payers")) learned. No work income labeled yet." }
+            if !s.sources.isEmpty { return "\(VoiceOverFormatter.count(s.sources.count, singular: "payer", plural: "payers")) learned. No income identified yet." }
             return "What your deposits are, learned as they arrive."
         }()
         return row(title: "Income", icon: "arrow.down.circle.fill", tint: .indigo, line: line,
@@ -640,7 +640,7 @@ struct AccountsListView: View {
                 let groups = bankDataManager.institutionGroups
                 ScreenReaderSummaryHeader(
                     verdict: groups.isEmpty && bankDataManager.manualAccounts.isEmpty ? "No accounts linked" : "Accounts",
-                    detail: "\(VoiceOverFormatter.count(groups.count, singular: "institution", plural: "institutions")), \(VoiceOverFormatter.count(bankDataManager.manualAccounts.count, singular: "manual account", plural: "manual accounts")). Open one to see its accounts and transactions.",
+                    detail: "\(VoiceOverFormatter.count(bankDataManager.accountsByItemId.values.reduce(0) { $0 + $1.count }, singular: "account linked", plural: "accounts linked")), \(VoiceOverFormatter.count(bankDataManager.manualAccounts.count, singular: "manual account", plural: "manual accounts")). Open one to see its accounts and transactions.",
                     tone: .neutral
                 )
                 ForEach(groups) { group in
@@ -912,7 +912,10 @@ struct InstitutionGroupAccountsView: View {
                 ForEach(accounts) { account in
                     NavigationLink {
                         AccountDetailView(account: FinancialAccount(from: account, plaidItemId: account.plaidItemId), bankAccount: account)
-                    } label: { BankAccountRow(account: account) }
+                    } label: {
+                        let item = group.items.first { $0.itemId == account.plaidItemId || $0.plaidItemId == account.plaidItemId }
+                        BankAccountRow(account: account, institution: group.name, lastSync: item?.lastSync, connected: item?.isActive ?? false)
+                    }
                     .buttonStyle(HapticPlainButtonStyle())
                 }
                 if let error { Text(error).foregroundStyle(Color.haloTextPrimary) }

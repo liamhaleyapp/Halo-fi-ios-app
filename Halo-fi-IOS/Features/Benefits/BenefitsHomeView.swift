@@ -230,8 +230,8 @@ struct BenefitsHomeView: View {
             title: "Monthly package",
             icon: "doc.text.fill",
             tone: submit == nil ? .neutral : .watch,
-            line: line,
-            estimate: true,
+            line: "Review your paperwork. " + line,
+            estimate: false,
             route: .monthlyPackage(submit?.month),
             spokenLine: submit.map { "\($0.title). \($0.body)" } ?? "Last month's SSA-795 package.",
             hint: "Opens the package: cover, ledger and receipts. Share, print, or send it to yourself."

@@ -63,7 +63,7 @@ enum UITestArchetype: String, CaseIterable {
 
     static var spendableFixture: WeeklySpendable? {
         guard isActive, ProcessInfo.processInfo.arguments.contains("--ui-test-spendable") else { return nil }
-        let json = #"{"status":"ready","amount_cents":60000,"weekly_allowance_cents":70000,"weekly_spent_cents":10000,"month_remaining_cents":240000,"cash_cap_cents":180000,"fixed_cents":150000,"bills_reserved_cents":150000,"card_reserve_cents":20000,"days_until_reset":4,"warnings":[],"settings":{"base_cents":450000,"savings_cents":10000,"reset_weekday":0,"bills":[{"id":"rent","label":"Rent","amount_cents":150000,"frequency":"MONTHLY","due_on":"2026-10-01"}],"confirmed":true}}"#
+        let json = #"{"status":"ready","amount_cents":60000,"weekly_allowance_cents":70000,"weekly_spent_cents":10000,"month_remaining_cents":240000,"monthly_pool_cents":290000,"monthly_allocated_cents":290000,"month_spent_cents":50000,"carried_overspending_cents":0,"cash_cap_cents":180000,"fixed_cents":150000,"bills_reserved_cents":150000,"card_reserve_cents":20000,"days_until_reset":4,"warnings":[],"settings":{"base_cents":450000,"savings_cents":10000,"reset_weekday":0,"bills":[{"id":"rent","label":"Rent","amount_cents":150000,"frequency":"MONTHLY","due_on":"2026-10-01"}],"confirmed":true}}"#
         return try? JSONDecoder().decode(WeeklySpendable.self, from: Data(json.utf8))
     }
 

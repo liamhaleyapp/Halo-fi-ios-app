@@ -27,6 +27,17 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     /// user | auto | learned
     var kindSource: String? = nil
     var amountVaries: Bool? = nil
+    var cancelledOn: String? = nil
+    var lifecycleRevision: Int? = nil
+    var forecastStatus: String? = nil
+    var chargedAfterCancellation: Bool? = nil
+    var forecastLine: String {
+        if chargedAfterCancellation == true { return "Charge recorded after cancellation. Review this payment." }
+        if forecastStatus == "cancelled" { return "Cancelled. Kept for your records." }
+        if forecastStatus == "interrupted" { return "Payment pattern stopped." + (lastDate.map { " Last charge \(TabSummaries.spokenDate($0))." } ?? "") }
+        if forecastStatus == "unverified" { return "Bank data unavailable; next payment unverified." }
+        return nextExpected.map { "Next expected \(TabSummaries.spokenDate($0))." } ?? "Next payment unverified."
+    }
 
     var id: String { streamId }
     var isSubscription: Bool { kind == "subscription" }
@@ -47,6 +58,8 @@ struct RecurringStream: Codable, Equatable, Identifiable {
         case kind
         case kindSource = "kind_source"
         case amountVaries = "amount_varies"
+        case cancelledOn = "cancelled_on", lifecycleRevision = "lifecycle_revision"
+        case forecastStatus = "forecast_status", chargedAfterCancellation = "charged_after_cancellation"
     }
 }
 
@@ -79,6 +92,14 @@ final class RecurringService {
 
     private struct ConfirmBody: Encodable { let is_bill: Bool; let label: String?; let kind: String? }
     private struct ConfirmOut: Codable { let stream: RecurringStream }
+
+    private struct CancellationBody: Encodable { let cancelled_on: String?; let expected_revision: Int }
+    func setCancellation(stream: RecurringStream, date: String?) async throws -> RecurringStream {
+        let out: ConfirmOut = try await NetworkService.shared.authenticatedRequest(
+            endpoint: "/bank/recurring/\(stream.streamId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? stream.streamId)/cancellation",
+            method: .POST, body: try JSONEncoder().encode(CancellationBody(cancelled_on: date, expected_revision: stream.lifecycleRevision ?? 0)), responseType: ConfirmOut.self)
+        return out.stream
+    }
 
     func bills() async throws -> RecurringResponse {
         try await NetworkService.shared.authenticatedRequest(

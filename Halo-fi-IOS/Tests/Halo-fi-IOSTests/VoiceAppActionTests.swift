@@ -80,6 +80,8 @@ struct VoiceAppActionTests {
 
 @Test @MainActor func missingAudioReachesCoordinatorErrorAndKeepsAnswerInChat() throws {
     let coordinator = ConversationCoordinator()
+    // This is a completed reply, not the hands-free greeting credential handshake.
+    coordinator.setConversationMode(.pushToTalk)
     let player = StreamingAudioPlayer()
     coordinator.configure(streamingAudioPlayer: player, audioFeedback: AudioFeedbackService(),
                           transcriptStore: ConversationTranscriptStore())

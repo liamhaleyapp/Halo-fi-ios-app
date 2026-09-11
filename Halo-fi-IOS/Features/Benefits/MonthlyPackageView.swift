@@ -192,18 +192,20 @@ struct MonthlyPackageView: View {
 
     private func checklist(_ s: SSIPacketSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text(s.submission?.isSubmitted == true ? "Marked submitted by you" : (s.reviewStatus == "ready_for_review" ? "Ready for your review" : "Draft — review needed")).font(.headline)
+            ForEach(s.reviewIssues ?? [], id: \.self) { Text($0).font(.body) }
             Text("What's inside").font(.headline).accessibilityAddTraits(.isHeader)
             if let wages = s.wageCount, wages > 0 {
-                checkRow(ok: true, title: "Wages",
-                         line: "\(VoiceOverFormatter.count(wages, singular: "paycheck", plural: "paychecks")) reported as gross wages, \(BudgetFormatter.cents(s.wagesGrossCents ?? 0)). Net deposits shown for reconciliation.")
+                checkRow(ok: (s.wagesMissingGross ?? 0) == 0, title: "Wages",
+                         line: "\(VoiceOverFormatter.count(wages, singular: "paycheck", plural: "paychecks")) recorded. Verified gross wages: \(BudgetFormatter.cents(s.wagesGrossCents ?? 0)). Net deposits shown for reconciliation.")
             }
             checkRow(ok: s.rowCount > 0, title: "SSA-795 cover, pre-filled",
                      line: s.rowCount > 0 ? "\(s.expenseKind == "irwe" ? "IRWE" : s.expenseKind == "mixed" ? "BWE and IRWE" : "BWE") statement for \(s.monthLabel). Social Security number and signature left blank for you." : "No expenses logged for \(s.monthLabel) yet.")
             checkRow(ok: s.rowCount > 0, title: "Ledger",
                      line: "\(VoiceOverFormatter.count(s.rowCount, singular: "row", plural: "rows")), \(s.matchedCount) matched to bank charges.")
             checkRow(ok: s.receiptsMissing == 0 && s.rowCount > 0, title: "Receipts \(s.receiptCount) of \(s.rowCount)",
-                     line: s.receiptsMissing == 0 ? "Every expense has a receipt." : "\(VoiceOverFormatter.count(s.receiptsMissing, singular: "expense is", plural: "expenses are")) missing a receipt. Add them from Work expenses before you hand this in.")
-            Text("File name \(s.filename). Under 25 megabytes, no password, ready for SSA's upload tool.")
+                     line: s.receiptsMissing == 0 ? "Every expense has a receipt." : "\(VoiceOverFormatter.count(s.receiptsMissing, singular: "expense is", plural: "expenses are")) missing a receipt. Add evidence or discuss unavailable records with your field office.")
+            Text("File name \(s.filename). Review the package and your field office’s submission instructions before sending.")
                 .font(.caption).foregroundColor(.haloTextSecondary)
         }
         .padding(14)
