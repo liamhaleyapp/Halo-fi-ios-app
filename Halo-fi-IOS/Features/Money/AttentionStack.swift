@@ -86,15 +86,26 @@ struct AttentionView: View {
                         NavigationLink {
                             AttentionReviewView(groupId: group.id, title: group.title, onOpen: onOpen)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(group.title).font(.headline)
-                                Text(VoiceOverFormatter.count(group.cards.count, singular: "question", plural: "questions"))
+                            HaloRow {
+                                HaloIconTile(icon: group.id == "bills" ? "calendar.badge.clock" : "arrow.down.circle.fill",
+                                             tint: group.id == "bills" ? .cyan : .purple)
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(group.title).font(.haloRowTitle).foregroundStyle(Color.haloTextPrimary)
+                                    Text(VoiceOverFormatter.count(group.cards.count, singular: "question", plural: "questions"))
+                                        .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
+                                }.fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                HaloChevron().accessibilityHidden(true)
                             }
-                            .foregroundStyle(Color.haloTextPrimary)
-                            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
-                            .padding(16).haloCard()
+                            .padding(16)
+                            .frame(minHeight: 72)
+                            .haloCard()
                         }
-                        .accessibilityElement(children: .combine)
+                        .buttonStyle(HapticPlainButtonStyle())
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(group.title). \(VoiceOverFormatter.count(group.cards.count, singular: "question", plural: "questions"))")
+                        .accessibilityHint("Opens review questions.")
                         .accessibilityIdentifier("attentionGroup-\(group.id)")
                     }
                 }

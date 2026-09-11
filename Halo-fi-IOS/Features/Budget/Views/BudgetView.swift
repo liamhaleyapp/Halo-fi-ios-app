@@ -38,7 +38,20 @@ struct WeeklySpendableCard: View {
         return data.amountCents == nil ? .haloTextSecondary : .haloPositive
     }
 
+    // The overage also supports servers that still return a zero-clamped amount.
+    // Never turn unavailable bank data into a numeric estimate.
+    var weeklyOverCents: Int {
+        guard let amount = data.amountCents else { return 0 }
+        return max(0, max(-amount, data.overCents ?? 0))
+    }
+
+    var statusMessage: String? {
+        if weeklyOverCents > 0 { return "You’re over your weekly spendable limit." }
+        return (data.warnings ?? []).isEmpty ? nil : "Review bank data before spending"
+    }
+
     var previewAmount: String {
+        if weeklyOverCents > 0 { return "−" + Self.money(weeklyOverCents) }
         if data.status == "shortfall" { return "Short by \(Self.money(data.shortfallCents ?? 0))" }
         if let amount = data.amountCents { return Self.money(amount) }
         return data.status == "setup_required" ? "Set up your weekly plan" : "Estimate unavailable"
@@ -50,8 +63,11 @@ struct WeeklySpendableCard: View {
     }
 
     var previewSummary: String {
-        (["Spendable this week", previewAmount, resetLabel,
-          (data.warnings ?? []).isEmpty ? nil : "Review bank data before spending"]
+        let amount = weeklyOverCents > 0
+            ? "\(Self.money(weeklyOverCents)) over your weekly spendable limit"
+            : previewAmount
+        return (["Spendable this week", amount, resetLabel,
+                 weeklyOverCents > 0 ? nil : statusMessage]
             .compactMap { $0 }).joined(separator: ". ")
     }
 
@@ -106,8 +122,8 @@ struct WeeklySpendableCard: View {
                         Text(resetLabel).font(.subheadline).foregroundStyle(Color.haloTextSecondary)
                     }
                 }
-                if !(data.warnings ?? []).isEmpty {
-                    Text("Review bank data before spending").font(.subheadline)
+                if let statusMessage {
+                    Text(statusMessage).font(.subheadline)
                         .foregroundStyle(DesignTokens.ToneText.act)
                 }
             }

@@ -51,6 +51,22 @@ final class TabHeaderUITests: XCTestCase {
         tab.tap()
     }
 
+    func testAttentionReviewCardHasOneLabelAndOpensQuestions() {
+        let app = launch("ssi_watch")
+        let attention = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Needs your attention'")).firstMatch
+        XCTAssertTrue(scrollTo(attention, in: app))
+        attention.tap()
+        let group = app.descendants(matching: .any)["attentionGroup-bills"].firstMatch
+        XCTAssertTrue(scrollTo(group, in: app))
+        XCTAssertEqual(group.label, "Review bills and subscriptions. 1 question")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Attention review card"
+        shot.lifetime = .keepAlways
+        add(shot)
+        group.tap()
+        XCTAssertTrue(app.navigationBars["Review bills and subscriptions"].waitForExistence(timeout: 5))
+    }
+
     func testFixedExpensesOpensBillsWithAndWithoutSpendingPlan() {
         for hasPlan in [false, true] {
             let app = XCUIApplication()

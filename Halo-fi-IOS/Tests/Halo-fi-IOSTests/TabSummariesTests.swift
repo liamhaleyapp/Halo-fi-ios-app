@@ -60,6 +60,40 @@ final class SpendableUITests: XCTestCase {
         XCTAssertFalse(value.isLow, "Unavailable is not zero")
     }
 
+    func testWeeklyOverageIsSignedAndSpokenClearlyWithLegacyOrSignedResponse() throws {
+        for amount in [0, -4283] {
+            var value = try sample()
+            value.amountCents = amount
+            value.overCents = 4283
+            value.weeklyAllowanceCents = 106792
+            value.weeklySpentCents = 111075
+            value.warnings = ["Bank data needs review"]
+            let card = WeeklySpendableCard(data: value)
+            XCTAssertEqual(card.previewAmount, "−$42.83")
+            XCTAssertEqual(card.statusMessage, "You’re over your weekly spendable limit.")
+            XCTAssertTrue(card.previewSummary.contains("$42.83 over your weekly spendable limit"))
+            XCTAssertFalse(card.previewSummary.contains("Review bank data"))
+            XCTAssertEqual(value.progress, 1)
+            XCTAssertTrue(value.isLow)
+            if amount < 0 {
+                for size in [DynamicTypeSize.large, .accessibility5] {
+                    let renderer = ImageRenderer(content: card
+                        .environment(\.colorScheme, .light).environment(\.dynamicTypeSize, size)
+                        .frame(width: 393).background(Color.white))
+                    let picture = try XCTUnwrap(renderer.uiImage)
+                    let attachment = XCTAttachment(image: picture)
+                    attachment.name = "Weekly overage \(size)"
+                    attachment.lifetime = .keepAlways
+                    add(attachment)
+                }
+            }
+        }
+        var unavailable = try sample()
+        unavailable.amountCents = nil
+        unavailable.overCents = 4283
+        XCTAssertEqual(WeeklySpendableCard(data: unavailable).previewAmount, "Estimate unavailable")
+    }
+
     func testEditorRejectsPartialNumbersAndParsesLocaleCents() {
         let us = Locale(identifier: "en_US")
         XCTAssertEqual(SpendablePlanEditor.cents("5,000.25",locale:us),500025)
