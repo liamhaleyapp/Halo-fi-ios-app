@@ -25,6 +25,9 @@ struct CalendarItem: Codable, Equatable, Identifiable {
     var month: String? = nil
     var date: String? = nil   // present on `next`
     var id: String { "\(kind)-\(label)-\(status)-\(cents)-\(date ?? "")" }
+    var canManageRecurringPayment: Bool {
+        (kind == "bill" || kind == "subscription") && !(streamId ?? "").isEmpty
+    }
 
     /// Shared wording for visible text and the single VoiceOver row.
     var statusDescription: String {

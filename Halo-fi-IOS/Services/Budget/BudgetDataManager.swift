@@ -46,6 +46,13 @@ final class BudgetDataManager {
     /// everything else, other months load on demand.
     var calendars: [String: CalendarMonth] = [:]
     var currentCalendarKey: String? = nil
+    @ObservationIgnored private var calendarGeneration = 0
+
+    func invalidateCalendar() {
+        calendarGeneration += 1
+        calendars = [:]
+        currentCalendarKey = nil
+    }
 
     func calendar(for month: String?) -> CalendarMonth? {
         if let month { return calendars[month] }
@@ -55,8 +62,9 @@ final class BudgetDataManager {
 
     func loadCalendar(month: String?) async throws {
         let generation = sessionGeneration
+        let calendarAtStart = calendarGeneration
         let cal = try await CalendarService.shared.month(month)
-        guard generation == sessionGeneration else { throw CancellationError() }
+        guard generation == sessionGeneration, calendarAtStart == calendarGeneration else { throw CancellationError() }
         calendars[cal.month] = cal
         if month == nil { currentCalendarKey = cal.month }
     }
@@ -470,10 +478,11 @@ final class BudgetDataManager {
         // Attention + income summary, in parallel, failures isolated: the
         // stack keeps its last cards when the fetch fails.
         // Calendar: current month, failures isolated.
+        let calendarAtStart = calendarGeneration
         Task { [weak self] in
             if let cal = try? await CalendarService.shared.month(nil) {
                 await MainActor.run {
-                    guard let self, generation == self.sessionGeneration else { return }
+                    guard let self, generation == self.sessionGeneration, calendarAtStart == self.calendarGeneration else { return }
                     self.calendars[cal.month] = cal
                     self.currentCalendarKey = cal.month
                 }

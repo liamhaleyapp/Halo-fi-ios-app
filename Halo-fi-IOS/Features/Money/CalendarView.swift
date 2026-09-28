@@ -5,7 +5,7 @@
 //  Money → Calendar (2026-09-05): the month as a list of days, one VoiceOver
 //  element per item, day headings for the rotor. No grid — a grid is
 //  hostile to a screen reader; the day list IS the calendar. Every amount
-//  is an estimate and the screen says so. Editing lives in Income / Bills.
+//  carries its status. Recurring entries open the shared bill/subscription editor.
 //
 
 import SwiftUI
@@ -15,6 +15,7 @@ struct CalendarView: View {
     @Environment(UserManager.self) private var userManager
     @State private var month: String? = nil       // nil = current
     @State private var errorMessage: String?
+    @State private var selectedPayment: CalendarItem?
     @AccessibilityFocusState private var focus: Bool
 
     private var cal: CalendarMonth? { dataManager.calendar(for: month) }
@@ -61,6 +62,12 @@ struct CalendarView: View {
         }
         .task { await load(force: true) }
         .onChange(of: month) { _, _ in Task { await load(force: true); focus = true } }
+        .sheet(item: $selectedPayment) { item in
+            BillConfirmSheet(streamId: item.streamId ?? "", merchant: item.label, amountCents: item.cents,
+                             frequencyLabel: "", nextExpected: nil, suggestedKind: item.kind) {
+                Task { await load(force: true) }
+            }
+        }
     }
 
     private func summaryLine(_ cal: CalendarMonth) -> String {
@@ -117,7 +124,19 @@ struct CalendarView: View {
         return day.isToday ? "Today, \(spoken)" : spoken
     }
 
+    @ViewBuilder
     private func itemRow(_ item: CalendarItem, day: CalendarDay) -> some View {
+        if item.canManageRecurringPayment {
+            Button { selectedPayment = item } label: { itemContent(item, day: day) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens payment details, including recording a cancellation.")
+                .accessibilityAction(named: Text("Record cancellation")) { selectedPayment = item }
+        } else {
+            itemContent(item, day: day)
+        }
+    }
+
+    private func itemContent(_ item: CalendarItem, day: CalendarDay) -> some View {
         let tint: Color = {
             switch item.kind {
             case "income": return .haloPositive
@@ -151,9 +170,13 @@ struct CalendarView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            if item.canManageRecurringPayment {
+                Image(systemName: "chevron.right").foregroundColor(.haloTextSecondary).accessibilityHidden(true)
+            }
         }
         .padding(14)
         .frame(minHeight: 64)
+        .contentShape(Rectangle())
         .haloCard(tint: (item.kind == "deadline" && item.status == "due") ? .orange : (item.status == "overdue" ? .red : nil))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(dayTitle(day)), \(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + (state.hasSuffix(".") ? "" : "."))

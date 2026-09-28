@@ -25,6 +25,8 @@ struct BillConfirmSheet: View {
     @State private var cancellationDate = Date()
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var loadedStream: RecurringStream?
+    @State private var isLoading = true
     @AccessibilityFocusState private var focused: Bool
 
     init(card: AttentionCard, onDone: (() -> Void)? = nil) {
@@ -42,62 +44,97 @@ struct BillConfirmSheet: View {
         self.suggestedKind = suggestedKind; self.amountVaries = amountVaries; self.onDone = onDone
     }
 
-    private var stream: RecurringStream? { dataManager.bills?.streams.first { $0.streamId == streamId } }
+    private var stream: RecurringStream? { loadedStream ?? dataManager.bills?.streams.first { $0.streamId == streamId } }
+    private var isTracked: Bool { stream?.userConfirmed == true || stream?.cancelledOn != nil }
 
-    private var suggestsSubscription: Bool { suggestedKind == "subscription" }
+    private var suggestsSubscription: Bool { (stream?.kind ?? suggestedKind) == "subscription" }
 
     var body: some View {
         NavigationStack {
             ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Is \(merchant) a \(suggestsSubscription ? "subscription" : "bill")?")
+                Text(isTracked ? merchant : "Is \(merchant) a \(suggestsSubscription ? "subscription" : "bill")?")
                     .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focused)
-                Text("About \(BudgetFormatter.cents(amountCents)) \(frequencyLabel)" + (amountVaries ? ", the amount varies." : ".")
-                     + (nextExpected.map { " Next one expected \(TabSummaries.spokenDate($0))." } ?? ""))
+                Text("About \(BudgetFormatter.cents(stream?.averageCents ?? amountCents)) \(stream?.frequencyLabel ?? frequencyLabel).")
                     .font(.body).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Bills are rent, utilities, phone, insurance and loan payments. Subscriptions are streaming, software and memberships. Both count in what is left by the 1st.")
-                    .font(.subheadline).foregroundColor(.haloTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if suggestsSubscription {
-                    kindButton("Yes, a subscription", kind: "subscription", prominent: true)
-                    kindButton("Yes, a bill", kind: "bill", prominent: false)
-                } else {
-                    kindButton("Yes, a bill", kind: "bill", prominent: true)
-                    kindButton("Yes, a subscription", kind: "subscription", prominent: false)
+                if let card = reminderCard, card.id.hasPrefix("cancelled-charge:") {
+                    Text(card.line).font(.body).foregroundColor(DesignTokens.ToneText.watch)
                 }
-                Button { answer(false) } label: {
-                    Label("No, neither", systemImage: "xmark.circle").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
-                }
-                .buttonStyle(.bordered).disabled(isSaving)
-                .accessibilityHint("Saves that this is not a bill or subscription. It will not be asked again.")
-                AttentionDetailReminder(card: reminderCard).disabled(isSaving)
                 if let stream {
                     Text(stream.forecastLine).font(.body)
                     if stream.cancelledOn == nil {
                         DatePicker("Cancellation effective date", selection: $cancellationDate, displayedComponents: .date)
-                        Button("I cancelled this") { recordCancellation(stream, undo: false) }
-                            .frame(minHeight: 48).disabled(isSaving)
+                            .disabled(isSaving || isLoading)
+                        Button { recordCancellation(stream, undo: false) } label: {
+                            Label("I cancelled this", systemImage: "calendar.badge.minus")
+                                .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                        }
+                            .buttonStyle(.bordered).disabled(isSaving || isLoading)
                             .accessibilityHint("Records your cancellation and stops future forecasts. Does not cancel with the company.")
-                    } else {
+                    } else if let cancelledOn = stream.cancelledOn {
+                        Text("Cancelled effective \(TabSummaries.spokenDate(cancelledOn)).")
+                            .font(.subheadline).foregroundColor(.haloTextSecondary)
                         Button("Undo cancellation") { recordCancellation(stream, undo: true) }
-                            .frame(minHeight: 48).disabled(isSaving)
+                            .frame(minHeight: 48).disabled(isSaving || isLoading)
                     }
+                    Text("HaloFi records your cancellation; it does not cancel with the company. We'll flag another posted charge for review. Missing bank data cannot confirm that billing stopped.")
+                        .font(.subheadline).foregroundColor(.haloTextSecondary)
                 }
-                if let errorMessage { Text(errorMessage).font(.callout).foregroundStyle(.red) }
+                if isTracked {
+                    DisclosureGroup("Change classification") { classificationButtons }
+                } else {
+                    classificationButtons
+                }
+                AttentionDetailReminder(card: reminderCard).disabled(isSaving)
+                if isLoading { ProgressView("Loading payment details…") }
+                if let errorMessage {
+                    Text(errorMessage).font(.callout).foregroundStyle(.red)
+                    if loadedStream == nil { Button("Try again") { Task { await loadDetails() } }.frame(minHeight: 44) }
+                }
                 Spacer()
             }
             .padding(20)
             .readableContentWidth()
             }
             .background(Color.haloBackground.ignoresSafeArea())
-            .navigationTitle(suggestsSubscription ? "Subscription?" : "Bill?")
+            .navigationTitle(suggestsSubscription ? "Subscription" : "Bill")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton(label: "Not now", hint: "Closes without answering.") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { dismiss() } } }
             .accessibilityAction(.escape) { dismiss() }
             .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
+            .task { await loadDetails() }
+        }
+    }
+
+    @ViewBuilder
+    private var classificationButtons: some View {
+        if suggestsSubscription {
+            kindButton("Yes, a subscription", kind: "subscription", prominent: true)
+            kindButton("Yes, a bill", kind: "bill", prominent: false)
+        } else {
+            kindButton("Yes, a bill", kind: "bill", prominent: true)
+            kindButton("Yes, a subscription", kind: "subscription", prominent: false)
+        }
+        Button { answer(false) } label: {
+            Label("No, neither", systemImage: "xmark.circle").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+        }
+        .buttonStyle(.bordered).disabled(isSaving)
+        .accessibilityHint("Saves that this is not a bill or subscription.")
+    }
+
+    private func loadDetails() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await RecurringService.shared.bills()
+            guard !Task.isCancelled else { return }
+            loadedStream = response.streams.first { $0.streamId == streamId }
+            errorMessage = loadedStream == nil ? "This payment is no longer available. Close and refresh Calendar." : nil
+        } catch {
+            errorMessage = "Couldn't load payment details. \(error.localizedDescription)"
         }
     }
 
@@ -114,10 +151,14 @@ struct BillConfirmSheet: View {
 
     private func recordCancellation(_ stream: RecurringStream, undo: Bool) {
         isSaving = true
+        errorMessage = nil
         Task {
             do {
-                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+                let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian)
+                f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
                 _ = try await RecurringService.shared.setCancellation(stream: stream, date: undo ? nil : f.string(from: cancellationDate))
+                dataManager.invalidateCalendar()
+                dataManager.invalidateAttention()
                 await dataManager.refresh()
                 UIAccessibility.post(notification: .announcement, argument: undo ? "Cancellation undone." : "Cancellation recorded.")
                 onDone?(); dismiss()
