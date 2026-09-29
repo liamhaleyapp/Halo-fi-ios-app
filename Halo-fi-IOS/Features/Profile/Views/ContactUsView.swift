@@ -48,21 +48,40 @@ struct ContactUsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(UserManager.self) private var userManager
 
-    @State private var selectedTopic: ContactTopic = .support
-    @State private var message = ""
+    @State private var selectedTopic: ContactTopic
+    @State private var message: String
     @State private var isSending = false
     @State private var showingResult = false
     @State private var resultMessage = ""
     @State private var resultSuccess = false
+    private let title: String
 
     private let networkService = NetworkService.shared
+
+    init(title: String = "Contact Us", topic: ContactTopic = .support, message: String = "") {
+        self.title = title
+        _selectedTopic = State(initialValue: topic)
+        _message = State(initialValue: message)
+    }
+
+    /// "Send feedback" (2026-09-29): the same form, opened as a bug report
+    /// with the build, the screen the user came from and the iOS version
+    /// already on the first lines so a tester never has to find them.
+    static func feedback() -> ContactUsView {
+        ContactUsView(title: "Send feedback", topic: .bug, message: feedbackPrefill())
+    }
+
+    static func feedbackPrefill() -> String {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "HaloFi feedback, build \(build)\nScreen: \(Diagnostics.lastScreen), iOS \(UIDevice.current.systemVersion)\n\n"
+    }
 
     var body: some View {
         ZStack {
             Color.haloBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ModalHeader(title: "Contact Us", onDone: { dismiss() })
+                ModalHeader(title: title, onDone: { dismiss() })
 
                 ScrollView {
                     VStack(spacing: 24) {

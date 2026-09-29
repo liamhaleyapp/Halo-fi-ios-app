@@ -472,6 +472,9 @@ struct SubscriptionPlan: Identifiable {
   let detail: String
   let terms: String
   let hasIntroductoryOffer: Bool
+  /// "7 days" when the store offers a free trial this user is eligible for
+  /// (2026-09-29); nil for paid intro offers and for no offer at all.
+  let freeTrialLength: String?
   var id: String { package.identifier }
   var tier: SubscriptionTier? { SubscriptionTier.from(productID: package.storeProduct.productIdentifier) }
   var billingCycle: SubscriptionBillingCycle? {
@@ -484,6 +487,12 @@ struct SubscriptionPlan: Identifiable {
   var displayTitle: String { tier?.title ?? title }
   var price: String { package.storeProduct.localizedPriceString }
   var billingLabel: String { billingCycle == .yearly ? "per year" : "per month" }
+  /// "7 days free, then $9.99 per month" for the plan row; nil without a trial.
+  var trialLine: String? { freeTrialLength.map { Self.trialLine(length: $0, price: price, billingLabel: billingLabel) } }
+  /// "Start 7-day free trial", or today's "Continue with Pro Monthly".
+  func continueTitle(cycle: SubscriptionBillingCycle) -> String {
+    Self.continueTitle(trialLength: freeTrialLength, planTitle: displayTitle, cycleTitle: cycle.title)
+  }
 
   init(package: Package, introEligible: Bool) {
     self.package = package
@@ -496,9 +505,26 @@ struct SubscriptionPlan: Identifiable {
       terms = Self.offerTerms(price: offer.localizedPriceString, mode: offer.paymentMode,
                               period: offer.subscriptionPeriod, count: offer.numberOfPeriods,
                               recurring: recurring)
+      freeTrialLength = offer.paymentMode == .freeTrial
+        ? Self.period(offer.subscriptionPeriod, multiplier: offer.numberOfPeriods) : nil
     } else {
       terms = "\(recurring)."
+      freeTrialLength = nil
     }
+  }
+
+  static func trialLine(length: String, price: String, billingLabel: String) -> String {
+    "\(length) free, then \(price) \(billingLabel)"
+  }
+
+  static func continueTitle(trialLength: String?, planTitle: String, cycleTitle: String) -> String {
+    guard let trialLength else { return "Continue with \(planTitle) \(cycleTitle)" }
+    // "7 days" → "7-day"; "1 month" → "1-month".
+    let parts = trialLength.split(separator: " ")
+    guard parts.count == 2 else { return "Start free trial" }
+    var unit = String(parts[1])
+    if unit.hasSuffix("s") { unit.removeLast() }
+    return "Start \(parts[0])-\(unit) free trial"
   }
 
   static func period(_ period: RevenueCat.SubscriptionPeriod?, multiplier: Int = 1) -> String {

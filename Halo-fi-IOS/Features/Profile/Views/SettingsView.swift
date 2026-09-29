@@ -9,7 +9,7 @@ import SwiftUI
 import LocalAuthentication
 
 enum SettingsDestination: Hashable {
-  case profile, preferences, accessibility, benefitsProfile, moneyProfile, counselorQuestions, fieldOffice, workProfile, subscription, inviteFriends, about, accounts, contactUs, aiDataSharing
+  case profile, preferences, accessibility, benefitsProfile, moneyProfile, counselorQuestions, fieldOffice, workProfile, subscription, inviteFriends, about, accounts, sendFeedback, contactUs, aiDataSharing
 }
 
 struct SettingsView: View {
@@ -136,6 +136,13 @@ struct SettingsView: View {
               SettingsOptionLabel(icon: "waveform.circle.fill", title: "AI & Data Sharing")
             }
 
+            // Early access (2026-09-29): the contact form, prefilled with
+            // build, screen and iOS so a tester's report arrives complete.
+            NavigationLink(value: SettingsDestination.sendFeedback) {
+              SettingsOptionLabel(icon: "exclamationmark.bubble.fill", title: "Send feedback")
+            }
+            .accessibilityHint("Tell us what looked wrong. Build and screen are filled in for you.")
+
             NavigationLink(value: SettingsDestination.contactUs) {
               SettingsOptionLabel(icon: "envelope.fill", title: "Contact Us")
             }
@@ -246,6 +253,9 @@ struct SettingsView: View {
 
         case .accounts:
           AccountsView()
+
+        case .sendFeedback:
+          ContactUsView.feedback()
 
         case .contactUs:
           ContactUsView()

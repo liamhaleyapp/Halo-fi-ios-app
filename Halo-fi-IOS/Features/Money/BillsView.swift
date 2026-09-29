@@ -92,10 +92,15 @@ struct BillsView: View {
             : "\(VoiceOverFormatter.count(confirmedBills.count, singular: "bill", plural: "bills")) and \(VoiceOverFormatter.count(confirmedSubscriptions.count, singular: "subscription", plural: "subscriptions")), about \(VoiceOverFormatter.dollars(monthly)) a month."
         if let next { detail += " Next: \(next.1.merchant), \(TabSummaries.spokenDate(next.0))." }
         if !unanswered.isEmpty { detail += " \(VoiceOverFormatter.count(unanswered.count, singular: "charge", plural: "charges")) waiting for a yes or no." }
-        // The Social Security disclaimer only means something to benefit users.
         return ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: detail,
-                                         isEstimate: count > 0 && userManager.capabilities.showsBenefitsLane,
+                                         isEstimate: Self.headerIsEstimate(confirmedCount: count, capabilities: userManager.capabilities),
                                          tone: unanswered.isEmpty ? .neutral : .watch)
+    }
+
+    /// The Social Security disclaimer only means something to benefit users,
+    /// and only once a confirmed number is on screen.
+    static func headerIsEstimate(confirmedCount: Int, capabilities: UserCapabilities) -> Bool {
+        confirmedCount > 0 && capabilities.showsBenefitsLane
     }
 
     private func statementRow(_ p: StatementPayment) -> some View {

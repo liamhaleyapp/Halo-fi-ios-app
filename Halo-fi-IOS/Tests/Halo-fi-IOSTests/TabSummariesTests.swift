@@ -540,4 +540,37 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         let two = try JSONDecoder().decode(RecurringResponse.self, from: Data(sibling.utf8))
         #expect(two.dedupedStreams.map(\.streamId) == ["a", "b"])
     }
+
+    /// The Bills header's "Estimate" disclaimer is benefits-only, and only
+    /// once a confirmed number is on screen.
+    @Test func billsHeaderEstimateIsBenefitsOnly() {
+        #expect(BillsView.headerIsEstimate(confirmedCount: 1, capabilities: UITestArchetype.ssiBlind.capabilities))
+        #expect(BillsView.headerIsEstimate(confirmedCount: 3, capabilities: UITestArchetype.ssdi.capabilities))
+        #expect(!BillsView.headerIsEstimate(confirmedCount: 0, capabilities: UITestArchetype.ssiBlind.capabilities))
+        #expect(!BillsView.headerIsEstimate(confirmedCount: 1, capabilities: UITestArchetype.noneAnswered.capabilities))
+        #expect(!BillsView.headerIsEstimate(confirmedCount: 5, capabilities: .none))
+        // The header itself carries the wording only when the flag is set.
+        let estimate = ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: "1 bill.", isEstimate: true)
+        #expect(estimate.spokenLabel.contains("Estimate"))
+        let plain = ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: "1 bill.", isEstimate: false)
+        #expect(!plain.spokenLabel.contains("Estimate"))
+    }
+
+    /// `confirmed_by` (2026-09-29) decodes when present and stays nil for
+    /// older servers; "halo" marks an assumed answer and builds the evidence line.
+    @Test func recurringStreamDecodesConfirmedBy() throws {
+        let json = #"{"today":"2026-09-29","confirmed_count":1,"monthly_bills_cents":1599,"streams":[{"stream_id":"a","merchant":"Netflix","description":"NETFLIX.COM","frequency":"MONTHLY","frequency_label":"monthly","average_cents":1599,"last_cents":1599,"last_date":"2026-09-01","next_expected":"2026-10-01","is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","kind":"subscription","confirmed_by":"halo"},{"stream_id":"b","merchant":"XYZ Property","description":"VT STATE HO-0128 DES:LL RENT","frequency":"MONTHLY","frequency_label":"monthly","average_cents":85400,"last_cents":85400,"last_date":null,"next_expected":null,"is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","confirmed_by":"user"},{"stream_id":"c","merchant":"Gym","description":"","frequency":"MONTHLY","frequency_label":"monthly","average_cents":3000,"last_cents":3000,"last_date":"2026-09-10","next_expected":null,"is_active":true,"user_confirmed":null,"institution_name":"Chase","account_id":"acct-1"}]}"#
+        let response = try JSONDecoder().decode(RecurringResponse.self, from: Data(json.utf8))
+        let halo = try #require(response.streams.first)
+        #expect(halo.confirmedBy == "halo")
+        #expect(halo.assumedByHalo)
+        #expect(halo.evidenceLine == "Your bank shows: NETFLIX.COM. Last charge $15.99 on September 1.")
+        let user = response.streams[1]
+        #expect(user.confirmedBy == "user")
+        #expect(!user.assumedByHalo)
+        #expect(user.evidenceLine == "Your bank shows: VT STATE HO-0128 DES:LL RENT. Last charge $854.00.")
+        let legacy = response.streams[2]
+        #expect(legacy.confirmedBy == nil)
+        #expect(legacy.evidenceLine == nil)
+    }
 }

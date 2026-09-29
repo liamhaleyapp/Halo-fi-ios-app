@@ -26,6 +26,9 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     var kind: String? = nil
     /// user | auto | learned
     var kindSource: String? = nil
+    /// Who answered "is this a bill?" (2026-09-29): "user", or "halo" when
+    /// HaloFi assumed an obvious subscription (Netflix) without asking.
+    var confirmedBy: String? = nil
     var amountVaries: Bool? = nil
     var cancelledOn: String? = nil
     var lifecycleRevision: Int? = nil
@@ -56,6 +59,17 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     }
 
     var displayCents: Int { typicalCents ?? averageCents }
+    /// HaloFi answered for the user; the sheet says so and offers the change.
+    var assumedByHalo: Bool { confirmedBy == "halo" }
+    /// "Your bank shows: VT STATE HO-0128 DES:LL RENT. Last charge $854.00 on
+    /// September 1." — the raw descriptor so a blind user can recognise a
+    /// cryptic payee as rent. Nil when the bank sent no descriptor.
+    var evidenceLine: String? {
+        guard let description = description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty else { return nil }
+        var line = "Your bank shows: \(description). Last charge \(BudgetFormatter.cents(lastCents))"
+        if let lastDate { line += " on \(TabSummaries.spokenDate(lastDate))" }
+        return line + "."
+    }
     /// "Was $50.00, now $55.00 since September 1." when the amount moved.
     var amountChangedLine: String? {
         amountChanged.map { "Was \(BudgetFormatter.cents($0.fromCents)), now \(BudgetFormatter.cents($0.toCents)) since \(TabSummaries.spokenDate($0.since))." }
@@ -91,6 +105,7 @@ struct RecurringStream: Codable, Equatable, Identifiable {
         case accountId = "account_id"
         case kind
         case kindSource = "kind_source"
+        case confirmedBy = "confirmed_by"
         case amountVaries = "amount_varies"
         case cancelledOn = "cancelled_on", lifecycleRevision = "lifecycle_revision"
         case forecastStatus = "forecast_status", chargedAfterCancellation = "charged_after_cancellation"

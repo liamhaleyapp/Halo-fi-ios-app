@@ -68,6 +68,9 @@ struct MoneyHomeView: View {
     @State private var candidateCard: AttentionCard?
     @State private var billCard: AttentionCard?
     @State private var suggestionCard: AttentionCard?
+    /// Early access notice (2026-09-29): once per build, under the header.
+    @State private var showsEarlyAccessNotice = !EarlyAccessNotice.isDismissed
+    @State private var showingFeedback = false
 
     private static let transactionPageSize = 200
 
@@ -79,6 +82,12 @@ struct MoneyHomeView: View {
                     VStack(spacing: 12) {
                         TabTitle("Money")
                         header
+                        if showsEarlyAccessNotice {
+                            EarlyAccessNotice(onFeedback: { showingFeedback = true }) {
+                                EarlyAccessNotice.markDismissed()
+                                withAnimation { showsEarlyAccessNotice = false }
+                            }
+                        }
                         AccountIdentityReviewSection()
                         attentionRow
                         budgetRow
@@ -131,6 +140,7 @@ struct MoneyHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
+            .sheet(isPresented: $showingFeedback) { ContactUsView.feedback() }
             .fullScreenCover(isPresented: $showingMoneyProfile) { MoneyProfileSheet() }
             .onReceive(NotificationCenter.default.publisher(for: .accountLinked)) { _ in
                 // First account in: offer the four money questions once,
@@ -491,6 +501,57 @@ struct MoneyHomeView: View {
         guard let d = f.date(from: String(iso.prefix(10))) else { return iso }
         let out = DateFormatter(); out.dateFormat = "MMMM d"
         return out.string(from: d)
+    }
+}
+
+// MARK: - Early access notice (2026-09-29)
+
+/// "Early access build" card: one VoiceOver element for the text, then the
+/// two buttons. Dismissal is remembered per build (CFBundleVersion), so every
+/// new TestFlight drop shows it once more.
+struct EarlyAccessNotice: View {
+    let onFeedback: () -> Void
+    let onDismiss: () -> Void
+
+    private static var key: String {
+        "earlyAccessNotice.dismissed." + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")
+    }
+    static var isDismissed: Bool { UserDefaults.standard.bool(forKey: key) }
+    static func markDismissed() { UserDefaults.standard.set(true, forKey: key) }
+
+    private let line = "You're using an early version. If something looks wrong, tell us — it helps more than you'd think."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Early access build").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
+                    Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Early access build. \(line)")
+                Spacer(minLength: 0)
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.haloTextSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Dismiss early access notice")
+                .accessibilityHint("Hides this until the next update.")
+            }
+            Button(action: onFeedback) {
+                Label("Send feedback", systemImage: "exclamationmark.bubble.fill")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint("Opens a message to the HaloFi team with the build and screen filled in.")
+        }
+        .padding(16)
+        .haloCard()
+        .accessibilityIdentifier("earlyAccessNotice")
     }
 }
 

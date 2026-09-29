@@ -240,7 +240,13 @@ struct SubscriptionCheckoutView: View {
               Text(plan.displayTitle).font(.title2.bold())
               Text("\(plan.price) \(plan.billingLabel)")
                 .font(.title3.weight(.semibold))
-              if plan.hasIntroductoryOffer { Text(plan.terms).font(.body) }
+              // A free trial reads as one plain sentence; other intro
+              // offers keep the store's full terms.
+              if let trial = plan.trialLine {
+                Text(trial).font(.body.weight(.semibold))
+              } else if plan.hasIntroductoryOffer {
+                Text(plan.terms).font(.body)
+              }
               if !plan.detail.isEmpty { Text(plan.detail).font(.body) }
               if checkout.selectedID == plan.id {
                 Text("Selected").font(.body.weight(.semibold))
@@ -272,7 +278,7 @@ struct SubscriptionCheckoutView: View {
           Button {
             Task { await checkout.purchase() }
           } label: {
-            Text(checkout.selectedPlan.map { "Continue with \($0.displayTitle) \(checkout.billingCycle.title)" } ?? "Select a plan above")
+            Text(checkout.selectedPlan.map { $0.continueTitle(cycle: checkout.billingCycle) } ?? "Select a plan above")
               .font(.headline)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity, minHeight: 44)

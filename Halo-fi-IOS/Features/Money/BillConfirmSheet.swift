@@ -27,6 +27,9 @@ struct BillConfirmSheet: View {
     @State private var errorMessage: String?
     @State private var loadedStream: RecurringStream?
     @State private var isLoading = true
+    /// "Name this payment" (2026-09-29): saved on its own for a confirmed
+    /// stream, otherwise carried as the label of the next Yes answer.
+    @State private var paymentName = ""
     @AccessibilityFocusState private var focused: Bool
 
     init(card: AttentionCard, onDone: (() -> Void)? = nil) {
@@ -48,6 +51,9 @@ struct BillConfirmSheet: View {
     private var isTracked: Bool { stream?.userConfirmed == true || stream?.cancelledOn != nil }
 
     private var suggestsSubscription: Bool { (stream?.kind ?? suggestedKind) == "subscription" }
+    /// Opened from an attention card and still without a yes or no.
+    private var canDefer: Bool { reminderCard != nil && stream?.userConfirmed == nil }
+    private var trimmedName: String { paymentName.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         NavigationStack {
@@ -60,6 +66,9 @@ struct BillConfirmSheet: View {
                 Text("About \(BudgetFormatter.cents(stream?.displayCents ?? amountCents)) \(stream?.frequencyLabel ?? frequencyLabel).")
                     .font(.body).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let evidence = stream?.evidenceLine {
+                    Text(evidence).font(.subheadline).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                }
                 if let changed = stream?.amountChangedLine {
                     Text(changed).font(.body).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -89,10 +98,27 @@ struct BillConfirmSheet: View {
                     Text("HaloFi records your cancellation; it does not cancel with the company. We'll flag another posted charge for review. Missing bank data cannot confirm that billing stopped.")
                         .font(.subheadline).foregroundColor(.haloTextSecondary)
                 }
+                if stream?.assumedByHalo == true {
+                    Text("HaloFi assumed this is a \(stream?.kindWord ?? "bill"). Change it below if that's wrong.")
+                        .font(.body).foregroundColor(.haloTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if isTracked {
-                    DisclosureGroup("Change classification") { classificationButtons }
+                    DisclosureGroup("Change classification") {
+                        classificationButtons
+                        nameField
+                    }
                 } else {
                     classificationButtons
+                    if canDefer {
+                        Button { deferQuestion() } label: {
+                            Label("Not sure yet", systemImage: "questionmark.circle")
+                                .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                        }
+                        .buttonStyle(.bordered).disabled(isSaving)
+                        .accessibilityHint("Leaves this unanswered. HaloFi asks again in a month.")
+                    }
+                    DisclosureGroup("Name this payment") { nameField }
                 }
                 AttentionDetailReminder(card: reminderCard).disabled(isSaving)
                 if isLoading { ProgressView("Loading payment details…") }
@@ -134,6 +160,29 @@ struct BillConfirmSheet: View {
             .font(.subheadline).foregroundColor(.haloTextSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityHidden(true)
+    }
+
+    /// A name in the user's words ("Rent") for a payee the bank names badly.
+    /// Confirmed streams save at once; unanswered ones save with the Yes.
+    @ViewBuilder
+    private var nameField: some View {
+        TextField("Rent, phone, car insurance…", text: $paymentName)
+            .textFieldStyle(CustomTextFieldStyle())
+            .submitLabel(.done)
+            .disabled(isSaving)
+            .accessibilityLabel("Name this payment")
+        if isTracked {
+            Button { saveName() } label: {
+                Label("Save name", systemImage: "tag")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.bordered).disabled(isSaving || isLoading || trimmedName.isEmpty)
+            .accessibilityHint("Renames this payment everywhere in HaloFi.")
+        } else {
+            Text("Saved with your answer above.")
+                .font(.subheadline).foregroundColor(.haloTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func loadDetails() async {
@@ -178,15 +227,58 @@ struct BillConfirmSheet: View {
         }
     }
 
-    private func answer(_ isBill: Bool, kind: String? = nil) {
+    /// "Not sure yet": the card rests for a month; the stream keeps no answer.
+    private func deferQuestion() {
+        guard let card = reminderCard else { return }
+        isSaving = true
+        errorMessage = nil
+        Task {
+            let saved = await dataManager.dismissCard(card, days: 30)
+            isSaving = false
+            guard saved else {
+                Haptics.error()
+                errorMessage = "Couldn't save that. Try again."
+                UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+                return
+            }
+            UIAccessibility.post(notification: .announcement, argument: "Okay. I'll ask again in a month.")
+            onDone?()
+            dismiss()
+        }
+    }
+
+    private func saveName() {
+        let name = trimmedName
+        guard !name.isEmpty else { return }
         isSaving = true
         errorMessage = nil
         Task {
             do {
-                try await dataManager.confirmBill(streamId: streamId, isBill: isBill, kind: kind)
+                try await dataManager.confirmBill(streamId: streamId, isBill: true, label: name, kind: stream?.kind)
+                await loadDetails()
                 isSaving = false
                 Haptics.success()
-                UIAccessibility.post(notification: .announcement, argument: isBill ? "Saved. \(merchant) counts as a \(kind ?? "bill")." : "Saved. \(merchant) is not a bill or subscription.")
+                UIAccessibility.post(notification: .announcement, argument: "Saved. This payment is now called \(name).")
+            } catch {
+                isSaving = false
+                Haptics.error()
+                errorMessage = "Couldn't save that name. \(error.localizedDescription)"
+                UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+            }
+        }
+    }
+
+    private func answer(_ isBill: Bool, kind: String? = nil) {
+        isSaving = true
+        errorMessage = nil
+        // A name typed before the Yes rides along with it; a No never renames.
+        let label = isBill && !trimmedName.isEmpty ? trimmedName : nil
+        Task {
+            do {
+                try await dataManager.confirmBill(streamId: streamId, isBill: isBill, label: label, kind: kind)
+                isSaving = false
+                Haptics.success()
+                UIAccessibility.post(notification: .announcement, argument: isBill ? "Saved. \(label ?? merchant) counts as a \(kind ?? "bill")." : "Saved. \(merchant) is not a bill or subscription.")
                 onDone?()
                 dismiss()
             } catch {
