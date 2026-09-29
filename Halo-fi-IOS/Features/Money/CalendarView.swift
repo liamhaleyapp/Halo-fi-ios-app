@@ -2,10 +2,12 @@
 //  CalendarView.swift
 //  Halo-fi-IOS
 //
-//  Money → Calendar (2026-09-05): the month as a list of days, one VoiceOver
+//  Money → Calendar (2026-09-05): the days ahead as a list, one VoiceOver
 //  element per item, day headings for the rotor. No grid — a grid is
 //  hostile to a screen reader; the day list IS the calendar. Every amount
 //  carries its status. Recurring entries open the shared bill/subscription editor.
+//  2026-09-28: 30-day windows from today instead of calendar months; rows
+//  take the Recent-transactions look (logo, amount on the right).
 //
 
 import SwiftUI
@@ -13,25 +15,24 @@ import SwiftUI
 struct CalendarView: View {
     @Environment(BudgetDataManager.self) private var dataManager
     @Environment(UserManager.self) private var userManager
-    @State private var month: String? = nil       // nil = current
+    @State private var offsetDays = 0            // multiples of 30, never past windows
     @State private var errorMessage: String?
     @State private var selectedPayment: CalendarItem?
     @AccessibilityFocusState private var focus: Bool
 
-    private var cal: CalendarMonth? { dataManager.calendar(for: month) }
+    private var cal: CalendarMonth? { dataManager.calendar(offsetDays: offsetDays) }
+    private var windowTitle: String { offsetDays == 0 ? "Next 30 days" : (cal?.windowLabel ?? "Later") }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                monthNav(month ?? Self.currentMonthKey(), label: month == nil ? "Next 30 days" : cal?.monthLabel)
-                if month != nil { Button("Next 30 days") { month = nil }.frame(minHeight: 44) }
+                windowNav
                 if let cal {
                     ScreenReaderSummaryHeader(
-                        verdict: cal.monthLabel,
-                        detail: summaryLine(cal),
-                        isEstimate: false,
-                        tone: .neutral,
-                        visualDetail: summaryLine(cal)
+                        verdict: windowTitle,
+                        detail: Self.summaryDetail(cal, offsetDays: offsetDays),
+                        isEstimate: cal.estimate ?? false,
+                        tone: .neutral
                     )
                     .accessibilityFocused($focus)
                     if cal.days.isEmpty {
@@ -61,52 +62,59 @@ struct CalendarView: View {
             UIAccessibility.post(notification: .announcement, argument: "Updated.")
         }
         .task { await load(force: true) }
-        .onChange(of: month) { _, _ in Task { await load(force: true); focus = true } }
+        .onChange(of: offsetDays) { _, _ in Task { await load(); focus = true } }
         .sheet(item: $selectedPayment) { item in
-            BillConfirmSheet(streamId: item.streamId ?? "", merchant: item.label, amountCents: item.cents,
+            BillConfirmSheet(streamId: item.streamId ?? "", merchant: item.merchant ?? item.label, amountCents: item.cents,
                              frequencyLabel: "", nextExpected: nil, suggestedKind: item.kind) {
                 Task { await load(force: true) }
             }
         }
     }
 
-    private func summaryLine(_ cal: CalendarMonth) -> String {
-        var s = "\(VoiceOverFormatter.dollars(cal.totals.expectedInCents)) expected in, \(VoiceOverFormatter.dollars(cal.totals.expectedOutCents)) going out."
+    /// "Next: Spotify, September 27. 3 payments, $412 going out in the next
+    /// 7 days." The 7-day figures are counted here, from the days within
+    /// today + 7; later windows count the whole window instead.
+    static func summaryDetail(_ cal: CalendarMonth, offsetDays: Int = 0) -> String {
+        var parts: [String] = []
         if let n = cal.next, let d = n.date {
-            s += " Next: \(n.label), \(TabSummaries.spokenDate(d))."
+            parts.append("Next: \(n.label), \(TabSummaries.spokenDate(d)).")
         }
+        let outgoing = ["bill", "subscription", "card_payment"]
+        let horizon: String? = {
+            guard offsetDays == 0, let today = CalendarDates.ymd.date(from: cal.today),
+                  let end = Calendar.current.date(byAdding: .day, value: 7, to: today) else { return nil }
+            return CalendarDates.ymd.string(from: end)
+        }()
+        let days = horizon.map { end in cal.days.filter { $0.date >= cal.today && $0.date < end } } ?? cal.days
+        let payments = days.flatMap(\.items).filter { outgoing.contains($0.kind) && $0.status != "paid" }
+        let total = payments.reduce(0) { $0 + $1.cents }
+        let when = horizon == nil ? "in these 30 days" : "in the next 7 days"
+        parts.append("\(VoiceOverFormatter.count(payments.count, singular: "payment", plural: "payments")), \(VoiceOverFormatter.dollars(total)) going out \(when).")
         if cal.days.contains(where: { $0.items.contains(where: { $0.paymentVerified == false }) }) {
-            s += " Some payments are unverified while a bank connection is unavailable."
+            parts.append("Some payments are unverified while a bank connection is unavailable.")
         }
-        return s
+        return parts.joined(separator: " ")
     }
 
     static func currentMonthKey() -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM"; return f.string(from: Date())
     }
 
-    private func monthNav(_ key: String, label: String?) -> some View {
+    private var windowNav: some View {
         HStack {
-            Button { month = shift(key, by: -1) } label: {
-                Label("Previous month", systemImage: "chevron.left").labelStyle(.iconOnly).frame(width: 44, height: 44)
+            Button { offsetDays = max(0, offsetDays - 30) } label: {
+                Label("Previous 30 days", systemImage: "chevron.left").labelStyle(.iconOnly).frame(width: 44, height: 44)
             }
-            .accessibilityLabel("Previous month")
+            .accessibilityLabel("Previous 30 days")
+            .disabled(offsetDays == 0)
             Spacer()
-            Text(label ?? key).font(.haloRowTitle).foregroundColor(.haloTextPrimary).accessibilityHidden(true)
+            Text(cal?.windowLabel ?? windowTitle).font(.haloRowTitle).foregroundColor(.haloTextPrimary).accessibilityHidden(true)
             Spacer()
-            Button { month = shift(key, by: 1) } label: {
-                Label("Next month", systemImage: "chevron.right").labelStyle(.iconOnly).frame(width: 44, height: 44)
+            Button { offsetDays += 30 } label: {
+                Label("Next 30 days", systemImage: "chevron.right").labelStyle(.iconOnly).frame(width: 44, height: 44)
             }
-            .accessibilityLabel("Next month")
+            .accessibilityLabel("Next 30 days")
         }
-    }
-
-    private func shift(_ key: String, by delta: Int) -> String {
-        let parts = key.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 2 else { return key }
-        var m = parts[1] + delta, y = parts[0]
-        if m < 1 { m = 12; y -= 1 } else if m > 12 { m = 1; y += 1 }
-        return String(format: "%04d-%02d", y, m)
     }
 
     private func daySection(_ day: CalendarDay) -> some View {
@@ -158,21 +166,21 @@ struct CalendarView: View {
         let amount = item.cents == 0 ? "" : (item.confidence == "about" ? "about " : "") + BudgetFormatter.cents(item.cents)
         let state = item.statusDescription
         return HaloRow {
-            HaloIconTile(icon: icon, tint: tint)
+            logo(item, icon: icon, tint: tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label).font(.haloRowTitle).foregroundColor(.haloTextPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(dayTitle(day)).font(.subheadline)
-                Text(amount).font(.title2.bold()).foregroundColor(.haloTextPrimary)
                 if let highlight = item.highlight { Text(highlight).font(.headline) }
                 Text(state)
                     .font(.subheadline).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            if item.canManageRecurringPayment {
-                Image(systemName: "chevron.right").foregroundColor(.haloTextSecondary).accessibilityHidden(true)
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 2) {
+                if !amount.isEmpty { Text(amount).font(.title3.bold()).foregroundColor(.haloTextPrimary) }
+                Text(dayTitle(day)).font(.subheadline).foregroundColor(.haloTextSecondary)
             }
+            if item.canManageRecurringPayment { HaloChevron() }
         }
         .padding(14)
         .frame(minHeight: 64)
@@ -182,14 +190,31 @@ struct CalendarView: View {
         .accessibilityLabel("\(dayTitle(day)), \(item.label)" + (amount.isEmpty ? "" : ", \(amount)") + (state.isEmpty ? "" : ", \(state)") + (state.hasSuffix(".") ? "" : "."))
     }
 
+    /// Merchant logo when the server has one, else the icon tile. Decorative.
+    @ViewBuilder
+    private func logo(_ item: CalendarItem, icon: String, tint: Color) -> some View {
+        if let logoUrl = item.logoUrl, let url = URL(string: logoUrl) {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: .fit)
+            } placeholder: {
+                HaloIconTile(icon: icon, tint: tint)
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+        } else {
+            HaloIconTile(icon: icon, tint: tint).accessibilityHidden(true)
+        }
+    }
+
     private func load(force: Bool = false) async {
         guard !UITestArchetype.isActive else { return }
         if !force, cal != nil { return }
         errorMessage = nil
         do {
-            try await dataManager.loadCalendar(month: month)
+            try await dataManager.loadCalendar(offsetDays: offsetDays)
         } catch {
-            errorMessage = "Couldn't build the month. \(error.localizedDescription)"
+            errorMessage = "Couldn't build these 30 days. \(error.localizedDescription)"
         }
     }
 }

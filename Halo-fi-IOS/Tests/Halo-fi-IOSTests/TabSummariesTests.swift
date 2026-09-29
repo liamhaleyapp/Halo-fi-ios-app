@@ -485,3 +485,59 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(InvestmentAllocation.segments([.init(id: "a", label: "a", cents: 0)]).isEmpty)
     }
 }
+
+/// Benefits copy stays off a non-benefit user's Money screens (2026-09-28):
+/// the Income, Calendar and Money summaries never mention Social Security.
+@Suite struct NonBenefitCopyTests {
+    private let forbidden = ["Social Security", "SSA", "Estimate for education", "gross wages"]
+
+    private func expectClean(_ text: String) {
+        for word in forbidden { #expect(!text.contains(word), "\(word) leaked into: \(text)") }
+    }
+
+    @Test func moneyHeaderIsClean() {
+        let snapshot = MoneySnapshot(cashCents: 121400, owedCents: 187000, accountCount: 2, connectionsNeedingAttention: 1,
+                                     resources: nil, budgetTotal: nil, spentCents: 144600, daysLeft: nil, firstOverCategory: nil)
+        let summary = TabSummaries.money(snapshot, capabilities: UITestArchetype.noneAnswered.capabilities)
+        #expect(!summary.isEstimate)
+        expectClean(summary.spoken)
+    }
+
+    @Test func incomeLinesAreCleanAndGrossPromptIsBenefitsOnly() throws {
+        let json = #"{"month":"2026-09","sources":[],"work_income":[],"work_income_gross_cents":0,"work_income_net_cents":0,"benefit_cents":0,"paychecks_needing_gross":2,"paychecks_needing_tax_review":1,"labels":[],"total_income_cents":41200}"#
+        let summary = try JSONDecoder().decode(IncomeSummary.self, from: Data(json.utf8))
+        let lines = IncomeView.summaryLines(summary, capabilities: UITestArchetype.noneAnswered.capabilities)
+        expectClean(lines.header)
+        #expect(lines.notes.isEmpty)
+        let ssi = IncomeView.summaryLines(summary, capabilities: UITestArchetype.ssiBlind.capabilities)
+        #expect(ssi.notes.contains { $0.contains("gross wages") })
+    }
+
+    @Test func calendarSummaryIsCleanAndCountsTheNextSevenDays() throws {
+        let json = #"{"month":"2026-09","month_label":"September 2026","today":"2026-09-05","window_start":"2026-09-05","window_end":"2026-10-04","days":[{"date":"2026-09-06","is_today":false,"is_past":false,"items":[{"kind":"bill","label":"XYZ Property","cents":85400,"confidence":"actual","source":"confirmed","status":"expected","stream_id":"rent","logo_url":"https://example.com/xyz.png"}]},{"date":"2026-09-27","is_today":false,"is_past":false,"items":[{"kind":"subscription","label":"Spotify","cents":1099,"confidence":"high","source":"confirmed","status":"expected","stream_id":"spot"}]}],"totals":{"expected_in_cents":0,"expected_out_cents":86499},"next":{"kind":"bill","label":"XYZ Property","cents":85400,"confidence":"actual","source":"confirmed","status":"expected","date":"2026-09-06"}}"#
+        let cal = try JSONDecoder().decode(CalendarMonth.self, from: Data(json.utf8))
+        let detail = CalendarView.summaryDetail(cal)
+        expectClean(detail)
+        #expect(detail == "Next: XYZ Property, September 6. 1 payment, 854 dollars going out in the next 7 days.")
+        #expect(cal.windowLabel == "Sep 5 – Oct 4")
+        #expect(cal.estimate == nil)
+        #expect(cal.days[0].items[0].logoUrl == "https://example.com/xyz.png")
+        // A later window counts everything in it.
+        #expect(CalendarView.summaryDetail(cal, offsetDays: 30).contains("2 payments, 865 dollars going out in these 30 days."))
+    }
+
+    @Test func recurringStreamDecodesTypicalAmountAndDedupes() throws {
+        let json = #"{"today":"2026-09-28","confirmed_count":1,"monthly_bills_cents":5500,"streams":[{"stream_id":"a","merchant":"Netflix","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":6000,"last_cents":5500,"last_date":"2026-09-01","next_expected":"2026-10-01","is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","kind":"subscription","typical_cents":5500,"typical_basis":"mode","extra_payments":[{"date":"2026-08-15","cents":12000}],"amount_changed":{"from_cents":5000,"to_cents":5500,"since":"2026-09-01"},"logo_url":"https://example.com/n.png"},{"stream_id":"b","merchant":"netflix","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":5000,"last_cents":5000,"last_date":"2026-07-01","next_expected":null,"is_active":true,"user_confirmed":null,"institution_name":"Chase","account_id":"acct-1"}]}"#
+        let response = try JSONDecoder().decode(RecurringResponse.self, from: Data(json.utf8))
+        let stream = try #require(response.streams.first)
+        #expect(stream.displayCents == 5500)
+        #expect(stream.amountChangedLine == "Was $50.00, now $55.00 since September 1.")
+        #expect(stream.extraPaymentsLine == "Extra payments not counted: August 15 $120.00.")
+        #expect(response.streams[1].displayCents == 5000)
+        #expect(response.dedupedStreams.map(\.streamId) == ["a"])
+        // A clearly different price from the same merchant is another product, not a duplicate.
+        let sibling = #"{"today":"2026-09-28","confirmed_count":0,"monthly_bills_cents":0,"streams":[{"stream_id":"a","merchant":"Spotify","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":1500,"last_cents":1500,"last_date":"2026-09-01","next_expected":null,"is_active":true,"user_confirmed":null,"institution_name":"Chase","account_id":"acct-1"},{"stream_id":"b","merchant":"Spotify","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":2500,"last_cents":2500,"last_date":"2026-09-20","next_expected":null,"is_active":true,"user_confirmed":null,"institution_name":"Chase","account_id":"acct-1"}]}"#
+        let two = try JSONDecoder().decode(RecurringResponse.self, from: Data(sibling.utf8))
+        #expect(two.dedupedStreams.map(\.streamId) == ["a", "b"])
+    }
+}

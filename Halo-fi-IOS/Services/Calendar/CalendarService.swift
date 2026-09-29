@@ -24,6 +24,8 @@ struct CalendarItem: Codable, Equatable, Identifiable {
     var streamId: String? = nil
     var month: String? = nil
     var date: String? = nil   // present on `next`
+    var logoUrl: String? = nil
+    var merchant: String? = nil
     var id: String { "\(kind)-\(label)-\(status)-\(cents)-\(date ?? "")" }
     var canManageRecurringPayment: Bool {
         (kind == "bill" || kind == "subscription") && !(streamId ?? "").isEmpty
@@ -52,8 +54,9 @@ struct CalendarItem: Codable, Equatable, Identifiable {
         case bankConnectionStatus = "bank_connection_status"
         case paymentVerified = "payment_verified"
         case verificationNote = "verification_note"
-        case kind, label, cents, confidence, source, status, highlight, month, date
+        case kind, label, cents, confidence, source, status, highlight, month, date, merchant
         case streamId = "stream_id"
+        case logoUrl = "logo_url"
     }
 }
 
@@ -86,21 +89,44 @@ struct CalendarMonth: Codable, Equatable {
     let totals: Totals
     let next: CalendarItem?
     let spoken: String?
+    /// The 30-day window (ISO dates) when built with `upcoming=true`.
+    var windowStart: String? = nil
+    var windowEnd: String? = nil
+    var estimate: Bool? = nil
     enum CodingKeys: String, CodingKey {
-        case month, today, days, totals, next, spoken
+        case month, today, days, totals, next, spoken, estimate
         case monthLabel = "month_label"
+        case windowStart = "window_start"
+        case windowEnd = "window_end"
     }
+
+    /// "Sep 28 – Oct 27" from the window, else the server's month label.
+    var windowLabel: String {
+        guard let s = windowStart, let e = windowEnd,
+              let sd = CalendarDates.ymd.date(from: String(s.prefix(10))),
+              let ed = CalendarDates.ymd.date(from: String(e.prefix(10))) else { return monthLabel }
+        let f = DateFormatter(); f.dateFormat = "MMM d"
+        return "\(f.string(from: sd)) – \(f.string(from: ed))"
+    }
+}
+
+/// The calendar's ISO dates are local days: parse them in the local zone
+/// (ISO8601DateFormatter reads UTC midnight, which drew "Sep 4" for "2026-09-05").
+enum CalendarDates {
+    static let ymd: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
 }
 
 final class CalendarService {
     static let shared = CalendarService()
 
-    func month(_ month: String? = nil, userTz: String? = TimeZone.current.identifier) async throws -> CalendarMonth {
+    /// The 30 days starting `offsetDays` from today (0 = the next 30 days).
+    func upcoming(offsetDays: Int = 0, userTz: String? = TimeZone.current.identifier) async throws -> CalendarMonth {
         var endpoint = "/me/calendar"
-        var parts: [String] = []
-        if let month { parts.append("month=\(month)") } else { parts.append("upcoming=true") }
+        var parts = ["upcoming=true", "offset_days=\(max(0, offsetDays))"]
         if let tz = userTz, let enc = tz.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { parts.append("user_tz=\(enc)") }
-        if !parts.isEmpty { endpoint += "?" + parts.joined(separator: "&") }
+        endpoint += "?" + parts.joined(separator: "&")
         return try await NetworkService.shared.authenticatedRequest(endpoint: endpoint, method: .GET, body: nil, responseType: CalendarMonth.self)
     }
 }

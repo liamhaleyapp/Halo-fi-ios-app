@@ -42,31 +42,24 @@ final class BudgetDataManager {
     /// "Needs your attention" (2026-09-05): the top cards for the Money tab
     /// and how many more the server holds. Learn cards resolve through
     /// `labelDeposit` / `enterGross` / `confirmSSIDeduction`.
-    /// Calendar months by key ("2026-09"); the current month refreshes with
-    /// everything else, other months load on demand.
-    var calendars: [String: CalendarMonth] = [:]
-    var currentCalendarKey: String? = nil
+    /// Calendar windows keyed by offset in days (0 = the next 30 days); the
+    /// first window refreshes with everything else, later ones on demand.
+    var calendars: [Int: CalendarMonth] = [:]
     @ObservationIgnored private var calendarGeneration = 0
 
     func invalidateCalendar() {
         calendarGeneration += 1
         calendars = [:]
-        currentCalendarKey = nil
     }
 
-    func calendar(for month: String?) -> CalendarMonth? {
-        if let month { return calendars[month] }
-        if let key = currentCalendarKey { return calendars[key] }
-        return nil
-    }
+    func calendar(offsetDays: Int = 0) -> CalendarMonth? { calendars[offsetDays] }
 
-    func loadCalendar(month: String?) async throws {
+    func loadCalendar(offsetDays: Int) async throws {
         let generation = sessionGeneration
         let calendarAtStart = calendarGeneration
-        let cal = try await CalendarService.shared.month(month)
+        let cal = try await CalendarService.shared.upcoming(offsetDays: offsetDays)
         guard generation == sessionGeneration, calendarAtStart == calendarGeneration else { throw CancellationError() }
-        calendars[cal.month] = cal
-        if month == nil { currentCalendarKey = cal.month }
+        calendars[offsetDays] = cal
     }
 
     var attentionCards: [AttentionCard] = []
@@ -195,7 +188,6 @@ final class BudgetDataManager {
         ssiReminders = []
         fieldOffice = nil
         calendars = [:]
-        currentCalendarKey = nil
         attentionCards = []
         attentionQueue = []
         attentionMoreCount = 0
@@ -477,14 +469,13 @@ final class BudgetDataManager {
     private func refreshAttentionData(userTz: String?, generation: UUID) async {
         // Attention + income summary, in parallel, failures isolated: the
         // stack keeps its last cards when the fetch fails.
-        // Calendar: current month, failures isolated.
+        // Calendar: the next 30 days, failures isolated.
         let calendarAtStart = calendarGeneration
         Task { [weak self] in
-            if let cal = try? await CalendarService.shared.month(nil) {
+            if let cal = try? await CalendarService.shared.upcoming(offsetDays: 0) {
                 await MainActor.run {
                     guard let self, generation == self.sessionGeneration, calendarAtStart == self.calendarGeneration else { return }
-                    self.calendars[cal.month] = cal
-                    self.currentCalendarKey = cal.month
+                    self.calendars[0] = cal
                 }
             }
         }

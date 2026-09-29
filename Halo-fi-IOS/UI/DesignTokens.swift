@@ -53,6 +53,10 @@ enum DesignTokens {
             t.userInterfaceStyle == .dark ? .secondaryLabel : UIColor(red: 60/255, green: 60/255, blue: 67/255, alpha: 0.78)
         })
         /// De-emphasized text — replaces `.white.opacity(~0.6)`.
+        /// Contrast (2026-09-28): `secondary` passes 4.5:1 on
+        /// secondarySystemBackground in both modes; `tertiary` does not
+        /// (~2.4:1 light, ~2.9:1 dark). Tertiary is for decorative text
+        /// only — anything that carries meaning uses secondary or primary.
         static let tertiary = Color(uiColor: .tertiaryLabel)
     }
 

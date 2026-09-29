@@ -95,6 +95,7 @@ struct HomeView: View {
     private var conversationContent: some View {
         VStack(spacing: 0) {
                 headerRow
+                VoiceErrorNotice(state: viewModel.state, action: viewModel.coordinator.errorAction)
                 if userManager.capabilities.moneyProfileRemaining > 0 && !hidMoneyPrompt {
                     MoneyProfilePromptCard(remaining: userManager.capabilities.moneyProfileRemaining,
                                            onOpen: { showingMoneyProfile = true },
@@ -136,6 +137,7 @@ struct HomeView: View {
         case .processing: return "\(status) Halo is thinking."
         case .speaking: return "\(status) Halo is speaking."
         case .connecting: return "\(status) Connecting."
+        case .error(let message): return "Offline. \(message)"
         default:
             return viewModel.entries.isEmpty
                 ? "\(status) Type below, open Shortcuts, or tap the microphone to talk."
@@ -197,6 +199,42 @@ struct HomeView: View {
                 await viewModel.connectForText()
             }
             await viewModel.coordinator.sendText(message, spoken: false)
+        }
+    }
+
+    /// A terminal voice error in words, with its way out when there is one
+    /// (2026-09-28): "Manage subscription" opens the subscription screen.
+    struct VoiceErrorNotice: View {
+        let state: ConversationState
+        let action: ConversationErrorAction?
+        @State private var showingSubscription = false
+
+        var body: some View {
+            if case .error(let message) = state {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(message).font(.body).foregroundColor(.haloTextPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let action {
+                        Button { showingSubscription = true } label: {
+                            Label(action.title, systemImage: "diamond.fill")
+                                .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityHint("Opens your subscription to choose a plan.")
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .haloCard(tint: .haloNegative)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .sheet(isPresented: $showingSubscription) {
+                    NavigationStack {
+                        SubscriptionManagementView()
+                            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { showingSubscription = false } } }
+                    }
+                }
+            }
         }
     }
 

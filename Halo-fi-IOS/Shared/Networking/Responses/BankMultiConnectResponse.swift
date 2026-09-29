@@ -115,7 +115,24 @@ struct ConnectedItem: Codable, Hashable, Identifiable {
     let updatedAt: String?
 
     var id: String { plaidItemId }
-    
+
+    /// When the backend last pulled this institution (PlaidItems.last_sync),
+    /// which is what "updated" means — not when a screen loaded.
+    var lastSyncDate: Date? {
+        guard let iso = lastSync else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: iso) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        if let d = f.date(from: iso) { return d }
+        let plain = DateFormatter(); plain.locale = Locale(identifier: "en_US_POSIX"); plain.timeZone = TimeZone(identifier: "UTC")
+        for fmt in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSSSSS", "yyyy-MM-dd HH:mm:ss"] {
+            plain.dateFormat = fmt
+            if let d = plain.date(from: iso) { return d }
+        }
+        return nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case institutionId = "institution_id"
         case institutionName = "institution_name"

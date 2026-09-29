@@ -68,7 +68,7 @@ final class VoiceInterruptionAudioTests: XCTestCase {
         var finishes = 0
         var failures = 0
         player.onPlaybackFinished = { finishes += 1 }
-        player.onPlaybackFailed = { failures += 1 }
+        player.onPlaybackFailed = { _ in failures += 1 }
         player.appendAudioChunk(Data([1, 2, 3]).base64EncodedString())
         XCTAssertTrue(player.isBuffering)
         player.stopAndDiscardPending(notify: false)

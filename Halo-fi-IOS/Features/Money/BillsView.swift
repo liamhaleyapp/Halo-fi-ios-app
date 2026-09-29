@@ -10,16 +10,18 @@ import SwiftUI
 
 struct BillsView: View {
     @Environment(BudgetDataManager.self) private var dataManager
+    @Environment(UserManager.self) private var userManager
     @State private var target: RecurringStream?
     @State private var loaded = false
     @State private var showHistory = false
 
     private var bills: RecurringResponse? { dataManager.bills }
-    private var confirmed: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == true && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } ?? [] }
+    private var streams: [RecurringStream] { bills?.dedupedStreams ?? [] }
+    private var confirmed: [RecurringStream] { streams.filter { $0.userConfirmed == true && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } }
     private var confirmedBills: [RecurringStream] { confirmed.filter { !$0.isSubscription } }
     private var confirmedSubscriptions: [RecurringStream] { confirmed.filter { $0.isSubscription } }
-    private var unanswered: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == nil && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } ?? [] }
-    private var declined: [RecurringStream] { bills?.streams.filter { $0.userConfirmed == false || $0.forecastStatus == "cancelled" || $0.forecastStatus == "interrupted" } ?? [] }
+    private var unanswered: [RecurringStream] { streams.filter { $0.userConfirmed == nil && $0.forecastStatus != "cancelled" && $0.forecastStatus != "interrupted" } }
+    private var declined: [RecurringStream] { streams.filter { $0.userConfirmed == false || $0.forecastStatus == "cancelled" || $0.forecastStatus == "interrupted" } }
     private var statementPayments: [StatementPayment] { bills?.statementPayments ?? [] }
 
     var body: some View {
@@ -74,7 +76,7 @@ struct BillsView: View {
             loaded = true
         }
         .sheet(item: $target) { s in
-            BillConfirmSheet(streamId: s.streamId, merchant: s.merchant, amountCents: s.averageCents,
+            BillConfirmSheet(streamId: s.streamId, merchant: s.merchant, amountCents: s.displayCents,
                              frequencyLabel: s.frequencyLabel, nextExpected: s.nextExpected,
                              suggestedKind: s.kind ?? "bill", amountVaries: s.amountVaries ?? false)
         }
@@ -89,7 +91,10 @@ struct BillsView: View {
             : "\(VoiceOverFormatter.count(confirmedBills.count, singular: "bill", plural: "bills")) and \(VoiceOverFormatter.count(confirmedSubscriptions.count, singular: "subscription", plural: "subscriptions")), about \(VoiceOverFormatter.dollars(monthly)) a month."
         if let next { detail += " Next: \(next.1.merchant), \(TabSummaries.spokenDate(next.0))." }
         if !unanswered.isEmpty { detail += " \(VoiceOverFormatter.count(unanswered.count, singular: "charge", plural: "charges")) waiting for a yes or no." }
-        return ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: detail, isEstimate: count > 0, tone: unanswered.isEmpty ? .neutral : .watch)
+        // The Social Security disclaimer only means something to benefit users.
+        return ScreenReaderSummaryHeader(verdict: "Bills and subscriptions", detail: detail,
+                                         isEstimate: count > 0 && userManager.capabilities.showsBenefitsLane,
+                                         tone: unanswered.isEmpty ? .neutral : .watch)
     }
 
     private func statementRow(_ p: StatementPayment) -> some View {
@@ -100,7 +105,7 @@ struct BillsView: View {
             }
             Spacer()
             Image(systemName: p.isOverdue ? "exclamationmark.circle.fill" : "creditcard.fill")
-                .foregroundColor(p.isOverdue ? .red : .haloTextTertiary)
+                .foregroundColor(p.isOverdue ? .red : .haloTextSecondary)
                 .accessibilityHidden(true)
         }
         .frame(minHeight: 44)
@@ -108,17 +113,37 @@ struct BillsView: View {
         .accessibilityLabel("\(p.label). \(p.line)")
     }
 
+    /// Unanswered rows say what was seen, not what to expect: no cadence
+    /// or next-date claim until the user says it is a bill.
+    private func secondLine(_ s: RecurringStream, prompt: Bool) -> String {
+        let varies = (s.amountVaries ?? false) ? ", varies" : ""
+        if prompt { return "Seen \(s.frequencyLabel)\(varies)" }
+        return "\(s.frequencyLabel)\(varies) · \(s.forecastLine)"
+    }
+
+    /// Only when the amount moved or a lump sum was left out.
+    private func thirdLine(_ s: RecurringStream) -> String? {
+        if let change = s.amountChanged { return "Was \(BudgetFormatter.cents(change.fromCents))" }
+        if let extra = s.extraPayments?.first { return "+ extra payment \(TabSummaries.spokenDate(extra.date))" }
+        return nil
+    }
+
     private func row(_ s: RecurringStream, prompt: Bool) -> some View {
-        Button { target = s } label: {
+        let second = secondLine(s, prompt: prompt)
+        let third = thirdLine(s)
+        let answer = prompt ? "Not answered." : (s.userConfirmed == true ? "Counted as a \(s.kindWord)." : "Not a bill or subscription.")
+        return Button { target = s } label: {
             HaloRow {
+                logo(s)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(s.merchant).font(.body.weight(.semibold)).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Text("\(BudgetFormatter.cents(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (" · " + s.forecastLine))
-                        .font(.caption).foregroundColor(.haloTextSecondary)
+                    Text(s.merchant).font(.haloRowTitle).foregroundColor(.haloTextPrimary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    Text(second).font(.subheadline).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                    if let third { Text(third).font(.subheadline).foregroundColor(.haloTextSecondary) }
                 }
-                Spacer()
+                Spacer(minLength: 0)
+                Text(BudgetFormatter.cents(s.displayCents)).font(.title3.bold()).foregroundColor(.haloTextPrimary)
                 Image(systemName: prompt ? "questionmark.circle" : (s.userConfirmed == true ? "checkmark.circle.fill" : "xmark.circle"))
-                    .foregroundColor(prompt ? .orange : (s.userConfirmed == true ? .haloPositive : .haloTextTertiary))
+                    .foregroundColor(prompt ? .orange : (s.userConfirmed == true ? .haloPositive : .haloTextSecondary))
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)
@@ -126,8 +151,24 @@ struct BillsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.averageCents)) \(s.frequencyLabel)" + ((s.amountVaries ?? false) ? ", varies" : "") + (", " + s.forecastLine) + (prompt ? ". Not answered." : (s.userConfirmed == true ? ". Counted as a \(s.kindWord)." : ". Not a bill or subscription.")))
+        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.displayCents)), \(second)." + (third.map { " \($0)." } ?? "") + " \(answer)")
         .accessibilityHint(prompt ? "Asks whether this is a bill, a subscription, or neither." : "Changes the answer.")
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// Merchant logo when the server has one, else the kind's icon. Decorative.
+    @ViewBuilder
+    private func logo(_ s: RecurringStream) -> some View {
+        let tile = HaloIconTile(icon: s.isSubscription ? "repeat.circle.fill" : "doc.text.fill", tint: s.isSubscription ? .indigo : .teal)
+        if let logoUrl = s.logoUrl, let url = URL(string: logoUrl) {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: .fit)
+            } placeholder: { tile }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+        } else {
+            tile.accessibilityHidden(true)
+        }
     }
 }

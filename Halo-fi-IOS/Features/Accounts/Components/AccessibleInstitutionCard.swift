@@ -20,6 +20,10 @@ struct AccessibleInstitutionCard: View {
     if let count = connectionsNeedingAttention, count > 0 { return "\(count) connection\(count == 1 ? "" : "s") need\(count == 1 ? "s" : "") attention" }
     return item.isActive ? "Connected" : "Needs attention"
   }
+  /// "Updated 2 hours ago" from the server's last pull of this bank.
+  private var updatedLabel: String? {
+    item.lastSyncDate.map { "Updated " + RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) }
+  }
 
   // MARK: - Computed Properties
 
@@ -37,6 +41,8 @@ struct AccessibleInstitutionCard: View {
     } else if isLoading {
       label += ". Loading accounts"
     }
+
+    if let updatedLabel { label += ". \(updatedLabel)" }
 
     return label
   }
@@ -87,6 +93,12 @@ struct AccessibleInstitutionCard: View {
               .font(.caption)
               .foregroundColor(Color.haloTextSecondary)
           }
+        }
+
+        if let updatedLabel {
+          Text(updatedLabel)
+            .font(.subheadline)
+            .foregroundColor(Color.haloTextSecondary)
         }
       }
 

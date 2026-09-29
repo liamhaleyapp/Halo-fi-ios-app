@@ -30,7 +30,7 @@ struct AttentionSections {
         for card in cards {
             let month = card.payload.month ?? card.payload.occurredOn.map { String($0.prefix(7)) }
             let filingNeedsGross = card.kind == "wage_gross" && (month == nil || filingMonths.contains(month!))
-            if card.kind == "bill_confirm" { bills.append(card) }
+            if card.kind == "bill_confirm" || card.kind == "bill_amount_changed" { bills.append(card) }
             else if (card.kind == "deposit_label" || card.kind == "wage_gross") && !filingNeedsGross { income.append(card) }
             else { alerts.append(card) }
         }
@@ -170,7 +170,7 @@ struct AttentionStack: View {
             if moreCount > 0 {
                 Text("\(VoiceOverFormatter.count(moreCount, singular: "more item", plural: "more items")) after these.")
                     .font(.caption)
-                    .foregroundColor(.haloTextTertiary)
+                    .foregroundColor(.haloTextSecondary)
             }
         }
     }
@@ -209,6 +209,7 @@ struct AttentionCardView: View {
         case "wage_gross": return "dollarsign.circle.fill"
         case "work_expense_candidate": return "briefcase.fill"
         case "bill_confirm": return "calendar.badge.clock"
+        case "bill_amount_changed": return "arrow.up.arrow.down.circle.fill"
         case "budget_suggestion": return "sparkles"
         case "budget_over": return "chart.pie.fill"
         case "profile_incomplete", "money_profile_incomplete": return "person.text.rectangle.fill"
@@ -228,7 +229,7 @@ struct AttentionCardView: View {
         case "open_review": return "Opens the month-end review."
         case "open_work_expenses": return "Opens work expenses."
         case "open_accounts": return "Opens your accounts."
-        case "confirm_bill": return "Opens one question: is this a bill."
+        case "confirm_bill": return card.kind == "bill_amount_changed" ? "Opens the payment so you can confirm the new amount." : "Opens one question: is this a bill."
         case "apply_budget_suggestion": return "Shows the proposed limits. One tap to use them, or keep what you have."
         case "open_budget": return "Opens your budget."
         case "open_benefits_profile": return "Opens your benefits profile to answer the rest."
@@ -358,9 +359,13 @@ struct AttentionDetailReminder: View {
     @State private var showing = false
     var body: some View {
         if let card {
-            Button("Remind me later") { showing = true }
-                .frame(minHeight: 44)
-                .sheet(isPresented: $showing) { AttentionReminderSheet(card: card) }
+            Button { showing = true } label: {
+                Label("Remind me later", systemImage: "clock")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint("Sets a reminder to answer this later.")
+            .sheet(isPresented: $showing) { AttentionReminderSheet(card: card) }
         }
     }
 }

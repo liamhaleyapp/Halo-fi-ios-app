@@ -165,6 +165,7 @@ struct DepositLabelSheet: View {
                                 .font(.title2)
                                 .textFieldStyle(.roundedBorder)
                                 .accessibilityLabel("Gross amount in dollars")
+                                .accessibilityValue(Self.cents(from: grossText).map(VoiceOverFormatter.dollarsAndCents) ?? "")
                         }
                         Button {
                             guard let cents = Self.cents(from: grossText) else {
@@ -254,7 +255,7 @@ struct DepositLabelSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(rows, id: \.0) { row in
                 HStack(alignment: .top, spacing: 8) {
-                    Text(row.0).font(.caption).foregroundColor(.haloTextTertiary).frame(width: 110, alignment: .leading)
+                    Text(row.0).font(.caption).foregroundColor(.haloTextSecondary).frame(width: 110, alignment: .leading)
                     Text(row.1).font(.caption).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)

@@ -435,8 +435,7 @@ struct MainTabView: View {
         budgetDataManager.overview = archetype.overview
         budgetDataManager.attentionCards = archetype.attentionCards
         if let cal = archetype.calendar {
-            budgetDataManager.calendars[cal.month] = cal
-            budgetDataManager.currentCalendarKey = cal.month
+            budgetDataManager.calendars[0] = cal
         }
     }
 

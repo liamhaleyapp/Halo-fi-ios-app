@@ -109,22 +109,23 @@ struct TransactionRow: View {
         }
         if let accountLabel {
           Text(accountLabel)
-            .font(.caption2)
-            .foregroundColor(Color.haloTextTertiary)
+            .font(.caption)
+            .foregroundColor(Color.haloTextSecondary)
             .lineLimit(1)
         }
       }
-      
+
       Spacer()
-      
+
       VStack(alignment: .trailing, spacing: 4) {
+        // Spends in primary text (red fails AA on a light card); money
+        // received keeps the legible positive tone.
         Text(transaction.amount, format: .currency(code: transaction.currency))
-          .font(.body)
-          .fontWeight(.semibold)
-          .foregroundColor(transaction.amount >= 0 ? Color.haloNegative : Color.haloPositive)
-        
+          .font(.title3.bold())
+          .foregroundColor(transaction.amount >= 0 ? Color.haloTextPrimary : DesignTokens.ToneText.positive)
+
         Text(formattedDate)
-          .font(.caption)
+          .font(.subheadline)
           .foregroundColor(Color.haloTextSecondary)
       }
     }

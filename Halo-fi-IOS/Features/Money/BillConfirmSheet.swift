@@ -31,7 +31,7 @@ struct BillConfirmSheet: View {
 
     init(card: AttentionCard, onDone: (() -> Void)? = nil) {
         let p = card.payload
-        self.init(streamId: p.streamId ?? "", merchant: p.merchant ?? p.source ?? "this charge", amountCents: p.amountCents ?? 0,
+        self.init(streamId: p.streamId ?? "", merchant: p.merchant ?? p.source ?? "this charge", amountCents: p.amountCents ?? p.toCents ?? 0,
                   frequencyLabel: p.frequencyLabel ?? "regularly", nextExpected: p.nextExpected,
                   suggestedKind: p.kind ?? "bill", amountVaries: p.amountVaries ?? false, onDone: onDone)
         self.reminderCard = card
@@ -57,9 +57,15 @@ struct BillConfirmSheet: View {
                     .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focused)
-                Text("About \(BudgetFormatter.cents(stream?.averageCents ?? amountCents)) \(stream?.frequencyLabel ?? frequencyLabel).")
+                Text("About \(BudgetFormatter.cents(stream?.displayCents ?? amountCents)) \(stream?.frequencyLabel ?? frequencyLabel).")
                     .font(.body).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let changed = stream?.amountChangedLine {
+                    Text(changed).font(.body).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if let extra = stream?.extraPaymentsLine {
+                    Text(extra).font(.subheadline).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                }
                 if let card = reminderCard, card.id.hasPrefix("cancelled-charge:") {
                     Text(card.line).font(.body).foregroundColor(DesignTokens.ToneText.watch)
                 }
@@ -109,20 +115,25 @@ struct BillConfirmSheet: View {
         }
     }
 
+    /// "Yes" agrees with HaloFi's guess; "No, a …" corrects it.
     @ViewBuilder
     private var classificationButtons: some View {
         if suggestsSubscription {
             kindButton("Yes, a subscription", kind: "subscription", prominent: true)
-            kindButton("Yes, a bill", kind: "bill", prominent: false)
+            kindButton("No, a bill", kind: "bill", prominent: false)
         } else {
             kindButton("Yes, a bill", kind: "bill", prominent: true)
-            kindButton("Yes, a subscription", kind: "subscription", prominent: false)
+            kindButton("No, a subscription", kind: "subscription", prominent: false)
         }
         Button { answer(false) } label: {
             Label("No, neither", systemImage: "xmark.circle").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
         }
         .buttonStyle(.bordered).disabled(isSaving)
-        .accessibilityHint("Saves that this is not a bill or subscription.")
+        .accessibilityHint("Saves that this is not a bill or subscription. Also for something you cancelled or a one-time payment.")
+        Text("Also for something you cancelled or a one-time payment.")
+            .font(.subheadline).foregroundColor(.haloTextSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityHidden(true)
     }
 
     private func loadDetails() async {
@@ -145,7 +156,7 @@ struct BillConfirmSheet: View {
                 .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
         }
         .disabled(isSaving)
-        .accessibilityHint("Saves it as a \(kind). HaloFi remembers this payee on every account.")
+        .accessibilityHint((title.hasPrefix("Yes") ? "Confirms it as a \(kind)." : "Corrects it to a \(kind).") + " HaloFi remembers this payee on every account.")
         if prominent { button.buttonStyle(.borderedProminent) } else { button.buttonStyle(.bordered) }
     }
 

@@ -389,17 +389,17 @@ struct MoneyHomeView: View {
     // MARK: - b4. Calendar row (2026-09-05)
 
     private var calendarRow: some View {
-        let cal = budgetDataManager.calendar(for: nil)
+        let cal = budgetDataManager.calendar(offsetDays: 0)
         let line: String = {
-            guard let cal else { return "The month ahead, from what you confirmed." }
+            guard let cal else { return "The next 30 days, from what you confirmed." }
             if let n = cal.next, let d = n.date {
                 let amount = n.cents > 0 ? ", \(VoiceOverFormatter.dollars(n.cents))" : ""
                 return "Next: \(n.label)\(amount), \(TabSummaries.spokenDate(d))."
             }
-            return "Nothing confirmed for \(cal.monthLabel.split(separator: " ").first.map(String.init) ?? "this month") yet."
+            return "Nothing confirmed for the next 30 days yet."
         }()
         return row(title: "Calendar", icon: "calendar", tint: .pink, line: line,
-                   hint: "Opens the month day by day: income, bills, subscriptions and deadlines you confirmed.", route: .calendar)
+                   hint: "Opens the next 30 days: income, bills, subscriptions and deadlines you confirmed.", route: .calendar)
     }
 
     // MARK: - c. Accounts row

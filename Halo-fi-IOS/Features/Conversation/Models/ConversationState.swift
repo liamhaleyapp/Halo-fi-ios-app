@@ -35,6 +35,13 @@ enum ConversationState: Equatable {
     case error(String)
 }
 
+/// A button drawn under a terminal error ("Manage subscription").
+struct ConversationErrorAction: Equatable {
+    enum Route: Equatable { case subscription }
+    let title: String
+    let route: Route
+}
+
 // MARK: - Display Helpers
 
 extension ConversationState {

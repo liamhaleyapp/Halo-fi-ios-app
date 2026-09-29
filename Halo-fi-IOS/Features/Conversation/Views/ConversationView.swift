@@ -51,6 +51,7 @@ struct ConversationView: View {
                 onMoreTap: viewModel.showMoreMenu,
                 onClose: { dismiss() }
             )
+            HomeView.VoiceErrorNotice(state: viewModel.state, action: viewModel.coordinator.errorAction)
 
             // Transcript.
             //

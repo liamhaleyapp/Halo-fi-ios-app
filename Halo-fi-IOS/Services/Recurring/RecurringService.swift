@@ -31,6 +31,40 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     var lifecycleRevision: Int? = nil
     var forecastStatus: String? = nil
     var chargedAfterCancellation: Bool? = nil
+    /// The amount to show everywhere (2026-09-28): the mode/median of
+    /// regular charges, lump sums excluded. Older servers send only the average.
+    var typicalCents: Int? = nil
+    /// mode | median | single | provider
+    var typicalBasis: String? = nil
+    var extraPayments: [ExtraPayment]? = nil
+    var amountChanged: AmountChange? = nil
+    var logoUrl: String? = nil
+
+    struct ExtraPayment: Codable, Equatable {
+        let date: String
+        let cents: Int
+    }
+    struct AmountChange: Codable, Equatable {
+        let fromCents: Int
+        let toCents: Int
+        let since: String
+        enum CodingKeys: String, CodingKey {
+            case since
+            case fromCents = "from_cents"
+            case toCents = "to_cents"
+        }
+    }
+
+    var displayCents: Int { typicalCents ?? averageCents }
+    /// "Was $50.00, now $55.00 since September 1." when the amount moved.
+    var amountChangedLine: String? {
+        amountChanged.map { "Was \(BudgetFormatter.cents($0.fromCents)), now \(BudgetFormatter.cents($0.toCents)) since \(TabSummaries.spokenDate($0.since))." }
+    }
+    /// "Extra payments not counted: September 3 $120.00, August 1 $80.00."
+    var extraPaymentsLine: String? {
+        guard let extra = extraPayments, !extra.isEmpty else { return nil }
+        return "Extra payments not counted: " + extra.map { "\(TabSummaries.spokenDate($0.date)) \(BudgetFormatter.cents($0.cents))" }.joined(separator: ", ") + "."
+    }
     var forecastLine: String {
         if chargedAfterCancellation == true { return "Charge recorded after cancellation. Review this payment." }
         if forecastStatus == "cancelled" { return "Cancelled. Kept for your records." }
@@ -60,12 +94,35 @@ struct RecurringStream: Codable, Equatable, Identifiable {
         case amountVaries = "amount_varies"
         case cancelledOn = "cancelled_on", lifecycleRevision = "lifecycle_revision"
         case forecastStatus = "forecast_status", chargedAfterCancellation = "charged_after_cancellation"
+        case typicalCents = "typical_cents", typicalBasis = "typical_basis"
+        case extraPayments = "extra_payments", amountChanged = "amount_changed"
+        case logoUrl = "logo_url"
     }
 }
 
 struct RecurringResponse: Codable, Equatable {
     let today: String
     let streams: [RecurringStream]
+
+    /// One row per subscription: two streams with the same merchant and
+    /// account at about the same price (within 15%) are one row, and the one
+    /// charged most recently stands in. A clearly different price is another
+    /// product and stays (the server dedupes the same way; belt and braces).
+    var dedupedStreams: [RecurringStream] {
+        var kept: [RecurringStream] = []
+        for s in streams {
+            let twin = kept.firstIndex { k in
+                k.merchant.lowercased() == s.merchant.lowercased() && (k.accountId ?? "") == (s.accountId ?? "")
+                    && abs(k.displayCents - s.displayCents) <= Int(0.15 * Double(max(k.displayCents, s.displayCents, 1)))
+            }
+            if let twin {
+                if (s.lastDate ?? "") > (kept[twin].lastDate ?? "") { kept[twin] = s }
+            } else {
+                kept.append(s)
+            }
+        }
+        return kept
+    }
     let confirmedCount: Int
     /// Everything confirmed, bills and subscriptions together.
     let monthlyBillsCents: Int

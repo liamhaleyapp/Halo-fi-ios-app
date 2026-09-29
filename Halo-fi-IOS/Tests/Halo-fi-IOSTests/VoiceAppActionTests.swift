@@ -17,7 +17,7 @@ struct VoiceAppActionTests {
         let player = StreamingAudioPlayer()
         var failed = false
         var completed = false
-        player.onPlaybackFailed = { failed = true }
+        player.onPlaybackFailed = { _ in failed = true }
         player.onPlaybackFinished = { completed = true }
         player.appendAudioChunk(Data("invalid mp3 fixture".utf8).base64EncodedString())
         player.playAccumulatedAudio(isFinal: true, turnId: "t")
@@ -34,7 +34,7 @@ struct VoiceAppActionTests {
         let player = StreamingAudioPlayer()
         var failures = 0
         var completions = 0
-        player.onPlaybackFailed = { failures += 1 }
+        player.onPlaybackFailed = { _ in failures += 1 }
         player.onPlaybackFinished = { completions += 1 }
         if oversized {
             let chunk = Data(repeating: 1, count: 3 * 1024 * 1024).base64EncodedString()
@@ -65,7 +65,7 @@ struct VoiceAppActionTests {
     let player = StreamingAudioPlayer()
     var failures = 0
     var completions = 0
-    player.onPlaybackFailed = { failures += 1 }
+    player.onPlaybackFailed = { _ in failures += 1 }
     player.onPlaybackFinished = { completions += 1 }
     // The exact protocol shape emitted by production after quota failures.
     let terminal = try JSONDecoder().decode(AudioCompletePayload.self,
@@ -106,7 +106,7 @@ struct VoiceAppActionTests {
 @Test @MainActor func acknowledgmentAudioDoesNotCountAsTheAnswer() {
     let player = StreamingAudioPlayer()
     var failures = 0
-    player.onPlaybackFailed = { failures += 1 }
+    player.onPlaybackFailed = { _ in failures += 1 }
     player.appendAudioChunk(silentWaveFixture().base64EncodedString())
     player.playAccumulatedAudio(isFinal: false, turnId: "t", isAcknowledgment: true)
     #expect(player.isPlaying)
@@ -119,7 +119,7 @@ struct VoiceAppActionTests {
     let player = StreamingAudioPlayer()
     var failures = 0
     var completions = 0
-    player.onPlaybackFailed = { failures += 1 }
+    player.onPlaybackFailed = { _ in failures += 1 }
     player.onPlaybackFinished = { completions += 1 }
     player.appendAudioChunk(silentWaveFixture().base64EncodedString())
     player.playAccumulatedAudio(isFinal: false, turnId: "t")
@@ -142,7 +142,7 @@ struct VoiceAppActionTests {
 @Test @MainActor func mutedAndAbandonedTurnsDoNotReportMissingAudio() {
     let player = StreamingAudioPlayer()
     var failures = 0
-    player.onPlaybackFailed = { failures += 1 }
+    player.onPlaybackFailed = { _ in failures += 1 }
     player.setMuted(true)
     player.playAccumulatedAudio(isFinal: true)
     player.setMuted(false)

@@ -871,7 +871,21 @@ final class BankDataManager {
                 accountsByItemId[itemId] = list.map { $0.idAccount == updated.idAccount ? updated : $0 }
             }
             if let all = accounts { accounts = all.map { $0.idAccount == updated.idAccount ? updated : $0 } }
+            // The Money tab and account lists read the summary; patch it too
+            // so the new name shows without waiting for the next fetch.
+            if let summary = accountsSummary {
+                accountsSummary = BankAccountsResponse(
+                    totalAccounts: summary.totalAccounts, totalBalance: summary.totalBalance, currency: summary.currency,
+                    lastSync: summary.lastSync, accounts: summary.accounts.map { $0.idAccount == updated.idAccount ? updated : $0 })
+            }
         }
+        // A cold launch reads the persisted accounts first: save the item's
+        // list with the new name, then let the server confirm in the background.
+        if let userId = currentUserId, let persistence = accountPersistence,
+           let itemId = updated.plaidItemId ?? account.plaidItemId, let list = accountsByItemId[itemId] {
+            await persistence.saveAccounts(list, for: userId, itemId: itemId)
+        }
+        Task { await fetchLinkedItemsFromServer() }
     }
 
     func fetchAccountsForItem(itemId: String) async throws -> ItemAccountsResponse {
@@ -994,10 +1008,10 @@ final class BankDataManager {
                 limit: limit,
                 before: nil
             )
-            let needsFullSync = await persistence.needsFullSync(for: userId, itemId: itemId)
-
-            // Return if we have transactions OR we've already synced (empty is a valid state)
-            if !cached.isEmpty || !needsFullSync {
+            // Only a NON-EMPTY cache answers here. An empty one is
+            // indistinguishable from a wiped cache (a skipped sync used to
+            // persist []), so it falls through to memory, then the network.
+            if !cached.isEmpty {
                 // Trigger background refresh if stale
                 if await persistence.needsRecentSync(for: userId, itemId: itemId) {
                     try SessionLifetime.shared.check(generation)
@@ -1008,18 +1022,20 @@ final class BankDataManager {
             }
         }
 
-        // 2. Check in-memory cache - if we've fetched for this item, use the result
-        // (even if this specific account has no transactions)
+        // 2. Check in-memory cache - if we've fetched for this item and it
+        // holds this account's transactions, use the result
         if let cached = transactionsByItemId[itemId] {
             let filtered = cached.filter { $0.accountId == accountId }
-            // Trigger background refresh if stale
-            if let persistence = transactionPersistence,
-               await persistence.needsRecentSync(for: userId, itemId: itemId) {
+            if !filtered.isEmpty {
+                // Trigger background refresh if stale
+                if let persistence = transactionPersistence,
+                   await persistence.needsRecentSync(for: userId, itemId: itemId) {
+                    try SessionLifetime.shared.check(generation)
+                    Task { await backgroundRefreshTransactions(itemId: itemId) }
+                }
                 try SessionLifetime.shared.check(generation)
-                Task { await backgroundRefreshTransactions(itemId: itemId) }
+                return Array(filtered.prefix(limit))
             }
-            try SessionLifetime.shared.check(generation)
-            return Array(filtered.prefix(limit))
         }
 
         // 3. No cache: fetch from network (blocking)

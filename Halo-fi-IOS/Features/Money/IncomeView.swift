@@ -23,7 +23,8 @@ struct IncomeView: View {
                 }
                 Text(month).font(.headline).accessibilityAddTraits(.isHeader)
                 if let s = summary {
-                    ScreenReaderSummaryHeader(verdict: "Income received", detail: s.totalIncomeCents.map { BudgetFormatter.cents($0) + " identified this month." } ?? "Refreshing income…", tone: .neutral)
+                    let lines = Self.summaryLines(s, capabilities: userManager.capabilities)
+                    ScreenReaderSummaryHeader(verdict: "Income received", detail: lines.header, tone: .neutral)
                     if let items = s.incomeItems {
                         if items.isEmpty { Text("No income identified this month.") }
                         ForEach(items) { item in
@@ -39,12 +40,7 @@ struct IncomeView: View {
                             .accessibilityHint("Opens income details and classification.")
                         }
                     }
-                    if userManager.capabilities.expenseType == .bwe, let count = s.paychecksNeedingTaxReview, count > 0 {
-                        Text("\(count) paychecks need tax withholding reviewed. Open a paycheck to enter its paystub taxes.").font(.subheadline)
-                    }
-                    if s.paychecksNeedingGross > 0 {
-                        Text("\(s.paychecksNeedingGross) paychecks need gross wages for reporting. Open a paycheck to add its paystub amount.")
-                    }
+                    ForEach(lines.notes, id: \.self) { Text($0).font(.subheadline) }
                 } else { ProgressView("Loading income…") }
                 if let error { Text(error).foregroundStyle(DesignTokens.ToneText.act) }
             }
@@ -65,11 +61,11 @@ struct IncomeView: View {
         .navigationTitle("Income")
         .task(id: month) { await load() }
         .refreshable { await load() }
-        .sheet(item: $sourceTarget, onDismiss: { Task { await load() } }) { IncomeSourceEditorSheet(source: $0) }
-        .sheet(item: $grossTarget, onDismiss: { Task { await load() } }) { label in
+        .sheet(item: $sourceTarget, onDismiss: { Task { await reload() } }) { IncomeSourceEditorSheet(source: $0) }
+        .sheet(item: $grossTarget, onDismiss: { Task { await reload() } }) { label in
             DepositLabelSheet(mode: .gross(labelId: label.id, employer: label.employer ?? label.source, netCents: label.netCents, lastGrossCents: label.grossCents, occurredOn: label.occurredOn))
         }
-        .sheet(item: $relabelTarget, onDismiss: { Task { await load() } }) { item in
+        .sheet(item: $relabelTarget, onDismiss: { Task { await reload() } }) { item in
             DepositLabelSheet(mode: .label(transactionId: item.transactionId, source: item.source, amountCents: item.amountCents, occurredOn: item.occurredOn))
         }
         .sheet(isPresented: $showingEditor) { IncomeEditorView() }
@@ -82,12 +78,34 @@ struct IncomeView: View {
             Text((IncomeKind(rawValue: item.kind) ?? .other).title)
             Text(item.classification == "confirmed" ? "Classification confirmed by you." : "Identified from bank data. Review if this looks wrong.")
             Button("Change classification") { relabelTarget = item }.frame(minHeight: 44)
-            if let label = summary?.labels.first(where: { $0.transactionId == item.transactionId }), label.kind == "work_income" {
+            // Gross wages are for Social Security reporting; nothing to ask a non-benefit user.
+            if userManager.capabilities.showsBenefitsLane,
+               let label = summary?.labels.first(where: { $0.transactionId == item.transactionId }), label.kind == "work_income" {
                 Text(label.grossCents.map { "Gross wages: " + BudgetFormatter.cents($0) } ?? "Gross wages needed from your paystub.")
                 Button("Review gross wages") { grossTarget = label }.frame(minHeight: 44)
-                PaystubTaxEditor(label: label) { Task { await load(); await dataManager.refresh() } }
+                PaystubTaxEditor(label: label) { Task { await reload() } }
             }
         }.navigationTitle("Income details")
+    }
+
+    /// The header line and the notes under the list. Benefit-only wording
+    /// (gross wages, paystub taxes) stays off a non-benefit user's screen.
+    static func summaryLines(_ s: IncomeSummary, capabilities: UserCapabilities) -> (header: String, notes: [String]) {
+        let header = s.totalIncomeCents.map { BudgetFormatter.cents($0) + " identified this month." } ?? "Refreshing income…"
+        var notes: [String] = []
+        if capabilities.expenseType == .bwe, let count = s.paychecksNeedingTaxReview, count > 0 {
+            notes.append("\(count) paychecks need tax withholding reviewed. Open a paycheck to enter its paystub taxes.")
+        }
+        if capabilities.showsBenefitsLane, s.paychecksNeedingGross > 0 {
+            notes.append("\(s.paychecksNeedingGross) paychecks need gross wages for reporting. Open a paycheck to add its paystub amount.")
+        }
+        return (header, notes)
+    }
+
+    /// After any save: this month's list and the Money tab's figures together.
+    private func reload() async {
+        await load()
+        await dataManager.refresh()
     }
     private func shift(_ delta: Int) {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM"
@@ -134,6 +152,7 @@ private struct PaystubTaxEditor: View {
             Text("Enter income tax, Social Security and Medicare taxes from this paystub. Do not include insurance or retirement deductions.").font(.subheadline)
             TextField("Tax withholding in dollars", text: $amount).keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("Tax withholding in dollars")
+                .accessibilityValue(SpendablePlanEditor.cents(amount).map(VoiceOverFormatter.dollarsAndCents) ?? "")
             Button("Confirm tax withholding") {
                 guard let cents = SpendablePlanEditor.cents(amount) else { return }
                 saving = true

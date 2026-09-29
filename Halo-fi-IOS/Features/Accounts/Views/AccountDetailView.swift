@@ -14,7 +14,16 @@ struct AccountDetailView: View {
   var bankAccount: BankAccount? = nil
   @State private var nicknameTarget: BankAccount?
   @State private var savedNickname: String?
-  private var shownNickname: String { savedNickname ?? account.nickname }
+  /// The live name from BankDataManager wins over the snapshot this screen
+  /// was opened with, so a nickname saved elsewhere is not stale here.
+  private var liveNickname: String? {
+    let id = bankAccount?.idAccount ?? account.id
+    let live = bankDataManager.accountsByItemId.values.joined().first { $0.idAccount == id }
+      ?? bankDataManager.accounts?.first { $0.idAccount == id }
+    guard let name = live?.nickname, !name.isEmpty else { return nil }
+    return name
+  }
+  private var shownNickname: String { savedNickname ?? liveNickname ?? account.nickname }
 
   @Environment(BankDataManager.self) private var bankDataManager
   @Environment(UserManager.self) private var userManager
@@ -84,20 +93,8 @@ struct AccountDetailView: View {
   /// When the backend last pulled this institution (PlaidItems.last_sync),
   /// which is what "synced" actually means — not when this screen loaded.
   private var serverLastSync: Date? {
-    guard let itemId = account.plaidItemId,
-          let item = bankDataManager.linkedItems?.first(where: { $0.itemId == itemId || $0.plaidItemId == itemId }),
-          let iso = item.lastSync else { return nil }
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let d = f.date(from: iso) { return d }
-    f.formatOptions = [.withInternetDateTime]
-    if let d = f.date(from: iso) { return d }
-    let plain = DateFormatter(); plain.locale = Locale(identifier: "en_US_POSIX"); plain.timeZone = TimeZone(identifier: "UTC")
-    for fmt in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSSSSS", "yyyy-MM-dd HH:mm:ss"] {
-      plain.dateFormat = fmt
-      if let d = plain.date(from: iso) { return d }
-    }
-    return nil
+    guard let itemId = account.plaidItemId else { return nil }
+    return bankDataManager.linkedItems?.first(where: { $0.itemId == itemId || $0.plaidItemId == itemId })?.lastSyncDate
   }
   
   @ViewBuilder

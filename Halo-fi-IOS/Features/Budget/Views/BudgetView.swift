@@ -366,6 +366,7 @@ struct SpendablePlanEditor: View {
                                     Text("Monthly amount")
                                     TextField("Dollars", text: $base).keyboardType(.decimalPad)
                                         .accessibilityLabel("Monthly budget amount in dollars")
+                                        .accessibilityValue(Self.cents(base).map(VoiceOverFormatter.dollarsAndCents) ?? "")
                                 }
                                 Text("Use your expected monthly income or choose your own amount. Confirming saves this amount until you change it.")
                                     .font(.subheadline).foregroundStyle(Color.haloTextSecondary)
@@ -378,6 +379,7 @@ struct SpendablePlanEditor: View {
                                     Text("Savings commitment (optional)")
                                     TextField("Dollars", text: $savings).keyboardType(.decimalPad)
                                         .accessibilityLabel("Optional monthly savings commitment in dollars")
+                                        .accessibilityValue(Self.cents(savings).map(VoiceOverFormatter.dollarsAndCents) ?? "")
                                 }
                                 Picker("Week resets on", selection: $weekday) {
                                     ForEach(0..<7) { day in Text(weekdays[day]).tag(day) }

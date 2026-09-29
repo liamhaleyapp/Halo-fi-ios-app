@@ -26,6 +26,9 @@ final class ConversationCoordinator {
     // MARK: - Public State (Read-Only)
 
     private(set) var state: ConversationState = .idle
+    /// A way out of a terminal voice error (2026-09-28): the Agent tab draws
+    /// it as a button under the message. Cleared on the next non-error state.
+    private(set) var errorAction: ConversationErrorAction?
     private(set) var sessionId: String?
     private(set) var workflowActivity: WorkflowActivityPayload?
     /// Mutes Halo's spoken responses (TTS playback). Distinct from
@@ -344,8 +347,8 @@ final class ConversationCoordinator {
             Logger.info("Voice playback timing: \(fields)")
             Diagnostics.send("voice_playback", fields)
         }
-        streamingAudioPlayer.onPlaybackFailed = { [weak self] in
-            self?.handleAudioDeliveryFailure("Voice audio is unavailable. Please try again later, or read the answer in chat.")
+        streamingAudioPlayer.onPlaybackFailed = { [weak self] reason in
+            self?.handleAudioDeliveryFailure("Voice audio is unavailable. Please try again later, or read the answer in chat.", reason: reason)
         }
         streamingAudioPlayer.onPlaybackFinished = { [weak self] in
             self?.handleSpeakingFinished()
@@ -693,7 +696,7 @@ final class ConversationCoordinator {
         }
     }
 
-    private func handleAudioDeliveryFailure(_ message: String) {
+    private func handleAudioDeliveryFailure(_ message: String, reason: String) {
         // Prevent recovery tasks or late frames from restarting this failed turn.
         lastAnnouncementTime = Date()
         setState(.error(message))
@@ -714,12 +717,46 @@ final class ConversationCoordinator {
         isPlayingAcknowledgment = false
         emitEvent(.agentFinal(message, id: currentAgentResponseId ?? UUID()))
         currentAgentResponseId = nil
-        Diagnostics.send("voice_audio_delivery_failed", [:])
+        // Why the speaker stayed silent: the session HaloFi asked for, the
+        // route it actually got, and whether anything else held the output.
+        let session = AVAudioSession.sharedInstance()
+        let micPermission: String = {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted: return "granted"
+            case .denied: return "denied"
+            case .undetermined: return "undetermined"
+            @unknown default: return "unknown"
+            }
+        }()
+        Diagnostics.send("voice_audio_delivery_failed", [
+            "reason": reason,
+            "session_category": session.category.rawValue,
+            "session_mode": session.mode.rawValue,
+            "route_outputs": session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","),
+            "other_audio_playing": String(session.isOtherAudioPlaying),
+            "output_volume": String(session.outputVolume),
+            "mic_permission": micPermission,
+        ])
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: .announcement, argument: message)
         } else if !isMuted && !isPrivacyMode {
             failureSpeaker.stopSpeaking(at: .immediate)
             failureSpeaker.speak(AVSpeechUtterance(string: message))
+        }
+    }
+
+    /// The words the user sees for a socket error, and the way out when
+    /// there is one. Plan and minute limits point at the subscription screen.
+    static func voiceErrorPresentation(_ error: ErrorPayload) -> (message: String, action: ConversationErrorAction?) {
+        switch error.code {
+        case "MINUTE_LIMIT_REACHED":
+            return ("You've used all of this month's voice minutes. Text chat still works. Upgrade or wait until the 1st.",
+                    ConversationErrorAction(title: "Manage subscription", route: .subscription))
+        case "SUBSCRIPTION_UNAVAILABLE", "NO_ENTITLEMENT", "SUBSCRIPTION_REQUIRED":
+            return ("Voice needs an active plan. Open Settings → Subscription to choose one.",
+                    ConversationErrorAction(title: "Manage subscription", route: .subscription))
+        default:
+            return (error.error, nil)
         }
     }
 
@@ -1219,6 +1256,7 @@ final class ConversationCoordinator {
     private func setState(_ newState: ConversationState) {
         let oldState = state
         state = newState
+        if case .error = newState {} else { errorAction = nil }
 
         // SINGLE CHOKE POINT for continuous haptics. Reconcile the looping
         // pulse to the new state on EVERY transition — this is what
@@ -1503,12 +1541,14 @@ final class ConversationCoordinator {
         case .error(let error):
             if workflowActivity?.isWorking == true { workflowActivity = workflowActivity?.interrupted() }
             if error.code == "AUDIO_DELIVERY_FAILED" {
-                handleAudioDeliveryFailure(error.error)
+                handleAudioDeliveryFailure(error.error, reason: "server:AUDIO_DELIVERY_FAILED")
                 return
             }
             audioFeedback.stopProcessingPulse()
-            setState(.error(error.error))
-            audioFeedback.feedbackForStateChange(.error(error.error))
+            let presentation = Self.voiceErrorPresentation(error)
+            setState(.error(presentation.message))
+            errorAction = presentation.action
+            audioFeedback.feedbackForStateChange(.error(presentation.message))
 
             if AgentWebSocketManager.terminalErrorCodes.contains(error.code) {
                 listenTask?.cancel()
@@ -1530,7 +1570,7 @@ final class ConversationCoordinator {
                 sttService.disconnect()
                 transcriptStore?.discardDraft()
                 streamingAudioPlayer?.stopAndDiscardPending()
-                UIAccessibility.post(notification: .announcement, argument: error.error)
+                UIAccessibility.post(notification: .announcement, argument: presentation.message)
                 return
             }
 
@@ -1543,7 +1583,7 @@ final class ConversationCoordinator {
                 let lifecycle = lifecycleID
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    guard !Task.isCancelled, let self, self.lifecycleID == lifecycle, self.state == .error(error.error),
+                    guard !Task.isCancelled, let self, self.lifecycleID == lifecycle, self.state == .error(presentation.message),
                           self.agentWebSocket.isConnected else { return }
                     UIAccessibility.post(
                         notification: .announcement,

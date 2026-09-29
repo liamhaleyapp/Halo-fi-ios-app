@@ -38,7 +38,8 @@ final class StreamingAudioPlayer: NSObject {
     // MARK: - Callbacks
 
     var onPlaybackFinished: (() -> Void)?
-    var onPlaybackFailed: (() -> Void)?
+    /// Called with a short reason ("init_failed: …", "play_returned_false") for the diagnostics line.
+    var onPlaybackFailed: ((String) -> Void)?
     /// WP7 — fires when a buffer is actually accepted and playing after
     /// the player was idle. The coordinator flips to `.speaking` HERE, not
     /// when text arrives, so state never claims Halo is talking while the
@@ -187,13 +188,13 @@ final class StreamingAudioPlayer: NSObject {
         guard base64Audio.utf8.count <= (Self.maxBufferedBytes + 2) / 3 * 4,
               let rawData = Data(base64Encoded: base64Audio), !rawData.isEmpty else {
             Logger.error("StreamingAudioPlayer: Invalid or oversized audio chunk")
-            failPlayback()
+            failPlayback(reason: "invalid_chunk")
             return
         }
         let queuedBytes = pendingBuffers.reduce(0) { $0 + $1.data.count }
         guard queuedBytes + mp3Data.count + rawData.count <= Self.maxBufferedBytes else {
             Logger.error("StreamingAudioPlayer: Playback backlog limit exceeded")
-            failPlayback()
+            failPlayback(reason: "backlog_limit")
             return
         }
         mp3Data.append(rawData)
@@ -253,13 +254,13 @@ final class StreamingAudioPlayer: NSObject {
         // synthesis request failed. Do not report that as successful playback.
         if isFinal && !isAcknowledgment && !hasResponseAudio && !isMuted {
             Logger.error("StreamingAudioPlayer: Final answer arrived without response audio")
-            failPlayback()
+            failPlayback(reason: "final_without_audio")
             return
         }
 
         if !mp3Data.isEmpty {
             guard pendingBuffers.count < Self.maxPendingBuffers else {
-                failPlayback()
+                failPlayback(reason: "pending_buffer_limit")
                 return
             }
             pendingBuffers.append(QueuedAudio(data: mp3Data,
@@ -312,7 +313,7 @@ final class StreamingAudioPlayer: NSObject {
             player.volume = isMuted ? 0 : VoiceOverPlaybackPolicy.speechGain
             guard player.prepareToPlay(), player.play() else {
                 Logger.error("StreamingAudioPlayer: failed to start playback for queued buffer")
-                failPlayback()
+                failPlayback(reason: "play_returned_false")
                 return
             }
             let wasIdle = !self.isPlaying
@@ -324,7 +325,7 @@ final class StreamingAudioPlayer: NSObject {
             if wasIdle { onPlaybackStarted?() }
         } catch {
             Logger.error("StreamingAudioPlayer: AVAudioPlayer init failed: \(error)")
-            failPlayback()
+            failPlayback(reason: "init_failed: \(error)")
         }
     }
 
@@ -343,10 +344,10 @@ final class StreamingAudioPlayer: NSObject {
         }
     }
 
-    private func failPlayback() {
+    private func failPlayback(reason: String) {
         isAcceptingChunks = false
         stop(notify: false)
-        onPlaybackFailed?()
+        onPlaybackFailed?(reason)
     }
 
     func setMuted(_ muted: Bool) {
@@ -387,7 +388,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
             // AND we're still mid-turn (waiting for more sentences),
             // stays silent and resumes when the next buffer is
             // queued via playAccumulatedAudio.
-            if !flag { self.failPlayback(); return }
+            if !flag { self.failPlayback(reason: "finished_unsuccessfully"); return }
             self.audioPlayer = nil
             self.isPlaying = false
             self.playNextBuffer()
@@ -398,7 +399,7 @@ extension StreamingAudioPlayer: AVAudioPlayerDelegate {
         Task { @MainActor in
             guard self.audioPlayer === player else { return }
             Logger.error("StreamingAudioPlayer: Decode error: \(error?.localizedDescription ?? "unknown")")
-            self.failPlayback()
+            self.failPlayback(reason: "decode_error: \(error?.localizedDescription ?? "unknown")")
         }
     }
 }

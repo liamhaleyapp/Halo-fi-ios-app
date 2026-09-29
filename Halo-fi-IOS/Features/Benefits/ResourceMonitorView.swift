@@ -135,7 +135,7 @@ struct ResourceMonitorView: View {
                     .font(.caption).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Estimate. Confidence: \(proj.confidence).").font(.caption2).foregroundColor(.haloTextTertiary)
+            Text("Estimate. Confidence: \(proj.confidence).").font(.caption).foregroundColor(.haloTextSecondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
