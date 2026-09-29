@@ -30,6 +30,10 @@ struct BillConfirmSheet: View {
     /// "Name this payment" (2026-09-29): saved on its own for a confirmed
     /// stream, otherwise carried as the label of the next Yes answer.
     @State private var paymentName = ""
+    /// "This costs" (2026-09-29): the user's own amount, in dollars. Saved on
+    /// its own for a confirmed stream, otherwise sent with the next Yes.
+    @State private var amountText = ""
+    @State private var amountPrefilled = false
     @AccessibilityFocusState private var focused: Bool
 
     init(card: AttentionCard, onDone: (() -> Void)? = nil) {
@@ -54,6 +58,10 @@ struct BillConfirmSheet: View {
     /// Opened from an attention card and still without a yes or no.
     private var canDefer: Bool { reminderCard != nil && stream?.userConfirmed == nil }
     private var trimmedName: String { paymentName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedAmount: String { amountText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// The typed amount in cents; nil when blank or not a number.
+    private var enteredCents: Int? { DepositLabelSheet.cents(from: trimmedAmount) }
+    private static let amountFormatError = "Enter the amount as dollars and cents, like 54.99."
 
     var body: some View {
         NavigationStack {
@@ -63,9 +71,12 @@ struct BillConfirmSheet: View {
                     .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focused)
-                Text("About \(BudgetFormatter.cents(stream?.displayCents ?? amountCents)) \(stream?.frequencyLabel ?? frequencyLabel).")
+                Text(stream?.amountLine ?? "About \(BudgetFormatter.cents(amountCents)) \(frequencyLabel).")
                     .font(.body).foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if stream?.typicalBasis == "user" {
+                    Text("Amount set by you.").font(.subheadline).foregroundColor(.haloTextSecondary)
+                }
                 if let evidence = stream?.evidenceLine {
                     Text(evidence).font(.subheadline).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -74,6 +85,14 @@ struct BillConfirmSheet: View {
                 }
                 if let extra = stream?.extraPaymentsLine {
                     Text(extra).font(.subheadline).foregroundColor(.haloTextSecondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if !streamId.isEmpty {
+                    NavigationLink { RecurringChargesView(streamId: streamId, merchant: stream?.merchant ?? merchant) } label: {
+                        Label("See every charge", systemImage: "list.bullet.rectangle.fill")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.bordered).disabled(isSaving)
+                    .accessibilityHint("Lists every charge from this payee on any of your accounts, newest first.")
                 }
                 if let card = reminderCard, card.id.hasPrefix("cancelled-charge:") {
                     Text(card.line).font(.body).foregroundColor(DesignTokens.ToneText.watch)
@@ -107,6 +126,7 @@ struct BillConfirmSheet: View {
                     DisclosureGroup("Change classification") {
                         classificationButtons
                         nameField
+                        amountField
                     }
                 } else {
                     classificationButtons
@@ -118,7 +138,13 @@ struct BillConfirmSheet: View {
                         .buttonStyle(.bordered).disabled(isSaving)
                         .accessibilityHint("Leaves this unanswered. HaloFi asks again in a month.")
                     }
-                    DisclosureGroup("Name this payment") { nameField }
+                    DisclosureGroup("Name this payment or set what it costs") {
+                        nameField
+                        amountField
+                        Text("Saved with your answer above.")
+                            .font(.subheadline).foregroundColor(.haloTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 AttentionDetailReminder(card: reminderCard).disabled(isSaving)
                 if isLoading { ProgressView("Loading payment details…") }
@@ -178,10 +204,33 @@ struct BillConfirmSheet: View {
             }
             .buttonStyle(.bordered).disabled(isSaving || isLoading || trimmedName.isEmpty)
             .accessibilityHint("Renames this payment everywhere in HaloFi.")
-        } else {
-            Text("Saved with your answer above.")
-                .font(.subheadline).foregroundColor(.haloTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "This costs": the user's own amount when HaloFi's guess is off (a
+    /// varying bill, a known rent). Confirmed streams save at once; unanswered
+    /// ones save with the Yes. "Use HaloFi's amount" sends 0 to clear it.
+    @ViewBuilder
+    private var amountField: some View {
+        TextField("What this costs, like 54.99", text: $amountText)
+            .textFieldStyle(CustomTextFieldStyle())
+            .keyboardType(.decimalPad)
+            .submitLabel(.done)
+            .disabled(isSaving)
+            .accessibilityLabel("What this costs")
+            .accessibilityValue(enteredCents.map(VoiceOverFormatter.dollarsAndCents) ?? "")
+        if isTracked {
+            Button { saveAmount() } label: {
+                Label("Save amount", systemImage: "dollarsign.circle")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.bordered).disabled(isSaving || isLoading || trimmedAmount.isEmpty)
+            .accessibilityHint("Uses this amount for this payment everywhere in HaloFi.")
+            if stream?.userAmountCents != nil {
+                Button("Use HaloFi's amount") { clearAmount() }
+                    .frame(minHeight: 48).disabled(isSaving || isLoading)
+                    .accessibilityHint("Goes back to the amount HaloFi worked out from your charges.")
+            }
         }
     }
 
@@ -193,6 +242,11 @@ struct BillConfirmSheet: View {
             guard !Task.isCancelled else { return }
             loadedStream = response.streams.first { $0.streamId == streamId }
             errorMessage = loadedStream == nil ? "This payment is no longer available. Close and refresh Calendar." : nil
+            // The user's own amount shows once; typing afterwards is theirs.
+            if !amountPrefilled, let cents = loadedStream?.userAmountCents {
+                amountText = String(format: "%.2f", Double(cents) / 100)
+                amountPrefilled = true
+            }
         } catch {
             errorMessage = "Couldn't load payment details. \(error.localizedDescription)"
         }
@@ -268,14 +322,59 @@ struct BillConfirmSheet: View {
         }
     }
 
-    private func answer(_ isBill: Bool, kind: String? = nil) {
+    private func saveAmount() {
+        guard let cents = enteredCents else {
+            errorMessage = Self.amountFormatError
+            UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+            return
+        }
+        sendAmount(cents, announcing: "Saved. This payment now costs \(VoiceOverFormatter.dollarsAndCents(cents)).")
+    }
+
+    private func clearAmount() {
+        sendAmount(0, announcing: "Saved. HaloFi's amount is back.")
+    }
+
+    /// 0 clears the user's amount; anything else replaces HaloFi's guess.
+    private func sendAmount(_ cents: Int, announcing message: String) {
         isSaving = true
         errorMessage = nil
-        // A name typed before the Yes rides along with it; a No never renames.
-        let label = isBill && !trimmedName.isEmpty ? trimmedName : nil
         Task {
             do {
-                try await dataManager.confirmBill(streamId: streamId, isBill: isBill, label: label, kind: kind)
+                try await dataManager.confirmBill(streamId: streamId, isBill: true, label: nil, kind: stream?.kind, amountCents: cents)
+                if cents == 0 { amountText = "" }
+                amountPrefilled = true
+                await loadDetails()
+                isSaving = false
+                Haptics.success()
+                UIAccessibility.post(notification: .announcement, argument: message)
+            } catch {
+                isSaving = false
+                Haptics.error()
+                errorMessage = "Couldn't save that amount. \(error.localizedDescription)"
+                UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+            }
+        }
+    }
+
+    private func answer(_ isBill: Bool, kind: String? = nil) {
+        // A name or amount typed before the Yes rides along with it; a No
+        // never renames or reprices. An amount that is not a number stops here.
+        let label = isBill && !trimmedName.isEmpty ? trimmedName : nil
+        var amount: Int? = nil
+        if isBill && !trimmedAmount.isEmpty {
+            guard let cents = enteredCents else {
+                errorMessage = Self.amountFormatError
+                UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
+                return
+            }
+            amount = cents
+        }
+        isSaving = true
+        errorMessage = nil
+        Task {
+            do {
+                try await dataManager.confirmBill(streamId: streamId, isBill: isBill, label: label, kind: kind, amountCents: amount)
                 isSaving = false
                 Haptics.success()
                 UIAccessibility.post(notification: .announcement, argument: isBill ? "Saved. \(label ?? merchant) counts as a \(kind ?? "bill")." : "Saved. \(merchant) is not a bill or subscription.")
@@ -287,6 +386,64 @@ struct BillConfirmSheet: View {
                 errorMessage = "Couldn't save that. \(error.localizedDescription)"
                 UIAccessibility.post(notification: .announcement, argument: errorMessage ?? "")
             }
+        }
+    }
+}
+
+/// Every charge from this payee (2026-09-29) on any account, newest first,
+/// so a blind user can check the amount and cadence HaloFi worked out.
+struct RecurringChargesView: View {
+    let streamId: String
+    let merchant: String
+
+    @Environment(BankDataManager.self) private var bankDataManager
+    @State private var charges: [Transaction] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    /// "6 charges, 330 dollars since April 3."
+    private var headerLine: String {
+        if charges.isEmpty { return isLoading ? "Loading charges…" : (errorMessage == nil ? "No charges found." : "Charges unavailable.") }
+        let total = charges.reduce(0) { $0 + max(0, Int(($1.amount * 100).rounded())) }
+        let oldest = charges.map(\.transactionDate).min() ?? ""
+        return "\(VoiceOverFormatter.count(charges.count, singular: "charge", plural: "charges")), \(VoiceOverFormatter.dollars(total)) since \(TabSummaries.spokenDate(oldest))."
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ScreenReaderSummaryHeader(verdict: merchant, detail: headerLine)
+                    .padding(.bottom, 12)
+                if isLoading && charges.isEmpty { ProgressView("Loading charges…").frame(maxWidth: .infinity, minHeight: 44) }
+                if let errorMessage {
+                    Text(errorMessage).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    Button("Try again") { Task { await load() } }.frame(minHeight: 44).disabled(isLoading)
+                }
+                ForEach(charges, id: \.idTransaction) { txn in
+                    TransactionRow(transaction: txn, accountLabel: bankDataManager.accountLabel(for: txn.accountId))
+                    Divider()
+                }
+            }
+            .padding(20)
+            .readableContentWidth()
+        }
+        .background(Color.haloBackground.ignoresSafeArea())
+        .navigationTitle("\(merchant) charges")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { Diagnostics.screen("bill_charges") }
+        .task { await load() }
+    }
+
+    private func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let loaded = try await RecurringService.shared.charges(streamId: streamId)
+            guard !Task.isCancelled else { return }
+            charges = loaded.sorted { $0.transactionDate > $1.transactionDate }
+        } catch {
+            errorMessage = "Couldn't load these charges. \(error.localizedDescription)"
         }
     }
 }

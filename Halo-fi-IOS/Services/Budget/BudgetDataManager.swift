@@ -522,9 +522,9 @@ final class BudgetDataManager {
     }
 
     /// Answer "is this a bill?" — instantly on the card, then refresh.
-    func confirmBill(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil) async throws {
+    func confirmBill(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil, amountCents: Int? = nil) async throws {
         let operationGeneration = sessionGeneration
-        let updated = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind)
+        let updated = try await RecurringService.shared.confirm(streamId: streamId, isBill: isBill, label: label, kind: kind, amountCents: amountCents)
         guard operationGeneration == sessionGeneration else { throw CancellationError() }
         // The answered row moves sections immediately; the refresh confirms.
         if let b = bills {

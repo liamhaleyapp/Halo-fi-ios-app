@@ -573,4 +573,29 @@ private func benefits(_ status: String, reminders: [SSIReminder] = [], receipts:
         #expect(legacy.confirmedBy == nil)
         #expect(legacy.evidenceLine == nil)
     }
+
+    /// `amount_range` and `user_amount_cents` (2026-09-29): a varying stream
+    /// shows and speaks a range; a user-set amount stands in as one number.
+    @Test func recurringStreamDecodesVaryingAndUserAmounts() throws {
+        let json = #"{"today":"2026-09-29","confirmed_count":2,"monthly_bills_cents":90400,"streams":[{"stream_id":"a","merchant":"Green Mountain Power","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":5200,"last_cents":6100,"last_date":"2026-09-10","next_expected":"2026-10-10","is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","kind":"bill","typical_cents":5200,"typical_basis":"varies","amount_range":[4000,6500]},{"stream_id":"b","merchant":"XYZ Property","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":85400,"last_cents":85400,"last_date":"2026-09-01","next_expected":"2026-10-01","is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","kind":"bill","typical_cents":85000,"typical_basis":"user","user_amount_cents":85000},{"stream_id":"c","merchant":"Netflix","description":null,"frequency":"MONTHLY","frequency_label":"monthly","average_cents":1599,"last_cents":1599,"last_date":"2026-09-01","next_expected":null,"is_active":true,"user_confirmed":true,"institution_name":"Chase","account_id":"acct-1","kind":"subscription","typical_cents":1599,"typical_basis":"mode"}]}"#
+        let response = try JSONDecoder().decode(RecurringResponse.self, from: Data(json.utf8))
+        let varies = try #require(response.streams.first)
+        #expect(varies.amountRange == [4000, 6500])
+        #expect(varies.userAmountCents == nil)
+        #expect(varies.amountLine == "Charges vary: $40.00 to $65.00 monthly; last $61.00.")
+        #expect(varies.spokenAmount == "between 40 dollars and 65 dollars")
+        #expect(varies.amountText == "$40–$65")
+        let user = response.streams[1]
+        #expect(user.typicalBasis == "user")
+        #expect(user.userAmountCents == 85000)
+        #expect(user.amountRange == nil)
+        #expect(user.displayCents == 85000)
+        #expect(user.amountLine == "About $850.00 monthly.")
+        #expect(user.spokenAmount == "850 dollars")
+        #expect(user.amountText == "$850.00")
+        let mode = response.streams[2]
+        #expect(mode.amountRange == nil)
+        #expect(mode.amountLine == "About $15.99 monthly.")
+        #expect(mode.spokenAmount == "16 dollars")
+    }
 }

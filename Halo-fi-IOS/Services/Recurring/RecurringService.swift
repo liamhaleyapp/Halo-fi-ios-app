@@ -37,8 +37,13 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     /// The amount to show everywhere (2026-09-28): the mode/median of
     /// regular charges, lump sums excluded. Older servers send only the average.
     var typicalCents: Int? = nil
-    /// mode | median | single | provider
+    /// mode | median | single | provider | varies | user
     var typicalBasis: String? = nil
+    /// [min, max] cents of the regular charges when the basis is "varies"
+    /// (2026-09-29): the amount moves too much for one number.
+    var amountRange: [Int]? = nil
+    /// The amount the user typed in "This costs"; nil when HaloFi's guess stands.
+    var userAmountCents: Int? = nil
     var extraPayments: [ExtraPayment]? = nil
     var amountChanged: AmountChange? = nil
     var logoUrl: String? = nil
@@ -59,6 +64,30 @@ struct RecurringStream: Codable, Equatable, Identifiable {
     }
 
     var displayCents: Int { typicalCents ?? averageCents }
+    /// The low and high of the regular charges when no single number fits.
+    var variesRange: (min: Int, max: Int)? {
+        guard typicalBasis == "varies", let range = amountRange, range.count == 2 else { return nil }
+        return (range[0], range[1])
+    }
+    /// The sheet's amount line: "About $55.00 monthly." or, when the charges
+    /// vary, "Charges vary: $40.00 to $60.00 monthly; last $52.00."
+    var amountLine: String {
+        if let range = variesRange {
+            return "Charges vary: \(BudgetFormatter.cents(range.min)) to \(BudgetFormatter.cents(range.max)) \(frequencyLabel); last \(BudgetFormatter.cents(lastCents))."
+        }
+        return "About \(BudgetFormatter.cents(displayCents)) \(frequencyLabel)."
+    }
+    /// The row's amount as drawn: "$55.00", or "$40–$60" when it varies.
+    var amountText: String {
+        if let range = variesRange { return "$\(range.min / 100)–$\(range.max / 100)" }
+        return BudgetFormatter.cents(displayCents)
+    }
+    /// The row's amount as VoiceOver says it: "55 dollars", or "between 40
+    /// dollars and 60 dollars" when it varies.
+    var spokenAmount: String {
+        if let range = variesRange { return "between \(VoiceOverFormatter.dollars(range.min)) and \(VoiceOverFormatter.dollars(range.max))" }
+        return VoiceOverFormatter.dollars(displayCents)
+    }
     /// HaloFi answered for the user; the sheet says so and offers the change.
     var assumedByHalo: Bool { confirmedBy == "halo" }
     /// "Your bank shows: VT STATE HO-0128 DES:LL RENT. Last charge $854.00 on
@@ -110,6 +139,7 @@ struct RecurringStream: Codable, Equatable, Identifiable {
         case cancelledOn = "cancelled_on", lifecycleRevision = "lifecycle_revision"
         case forecastStatus = "forecast_status", chargedAfterCancellation = "charged_after_cancellation"
         case typicalCents = "typical_cents", typicalBasis = "typical_basis"
+        case amountRange = "amount_range", userAmountCents = "user_amount_cents"
         case extraPayments = "extra_payments", amountChanged = "amount_changed"
         case logoUrl = "logo_url"
     }
@@ -162,7 +192,8 @@ struct RecurringResponse: Codable, Equatable {
 final class RecurringService {
     static let shared = RecurringService()
 
-    private struct ConfirmBody: Encodable { let is_bill: Bool; let label: String?; let kind: String? }
+    /// `amount_cents` goes only when set; 0 clears the user's amount.
+    private struct ConfirmBody: Encodable { let is_bill: Bool; let label: String?; let kind: String?; let amount_cents: Int? }
     private struct ConfirmOut: Codable { let stream: RecurringStream }
 
     private struct CancellationBody: Encodable { let cancelled_on: String?; let expected_revision: Int }
@@ -179,12 +210,23 @@ final class RecurringService {
         )
     }
 
-    func confirm(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil) async throws -> RecurringStream {
+    func confirm(streamId: String, isBill: Bool, label: String? = nil, kind: String? = nil, amountCents: Int? = nil) async throws -> RecurringStream {
         let out: ConfirmOut = try await NetworkService.shared.authenticatedRequest(
             endpoint: "/bank/recurring/\(streamId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? streamId)", method: .POST,
-            body: try JSONEncoder().encode(ConfirmBody(is_bill: isBill, label: label, kind: kind)), responseType: ConfirmOut.self
+            body: try JSONEncoder().encode(ConfirmBody(is_bill: isBill, label: label, kind: kind, amount_cents: amountCents)), responseType: ConfirmOut.self
         )
         return out.stream
+    }
+
+    /// Every charge from this payee on any account, newest first (2026-09-29).
+    /// The same shape as GET /bank/transactions.
+    func charges(streamId: String, userTz: String? = TimeZone.current.identifier) async throws -> [Transaction] {
+        var endpoint = "/bank/recurring/\(streamId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? streamId)/charges"
+        if let tz = userTz, let enc = tz.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { endpoint += "?user_tz=\(enc)" }
+        let out: TransactionsResponse = try await NetworkService.shared.authenticatedRequest(
+            endpoint: endpoint, method: .GET, body: nil, responseType: TransactionsResponse.self
+        )
+        return out.transactions
     }
 }
 

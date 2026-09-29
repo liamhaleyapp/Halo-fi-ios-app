@@ -147,7 +147,7 @@ struct BillsView: View {
                     if let third { Text(third).font(.subheadline).foregroundColor(.haloTextSecondary) }
                 }
                 Spacer(minLength: 0)
-                Text(BudgetFormatter.cents(s.displayCents)).font(.title3.bold()).foregroundColor(.haloTextPrimary)
+                Text(s.amountText).font(.title3.bold()).foregroundColor(.haloTextPrimary)
                 Image(systemName: prompt ? "questionmark.circle" : (s.userConfirmed == true ? "checkmark.circle.fill" : "xmark.circle"))
                     .foregroundColor(prompt ? .orange : (s.userConfirmed == true ? .haloPositive : .haloTextSecondary))
                     .accessibilityHidden(true)
@@ -157,7 +157,7 @@ struct BillsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(s.merchant), \(VoiceOverFormatter.dollars(s.displayCents)), \(second)." + (third.map { " \($0)." } ?? "") + " \(answer)")
+        .accessibilityLabel("\(s.merchant), \(s.spokenAmount), \(second)." + (third.map { " \($0)." } ?? "") + " \(answer)")
         .accessibilityHint(prompt ? "Asks whether this is a bill, a subscription, or neither." : "Changes the answer.")
         .accessibilityAddTraits(.isButton)
     }
