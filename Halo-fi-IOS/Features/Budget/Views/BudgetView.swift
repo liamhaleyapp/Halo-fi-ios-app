@@ -466,6 +466,7 @@ struct SpendablePlanEditor: View {
                 ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { dismiss() } }
             }
             .accessibilityAction(.escape) { dismiss() }
+            .onAppear { Diagnostics.screen("budget") }
             .task { await load() }
             .onChange(of: dataManager.spendableSessionID) { _, _ in dismiss() }
             .sheet(item: $editingBill) { bill in

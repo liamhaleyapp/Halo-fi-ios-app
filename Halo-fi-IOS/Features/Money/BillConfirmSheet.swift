@@ -110,7 +110,7 @@ struct BillConfirmSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { dismiss() } } }
             .accessibilityAction(.escape) { dismiss() }
-            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
+            .onAppear { Diagnostics.screen("bill_sheet"); DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
             .task { await loadDetails() }
         }
     }

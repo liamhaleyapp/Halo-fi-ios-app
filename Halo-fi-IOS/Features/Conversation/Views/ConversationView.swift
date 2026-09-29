@@ -83,6 +83,7 @@ struct ConversationView: View {
         }
         .background(Color(.systemBackground))
         .onAppear {
+            Diagnostics.screen("voice")
             viewModel.coordinator.setVoiceModalPresented(true)
             Task {
                 // Three entry modes:

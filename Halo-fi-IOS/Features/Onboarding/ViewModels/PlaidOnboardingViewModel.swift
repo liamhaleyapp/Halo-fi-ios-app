@@ -20,6 +20,9 @@ class PlaidOnboardingViewModel {
   var isDismissing = false
   var shouldSignOut = false
   var isCompletingLinking = false
+  /// Spoken and drawn while the first sync runs; changes after ten seconds
+  /// so a screen-reader user knows the wait is progress, not a hang.
+  var linkProgressLine: String? = nil
   /// True when the linked-accounts check failed — the intro screen must say
   /// "couldn't confirm your linked accounts" instead of implying none exist.
   var linkedStateUnconfirmed = false
@@ -203,22 +206,34 @@ class PlaidOnboardingViewModel {
     // - We poll for accounts until they appear (backend already processed)
     Logger.info("PlaidOnboardingVM: Waiting for backend webhook processing...")
 
-    // Poll for accounts with retry logic. A full first sync often takes
-    // longer than the old ~5 s budget, which showed "No accounts were
-    // connected" to users whose bank WAS connected — and they re-linked.
-    let maxRetries = 30
-    let retryDelayMs: UInt64 = 1_000_000_000 // 1 s → ~30 s window
+    // Poll for accounts against a wall clock. Each pass is a full server
+    // refresh, so counting attempts made "30 tries" two minutes on a slow
+    // bank (Sara, 2026-09-29: BofA linked at once, spinner never ended).
+    // Thirty seconds total; after ten, a bank that already shows an active
+    // account is good enough to proceed and finish syncing in the background.
+    let budgetSeconds: TimeInterval = 30
+    let retryDelayMs: UInt64 = 1_000_000_000
+    let started = Date()
 
     var accountsFound = false
+    var attempts = 0
     let institution = linkSuccess.metadata.institution.name
+    await MainActor.run { linkProgressLine = "Connecting to \(institution)…" }
     let expected = linkSuccess.metadata.accounts.count
     let selectedIds = Set(linkSuccess.metadata.accounts.map(\.id))
     var matchingItems: [ConnectedItem] = []
     var reviewCount = 0
     var connectedCount = 0
 
-    for attempt in 1...maxRetries {
-      Logger.debug("PlaidOnboardingVM: Polling for accounts (attempt \(attempt)/\(maxRetries))")
+    while Date().timeIntervalSince(started) < budgetSeconds {
+      attempts += 1
+      let elapsed = Date().timeIntervalSince(started)
+      Logger.debug("PlaidOnboardingVM: Polling for accounts (attempt \(attempts), \(Int(elapsed)) s)")
+      if elapsed >= 10, linkProgressLine?.hasPrefix("Still") != true {
+        let line = "Still syncing with \(institution). Almost there."
+        await MainActor.run { linkProgressLine = line }
+        UIAccessibility.post(notification: .announcement, argument: line)
+      }
 
       // forceRefresh fetches linked items from server + accounts for each item
       await bankDataManager.forceRefresh()
@@ -235,22 +250,24 @@ class PlaidOnboardingViewModel {
         .union(bankDataManager.identityReviews.filter { $0.institution.caseInsensitiveCompare(institution) == .orderedSame }.compactMap(\.plaidAccountId))
       // Existing accounts from another bank (or an earlier Chase sync) do
       // not prove that this Link callback has been processed by the server.
-      if BankLinkProgress.isReady(items: matchingItems, initialSyncs: linkStartSyncs,
-                                  connected: connectedCount, reviews: reviewCount, expected: expected,
-                                  selectedIds: selectedIds, observedIds: observedIds) {
+      let ready = BankLinkProgress.isReady(items: matchingItems, initialSyncs: linkStartSyncs,
+                                           connected: connectedCount, reviews: reviewCount, expected: expected,
+                                           selectedIds: selectedIds, observedIds: observedIds)
+      if BankLinkProgress.canProceed(ready: ready, connected: connectedCount, elapsedSeconds: elapsed) {
         accountsFound = true
         NotificationCenter.default.post(name: .accountLinked, object: nil)
         break
       }
-
-      // Wait before next retry (unless it's the last attempt)
-      if attempt < maxRetries {
-        try? await Task.sleep(nanoseconds: retryDelayMs)
-      }
+      try? await Task.sleep(nanoseconds: retryDelayMs)
     }
+    Diagnostics.send("link_wait", ["seconds": String(Int(Date().timeIntervalSince(started))), "attempts": String(attempts),
+                                   "ready": String(accountsFound), "items": String(matchingItems.count),
+                                   "connected": String(connectedCount), "expected": String(expected),
+                                   "selected": String(selectedIds.count)])
 
     await MainActor.run {
       isCompletingLinking = false
+      linkProgressLine = nil
 
       if accountsFound {
         Logger.success("PlaidOnboardingVM: Accounts found, completing onboarding")
@@ -283,7 +300,7 @@ class PlaidOnboardingViewModel {
           onDismiss?()
         }
       } else {
-        Logger.warning("PlaidOnboardingVM: No accounts found after \(maxRetries) attempts")
+        Logger.warning("PlaidOnboardingVM: No accounts found after \(attempts) attempts")
         // User may have exited without connecting any banks, or webhook is delayed
         errorMessage = "No accounts were connected. Please try again or wait a moment and retry."
         showingError = true
@@ -448,6 +465,12 @@ struct BankLinkProgress {
       return initialSyncs[item.itemId] != sync
     }
     return observed && connected + reviews >= max(1, expected)
+  }
+
+  /// Ten seconds in, a bank that already shows an active account is done
+  /// enough: the rest of the first sync finishes in the background.
+  static func canProceed(ready: Bool, connected: Int, elapsedSeconds: TimeInterval) -> Bool {
+    ready || (connected >= 1 && elapsedSeconds >= 10)
   }
 
   static func reviewNotice(institution: String, count: Int) -> String {

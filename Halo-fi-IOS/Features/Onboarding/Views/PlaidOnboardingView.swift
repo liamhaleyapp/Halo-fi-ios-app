@@ -40,6 +40,9 @@ struct PlaidOnboardingView: View {
             .background(Color(.systemBackground))
         }
         // Loading state
+        else if viewModel.isCompletingLinking, let line = viewModel.linkProgressLine {
+          LoadingOverlay(title: line, subtitle: "Checking the accounts you shared. Usually under 30 seconds.")
+        }
         else if viewModel.isLoading || bankDataManager.isSyncing {
           LoadingView()
         }
@@ -60,6 +63,7 @@ struct PlaidOnboardingView: View {
         LoadingView()
       }
     }
+    .onAppear { Diagnostics.screen("link_bank") }
     .task {
       // Initialize viewModel with the environment's PlaidManager
       if viewModel == nil {

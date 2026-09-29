@@ -188,6 +188,7 @@ struct MainTabView: View {
             selectedTab = .money
         }
         .onChange(of: selectedTab) { oldTab, newTab in
+            Diagnostics.screen("tab:\(newTab)")
             if oldTab != newTab {
                 feedbackService.playTabSwitchFeedback()
                 // Game-quality haptic: ascending tick keyed to the tab's

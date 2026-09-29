@@ -195,6 +195,12 @@ private final class ReminderTestService: AttentionServiceProtocol {
         #expect(!BankLinkProgress.isReady(items: [item()], initialSyncs: [:], connected: 4, reviews: 0, expected: 2,
                                         selectedIds: ["new-card", "copy"], observedIds: ["old-card", "other-card"]))
     }
+    @Test func aConnectedAccountIsEnoughAfterTenSeconds() {
+        #expect(!BankLinkProgress.canProceed(ready: false, connected: 1, elapsedSeconds: 3))
+        #expect(!BankLinkProgress.canProceed(ready: false, connected: 0, elapsedSeconds: 25))
+        #expect(BankLinkProgress.canProceed(ready: false, connected: 2, elapsedSeconds: 10))
+        #expect(BankLinkProgress.canProceed(ready: true, connected: 0, elapsedSeconds: 0))
+    }
     @Test func reviewAccountsCountAsReceivedButNotAsExtraMoney() {
         #expect(BankLinkProgress.isReady(items: [item()], initialSyncs: [:], connected: 1, reviews: 1, expected: 2,
                                        selectedIds: ["new-card", "copy"], observedIds: ["new-card", "copy"]))

@@ -60,6 +60,7 @@ struct IncomeView: View {
         }
         .navigationTitle("Income")
         .task(id: month) { await load() }
+        .onAppear { Diagnostics.screen("income") }
         .refreshable { await load() }
         .sheet(item: $sourceTarget, onDismiss: { Task { await reload() } }) { IncomeSourceEditorSheet(source: $0) }
         .sheet(item: $grossTarget, onDismiss: { Task { await reload() } }) { label in

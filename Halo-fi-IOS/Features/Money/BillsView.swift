@@ -71,6 +71,7 @@ struct BillsView: View {
             await dataManager.refresh()
             UIAccessibility.post(notification: .announcement, argument: "Updated.")
         }
+        .onAppear { Diagnostics.screen("bills") }
         .task {
             if dataManager.bills == nil { await dataManager.refresh() }
             loaded = true

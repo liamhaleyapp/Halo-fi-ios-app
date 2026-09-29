@@ -66,6 +66,7 @@ struct MoneyProfileSheet: View {
                 }
             }
         }
+        .onAppear { Diagnostics.screen("money_profile") }
         .accessibilityAction(.escape) { dismiss() }
     }
 }

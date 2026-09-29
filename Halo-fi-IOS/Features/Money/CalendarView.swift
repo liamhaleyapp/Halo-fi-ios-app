@@ -61,6 +61,7 @@ struct CalendarView: View {
             await load(force: true)
             UIAccessibility.post(notification: .announcement, argument: "Updated.")
         }
+        .onAppear { Diagnostics.screen("calendar") }
         .task { await load(force: true) }
         .onChange(of: offsetDays) { _, _ in Task { await load(); focus = true } }
         .sheet(item: $selectedPayment) { item in

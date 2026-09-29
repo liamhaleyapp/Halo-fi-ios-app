@@ -128,6 +128,7 @@ struct BenefitsHomeView: View {
                 default: navigationPath.append(Route.workExpenses)
                 }
             }
+            .onAppear { Diagnostics.screen("benefits") }
             .task {
                 guard !hasAppeared else { return }
                 hasAppeared = true

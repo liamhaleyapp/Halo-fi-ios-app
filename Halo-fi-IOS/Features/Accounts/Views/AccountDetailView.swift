@@ -65,6 +65,7 @@ struct AccountDetailView: View {
         savedNickname = updated.nickname?.isEmpty == false ? updated.nickname : account.name
       }
     }
+    .onAppear { Diagnostics.screen("account_detail") }
     .task {
       await loadTransactions(forceRefresh: false)
     }

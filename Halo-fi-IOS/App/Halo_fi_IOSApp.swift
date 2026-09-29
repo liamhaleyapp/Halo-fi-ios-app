@@ -57,6 +57,8 @@ struct Halo_fi_IOSApp: App {
     // Notifications: local digest planning + real push once allowed.
     ReminderNotificationScheduler.shared.install()
     PushRegistrar.shared.registerIfAllowed()
+    // Crash and hang reports from the previous run, with the screen they died on.
+    Diagnostics.install()
 
     // Configure RevenueCat
     Purchases.logLevel = .error
