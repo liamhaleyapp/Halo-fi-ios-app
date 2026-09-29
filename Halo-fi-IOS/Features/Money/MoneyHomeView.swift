@@ -293,7 +293,7 @@ struct MoneyHomeView: View {
         if showsResources, snapshot.resources != nil {
             // For SSI users the balance card is the resource counter and
             // opens the monitor (counted vs excluded accounts, actions).
-            NavigationLink(value: MoneyRoute.resourceMonitor) { card }
+            Button { navigationPath.append(MoneyRoute.resourceMonitor) } label: { card }
                 .buttonStyle(HapticPlainButtonStyle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(summary.spoken)
@@ -460,8 +460,12 @@ struct MoneyHomeView: View {
 
     // MARK: - Row builder
 
+    // A Button that pushes the route, not NavigationLink (2026-09-29): with the
+    // navigation bar hidden, pull-to-refresh, and rows that appear after the
+    // first layout (Investments), NavigationLinks in this ScrollView kept
+    // stale touch frames — a tap on Income opened the row below it (Liam).
     private func row(title: String, icon: String, tint: Color, line: String, hint: String, route: MoneyRoute) -> some View {
-        NavigationLink(value: route) {
+        Button { navigationPath.append(route) } label: {
             HaloRow {
                 HaloIconTile(icon: icon, tint: tint)
                 VStack(alignment: .leading, spacing: 3) {
@@ -479,7 +483,6 @@ struct MoneyHomeView: View {
             .accessibilityElement(children: .ignore)
         }
         .buttonStyle(HapticPlainButtonStyle())
-        .id(route)
         .contentShape(Rectangle())
         .accessibilityIdentifier("moneyRow-\(title)")
         .accessibilityLabel("\(title). \(line)")
