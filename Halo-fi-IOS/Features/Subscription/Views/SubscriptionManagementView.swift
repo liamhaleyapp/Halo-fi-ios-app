@@ -47,7 +47,7 @@ struct SubscriptionManagementView: View {
               if let pending = subscriptionService.pendingPlanChange {
                 Text("Switching to \(pending)")
                   .font(.caption)
-                  .foregroundColor(.orange)
+                  .foregroundColor(DesignTokens.ToneText.watch)
                 Text("on \(renewalText)")
                   .font(.caption)
                   .foregroundColor(.haloTextSecondary)

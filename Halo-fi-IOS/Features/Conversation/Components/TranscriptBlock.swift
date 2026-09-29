@@ -31,7 +31,7 @@ struct TranscriptBlock: View {
 
                 Text(entry.timestamp, style: .time)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
 
             // Message text

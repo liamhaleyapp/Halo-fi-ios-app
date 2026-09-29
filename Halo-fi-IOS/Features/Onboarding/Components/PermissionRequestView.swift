@@ -44,7 +44,7 @@ struct PermissionRequestView: View {
 
         Text("Halo uses your microphone so you can manage your money by voice. It's how the app works for people who are blind or have low vision.")
           .font(.body)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal)
       }

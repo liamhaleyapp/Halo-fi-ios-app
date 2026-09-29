@@ -204,7 +204,7 @@ struct AccountsOverviewView: View {
     VStack(spacing: 20) {
       Image(systemName: "building.2")
         .font(.system(size: emptyIconSize))
-        .foregroundColor(.secondary)
+        .foregroundColor(.haloTextSecondary)
         .accessibilityHidden(true)
 
       VStack(spacing: 8) {

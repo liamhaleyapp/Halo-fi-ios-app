@@ -17,7 +17,7 @@ struct ReceiptRemindersCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "camera.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                Image(systemName: "camera.fill").foregroundColor(DesignTokens.ToneText.watch).accessibilityHidden(true)
                 Text(VoiceOverFormatter.count(reminders.count, singular: "receipt to add", plural: "receipts to add"))
                     .font(.headline)
                 Spacer()
@@ -25,7 +25,7 @@ struct ReceiptRemindersCard: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             Text("Social Security asks for proof of every work expense. A photo or the email confirmation both count.")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(.footnote).foregroundColor(.haloTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 8) {
                 ForEach(reminders) { reminder in
@@ -35,10 +35,10 @@ struct ReceiptRemindersCard: View {
                                 Text(reminder.title).font(.subheadline.weight(.semibold))
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text(reminder.kind == "receipt_overdue" ? "Overdue" : "Confirmed bank charge")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .font(.caption).foregroundColor(.haloTextSecondary)
                             }
                             Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right").font(.caption).foregroundColor(.haloTextSecondary)
                         }
                         .padding(.vertical, 10).padding(.horizontal, 10)
                         .frame(minHeight: 56)

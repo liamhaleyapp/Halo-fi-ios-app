@@ -797,7 +797,7 @@ struct BudgetView: View {
     private func monthSubtitle(_ overview: BudgetOverview) -> some View {
         Text(overview.month)
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.haloTextSecondary)
             .accessibilityLabel("\(overview.month) budget")
             .accessibilityAddTraits(.isHeader)
     }
@@ -928,7 +928,7 @@ struct BudgetView: View {
     private func categoryAlertRow(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundColor(DesignTokens.ToneText.watch)
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
@@ -990,7 +990,7 @@ struct BudgetView: View {
                         Image(systemName: "pencil")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                             .padding(8)
                             .background(Color(.tertiarySystemBackground), in: Circle())
                     }
@@ -1050,7 +1050,7 @@ struct BudgetView: View {
                 if let detail {
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                 }
             }
             Spacer(minLength: 0)
@@ -1601,7 +1601,7 @@ struct SSIOverpaymentBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundColor(DesignTokens.ToneText.watch)
             Text(reason)
                 .font(.footnote)
                 .foregroundStyle(.primary)
@@ -1717,7 +1717,7 @@ struct SSIMedicaidContinuationBanner: View {
                     .foregroundStyle(.primary)
                 Text("Even with your SSI check at zero this month, you may still keep Medicaid through Section 1619(b) if your earnings stay below your state's threshold. Don't drop coverage without checking with SSA first.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -1756,7 +1756,7 @@ struct SSIDeductionCandidatesCard: View {
             }
             Text("Confirm any that were really work-related and we'll subtract them from your countable income this month.")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.haloTextSecondary)
 
             VStack(spacing: 8) {
                 ForEach(candidates) { candidate in
@@ -1792,12 +1792,12 @@ struct SSIDeductionCandidatesCard: View {
                         .lineLimit(1)
                     Text("\(typeLabel(candidate.suggestedType)) • \(BudgetFormatter.cents(candidate.amountCents))")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
@@ -1921,12 +1921,12 @@ private struct BreakdownByCategoryRow: View {
                     .foregroundStyle(.primary)
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundColor(.haloTextSecondary)
         }
         .padding(14)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))

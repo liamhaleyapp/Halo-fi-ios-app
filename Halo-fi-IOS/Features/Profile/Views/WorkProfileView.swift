@@ -110,7 +110,7 @@ struct WorkProfileView: View {
         .font(.headline)
       Text("Halo uses these answers to spot SSI deductions in your bank activity. A blind work expense (BWE) only counts if the expense exists because of your work — your bank won't tell us that, so you do, once.")
         .font(.subheadline)
-        .foregroundColor(.secondary)
+        .foregroundColor(.haloTextSecondary)
     }
     .padding(16)
     .background(Color(.secondarySystemBackground))
@@ -126,7 +126,7 @@ struct WorkProfileView: View {
             .font(.body)
           Text("Turn on if you go to a job site (not work-from-home).")
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundColor(.haloTextSecondary)
         }
       }
       .accessibilityValue(commutesToWorkplace ? "On" : "Off")
@@ -141,7 +141,7 @@ struct WorkProfileView: View {
           .font(.body)
         Text("Tap all that apply. Halo flags charges from these methods as BWE candidates.")
           .font(.caption)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
         FlowChips(
           options: methodOptions,
           selected: $commuteMethods
@@ -158,7 +158,7 @@ struct WorkProfileView: View {
           .font(.body)
         Text("Charges on these days get a confidence boost; off-day charges still need confirmation.")
           .font(.caption)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
         FlowChips(
           options: dayOptions,
           selected: $commuteDays
@@ -176,7 +176,7 @@ struct WorkProfileView: View {
             .font(.body)
           Text("Vet visits, food, and training count as BWE for work-essential animals.")
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundColor(.haloTextSecondary)
         }
       }
       .accessibilityValue(hasWorkServiceAnimal ? "On" : "Off")
@@ -192,7 +192,7 @@ struct WorkProfileView: View {
             .font(.body)
           Text("Pharmacy charges become high-confidence IRWE candidates.")
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundColor(.haloTextSecondary)
         }
       }
       .accessibilityValue(requiresWorkMeds ? "On" : "Off")
@@ -208,7 +208,7 @@ struct WorkProfileView: View {
             .font(.body)
           Text("Screen readers, magnifiers, dictation software — subscriptions to those count as BWE.")
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundColor(.haloTextSecondary)
         }
       }
       .accessibilityValue(usesAssistiveTechForWork ? "On" : "Off")

@@ -168,7 +168,7 @@ struct InviteFriendsView: View {
             } else if let loadError {
                 Text(loadError)
                     .font(.subheadline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(DesignTokens.ToneText.watch)
                     .multilineTextAlignment(.center)
                 Button("Retry") {
                     Task { await loadStats() }

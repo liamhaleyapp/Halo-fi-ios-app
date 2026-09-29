@@ -104,7 +104,7 @@ struct InstitutionAccountsView: View {
     VStack(spacing: 20) {
       Image(systemName: "exclamationmark.triangle")
         .font(.system(size: errorIconSize))
-        .foregroundColor(.orange)
+        .foregroundColor(DesignTokens.ToneText.watch)
         .accessibilityHidden(true)
 
       VStack(spacing: 8) {

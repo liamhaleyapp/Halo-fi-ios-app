@@ -58,13 +58,13 @@ struct BiometricEnrollmentSheet: View {
 
         Text("Skip the typing next time. Open the app and \(biometryName) signs you in automatically.")
           .font(.body)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal, 8)
 
         Text("You can change this anytime in Settings.")
           .font(.footnote)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
           .multilineTextAlignment(.center)
           .padding(.top, 4)
       }

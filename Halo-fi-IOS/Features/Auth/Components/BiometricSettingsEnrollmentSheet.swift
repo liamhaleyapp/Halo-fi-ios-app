@@ -70,7 +70,7 @@ struct BiometricSettingsEnrollmentSheet: View {
               .accessibilityAddTraits(.isHeader)
             Text("Confirm your password to allow \(biometryName) sign-in.")
               .font(.body)
-              .foregroundColor(.secondary)
+              .foregroundColor(.haloTextSecondary)
               .multilineTextAlignment(.center)
           }
           .padding(.horizontal, 16)
@@ -78,7 +78,7 @@ struct BiometricSettingsEnrollmentSheet: View {
           VStack(alignment: .leading, spacing: 8) {
             Text("Phone")
               .font(.caption)
-              .foregroundColor(.secondary)
+              .foregroundColor(.haloTextSecondary)
             Text(formattedEmail)
               .font(.body)
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -91,7 +91,7 @@ struct BiometricSettingsEnrollmentSheet: View {
           VStack(alignment: .leading, spacing: 8) {
             Text("Password")
               .font(.caption)
-              .foregroundColor(.secondary)
+              .foregroundColor(.haloTextSecondary)
             SecureField("Enter your password", text: $password)
               .textContentType(.password)
               .padding(.horizontal, 16)

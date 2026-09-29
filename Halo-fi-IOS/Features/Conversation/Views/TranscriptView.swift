@@ -169,16 +169,16 @@ struct TranscriptView: View {
         VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: emptyIconSize))
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
                 .accessibilityHidden(true)
 
             Text("Start a conversation")
                 .font(.headline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
 
             Text("Tap the microphone or type to talk with Halo")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

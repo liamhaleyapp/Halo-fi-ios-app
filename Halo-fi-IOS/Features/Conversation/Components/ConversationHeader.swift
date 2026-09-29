@@ -67,7 +67,7 @@ struct ConversationHeader: View {
 
             Text(isConnected ? "Connected" : "Disconnected")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isConnected ? "Connected to Halo" : "Disconnected from Halo")
@@ -126,7 +126,7 @@ struct ConversationMoreMenu: View {
 
                             Text("Halo won't speak responses aloud")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.haloTextSecondary)
                         }
                     }
                     .accessibilityHint(isPrivacyMode
@@ -145,7 +145,7 @@ struct ConversationMoreMenu: View {
 
                         Text("Halo may read your account balances and transaction details aloud. Use Privacy Mode in public spaces.")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                     }
                     .padding(.vertical, 8)
                 } header: {

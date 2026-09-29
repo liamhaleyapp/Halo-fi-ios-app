@@ -113,7 +113,7 @@ struct SSIDeductionConfirmView: View {
                 Spacer()
                 Text(friendlyDate)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
         }
         .accessibilityElement(children: .combine)

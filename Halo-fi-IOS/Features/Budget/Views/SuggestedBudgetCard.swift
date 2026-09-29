@@ -34,7 +34,7 @@ struct SuggestedBudgetCard: View {
             }
             Text(totalLine)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.haloTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let note = suggestion.note {
                 Text(note).font(.caption).foregroundColor(.haloTextSecondary)
@@ -52,7 +52,7 @@ struct SuggestedBudgetCard: View {
                                 Text(BudgetFormatter.cents(row.limitCents)).font(.subheadline.weight(.semibold))
                                 if let median = row.medianCents {
                                     Text("you usually spend \(BudgetFormatter.cents(median))")
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.caption2).foregroundColor(.haloTextSecondary)
                                 }
                             }
                         }

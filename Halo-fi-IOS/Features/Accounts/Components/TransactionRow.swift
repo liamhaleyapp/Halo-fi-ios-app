@@ -104,7 +104,7 @@ struct TransactionRow: View {
           if transaction.pending {
             Text("• Pending")
               .font(.caption)
-              .foregroundColor(.orange)
+              .foregroundColor(DesignTokens.ToneText.watch)
           }
         }
         if let accountLabel {

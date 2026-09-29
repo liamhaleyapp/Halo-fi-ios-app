@@ -379,7 +379,7 @@ struct BenefitsProfileView: View {
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.haloTextTertiary)
+                .foregroundColor(.haloTextSecondary)
                 .accessibilityHidden(true)
         }
         .frame(minHeight: 44)

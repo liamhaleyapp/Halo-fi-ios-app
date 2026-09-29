@@ -25,7 +25,7 @@ struct PermissionBenefitRow: View {
           .font(.headline)
         Text(description)
           .font(.caption)
-          .foregroundColor(.secondary)
+          .foregroundColor(.haloTextSecondary)
       }
       
       Spacer()

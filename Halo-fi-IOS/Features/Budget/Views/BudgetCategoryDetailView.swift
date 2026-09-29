@@ -85,7 +85,7 @@ struct BudgetCategoryDetailView: View {
                         .font(.headline)
                     Text("This month")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                 }
             }
 
@@ -96,7 +96,7 @@ struct BudgetCategoryDetailView: View {
                     .lineLimit(1)
                 Text("of \(category.formatted["limit"] ?? "$0.00")")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
 
             PendingSpendingBreakdown(posted: category.postedSpentCents, pending: category.pendingSpentCents, postedColor: BudgetFormatter.color(forCategory: category.category))
@@ -108,7 +108,7 @@ struct BudgetCategoryDetailView: View {
                 Text("\(category.formatted["remaining"] ?? "$0.00") remaining")
             }
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.haloTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -125,7 +125,7 @@ struct BudgetCategoryDetailView: View {
                     .fontWeight(.semibold)
                 Text(statusExplanation)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
             Spacer()
             Text(BudgetFormatter.prettyStatus(category.status))
@@ -155,7 +155,7 @@ struct BudgetCategoryDetailView: View {
                     .fontWeight(.semibold)
                 Text(canEdit ? "Tap to change this limit" : "Spend under this to stay on pace")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
             }
             Spacer()
             Text(category.formatted["limit"] ?? "$0.00")
@@ -164,7 +164,7 @@ struct BudgetCategoryDetailView: View {
             if canEdit {
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundColor(.haloTextSecondary)
             }
         }
         .padding()
@@ -259,7 +259,7 @@ private struct CategoryLimitEditorView: View {
                 Section {
                     HStack {
                         Text("$")
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                         TextField("0.00", text: $amountText)
                             .keyboardType(.decimalPad)
                             .accessibilityLabel("New monthly limit in dollars")

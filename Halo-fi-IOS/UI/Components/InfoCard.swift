@@ -31,7 +31,7 @@ struct InfoCard<Content: View>: View {
       VStack(alignment: .leading, spacing: 12) {
         Text("What is Halo Fi?")
           .font(.headline)
-          .foregroundColor(.gray)
+          .foregroundColor(.haloTextSecondary)
         
         Text("Your voice-first financial assistant, designed to make understanding your finances simple, clear, and accessible.")
           .font(.body)

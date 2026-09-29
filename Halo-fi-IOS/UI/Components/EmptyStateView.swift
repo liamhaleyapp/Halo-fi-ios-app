@@ -20,7 +20,7 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: iconSize))
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
                 .accessibilityHidden(true)
 
             Text(title)
@@ -30,7 +30,7 @@ struct EmptyStateView: View {
 
             Text(message)
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(.haloTextSecondary)
                 .multilineTextAlignment(.center)
 
             if let action = action, let actionTitle = actionTitle {
@@ -64,7 +64,7 @@ extension EmptyStateView {
         HStack {
             Text(message)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.haloTextSecondary)
             Spacer()
         }
         .padding(.horizontal, 20)

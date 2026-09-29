@@ -33,11 +33,11 @@ struct SelectionListView: View {
                                 if let reason = option.disabledReason {
                                     Text(reason)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundColor(.haloTextSecondary)
                                 } else if let subtitle = option.subtitle {
                                     Text(subtitle)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundColor(.haloTextSecondary)
                                 }
                             }
                             Spacer()

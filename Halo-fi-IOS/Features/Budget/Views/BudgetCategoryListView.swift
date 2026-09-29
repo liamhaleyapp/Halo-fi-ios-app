@@ -92,10 +92,10 @@ struct BudgetCategoryListView: View {
         VStack(spacing: 12) {
             Image(systemName: "chart.pie")
                 .font(.system(size: emptyIconSize))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.haloTextSecondary)
             Text("No category spending yet this month")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.haloTextSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -235,7 +235,7 @@ struct BudgetCategoryRow: View {
                             .foregroundStyle(.primary)
                         Text("of \(category.formatted["limit"] ?? "$0.00")")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                     }
                 }
                 progressBar
@@ -248,7 +248,7 @@ struct BudgetCategoryRow: View {
             pctLabel
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundColor(.haloTextSecondary)
         }
         .padding(12)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -315,7 +315,7 @@ struct BudgetSpendingOnlyRow: View {
                 .fontWeight(.semibold)
             Text("\(Int(group.pctOfTotal.rounded()))%")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.haloTextSecondary)
                 .frame(minWidth: 36, alignment: .trailing)
         }
         .padding(12)

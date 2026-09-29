@@ -38,14 +38,14 @@ struct InstitutionDetailSheet: View {
                             .frame(width: 8, height: 8)
                         Text(institution.isActive ? "Connected" : "Needs Attention")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                     }
 
                     // Last sync info (if available)
                     if let lastSync = institution.lastSync {
                         Text("Last synced: \(lastSync)")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                     }
                 }
                 .padding(.top, 24)

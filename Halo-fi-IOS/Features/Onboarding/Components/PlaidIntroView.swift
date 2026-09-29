@@ -58,7 +58,7 @@ struct PlaidIntroView: View {
             systemImage: "exclamationmark.triangle.fill"
           )
           .font(.subheadline)
-          .foregroundColor(.orange)
+          .foregroundColor(DesignTokens.ToneText.watch)
           .padding(.horizontal)
           .accessibilityLabel("Warning: we couldn't confirm your linked accounts right now. If you've connected a bank before, it may already be linked.")
         }

@@ -110,7 +110,7 @@ struct AccountDetailView: View {
       VStack(spacing: 12) {
         Image(systemName: "exclamationmark.triangle")
           .font(.largeTitle)
-          .foregroundColor(.orange)
+          .foregroundColor(DesignTokens.ToneText.watch)
         Text(error)
           .foregroundColor(Color.haloTextSecondary)
           .multilineTextAlignment(.center)

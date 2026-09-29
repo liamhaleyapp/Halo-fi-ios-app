@@ -37,7 +37,7 @@ struct PreferenceDropdownSection: View {
 
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                         .lineLimit(2)
                 }
 
@@ -57,7 +57,7 @@ struct PreferenceDropdownSection: View {
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

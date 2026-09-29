@@ -22,7 +22,7 @@ struct SignInDebugMenu: View {
       
       Text("DEBUG MENU")
         .font(.caption)
-        .foregroundColor(.orange)
+        .foregroundColor(DesignTokens.ToneText.watch)
         .fontWeight(.bold)
       
       VStack(spacing: 8) {

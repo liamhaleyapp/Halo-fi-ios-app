@@ -65,7 +65,7 @@ struct SSILoggedDeductionsCard: View {
                     if let line = totalsLine {
                         Text(line)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                     }
                 }
                 Spacer(minLength: 0)
@@ -116,7 +116,7 @@ struct SSILoggedDeductionsCard: View {
             if deductions.isEmpty {
                 Text("Nothing logged this month yet. Tap Log an expense above\(expenseType == .bwe ? " — Uber to work, readers, guide dog costs all count" : " — medication, devices and rides you need because of your condition count").")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
                     .padding(.vertical, 4)
             } else {
                 VStack(spacing: 6) {
@@ -256,7 +256,7 @@ struct SSILoggedDeductionsCard: View {
                     if entry.source == "user_voice" {
                         Image(systemName: "mic.fill")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.haloTextSecondary)
                             .accessibilityLabel("Logged by voice")
                     }
                     if entry.linkedTransactionId != nil {
@@ -272,11 +272,11 @@ struct SSILoggedDeductionsCard: View {
                     .lineLimit(1)
                 Text("\(BudgetFormatter.cents(entry.amountCents)) on \(formattedDate(entry.occurredOn))")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.haloTextSecondary)
                 if let value = valueLine(entry) {
                     Text(value)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.haloTextSecondary)
                 }
                 if entry.resolvedMatchStatus == "needs_receipt" {
                     // Tapping the state opens capture — the receipt is the
@@ -286,7 +286,7 @@ struct SSILoggedDeductionsCard: View {
                     } label: {
                         Label("Needs receipt — add it", systemImage: "doc.viewfinder")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundColor(DesignTokens.ToneText.watch)
                     }
                     .buttonStyle(.borderless)
                 } else if let line = matchStatusLine(entry) {

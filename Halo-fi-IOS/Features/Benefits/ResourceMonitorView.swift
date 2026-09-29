@@ -147,7 +147,7 @@ struct ResourceMonitorView: View {
         HStack {
             Text(item.label).font(.subheadline).foregroundColor(.haloTextPrimary).lineLimit(1)
             Spacer()
-            Text("\(sign)\(BudgetFormatter.cents(item.cents))").font(.subheadline.weight(.semibold)).foregroundColor(sign == "+" ? .haloPositive : .haloTextPrimary)
+            Text("\(sign)\(BudgetFormatter.cents(item.cents))").font(.subheadline.weight(.semibold)).foregroundColor(sign == "+" ? DesignTokens.ToneText.positive : .haloTextPrimary)
             Text(TabSummaries.spokenDate(item.expectedDateIso)).font(.caption).foregroundColor(.haloTextSecondary)
         }
         .frame(minHeight: 32)
