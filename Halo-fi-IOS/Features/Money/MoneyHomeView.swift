@@ -503,16 +503,15 @@ struct MoneyHomeView: View {
 /// "Early access build" card: one VoiceOver element for the text, then the
 /// two buttons. Dismissal is remembered per build (CFBundleVersion), so every
 /// new TestFlight drop shows it once more.
-/// Once per build, as a pop-up on launch (Liam, 2026-09-29): not a card in
-/// the feed. It says where feedback lives; the button takes the user there
-/// so they can find it again on their own.
+/// Once, the very first time the app opens on this phone (Liam, 2026-09-29):
+/// a pop-up, not a card in the feed, and never again after any update. It
+/// says where feedback lives; the button takes the user there so they can
+/// find it again on their own.
 struct EarlyAccessNotice: View {
     let onShowFeedback: () -> Void
     let onClose: () -> Void
 
-    private static var key: String {
-        "earlyAccessNotice.dismissed." + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")
-    }
+    private static let key = "earlyAccessNotice.dismissed"
     static var isDismissed: Bool { UserDefaults.standard.bool(forKey: key) }
     static func markDismissed() { UserDefaults.standard.set(true, forKey: key) }
 
