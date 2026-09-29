@@ -14,6 +14,8 @@ import SwiftUI
 extension Notification.Name {
     /// Posted after a bank link or a manual account is saved.
     static let accountLinked = Notification.Name("AccountLinked")
+    /// Settings should open its Send feedback screen (the early-access pop-up).
+    static let openSendFeedback = Notification.Name("OpenSendFeedback")
 }
 
 enum MoneyProfilePrompt {

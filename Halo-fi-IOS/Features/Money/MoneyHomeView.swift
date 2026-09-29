@@ -69,8 +69,6 @@ struct MoneyHomeView: View {
     @State private var billCard: AttentionCard?
     @State private var suggestionCard: AttentionCard?
     /// Early access notice (2026-09-29): once per build, under the header.
-    @State private var showsEarlyAccessNotice = !EarlyAccessNotice.isDismissed
-    @State private var showingFeedback = false
 
     private static let transactionPageSize = 200
 
@@ -82,12 +80,6 @@ struct MoneyHomeView: View {
                     VStack(spacing: 12) {
                         TabTitle("Money")
                         header
-                        if showsEarlyAccessNotice {
-                            EarlyAccessNotice(onFeedback: { showingFeedback = true }) {
-                                EarlyAccessNotice.markDismissed()
-                                withAnimation { showsEarlyAccessNotice = false }
-                            }
-                        }
                         AccountIdentityReviewSection()
                         attentionRow
                         budgetRow
@@ -140,7 +132,6 @@ struct MoneyHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingLinkChooser) { LinkAccountChooserView() }
-            .sheet(isPresented: $showingFeedback) { ContactUsView.feedback() }
             .fullScreenCover(isPresented: $showingMoneyProfile) { MoneyProfileSheet() }
             .onReceive(NotificationCenter.default.publisher(for: .accountLinked)) { _ in
                 // First account in: offer the four money questions once,
@@ -509,9 +500,12 @@ struct MoneyHomeView: View {
 /// "Early access build" card: one VoiceOver element for the text, then the
 /// two buttons. Dismissal is remembered per build (CFBundleVersion), so every
 /// new TestFlight drop shows it once more.
+/// Once per build, as a pop-up on launch (Liam, 2026-09-29): not a card in
+/// the feed. It says where feedback lives; the button takes the user there
+/// so they can find it again on their own.
 struct EarlyAccessNotice: View {
-    let onFeedback: () -> Void
-    let onDismiss: () -> Void
+    let onShowFeedback: () -> Void
+    let onClose: () -> Void
 
     private static var key: String {
         "earlyAccessNotice.dismissed." + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")
@@ -519,38 +513,37 @@ struct EarlyAccessNotice: View {
     static var isDismissed: Bool { UserDefaults.standard.bool(forKey: key) }
     static func markDismissed() { UserDefaults.standard.set(true, forKey: key) }
 
-    private let line = "You're using an early version. If something looks wrong, tell us — it helps more than you'd think."
+    private let line = "You're using an early version of HaloFi. If something looks wrong, tell us: open Settings and choose Send feedback. It helps more than you'd think."
+    @AccessibilityFocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Early access build").font(.haloRowTitle).foregroundColor(.haloTextPrimary)
-                    Text(line).font(.subheadline).foregroundColor(.haloTextSecondary)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Early access build")
+                        .font(.title2.weight(.bold)).foregroundColor(.haloTextPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($focused)
+                    Text(line).font(.body).foregroundColor(.haloTextPrimary)
                         .fixedSize(horizontal: false, vertical: true)
+                    Button(action: onShowFeedback) {
+                        Label("Show me Send feedback", systemImage: "exclamationmark.bubble.fill")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Opens Settings and the Send feedback screen so you know where it is.")
+                    Spacer()
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Early access build. \(line)")
-                Spacer(minLength: 0)
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.haloTextSecondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Dismiss early access notice")
-                .accessibilityHint("Hides this until the next update.")
+                .padding(20)
+                .readableContentWidth()
             }
-            Button(action: onFeedback) {
-                Label("Send feedback", systemImage: "exclamationmark.bubble.fill")
-                    .font(.headline).frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityHint("Opens a message to the HaloFi team with the build and screen filled in.")
+            .background(Color.haloBackground.ignoresSafeArea())
+            .navigationTitle("Early access")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { CloseToolbarButton { onClose() } } }
+            .accessibilityAction(.escape) { onClose() }
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { focused = true } }
         }
-        .padding(16)
-        .haloCard()
         .accessibilityIdentifier("earlyAccessNotice")
     }
 }

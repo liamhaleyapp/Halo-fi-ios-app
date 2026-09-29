@@ -273,6 +273,12 @@ struct SettingsView: View {
           navigationPath.removeLast(navigationPath.count)
         }
       }
+      // The early-access pop-up's button: land on Send feedback so the
+      // user has seen where it lives.
+      .onReceive(NotificationCenter.default.publisher(for: .openSendFeedback)) { _ in
+        if !navigationPath.isEmpty { navigationPath.removeLast(navigationPath.count) }
+        navigationPath.append(SettingsDestination.sendFeedback)
+      }
     }
     .alert("Refresh from bank", isPresented: $showRefreshConfirm, presenting: refreshStatus) { status in
       Button("Refresh") { runRefreshFromBank() }

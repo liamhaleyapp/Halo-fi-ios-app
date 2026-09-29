@@ -55,6 +55,7 @@ struct MainTabView: View {
     @Environment(BudgetDataManager.self) private var budgetDataManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: MainTab = UITestArchetype.initialTab ?? .money
+    @State private var showingEarlyAccess = !EarlyAccessNotice.isDismissed && !UITestArchetype.isActive
     @State private var feedbackService = AudioFeedbackService()
     /// Tab the user was on when a cross-tab conversation was launched.
     /// Restored when the conversation dismisses so the user lands back
@@ -186,6 +187,16 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .attentionOpened)) { _ in
             selectedTab = .money
+        }
+        .sheet(isPresented: $showingEarlyAccess, onDismiss: { EarlyAccessNotice.markDismissed() }) {
+            EarlyAccessNotice(onShowFeedback: {
+                showingEarlyAccess = false
+                selectedTab = .settings
+                // After the tab switch has cleared Settings' path.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    NotificationCenter.default.post(name: .openSendFeedback, object: nil)
+                }
+            }, onClose: { showingEarlyAccess = false })
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             Diagnostics.screen("tab:\(newTab)")
