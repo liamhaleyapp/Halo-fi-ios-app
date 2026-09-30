@@ -1,211 +1,187 @@
 {
-  "appPolicies" : {
-    "eula" : "",
-    "policies" : [
+  "appPolicies": {
+    "eula": "",
+    "policies": [
       {
-        "locale" : "en_US",
-        "policyText" : "",
-        "policyURL" : ""
+        "locale": "en_US",
+        "policyText": "",
+        "policyURL": ""
       }
     ]
   },
-  "identifier" : "2BCBBC0E",
-  "nonRenewingSubscriptions" : [
-
-  ],
-  "products" : [
-
-  ],
-  "settings" : {
-    "_applicationInternalID" : "6751153562",
-    "_askToBuyEnabled" : false,
-    "_billingGracePeriodEnabled" : false,
-    "_billingIssuesEnabled" : false,
-    "_developerTeamID" : "3TB8D2484F",
-    "_disableDialogs" : false,
-    "_failTransactionsEnabled" : false,
-    "_lastSynchronizedDate" : 783626852.45370901,
-    "_locale" : "en_US",
-    "_renewalBillingIssuesEnabled" : false,
-    "_storefront" : "USA",
-    "_storeKitErrors" : [
-
-    ],
-    "_timeRate" : 0
+  "identifier": "2BCBBC0E",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_applicationInternalID": "6751153562",
+    "_askToBuyEnabled": false,
+    "_billingGracePeriodEnabled": false,
+    "_billingIssuesEnabled": false,
+    "_developerTeamID": "3TB8D2484F",
+    "_disableDialogs": false,
+    "_failTransactionsEnabled": false,
+    "_lastSynchronizedDate": 783626852.453709,
+    "_locale": "en_US",
+    "_renewalBillingIssuesEnabled": false,
+    "_storefront": "USA",
+    "_storeKitErrors": [],
+    "_timeRate": 0
   },
-  "subscriptionGroups" : [
+  "subscriptionGroups": [
     {
-      "id" : "21796073",
-      "localizations" : [
-
-      ],
-      "name" : "Launch Group",
-      "subscriptions" : [
+      "id": "21796073",
+      "localizations": [],
+      "name": "Launch Group",
+      "subscriptions": [
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "12.99",
-          "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "6753360876",
-          "introductoryOffer" : null,
-          "localizations" : [
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "12.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6753360876",
+          "introductoryOffer": {
+            "internalID": "1735924300",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
             {
-              "description" : "Basic subscription plan",
-              "displayName" : "Halo Fi Basic",
-              "locale" : "en_US"
+              "description": "Basic subscription plan",
+              "displayName": "Halo Fi Basic",
+              "locale": "en_US"
             }
           ],
-          "productID" : "com.halofi.basic.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Halo Fi Basic Monthly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "productID": "com.halofi.basic.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Halo Fi Basic Monthly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "144.99",
-          "familyShareable" : false,
-          "groupNumber" : 4,
-          "internalID" : "6754772956",
-          "introductoryOffer" : null,
-          "localizations" : [
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "144.99",
+          "familyShareable": false,
+          "groupNumber": 4,
+          "internalID": "6754772956",
+          "introductoryOffer": {
+            "internalID": "1095678217",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
             {
-              "description" : "Basic Yearly Subscription",
-              "displayName" : "Basic Yearly",
-              "locale" : "en_US"
+              "description": "Basic Yearly Subscription",
+              "displayName": "Basic Yearly",
+              "locale": "en_US"
             }
           ],
-          "productID" : "com.halofi.basic.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Halo Fi Basic Yearly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "productID": "com.halofi.basic.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Halo Fi Basic Yearly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "49.99",
-          "familyShareable" : false,
-          "groupNumber" : 3,
-          "internalID" : "6753362089",
-          "introductoryOffer" : null,
-          "localizations" : [
-
-          ],
-          "productID" : "com.halofi.max.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Halo Fi Max Monthly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "49.99",
+          "familyShareable": false,
+          "groupNumber": 3,
+          "internalID": "6753362089",
+          "introductoryOffer": {
+            "internalID": "8616606577",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [],
+          "productID": "com.halofi.max.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Halo Fi Max Monthly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "549.99",
-          "familyShareable" : false,
-          "groupNumber" : 6,
-          "internalID" : "6754773096",
-          "introductoryOffer" : null,
-          "localizations" : [
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "549.99",
+          "familyShareable": false,
+          "groupNumber": 6,
+          "internalID": "6754773096",
+          "introductoryOffer": {
+            "internalID": "3014557501",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
             {
-              "description" : "Max Yearly Subscription",
-              "displayName" : "Max Yearly",
-              "locale" : "en_US"
+              "description": "Max Yearly Subscription",
+              "displayName": "Max Yearly",
+              "locale": "en_US"
             }
           ],
-          "productID" : "com.halofi.max.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Halo Fi Max Yearly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "productID": "com.halofi.max.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Halo Fi Max Yearly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "24.99",
-          "familyShareable" : false,
-          "groupNumber" : 2,
-          "internalID" : "6753360405",
-          "introductoryOffer" : null,
-          "localizations" : [
-
-          ],
-          "productID" : "com.halofi.pro.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Halo Fi Pro Monthly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "24.99",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "6753360405",
+          "introductoryOffer": {
+            "internalID": "1180439366",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [],
+          "productID": "com.halofi.pro.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Halo Fi Pro Monthly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "274.99",
-          "familyShareable" : false,
-          "groupNumber" : 5,
-          "internalID" : "6754772990",
-          "introductoryOffer" : null,
-          "localizations" : [
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "274.99",
+          "familyShareable": false,
+          "groupNumber": 5,
+          "internalID": "6754772990",
+          "introductoryOffer": {
+            "internalID": "8345672516",
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
             {
-              "description" : "Pro Yearly Subscription",
-              "displayName" : "Pro Yearly",
-              "locale" : "en_US"
+              "description": "Pro Yearly Subscription",
+              "displayName": "Pro Yearly",
+              "locale": "en_US"
             }
           ],
-          "productID" : "com.halofi.pro.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Halo Fi Pro Yearly",
-          "subscriptionGroupID" : "21796073",
-          "type" : "RecurringSubscription",
-          "winbackOffers" : [
-
-          ]
+          "productID": "com.halofi.pro.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Halo Fi Pro Yearly",
+          "subscriptionGroupID": "21796073",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
         }
       ]
     }
   ],
-  "version" : {
-    "major" : 4,
-    "minor" : 0
+  "version": {
+    "major": 4,
+    "minor": 0
   }
 }
